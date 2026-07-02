@@ -1,0 +1,17 @@
+.dotnet/
+bin/
+obj/
+dist/
+releases/
+tests/
+ppt/
+reference/
+logs/
+*.log
+*.zip
+*.7z
+*.rar
+*.user
+*.suo
+.vs/
+*.bad.json
