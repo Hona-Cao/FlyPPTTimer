@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "FlyPPTTimer.Modern (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "FlyPPTTimer.Modern (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
