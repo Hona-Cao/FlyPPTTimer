@@ -9,6 +9,7 @@ namespace FlyPPTTimer;
 public sealed class FlyPPTTimerContext : ApplicationContext
 {
     private readonly LogService _log = new();
+    private readonly SynchronizationContext _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
     private readonly ConfigService _configService;
     private readonly TimerService _timer;
     private readonly AlertService _alerts;
@@ -16,6 +17,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly HotkeyService _hotkeys;
     private readonly NetworkAddressService _networkAddresses = new();
     private readonly AppCommandService _commands;
+    private readonly PowerPointControlService _powerPoint;
     private readonly RemoteControlService _remoteControl;
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _overlayMenu;
@@ -62,7 +64,10 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             FlashOverlay,
             ShowSettings,
             _log);
-        _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _log);
+        _powerPoint = new PowerPointControlService(() => _config, _log);
+        _powerPoint.SlideShowStarted += (_, path) => RunOnUi(() => HandlePresentationStarted(path, "远程控制"));
+        _powerPoint.SlideShowEnded += (_, _) => RunOnUi(() => HandlePresentationEnded("远程控制"));
+        _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _powerPoint, _log);
 
         _timer.Configure(_config);
         RebuildOverlays();
@@ -308,17 +313,45 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     {
         if (state.IsFullscreen && _config.Behavior.AutoStartOnFullscreen)
         {
-            _alerts.ResetTriggers();
-            ApplyPresentationRuleDuration(state.PresentationPath);
-            _autoStartedFromFullscreen = true;
-            _commands.StopReset();
-            _commands.Start();
+            HandlePresentationStarted(state.PresentationPath, "放映检测");
         }
-        else if (!state.IsFullscreen && _autoStartedFromFullscreen && _config.Behavior.StopWhenLeavingFullscreen && _timer.State is TimerState.Running or TimerState.Paused)
+        else if (!state.IsFullscreen)
+        {
+            HandlePresentationEnded("放映检测");
+        }
+    }
+
+    private void HandlePresentationStarted(string presentationPath, string source)
+    {
+        if (_autoStartedFromFullscreen)
+        {
+            _log.Info($"Ignored duplicate presentation start from {source}: {presentationPath}");
+            return;
+        }
+
+        _alerts.ResetTriggers();
+        ApplyPresentationRuleDuration(presentationPath);
+        _autoStartedFromFullscreen = true;
+        _commands.StopReset();
+        _commands.Start();
+        _log.Info($"Presentation start applied from {source}: {presentationPath}");
+    }
+
+    private void HandlePresentationEnded(string source)
+    {
+        if (!_autoStartedFromFullscreen) return;
+        if (_config.Behavior.StopWhenLeavingFullscreen && _timer.State is TimerState.Running or TimerState.Paused)
         {
             _commands.StopReset();
-            _autoStartedFromFullscreen = false;
         }
+        _autoStartedFromFullscreen = false;
+        _log.Info($"Presentation end applied from {source}.");
+    }
+
+    private void RunOnUi(Action action)
+    {
+        if (SynchronizationContext.Current == _uiContext) action();
+        else _uiContext.Send(_ => action(), null);
     }
 
     private void RebuildOverlays()
@@ -439,6 +472,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _hotkeys.Dispose();
         _fullscreen.Dispose();
         _remoteControl.Dispose();
+        _powerPoint.Dispose();
         _screenTimer.Dispose();
         _menuCloseTimer.Dispose();
         foreach (var timerWindow in _overlays) timerWindow.Dispose();
@@ -455,6 +489,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _menuOwner.Dispose();
             _hotkeys.Dispose();
             _fullscreen.Dispose();
+            _powerPoint.Dispose();
             _screenTimer.Dispose();
             _menuCloseTimer.Dispose();
             foreach (var overlay in _overlays) overlay.Dispose();

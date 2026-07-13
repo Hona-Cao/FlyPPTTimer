@@ -9,6 +9,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>FlyPPTTimer</AssemblyName>
     <RootNamespace>FlyPPTTimer</RootNamespace>
+    <Version>0.11.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,6 +21,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Web\index.html" />
+    <EmbeddedResource Include="Web\app.css" />
+    <EmbeddedResource Include="Web\app.js" />
   </ItemGroup>
 
   <ItemGroup>

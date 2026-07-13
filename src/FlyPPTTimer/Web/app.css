@@ -1,0 +1,59 @@
+:root {
+  color-scheme: light; --bg:#f4f7f8; --card:#fff; --ink:#17282b; --muted:#64777b;
+  --accent:#126b63; --warning:#f4ead2; --danger:#b13b43; --danger-soft:#f9e8e9; --radius:9px;
+}
+* { box-sizing:border-box; }
+html, body { max-width:100%; overflow-x:hidden; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,"Microsoft YaHei UI","Microsoft YaHei",sans-serif; -webkit-tap-highlight-color:transparent; }
+.app-shell { width:100%; max-width:620px; margin:auto; padding:18px 14px calc(24px + env(safe-area-inset-bottom)); }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:4px 2px 14px; }
+.topbar h1 { font-size:24px; line-height:1.25; margin:0; }
+.topbar p { color:var(--muted); font-size:13px; margin:5px 0 0; }
+.status { flex:none; padding:7px 11px; border-radius:var(--radius); font-size:13px; font-weight:700; background:#e7edef; color:var(--muted); }
+.status.connected { background:#dff2e6; color:#15713d; }
+.status.disconnected { background:var(--danger-soft); color:var(--danger); }
+.tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:5px; background:#e8edef; border-radius:var(--radius); margin-bottom:12px; }
+.tab { min-height:42px; background:transparent; color:var(--muted); }
+.tab.active { background:#fff; color:var(--accent); box-shadow:0 1px 4px #1b343412; }
+.page { display:none; }
+.page.active { display:block; animation:page-in 160ms ease; }
+.card { background:var(--card); border-radius:var(--radius); padding:15px; margin:0 0 12px; box-shadow:0 1px 2px #1835360a; }
+.timer-card { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.timer-text { font-size:48px; line-height:1; font-weight:800; color:var(--accent); }
+.timer-card p { margin:4px 0 0; color:var(--muted); text-align:right; }
+.control-grid, .nav-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+button, select, input { border:0; border-radius:var(--radius); font:inherit; color:var(--ink); background:#edf3f4; min-height:48px; outline:none; }
+button { padding:0 14px; font-weight:700; cursor:pointer; transition:transform 140ms ease,background-color 140ms ease,opacity 140ms ease; }
+button:active:not(:disabled) { transform:scale(.975); }
+button.primary { background:var(--accent); color:#fff; }
+button.warning { background:var(--warning); color:#6c5000; }
+button.danger { background:var(--danger-soft); color:var(--danger); }
+button:disabled { opacity:.42; cursor:not-allowed; }
+.presentation-card h2 { font-size:20px; line-height:1.35; margin:5px 0; }
+.eyebrow, label { display:block; color:var(--muted); font-size:13px; font-weight:700; margin-bottom:7px; }
+.ellipsis { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); margin:0; }
+.presentation-meta { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; margin-top:15px; padding-top:13px; border-top:1px solid #edf1f2; color:var(--muted); font-size:14px; }
+.presentation-meta strong { text-align:center; color:var(--ink); font-size:18px; }
+.presentation-meta span:last-child { text-align:right; }
+.select-row { display:grid; grid-template-columns:minmax(0,1fr) 88px; gap:9px; }
+.select-row select, input { min-width:0; width:100%; padding:0 12px; }
+.hint { min-height:20px; margin:8px 0 0; color:var(--muted); font-size:13px; }
+.nav-button { font-size:17px; }
+.nav-button span { font-size:28px; vertical-align:-2px; margin:0 8px; }
+.goto-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.message { position:sticky; bottom:10px; min-height:38px; padding:10px 13px; border-radius:var(--radius); background:#26383be8; color:#fff; font-size:13px; line-height:1.4; box-shadow:0 5px 18px #17282b22; opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity 160ms ease,transform 160ms ease; }
+.message.show { opacity:1; transform:none; }
+.message.error { background:#8f3037e8; }
+@keyframes page-in { from { opacity:.6; transform:translateY(3px); } to { opacity:1; transform:none; } }
+@media (orientation:landscape) and (min-width:650px) {
+  .app-shell { width:96%; max-width:920px; }
+  #pptPage.active { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .card { margin:0; }
+  .presentation-card, .nav-grid { grid-column:1; }
+  .control-grid { grid-column:2; grid-row:1/span 3; }
+}
+@media (max-width:370px) {
+  .timer-text { font-size:40px; }
+  .control-grid { grid-template-columns:1fr; }
+  .topbar h1 { font-size:21px; }
+}

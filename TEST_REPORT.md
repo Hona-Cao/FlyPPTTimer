@@ -1,6 +1,6 @@
 ﻿# 演讲计时器 TEST_REPORT
 
-测试时间：2026-07-02 上午（本机时钟记录）
+测试时间：2026-07-13（本机时钟记录）
 
 ## 环境
 
@@ -13,12 +13,31 @@
 
 ## 构建
 
-- 当前版本：v0.10.0
+- 当前版本：v0.11.0
 - 构建命令：`powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1`
 - build：通过，0 warnings，0 errors
 - publish：通过，win-x64 self-contained single-file
 - exe 路径：`E:\快传\FlyPPTTimer_GUI\dist\FlyPPTTimer.exe`
 - 配置路径：`E:\快传\FlyPPTTimer_GUI\dist\FlyPPTTimer.config.json`
+
+## v0.11 PowerPoint 远控实测
+
+- 构建：通过，0 warnings，0 errors；win-x64 self-contained single-file 发布成功。
+- 测试文件：`E:\快传\FlyPPTTimer_GUI\ppt\6月护士长例会内容.pptx`，共 12 页。
+- 从头放映：通过；返回第 1 页，计时器立即进入“运行中”。
+- 下一页、上一页：通过；状态依次同步为第 2 页、第 1 页。
+- 跳转页码：通过；跳到第 3 页后 `/state` 返回 `currentSlide=3`。
+- 黑屏、恢复、白屏、恢复：通过；`screenMode` 分别同步为“黑屏”“正常”“白屏”“正常”。
+- 结束放映：通过；`isSlideShowRunning=false`，计时器停止并重置为 `08:00`。
+- 从当前页放映：通过；先停在第 4 页再结束，重新“从当前页”后立即和 0.5 秒后均返回第 4 页。
+- 多文稿：同时打开两个不同路径的 PPT 副本，状态返回 2 个选项；通过服务端 ID 切换后活动路径正确更新。
+- 快速重复：放映运行时连续发送 8 次启动命令，8 次均返回“重复启动已忽略”，始终只有一个放映窗口，计时未重复重置。
+- 计时同步：放映开始 1.1 秒后 `elapsedMs > 900`，手机状态、PC 计时服务和放映状态同步正常。
+- 断联恢复：无效 token 返回 HTTP 403；恢复有效 token 后 `/state` 在 4ms 内成功返回。
+- 网页资源：`/`、`/assets/app.css`、`/assets/app.js` 均返回 HTTP 200，离线局域网不依赖 CDN。
+- 移动端截图：`tests\v0.11\mobile_portrait_500x844.png` 完整显示；`mobile_landscape_844x390_150dpi.png` 验证横屏和 150% 缩放。
+- 工具限制：本机 Edge 无头模式对宽度小于 500px 的窗口采用内部最小视口，390px 截图会裁切浏览器画布，不能作为 390px CSS 布局结论；CSS 已使用 `width:100%; max-width`、`minmax(0,1fr)` 和横向溢出保护。
+- 桌面 WinForms 本轮未改设置窗口、悬浮窗或托盘布局；100%/125%/150% 桌面 DPI 沿用 v0.10 回归结果，未在本轮切换系统缩放复测。
 
 ## v0.10 本轮外观验证
 
