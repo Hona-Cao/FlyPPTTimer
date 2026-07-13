@@ -100,7 +100,7 @@ public sealed class SettingsForm : Form
 
     private void BuildWindowChrome()
     {
-        _shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        _shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         _shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(_shell);
 
@@ -122,8 +122,8 @@ public sealed class SettingsForm : Form
             Dock = DockStyle.Right,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Width = 126,
-            Padding = new Padding(0, 7, 0, 7),
+            Width = 232,
+            Padding = new Padding(0, 8, 0, 8),
             BackColor = ModernTheme.Surface
         };
         buttons.Controls.Add(TitleButton("－", () => WindowState = FormWindowState.Minimized));
@@ -200,9 +200,10 @@ public sealed class SettingsForm : Form
         var button = new Button
         {
             Text = text,
-            Width = 34,
-            Height = 30,
-            Margin = new Padding(4, 0, 0, 0),
+            Width = 68,
+            Height = 58,
+            Font = new Font(Font.FontFamily, 14F, FontStyle.Regular),
+            Margin = new Padding(6, 0, 0, 0),
             BackColor = ModernTheme.ControlFill,
             ForeColor = ModernTheme.Text,
             UseCompatibleTextRendering = true
@@ -747,7 +748,7 @@ public sealed class SettingsForm : Form
         Row(grid, "配置文件", Button("打开配置文件位置", (_, _) => OpenConfigRequested?.Invoke(this, EventArgs.Empty)), "otherConfigPath");
         Row(grid, "日志文件", Button("打开日志文件位置", (_, _) => OpenLogRequested?.Invoke(this, EventArgs.Empty)), "otherLogPath");
         Section(grid, "版本");
-        Row(grid, "当前版本", new Label { Text = "演讲计时器 0.10.0 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
+        Row(grid, "当前版本", new Label { Text = "演讲计时器 0.12.0 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
         AddTab("其他设置", grid);
     }
 

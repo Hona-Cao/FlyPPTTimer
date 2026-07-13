@@ -3,9 +3,14 @@ $ErrorActionPreference = "Stop"
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
 $root = $PSScriptRoot
-$version = "0.10"
+$projectPath = Join-Path $root "src\FlyPPTTimer\FlyPPTTimer.csproj"
+[xml]$project = Get-Content -LiteralPath $projectPath -Raw
+$fullVersion = [string]$project.Project.PropertyGroup.Version
+if ([string]::IsNullOrWhiteSpace($fullVersion)) { throw "Project version is missing: $projectPath" }
+$version = $fullVersion -replace '\.0$', ''
 $dist = Join-Path $root "dist"
 $releaseRoot = Join-Path $root "releases\v$version"
+if (Test-Path -LiteralPath $releaseRoot) { throw "Release directory already exists and will not be overwritten: $releaseRoot" }
 $assets = Join-Path $releaseRoot "assets"
 $portable = Join-Path $assets "portable"
 $installerSource = Join-Path $assets "installer-source"
@@ -18,7 +23,7 @@ $iexpressSetup = Join-Path $iexpressWork "FlyPPTTimer_Setup_v$version.exe"
 & (Join-Path $root "build.ps1")
 Copy-Item -LiteralPath (Join-Path $root "docs\default-config.json") -Destination (Join-Path $dist "FlyPPTTimer.config.json") -Force
 
-Remove-Item -LiteralPath $assets, $iexpressWork -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $iexpressWork -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $portable, $installerSource, $iexpressSource | Out-Null
 
 $runtimeFiles = @(

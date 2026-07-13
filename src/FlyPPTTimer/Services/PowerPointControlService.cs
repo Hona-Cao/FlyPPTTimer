@@ -11,10 +11,17 @@ public sealed class PowerPointControlService : IDisposable
     private const int SlideShowRunning = 1;
     private const int SlideShowBlackScreen = 3;
     private const int SlideShowWhiteScreen = 4;
-    private readonly BlockingCollection<Action> _queue = new();
+    private readonly BlockingCollection<Action> _queue = new(32);
     private readonly Thread _thread;
     private readonly Func<AppConfig> _getConfig;
     private readonly LogService _log;
+    private readonly System.Threading.Timer _refreshTimer;
+    private readonly object _stateSync = new();
+    private PresentationState _cachedState = new();
+    private bool _lastShowRunning;
+    private string _lastShowPath = "";
+    private long _lastNavigationTick;
+    private int _refreshQueued;
     private bool _disposed;
 
     public PowerPointControlService(Func<AppConfig> getConfig, LogService log)
@@ -24,31 +31,46 @@ public sealed class PowerPointControlService : IDisposable
         _thread = new Thread(Run) { IsBackground = true, Name = "FlyPPTTimer PowerPoint STA" };
         _thread.SetApartmentState(ApartmentState.STA);
         _thread.Start();
+        _refreshTimer = new System.Threading.Timer(_ => QueueRefresh(), null, 0, 500);
     }
 
     public event EventHandler<string>? SlideShowStarted;
     public event EventHandler? SlideShowEnded;
 
-    public PresentationState GetState() => Invoke(ReadState);
+    public PresentationState GetState()
+    {
+        lock (_stateSync) return CloneState(_cachedState);
+    }
 
     public PresentationCommandResult Execute(RemoteCommand command)
     {
-        return Invoke(() =>
+        var timeout = command.Command is "ppt.openPresentation" or "ppt.startFromBeginning" or "ppt.startFromCurrent"
+            ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(5);
+        try { return Invoke(() =>
         {
             try
             {
                 var message = ExecuteCore(command);
-                var state = ReadState();
+                var state = UpdateCachedState();
                 return new PresentationCommandResult(true, message, state);
             }
             catch (Exception ex)
             {
                 _log.Error($"PowerPoint command failed: {command.Command}", ex);
-                var state = ReadState();
+                var state = GetState();
                 state.Error = FriendlyError(ex);
                 return new PresentationCommandResult(false, state.Error, state);
             }
-        });
+        }, timeout); }
+        catch (TimeoutException ex)
+        {
+            _log.Error($"PowerPoint command timed out: {command.Command}", ex);
+            return new PresentationCommandResult(false, "PowerPoint 响应超时，计时遥控仍可继续使用。", GetState());
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new PresentationCommandResult(false, ex.Message, GetState());
+        }
     }
 
     private void Run()
@@ -56,16 +78,57 @@ public sealed class PowerPointControlService : IDisposable
         foreach (var action in _queue.GetConsumingEnumerable()) action();
     }
 
-    private T Invoke<T>(Func<T> operation)
+    private T Invoke<T>(Func<T> operation, TimeSpan timeout)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(PowerPointControlService));
         var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _queue.Add(() =>
+        using var cancellation = new CancellationTokenSource();
+        var cancellationToken = cancellation.Token;
+        if (!_queue.TryAdd(() =>
         {
-            try { completion.SetResult(operation()); }
+            if (cancellationToken.IsCancellationRequested) return;
+            try { completion.TrySetResult(RetryComBusy(operation)); }
             catch (Exception ex) { completion.SetException(ex); }
-        });
+        }, 200)) throw new InvalidOperationException("PowerPoint 命令队列繁忙，请稍后重试。");
+        if (!completion.Task.Wait(timeout)) { cancellation.Cancel(); throw new TimeoutException(); }
         return completion.Task.GetAwaiter().GetResult();
+    }
+
+    private T RetryComBusy<T>(Func<T> operation)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try { return operation(); }
+            catch (COMException ex) when (attempt < 3 && (ex.HResult == unchecked((int)0x80010001) || ex.HResult == unchecked((int)0x8001010A)))
+            {
+                Thread.Sleep(100 * (attempt + 1));
+            }
+        }
+    }
+
+    private void QueueRefresh()
+    {
+        if (_disposed) return;
+        if (Interlocked.Exchange(ref _refreshQueued, 1) != 0) return;
+        if (!_queue.TryAdd(() =>
+        {
+            try { RetryComBusy(UpdateCachedState); }
+            catch (Exception ex) { _log.Warn($"PowerPoint background refresh failed: {FriendlyError(ex)}"); }
+            finally { Interlocked.Exchange(ref _refreshQueued, 0); }
+        })) Interlocked.Exchange(ref _refreshQueued, 0);
+    }
+
+    private PresentationState UpdateCachedState()
+    {
+        var state = ReadState();
+        state.UpdatedAt = DateTime.Now;
+        lock (_stateSync) _cachedState = CloneState(state);
+        if (state.IsSlideShowRunning && (!_lastShowRunning || !SamePath(_lastShowPath, state.PresentationPath)))
+            SlideShowStarted?.Invoke(this, state.PresentationPath);
+        else if (!state.IsSlideShowRunning && _lastShowRunning) SlideShowEnded?.Invoke(this, EventArgs.Empty);
+        _lastShowRunning = state.IsSlideShowRunning;
+        _lastShowPath = state.PresentationPath;
+        return state;
     }
 
     private string ExecuteCore(RemoteCommand command)
@@ -75,8 +138,8 @@ public sealed class PowerPointControlService : IDisposable
             "ppt.refresh" => "状态已刷新",
             "ppt.startFromBeginning" => StartShow(false),
             "ppt.startFromCurrent" => StartShow(true),
-            "ppt.previous" => WithSlideShowView(view => ((dynamic)view).Previous(), "已切换到上一页"),
-            "ppt.next" => WithSlideShowView(view => ((dynamic)view).Next(), "已切换到下一页"),
+            "ppt.previous" => Navigate(view => ((dynamic)view).Previous(), "已切换到上一页"),
+            "ppt.next" => Navigate(view => ((dynamic)view).Next(), "已切换到下一页"),
             "ppt.gotoSlide" => GoToSlide(command.SlideNumber),
             "ppt.endShow" => EndShow(),
             "ppt.blackScreenToggle" => ToggleScreen(SlideShowBlackScreen, "黑屏"),
@@ -119,7 +182,6 @@ public sealed class PowerPointControlService : IDisposable
             showSettings.EndingSlide = total;
             startedWindow = showSettings.Run();
             var path = SafeString(() => (string)deck.FullName);
-            SlideShowStarted?.Invoke(this, path);
             return fromCurrent ? $"已从第 {start} 页开始放映" : "已从头开始放映";
         }
         finally { Release(startedWindow, showWindows, slide, view, window, slides, settings, presentation, appObject); }
@@ -134,7 +196,6 @@ public sealed class PowerPointControlService : IDisposable
     private string EndShow()
     {
         var result = WithSlideShowView(view => ((dynamic)view).Exit(), "已结束放映");
-        SlideShowEnded?.Invoke(this, EventArgs.Empty);
         return result;
     }
 
@@ -237,39 +298,41 @@ public sealed class PowerPointControlService : IDisposable
                 finally { Release(item); }
             }
 
-            try { active = app.ActivePresentation; } catch { active = null; }
-            if (active is not null)
-            {
-                dynamic deck = active;
-                state.HasPresentation = true;
-                state.PresentationName = SafeString(() => (string)deck.Name);
-                state.PresentationPath = SafeString(() => (string)deck.FullName);
-                slides = deck.Slides;
-                state.TotalSlides = (int)((dynamic)slides).Count;
-            }
-
             windows = app.SlideShowWindows;
             state.IsSlideShowRunning = (int)((dynamic)windows).Count > 0;
             if (state.IsSlideShowRunning)
             {
                 window = ((dynamic)windows)[1];
+                parent = ((dynamic)window).Presentation;
                 view = ((dynamic)window).View;
                 slide = ((dynamic)view).Slide;
                 state.CurrentSlide = (int)((dynamic)slide).SlideIndex;
                 var viewState = (int)((dynamic)view).State;
                 state.ScreenMode = viewState == SlideShowBlackScreen ? "黑屏" : viewState == SlideShowWhiteScreen ? "白屏" : "正常";
-                parent = ((dynamic)slide).Parent;
-                if (!state.HasPresentation)
+                state.PresentationName = SafeString(() => (string)((dynamic)parent).Name);
+                state.PresentationPath = SafeString(() => (string)((dynamic)parent).FullName);
+                slides = ((dynamic)parent).Slides;
+                state.TotalSlides = (int)((dynamic)slides).Count;
+                state.HasPresentation = true;
+            }
+            else
+            {
+                try { active = app.ActivePresentation; } catch { active = null; }
+                if (active is not null)
                 {
-                    state.PresentationName = SafeString(() => (string)((dynamic)parent).Name);
-                    state.PresentationPath = SafeString(() => (string)((dynamic)parent).FullName);
+                    dynamic deck = active;
                     state.HasPresentation = true;
+                    state.PresentationName = SafeString(() => (string)deck.Name);
+                    state.PresentationPath = SafeString(() => (string)deck.FullName);
+                    slides = deck.Slides;
+                    state.TotalSlides = (int)((dynamic)slides).Count;
                 }
             }
             AddRuleOptions(state, openPaths);
         }
         catch (Exception ex)
         {
+            if (ex is COMException busy && IsComBusy(busy)) throw;
             state.Error = FriendlyError(ex);
             _log.Error("PowerPoint state refresh failed.", ex);
         }
@@ -340,6 +403,30 @@ public sealed class PowerPointControlService : IDisposable
         InvalidOperationException => ex.Message,
         _ => "PowerPoint 操作失败，请查看程序日志。"
     };
+    private static bool IsComBusy(COMException ex) => ex.HResult == unchecked((int)0x80010001) || ex.HResult == unchecked((int)0x8001010A);
+    private static PresentationState CloneState(PresentationState state) => new()
+    {
+        PowerPointInstalled = state.PowerPointInstalled,
+        PowerPointRunning = state.PowerPointRunning,
+        HasPresentation = state.HasPresentation,
+        IsSlideShowRunning = state.IsSlideShowRunning,
+        PresentationName = state.PresentationName,
+        PresentationPath = state.PresentationPath,
+        CurrentSlide = state.CurrentSlide,
+        TotalSlides = state.TotalSlides,
+        ScreenMode = state.ScreenMode,
+        UpdatedAt = state.UpdatedAt,
+        Error = state.Error,
+        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, IsOpen = x.IsOpen, IsActive = x.IsActive }).ToList()
+    };
+
+    private string Navigate(Action<object> action, string message)
+    {
+        var now = Environment.TickCount64;
+        if (now - _lastNavigationTick < 160) return "操作过快，本次翻页已忽略";
+        _lastNavigationTick = now;
+        return WithSlideShowView(action, message);
+    }
     private static void Release(params object?[] values)
     {
         foreach (var value in values)
@@ -358,6 +445,7 @@ public sealed class PowerPointControlService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _refreshTimer.Dispose();
         _queue.CompleteAdding();
         if (!_thread.Join(TimeSpan.FromSeconds(2))) _log.Warn("PowerPoint STA thread did not stop within two seconds.");
         _queue.Dispose();

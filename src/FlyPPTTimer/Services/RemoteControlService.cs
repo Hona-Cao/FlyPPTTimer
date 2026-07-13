@@ -23,6 +23,9 @@ public sealed class RemoteControlService : IDisposable
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private readonly Dictionary<string, DateTime> _clients = [];
+    private readonly SemaphoreSlim _connectionSlots = new(16, 16);
+    private const int MaxHeaderBytes = 16 * 1024;
+    private const int MaxBodyBytes = 64 * 1024;
 
     public RemoteControlService(Func<AppConfig> getConfig, Action<AppConfig> saveConfig, AppCommandService commands, PowerPointControlService powerPoint, LogService log)
     {
@@ -144,17 +147,22 @@ public sealed class RemoteControlService : IDisposable
     private async Task HandleClient(TcpClient client, CancellationToken token)
     {
         using var _ = client;
+        if (!await _connectionSlots.WaitAsync(TimeSpan.FromSeconds(2), token)) return;
         try
         {
+            client.ReceiveTimeout = 8000;
+            client.SendTimeout = 8000;
             using var stream = client.GetStream();
-            using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
-            var requestLine = await reader.ReadLineAsync(token) ?? "";
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            var (headerText, bodyPrefix) = await ReadHeaders(stream, timeout.Token);
+            var lines = headerText.Split("\r\n", StringSplitOptions.None);
+            var requestLine = lines.FirstOrDefault() ?? "";
             if (string.IsNullOrWhiteSpace(requestLine)) return;
 
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            string? line;
             var contentLength = 0;
-            while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(token)))
+            foreach (var line in lines.Skip(1))
             {
                 var idx = line.IndexOf(':');
                 if (idx <= 0) continue;
@@ -163,14 +171,22 @@ public sealed class RemoteControlService : IDisposable
                 headers[name] = value;
                 if (name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)) int.TryParse(value, out contentLength);
             }
+            if (contentLength < 0 || contentLength > MaxBodyBytes) throw new InvalidDataException("请求体过大。");
 
-            var body = "";
+            var bodyBytes = new byte[contentLength];
             if (contentLength > 0)
             {
-                var buffer = new char[contentLength];
-                var read = await reader.ReadBlockAsync(buffer.AsMemory(0, contentLength), token);
-                body = new string(buffer, 0, read);
+                var copied = Math.Min(contentLength, bodyPrefix.Length);
+                bodyPrefix.AsSpan(0, copied).CopyTo(bodyBytes);
+                var offset = copied;
+                while (offset < contentLength)
+                {
+                    var read = await stream.ReadAsync(bodyBytes.AsMemory(offset, contentLength - offset), timeout.Token);
+                    if (read == 0) throw new EndOfStreamException("请求体未完整发送。");
+                    offset += read;
+                }
             }
+            var body = Encoding.UTF8.GetString(bodyBytes);
 
             var parts = requestLine.Split(' ');
             if (parts.Length < 2) return;
@@ -178,13 +194,39 @@ public sealed class RemoteControlService : IDisposable
             var rawUrl = parts[1];
             var remote = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
             var ok = HandleRequest(method, rawUrl, body, remote, out var contentType, out var response, out var status);
-            await WriteResponse(stream, status, contentType, response, token);
+            await WriteResponse(stream, status, contentType, response, timeout.Token);
             if (!ok) _log.Warn($"Remote request rejected: {remote} {rawUrl}");
         }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested) { _log.Warn("Remote request timed out."); }
         catch (Exception ex)
         {
             if (!token.IsCancellationRequested) _log.Error("Remote client handling failed.", ex);
         }
+        finally { _connectionSlots.Release(); }
+    }
+
+    private static async Task<(string Header, byte[] BodyPrefix)> ReadHeaders(NetworkStream stream, CancellationToken token)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[2048];
+        while (buffer.Length < MaxHeaderBytes)
+        {
+            var read = await stream.ReadAsync(chunk, token);
+            if (read == 0) throw new EndOfStreamException("连接在请求头完成前关闭。");
+            buffer.Write(chunk, 0, read);
+            var data = buffer.GetBuffer();
+            var length = (int)buffer.Length;
+            for (var i = Math.Max(0, length - read - 3); i <= length - 4; i++)
+            {
+                if (data[i] != 13 || data[i + 1] != 10 || data[i + 2] != 13 || data[i + 3] != 10) continue;
+                var header = Encoding.ASCII.GetString(data, 0, i);
+                var prefixLength = length - i - 4;
+                var prefix = new byte[prefixLength];
+                Buffer.BlockCopy(data, i + 4, prefix, 0, prefixLength);
+                return (header, prefix);
+            }
+        }
+        throw new InvalidDataException("请求头过大。");
     }
 
     private bool HandleRequest(string method, string rawUrl, string body, string remote, out string contentType, out string response, out int status)

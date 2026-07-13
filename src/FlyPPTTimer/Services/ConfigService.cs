@@ -79,7 +79,7 @@ public sealed class ConfigService(LogService log)
 
     private static void Normalize(AppConfig config)
     {
-        config.Version = "0.11.0";
+        config.Version = "0.12.0";
         if (!config.Placement.HasCustomPlacement)
         {
             config.Placement.Anchor = OverlayAnchor.TopCenter;

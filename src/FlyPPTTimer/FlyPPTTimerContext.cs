@@ -46,9 +46,10 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _log.Info("Application started.");
         _configService = new ConfigService(_log);
         _config = _configService.Load();
+        _powerPoint = new PowerPointControlService(() => _config, _log);
         _timer = new TimerService(_log);
         _alerts = new AlertService(_log);
-        _fullscreen = new FullscreenDetector(_log);
+        _fullscreen = new FullscreenDetector(() => _powerPoint.GetState(), _log);
         _hotkeys = new HotkeyService(_log);
         _overlayMenu = BuildCommandMenu();
         _trayMenu = BuildCommandMenu();
@@ -64,7 +65,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             FlashOverlay,
             ShowSettings,
             _log);
-        _powerPoint = new PowerPointControlService(() => _config, _log);
         _powerPoint.SlideShowStarted += (_, path) => RunOnUi(() => HandlePresentationStarted(path, "远程控制"));
         _powerPoint.SlideShowEnded += (_, _) => RunOnUi(() => HandlePresentationEnded("远程控制"));
         _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _powerPoint, _log);
@@ -340,10 +340,11 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private void HandlePresentationEnded(string source)
     {
         if (!_autoStartedFromFullscreen) return;
-        if (_config.Behavior.StopWhenLeavingFullscreen && _timer.State is TimerState.Running or TimerState.Paused)
+        if (_config.Behavior.StopWhenLeavingFullscreen)
         {
-            _commands.StopReset();
+            _timer.Stop(_config.Behavior.ResetWhenLeavingFullscreen);
         }
+        else if (_config.Behavior.ResetWhenLeavingFullscreen) _timer.Reset();
         _autoStartedFromFullscreen = false;
         _log.Info($"Presentation end applied from {source}.");
     }

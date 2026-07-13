@@ -4,7 +4,7 @@ namespace FlyPPTTimer.Models;
 
 public sealed class AppConfig
 {
-    public string Version { get; set; } = "0.11.0";
+    public string Version { get; set; } = "0.12.0";
     public TimerSettings Timer { get; set; } = new();
     public BehaviorSettings Behavior { get; set; } = new();
     public AppearanceSettings Appearance { get; set; } = new();
@@ -217,7 +217,7 @@ public sealed class RemoteState
     public bool WindowVisible { get; set; }
     public bool Muted { get; set; }
     public int ConnectedClients { get; set; }
-    public string Version { get; set; } = "0.11.0";
+    public string Version { get; set; } = "0.12.0";
 }
 
 public sealed class TimerRemoteState
@@ -244,6 +244,7 @@ public sealed class PresentationState
     public int CurrentSlide { get; set; }
     public int TotalSlides { get; set; }
     public string ScreenMode { get; set; } = "正常";
+    public DateTime UpdatedAt { get; set; }
     public string Error { get; set; } = "";
     public List<PresentationOption> Presentations { get; set; } = [];
 }

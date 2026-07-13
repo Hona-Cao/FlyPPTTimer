@@ -44,8 +44,8 @@
       </article>
 
       <article class="card">
-        <label for="presentationSelect">选择允许的演示文稿</label>
-        <div class="select-row"><select id="presentationSelect"></select><button id="openPresentation">打开</button></div>
+        <div class="eyebrow">演示文稿列表</div>
+        <div id="presentationList" class="presentation-list"></div>
         <p id="presentationHint" class="hint"></p>
       </article>
 
@@ -58,8 +58,8 @@
         <button data-command="ppt.startFromBeginning">从头放映</button>
         <button data-command="ppt.startFromCurrent">从当前页放映</button>
         <div class="goto-row"><input id="slideNumber" type="number" min="1" inputmode="numeric" placeholder="页码"><button id="gotoSlide">跳转</button></div>
-        <button data-command="ppt.blackScreenToggle">黑屏 / 恢复</button>
-        <button data-command="ppt.whiteScreenToggle">白屏 / 恢复</button>
+        <button id="blackScreenButton" data-command="ppt.blackScreenToggle">黑屏 / 恢复</button>
+        <button id="whiteScreenButton" data-command="ppt.whiteScreenToggle">白屏 / 恢复</button>
         <button data-command="ppt.endShow" class="danger">结束放映</button>
       </article>
     </section>

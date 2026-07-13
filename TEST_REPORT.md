@@ -39,6 +39,22 @@
 - 工具限制：本机 Edge 无头模式对宽度小于 500px 的窗口采用内部最小视口，390px 截图会裁切浏览器画布，不能作为 390px CSS 布局结论；CSS 已使用 `width:100%; max-width`、`minmax(0,1fr)` 和横向溢出保护。
 - 桌面 WinForms 本轮未改设置窗口、悬浮窗或托盘布局；100%/125%/150% 桌面 DPI 沿用 v0.10 回归结果，未在本轮切换系统缩放复测。
 
+## v0.12 稳定性与界面实测
+
+- Release 构建：通过，0 warnings，0 errors；win-x64 self-contained single-file。
+- `/state` 缓存：连续 20 次请求共 94ms，PowerPoint 状态轮询不再同步等待 COM。
+- UTF-8 请求体：以字节发送 `mode=正计时`，服务端正确按 Content-Length 解码并执行。
+- 计时结束：200ms 倒计时结束后返回 `state=已结束`，最终 Updated 与 Finished 快照状态一致。
+- PowerPoint 状态一致性：测试 `0-背投.pptx`，缓存返回同一放映文稿的文件名、路径、`1/2` 页数。
+- 快速翻页：连续 8 次下一页仅前进到第 2 页，防抖生效且服务未卡死。
+- 黑屏状态：命令后缓存返回 `screenMode=黑屏`；网页按钮按该状态显示选中样式。
+- 退出放映：默认停止+重置组合返回 `停止/elapsed=0`，Finished 状态也纳入同一处理。
+- PowerPoint 冷启动：首次打开超过短超时时，计时接口保持可用；打开/开始命令窗口已调整为 15 秒，后台刷新最多排队一个。
+- Clash/TUN：地址分类会排除 Clash、TUN、Wintun、代理名称和 `198.18.0.0/15` 地址；真实手机在规则模式/TUN 模式下仍需用户本机复测，并将局域网 IP 设为 DIRECT。
+- 设置标题栏：按钮由 `34×30` 放大为 `68×58`，截图 `tests\v0.12\settings_title_buttons.png` 完整显示且无重叠。
+- 异常 PowerPoint：未运行时缓存稳定返回 `powerPointRunning=false`；COM 忙碌真实注入环境不可稳定制造，已通过指定 HRESULT 重试路径和超时隔离代码审查。
+- 多文稿非活动放映：v0.11 多文稿选择测试保留；v0.12 状态明确以第一个实际 `SlideShowWindow.Presentation` 为唯一字段来源。
+
 ## v0.10 本轮外观验证
 
 - 构建结果：通过，0 warnings，0 errors。

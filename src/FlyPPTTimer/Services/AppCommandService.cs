@@ -156,7 +156,7 @@ public sealed class AppCommandService
             DisplayText = timerState.DisplayText,
             WindowVisible = timerState.WindowVisible,
             Muted = timerState.Muted,
-            Version = "0.11.0"
+            Version = "0.12.0"
         };
     }
 

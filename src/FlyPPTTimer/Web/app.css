@@ -29,14 +29,20 @@ button.primary { background:var(--accent); color:#fff; }
 button.warning { background:var(--warning); color:#6c5000; }
 button.danger { background:var(--danger-soft); color:var(--danger); }
 button:disabled { opacity:.42; cursor:not-allowed; }
+button:focus-visible, input:focus-visible { outline:3px solid #65a9ff; outline-offset:2px; }
+button.selected { background:#173f46; color:#fff; }
 .presentation-card h2 { font-size:20px; line-height:1.35; margin:5px 0; }
 .eyebrow, label { display:block; color:var(--muted); font-size:13px; font-weight:700; margin-bottom:7px; }
 .ellipsis { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); margin:0; }
 .presentation-meta { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; margin-top:15px; padding-top:13px; border-top:1px solid #edf1f2; color:var(--muted); font-size:14px; }
 .presentation-meta strong { text-align:center; color:var(--ink); font-size:18px; }
 .presentation-meta span:last-child { text-align:right; }
-.select-row { display:grid; grid-template-columns:minmax(0,1fr) 88px; gap:9px; }
-.select-row select, input { min-width:0; width:100%; padding:0 12px; }
+.presentation-list { display:grid; gap:8px; max-height:260px; overflow-y:auto; }
+.presentation-item { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; padding:10px 12px; min-height:58px; border-radius:var(--radius); background:#edf3f4; }
+.presentation-item strong,.presentation-item span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.presentation-item span { color:var(--muted); font-size:12px; margin-top:3px; }
+.presentation-item button { min-height:40px; }
+input { min-width:0; width:100%; padding:0 12px; }
 .hint { min-height:20px; margin:8px 0 0; color:var(--muted); font-size:13px; }
 .nav-button { font-size:17px; }
 .nav-button span { font-size:28px; vertical-align:-2px; margin:0 8px; }
