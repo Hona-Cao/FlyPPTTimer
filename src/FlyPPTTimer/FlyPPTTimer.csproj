@@ -9,7 +9,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>FlyPPTTimer</AssemblyName>
     <RootNamespace>FlyPPTTimer</RootNamespace>
-    <Version>0.12.0</Version>
+    <Version>0.12.1</Version>
   </PropertyGroup>
 
   <ItemGroup>

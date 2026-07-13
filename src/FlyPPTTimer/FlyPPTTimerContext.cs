@@ -18,6 +18,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly NetworkAddressService _networkAddresses = new();
     private readonly AppCommandService _commands;
     private readonly PowerPointControlService _powerPoint;
+    private readonly PresentationLifecycleController _presentationLifecycle;
     private readonly RemoteControlService _remoteControl;
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _overlayMenu;
@@ -38,7 +39,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private SettingsForm? _settings;
     private RemoteControlForm? _remoteControlWindow;
     private AppConfig _config;
-    private bool _autoStartedFromFullscreen;
     private string _screenSignature = "";
 
     public FlyPPTTimerContext()
@@ -64,6 +64,15 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             () => _overlays.Any(x => x.Visible),
             FlashOverlay,
             ShowSettings,
+            _log);
+        _presentationLifecycle = new PresentationLifecycleController(
+            () => _config,
+            ApplyPresentationRuleDuration,
+            _alerts.ResetTriggers,
+            _commands.StopReset,
+            _commands.Start,
+            reset => _timer.Stop(reset),
+            _timer.Reset,
             _log);
         _powerPoint.SlideShowStarted += (_, path) => RunOnUi(() => HandlePresentationStarted(path, "远程控制"));
         _powerPoint.SlideShowEnded += (_, _) => RunOnUi(() => HandlePresentationEnded("远程控制"));
@@ -311,42 +320,17 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void OnFullscreenChanged(object? sender, FullscreenState state)
     {
-        if (state.IsFullscreen && _config.Behavior.AutoStartOnFullscreen)
-        {
-            HandlePresentationStarted(state.PresentationPath, "放映检测");
-        }
-        else if (!state.IsFullscreen)
-        {
-            HandlePresentationEnded("放映检测");
-        }
+        _presentationLifecycle.Observe(state.IsFullscreen, state.PresentationPath, "FullscreenDetector");
     }
 
     private void HandlePresentationStarted(string presentationPath, string source)
     {
-        if (_autoStartedFromFullscreen)
-        {
-            _log.Info($"Ignored duplicate presentation start from {source}: {presentationPath}");
-            return;
-        }
-
-        _alerts.ResetTriggers();
-        ApplyPresentationRuleDuration(presentationPath);
-        _autoStartedFromFullscreen = true;
-        _commands.StopReset();
-        _commands.Start();
-        _log.Info($"Presentation start applied from {source}: {presentationPath}");
+        _presentationLifecycle.Observe(true, presentationPath, source);
     }
 
     private void HandlePresentationEnded(string source)
     {
-        if (!_autoStartedFromFullscreen) return;
-        if (_config.Behavior.StopWhenLeavingFullscreen)
-        {
-            _timer.Stop(_config.Behavior.ResetWhenLeavingFullscreen);
-        }
-        else if (_config.Behavior.ResetWhenLeavingFullscreen) _timer.Reset();
-        _autoStartedFromFullscreen = false;
-        _log.Info($"Presentation end applied from {source}.");
+        _presentationLifecycle.Observe(false, "", source);
     }
 
     private void RunOnUi(Action action)

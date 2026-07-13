@@ -748,7 +748,7 @@ public sealed class SettingsForm : Form
         Row(grid, "配置文件", Button("打开配置文件位置", (_, _) => OpenConfigRequested?.Invoke(this, EventArgs.Empty)), "otherConfigPath");
         Row(grid, "日志文件", Button("打开日志文件位置", (_, _) => OpenLogRequested?.Invoke(this, EventArgs.Empty)), "otherLogPath");
         Section(grid, "版本");
-        Row(grid, "当前版本", new Label { Text = "演讲计时器 0.12.0 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
+        Row(grid, "当前版本", new Label { Text = "演讲计时器 0.12.1 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
         AddTab("其他设置", grid);
     }
 

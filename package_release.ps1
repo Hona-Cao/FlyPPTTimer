@@ -45,7 +45,14 @@ $installScript = @'
 $ErrorActionPreference = "Stop"
 $installDir = Join-Path $env:LOCALAPPDATA "FlyPPTTimer"
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-Copy-Item -LiteralPath ".\FlyPPTTimer.exe", ".\FlyPPTTimer.config.json", ".\app.ico", ".\README.md" -Destination $installDir -Force
+$configPath = Join-Path $installDir "FlyPPTTimer.config.json"
+if (Test-Path -LiteralPath $configPath) {
+    Copy-Item -LiteralPath $configPath -Destination ($configPath + ".upgrade." + (Get-Date -Format "yyyyMMddHHmmss") + ".backup.json") -Force
+}
+Copy-Item -LiteralPath ".\FlyPPTTimer.exe", ".\app.ico", ".\README.md" -Destination $installDir -Force
+if (-not (Test-Path -LiteralPath $configPath)) {
+    Copy-Item -LiteralPath ".\FlyPPTTimer.config.json" -Destination $configPath
+}
 
 $shell = New-Object -ComObject WScript.Shell
 $startMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\FlyPPTTimer"
@@ -177,7 +184,20 @@ internal static class Program
             {
                 resource.CopyTo(file);
             }
-            ZipFile.ExtractToDirectory(tempZip, installDir, true);
+            var extractDir = Path.Combine(Path.GetTempPath(), "FlyPPTTimer_install_" + Guid.NewGuid().ToString("N"));
+            ZipFile.ExtractToDirectory(tempZip, extractDir, true);
+            var configPath = Path.Combine(installDir, "FlyPPTTimer.config.json");
+            if (File.Exists(configPath))
+            {
+                File.Copy(configPath, configPath + ".upgrade." + DateTime.Now.ToString("yyyyMMddHHmmss") + ".backup.json", true);
+            }
+            foreach (var file in Directory.GetFiles(extractDir))
+            {
+                var target = Path.Combine(installDir, Path.GetFileName(file));
+                if (Path.GetFileName(file).Equals("FlyPPTTimer.config.json", StringComparison.OrdinalIgnoreCase) && File.Exists(target)) continue;
+                File.Copy(file, target, true);
+            }
+            Directory.Delete(extractDir, true);
             TryCreateShortcut(
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "FlyPPTTimer.lnk"),
                 installDir);

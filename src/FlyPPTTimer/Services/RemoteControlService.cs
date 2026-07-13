@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Reflection;
+using System.Security.Cryptography;
 using FlyPPTTimer.Models;
 
 namespace FlyPPTTimer.Services;
@@ -24,8 +25,8 @@ public sealed class RemoteControlService : IDisposable
     private CancellationTokenSource? _cts;
     private readonly Dictionary<string, DateTime> _clients = [];
     private readonly SemaphoreSlim _connectionSlots = new(16, 16);
-    private const int MaxHeaderBytes = 16 * 1024;
-    private const int MaxBodyBytes = 64 * 1024;
+    internal const int MaxHeaderBytes = 16 * 1024;
+    internal const int MaxBodyBytes = 64 * 1024;
 
     public RemoteControlService(Func<AppConfig> getConfig, Action<AppConfig> saveConfig, AppCommandService commands, PowerPointControlService powerPoint, LogService log)
     {
@@ -123,8 +124,8 @@ public sealed class RemoteControlService : IDisposable
 
     public void DisconnectAll()
     {
-        lock (_clients) _clients.Clear();
-        _log.Info("All remote devices disconnected.");
+        RegenerateToken();
+        _log.Info("All remote devices disconnected and their links invalidated.");
     }
 
     private async Task AcceptLoop(CancellationToken token)
@@ -173,19 +174,7 @@ public sealed class RemoteControlService : IDisposable
             }
             if (contentLength < 0 || contentLength > MaxBodyBytes) throw new InvalidDataException("请求体过大。");
 
-            var bodyBytes = new byte[contentLength];
-            if (contentLength > 0)
-            {
-                var copied = Math.Min(contentLength, bodyPrefix.Length);
-                bodyPrefix.AsSpan(0, copied).CopyTo(bodyBytes);
-                var offset = copied;
-                while (offset < contentLength)
-                {
-                    var read = await stream.ReadAsync(bodyBytes.AsMemory(offset, contentLength - offset), timeout.Token);
-                    if (read == 0) throw new EndOfStreamException("请求体未完整发送。");
-                    offset += read;
-                }
-            }
+            var bodyBytes = await ReadBody(stream, bodyPrefix, contentLength, timeout.Token);
             var body = Encoding.UTF8.GetString(bodyBytes);
 
             var parts = requestLine.Split(' ');
@@ -195,7 +184,7 @@ public sealed class RemoteControlService : IDisposable
             var remote = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
             var ok = HandleRequest(method, rawUrl, body, remote, out var contentType, out var response, out var status);
             await WriteResponse(stream, status, contentType, response, timeout.Token);
-            if (!ok) _log.Warn($"Remote request rejected: {remote} {rawUrl}");
+            if (!ok) _log.Warn($"Remote request rejected: {remote} {RedactUrl(rawUrl)}");
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested) { _log.Warn("Remote request timed out."); }
         catch (Exception ex)
@@ -205,7 +194,7 @@ public sealed class RemoteControlService : IDisposable
         finally { _connectionSlots.Release(); }
     }
 
-    private static async Task<(string Header, byte[] BodyPrefix)> ReadHeaders(NetworkStream stream, CancellationToken token)
+    internal static async Task<(string Header, byte[] BodyPrefix)> ReadHeaders(Stream stream, CancellationToken token)
     {
         using var buffer = new MemoryStream();
         var chunk = new byte[2048];
@@ -219,6 +208,7 @@ public sealed class RemoteControlService : IDisposable
             for (var i = Math.Max(0, length - read - 3); i <= length - 4; i++)
             {
                 if (data[i] != 13 || data[i + 1] != 10 || data[i + 2] != 13 || data[i + 3] != 10) continue;
+                if (i + 4 > MaxHeaderBytes) throw new InvalidDataException("请求头过大。");
                 var header = Encoding.ASCII.GetString(data, 0, i);
                 var prefixLength = length - i - 4;
                 var prefix = new byte[prefixLength];
@@ -227,6 +217,22 @@ public sealed class RemoteControlService : IDisposable
             }
         }
         throw new InvalidDataException("请求头过大。");
+    }
+
+    internal static async Task<byte[]> ReadBody(Stream stream, byte[] prefix, int contentLength, CancellationToken token)
+    {
+        if (contentLength < 0 || contentLength > MaxBodyBytes) throw new InvalidDataException("请求体过大。");
+        var body = new byte[contentLength];
+        var copied = Math.Min(contentLength, prefix.Length);
+        prefix.AsSpan(0, copied).CopyTo(body);
+        var offset = copied;
+        while (offset < contentLength)
+        {
+            var read = await stream.ReadAsync(body.AsMemory(offset, contentLength - offset), token);
+            if (read == 0) throw new EndOfStreamException("请求体未完整发送。");
+            offset += read;
+        }
+        return body;
     }
 
     private bool HandleRequest(string method, string rawUrl, string body, string remote, out string contentType, out string response, out int status)
@@ -238,7 +244,7 @@ public sealed class RemoteControlService : IDisposable
         var uri = new Uri("http://localhost" + rawUrl);
         var token = GetQuery(uri.Query, "token");
         var config = _getConfig();
-        if (!config.RemoteControl.Enabled || !IsRunning || token != config.RemoteControl.Token)
+        if (!config.RemoteControl.Enabled || !IsRunning || !FixedTimeTokenEquals(token, config.RemoteControl.Token))
         {
             status = 403;
             response = ToJson(new { ok = false, error = "令牌无效或远程控制已关闭" });
@@ -356,6 +362,23 @@ public sealed class RemoteControlService : IDisposable
         return "";
     }
 
+    internal static bool FixedTimeTokenEquals(string supplied, string expected)
+    {
+        var left = SHA256.HashData(Encoding.UTF8.GetBytes(supplied ?? ""));
+        var right = SHA256.HashData(Encoding.UTF8.GetBytes(expected ?? ""));
+        return CryptographicOperations.FixedTimeEquals(left, right);
+    }
+
+    internal static string RedactUrl(string rawUrl)
+    {
+        try
+        {
+            var uri = new Uri("http://localhost" + rawUrl);
+            return uri.AbsolutePath;
+        }
+        catch { return "<invalid-url>"; }
+    }
+
     private static async Task WriteResponse(NetworkStream stream, int status, string contentType, string response, CancellationToken token)
     {
         var body = Encoding.UTF8.GetBytes(response);
@@ -364,7 +387,9 @@ public sealed class RemoteControlService : IDisposable
             $"Content-Type: {contentType}\r\n" +
             $"Content-Length: {body.Length}\r\n" +
             "Cache-Control: no-store\r\n" +
-            "Access-Control-Allow-Origin: *\r\n" +
+            "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'\r\n" +
+            "Referrer-Policy: no-referrer\r\n" +
+            "X-Content-Type-Options: nosniff\r\n" +
             "Connection: close\r\n\r\n");
         await stream.WriteAsync(header, token);
         await stream.WriteAsync(body, token);

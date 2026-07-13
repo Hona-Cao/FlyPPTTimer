@@ -4,7 +4,7 @@ namespace FlyPPTTimer.Models;
 
 public sealed class AppConfig
 {
-    public string Version { get; set; } = "0.12.0";
+    public string Version { get; set; } = "0.12.1";
     public TimerSettings Timer { get; set; } = new();
     public BehaviorSettings Behavior { get; set; } = new();
     public AppearanceSettings Appearance { get; set; } = new();
@@ -217,7 +217,7 @@ public sealed class RemoteState
     public bool WindowVisible { get; set; }
     public bool Muted { get; set; }
     public int ConnectedClients { get; set; }
-    public string Version { get; set; } = "0.12.0";
+    public string Version { get; set; } = "0.12.1";
 }
 
 public sealed class TimerRemoteState
@@ -253,6 +253,7 @@ public sealed class PresentationOption
 {
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
+    public string Directory { get; set; } = "";
     public bool IsOpen { get; set; }
     public bool IsActive { get; set; }
 }

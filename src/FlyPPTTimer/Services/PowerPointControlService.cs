@@ -22,6 +22,7 @@ public sealed class PowerPointControlService : IDisposable
     private string _lastShowPath = "";
     private long _lastNavigationTick;
     private int _refreshQueued;
+    private DateTime _lastRefreshFailureLog = DateTime.MinValue;
     private bool _disposed;
 
     public PowerPointControlService(Func<AppConfig> getConfig, LogService log)
@@ -113,7 +114,14 @@ public sealed class PowerPointControlService : IDisposable
         if (!_queue.TryAdd(() =>
         {
             try { RetryComBusy(UpdateCachedState); }
-            catch (Exception ex) { _log.Warn($"PowerPoint background refresh failed: {FriendlyError(ex)}"); }
+            catch (Exception ex)
+            {
+                if (DateTime.UtcNow - _lastRefreshFailureLog >= TimeSpan.FromSeconds(30))
+                {
+                    _lastRefreshFailureLog = DateTime.UtcNow;
+                    _log.Warn($"PowerPoint background refresh failed: {FriendlyError(ex)}");
+                }
+            }
             finally { Interlocked.Exchange(ref _refreshQueued, 0); }
         })) Interlocked.Exchange(ref _refreshQueued, 0);
     }
@@ -121,6 +129,16 @@ public sealed class PowerPointControlService : IDisposable
     private PresentationState UpdateCachedState()
     {
         var state = ReadState();
+        if (!string.IsNullOrWhiteSpace(state.Error))
+        {
+            lock (_stateSync)
+            {
+                var stale = CloneState(_cachedState);
+                stale.Error = state.Error;
+                _cachedState = stale;
+                return CloneState(stale);
+            }
+        }
         state.UpdatedAt = DateTime.Now;
         lock (_stateSync) _cachedState = CloneState(state);
         if (state.IsSlideShowRunning && (!_lastShowRunning || !SamePath(_lastShowPath, state.PresentationPath)))
@@ -347,7 +365,7 @@ public sealed class PowerPointControlService : IDisposable
         {
             state.Presentations.Add(new PresentationOption
             {
-                Id = IdForPath(path), Name = Path.GetFileName(path),
+                Id = IdForPath(path), Name = Path.GetFileName(path), Directory = Path.GetDirectoryName(path) ?? "",
                 IsOpen = openPaths.Contains(path, StringComparer.OrdinalIgnoreCase),
                 IsActive = SamePath(path, activePath)
             });
@@ -417,7 +435,7 @@ public sealed class PowerPointControlService : IDisposable
         ScreenMode = state.ScreenMode,
         UpdatedAt = state.UpdatedAt,
         Error = state.Error,
-        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, IsOpen = x.IsOpen, IsActive = x.IsActive }).ToList()
+        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, Directory = x.Directory, IsOpen = x.IsOpen, IsActive = x.IsActive }).ToList()
     };
 
     private string Navigate(Action<object> action, string message)
@@ -447,7 +465,11 @@ public sealed class PowerPointControlService : IDisposable
         _disposed = true;
         _refreshTimer.Dispose();
         _queue.CompleteAdding();
-        if (!_thread.Join(TimeSpan.FromSeconds(2))) _log.Warn("PowerPoint STA thread did not stop within two seconds.");
+        if (!_thread.Join(TimeSpan.FromSeconds(2)))
+        {
+            _log.Warn("PowerPoint STA thread did not stop within two seconds; queue disposal deferred until process exit.");
+            return;
+        }
         _queue.Dispose();
     }
 }

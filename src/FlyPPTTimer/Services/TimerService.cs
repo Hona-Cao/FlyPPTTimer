@@ -135,6 +135,8 @@ public sealed class TimerService
 
     private void RaiseUpdate() => Updated?.Invoke(this, CreateSnapshot());
 
+    internal void ProcessTickForTest() => Tick();
+
     public TimerSnapshot CreateSnapshot()
     {
         var elapsed = _stopwatch.Elapsed;

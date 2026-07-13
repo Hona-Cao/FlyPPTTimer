@@ -46,7 +46,7 @@ public sealed class NetworkAddressService
         var name = (ni.Name + " " + ni.Description).ToLowerInvariant();
         if (address.StartsWith("127.")) return ("本机测试", 90);
         if (address.StartsWith("169.254.")) return ("自动私有地址", 80);
-        if (address.StartsWith("198.18.") || address.StartsWith("198.19.") || name.Contains("clash") || name.Contains("tun") || name.Contains("wintun") || name.Contains("proxy")) return ("代理/TUN 虚拟网卡（手机不可用）", 85);
+        if (IsProxyAddress(address, name)) return ("代理/TUN 虚拟网卡（手机不可用）", 85);
         if (name.Contains("virtual") || name.Contains("vmware") || name.Contains("hyper-v") || name.Contains("virtualbox")) return ("虚拟网卡", 70);
         if (name.Contains("wi-fi") || name.Contains("wireless") || name.Contains("wlan")) return ("无线网络", 1);
         if (name.Contains("remote ndis") || name.Contains("usb") || name.Contains("rndis") || name.Contains("mobile") || name.Contains("tether")) return ("手机热点或 USB 共享网络", 2);
@@ -54,7 +54,14 @@ public sealed class NetworkAddressService
         return ("其他网络", 50);
     }
 
-    private static bool IsLanAddress(string address)
+    internal static bool IsProxyAddress(string address, string adapterName) =>
+        address.StartsWith("198.18.") || address.StartsWith("198.19.") ||
+        adapterName.Contains("clash", StringComparison.OrdinalIgnoreCase) ||
+        adapterName.Contains("tun", StringComparison.OrdinalIgnoreCase) ||
+        adapterName.Contains("wintun", StringComparison.OrdinalIgnoreCase) ||
+        adapterName.Contains("proxy", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsLanAddress(string address)
     {
         if (!IPAddress.TryParse(address, out var ip)) return false;
         var b = ip.GetAddressBytes();

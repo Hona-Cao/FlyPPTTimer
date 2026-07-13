@@ -1,6 +1,6 @@
 ﻿# FlyPPTTimer
 
-Windows 便携版 PPT/演讲计时器。当前版本 v0.12 使用 C#、.NET 8、Windows Forms 开发，配置和日志默认写入 exe 同目录。
+Windows 便携版 PPT/演讲计时器。当前版本 v0.12.1 使用 C#、.NET 8、Windows Forms 开发，配置和日志默认写入 exe 同目录。
 
 适合 PPT 汇报、会议发言、课堂演示、护理/医疗科室例会等场景。
 
@@ -17,7 +17,7 @@ Windows 便携版 PPT/演讲计时器。当前版本 v0.12 使用 C#、.NET 8、
 
 首次启动会自动生成：
 - `FlyPPTTimer.config.json`
-- `logs/app.log`
+- `logs/app-日期.log`
 
 ## 主要功能
 
@@ -51,6 +51,12 @@ Windows 便携版 PPT/演讲计时器。当前版本 v0.12 使用 C#、.NET 8、
 - PowerPoint 状态由专用 STA 线程缓存，手机状态轮询不会因 Office 忙碌而断开计时遥控。
 - Clash/TUN 虚拟网卡会被标为手机不可用，二维码优先选择真实 Wi-Fi 或 RFC1918 局域网地址。
 - 演示文稿在手机端直接完整列出，长列表可滚动，不再使用下拉选择。
+- PowerPoint 事件和全屏检测共用同一放映状态机；关闭自动开始后，本地或手机启动放映都不会改动计时器。
+- 手机演示列表区分“切换”和“打开”，同名文件显示目录；命令结束和断线恢复后按钮状态会立即校准。
+- 远控 token 使用固定时间比较，“断开所有设备”会生成新 token 并使旧二维码和旧链接失效。
+- 配置使用原子写入和备份恢复；安装升级不会覆盖现有用户配置。
+- 单实例运行，日志按日期及大小轮转，并捕获 UI、后台任务和未处理异常。
+- 仓库包含 Windows 自动化测试与 GitHub Actions；PowerPoint COM 操作保留为本机集成测试。
 
 > v0.11 的 PowerPoint 遥控首先保证 Microsoft PowerPoint。WPS 演示仅保留原有全屏检测，不宣称支持远程演示控制。
 
