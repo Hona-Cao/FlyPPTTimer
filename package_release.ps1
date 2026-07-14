@@ -8,7 +8,7 @@ $projectPath = Join-Path $root "src\FlyPPTTimer\FlyPPTTimer.csproj"
 $fullVersion = [string]$project.Project.PropertyGroup.Version
 if ([string]::IsNullOrWhiteSpace($fullVersion)) { throw "Project version is missing: $projectPath" }
 $version = $fullVersion -replace '\.0$', ''
-$dist = Join-Path $root "dist"
+$dist = Join-Path $root "dist\v$fullVersion"
 $releaseRoot = Join-Path $root "releases\v$version"
 if (Test-Path -LiteralPath $releaseRoot) { throw "Release directory already exists and will not be overwritten: $releaseRoot" }
 $assets = Join-Path $releaseRoot "assets"
@@ -20,8 +20,9 @@ $iexpressWork = "C:\Temp\FlyPPTTimerPackage_v$version"
 $iexpressSource = Join-Path $iexpressWork "source"
 $iexpressSetup = Join-Path $iexpressWork "FlyPPTTimer_Setup_v$version.exe"
 
-& (Join-Path $root "build.ps1")
-Copy-Item -LiteralPath (Join-Path $root "docs\default-config.json") -Destination (Join-Path $dist "FlyPPTTimer.config.json") -Force
+if (-not (Test-Path -LiteralPath $dist)) {
+    & (Join-Path $root "build.ps1")
+}
 
 Remove-Item -LiteralPath $iexpressWork -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $portable, $installerSource, $iexpressSource | Out-Null

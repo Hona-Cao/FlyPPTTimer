@@ -1,47 +1,47 @@
-# FlyPPTTimer v0.12.1 测试报告
+# FlyPPTTimer v0.13.1 测试报告
 
-## 构建环境
+## 发布范围
 
-- 系统：Windows 11 x64
-- 运行时：.NET 8
-- 当前版本：v0.12.1
-- 分支：`feature/v0.12-stability-ui`
+- 分支：`feature/v0.13.1-compatibility`
+- 基线：v0.12.1 稳定 WinForms 版本（提交 `a75c740`）
+- 本版仅恢复兼容性并保留既有美工，不引入 WinUI 运行时，不重构计时、远控、PPT 检测或设置功能。
 
 ## 自动化测试
 
 执行命令：
 
 ```powershell
-.\.dotnet\dotnet.exe test .\tests\FlyPPTTimer.Tests\FlyPPTTimer.Tests.csproj -c Release
+.\.dotnet\dotnet.exe test .\tests\FlyPPTTimer.Tests\FlyPPTTimer.Tests.csproj -c Release -p:NuGetAudit=false
 ```
 
-结果：18 项通过，0 项失败。
+结果：18 项通过，0 项失败，0 项跳过。
 
-覆盖范围：
+## 桌面交互回归
 
-- `AutoStartOnFullscreen=false` 时放映不启动或重置计时器。
-- 退出放映的停止/重置四种组合。
-- 倒计时结束时 Updated 和 Finished 获得同一 Finished 最终快照。
-- UTF-8 请求体字节长度、超大请求体和不完整请求体。
-- token 固定时间比较、日志 URL 脱敏和旧 token 失效。
-- 私有局域网与 Clash/TUN 地址过滤。
-- 手机演示列表 busy 结束后的按钮恢复路径。
-- 配置原子保存、用户值保留、损坏配置备份恢复。
+- 原设置窗口已恢复，六个原有页签及其设置内容完整保留。
+- 按 `F6` 能打开设置窗口，窗口保持响应。
+- 双屏显示两个计时悬浮窗时，任务栏中只有设置窗口；两个计时窗口均不生成任务栏预览。
+- 实际鼠标右键点击计时窗口能弹出原功能菜单。
+- 点击菜单外空白处，右键菜单立即关闭。
+- 在右键菜单选择“退出”后，进程正常结束，无需任务管理器强制关闭。
+- 连续启动两次最终 EXE，仅保留 1 个进程，单实例保护有效。
+- v0.13 WinUI 页面及动画未进入 v0.13.1 运行路径。
+- 使用原始 `Assets/app.ico`，未替换软件标志。
 
-## 本机回归
+验收截图：`tests/acceptance/v0.13.1/settings-restored.png`。
 
-- Release 构建：通过，0 warnings，0 errors。
-- 单文件 win-x64 自包含发布：通过。
-- `/state` 和 `/command`：使用本地服务验证响应、安全头和旧 token 拒绝。
-- 单实例：重复启动不会创建第二套托盘、快捷键或远程服务。
-- PowerPoint 自动开始开关：使用 `ppt\6月护士长例会内容.pptx` 通过同一手机接口从头放映；`AutoStartOnFullscreen=false` 时放映状态为运行中，计时器保持“停止”，测试通过。
-- `releases\v0.12.1`：新目录创建成功，未覆盖 v0.12。
+## 构建验证
 
-## 需人工验证
+- 目标版本：v0.13.1
+- 目标平台：Windows x64、.NET 8、自包含单文件。
+- `dist\v0.13.1` 和 `releases\v0.13.1` 均为独立目录，不覆盖旧版本。
+- Release 构建及自包含单文件发布：0 个警告，0 个错误。
+- EXE SHA-256：`7D3D1A2CDEEDC81AA5FE40DF5D1607811D16C28105CB240DE471FB6EA9F78330`。
+- 安装程序 SHA-256：`96973CE1629508BD823AD4AE88645B95F46765A09EC75AD504DD95A1C0942E62`。
+- 绿色版 ZIP SHA-256：`8F31222E69AF92A5822F884F21E344CB9473337EFDBFA2854A78B7A0EF35D159`。
 
-- Microsoft PowerPoint COM：从当前页放映、翻页、跳页、黑白屏和结束放映的完整交互复测。
-- PowerPoint 忙碌、受保护文稿、多个已打开文稿及非活动放映窗口。
-- 手机在 Clash 规则模式、电脑在 Clash TUN 模式下的断联与恢复。
-- 100%、125%、150% DPI，以及手机竖屏和横屏触控体验。
+## 仍需人工验证
 
-上述 PowerPoint COM 项目不能在无 Office 交互桌面的 GitHub Actions 中可靠执行，明确作为本机集成测试，不标记为 CI 通过。
+- 托盘溢出区图标在用户当前任务栏布局下的鼠标右键操作。
+- Microsoft PowerPoint COM 全流程及手机真机远控。
+- 100%、125%、150% DPI 下的长期使用体验。

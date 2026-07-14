@@ -1,6 +1,6 @@
 ﻿# FlyPPTTimer
 
-Windows 便携版 PPT/演讲计时器。当前版本 v0.12.1 使用 C#、.NET 8、Windows Forms 开发，配置和日志默认写入 exe 同目录。
+Windows 便携版 PPT/演讲计时器。当前兼容版本 v0.13.1 使用 C#、.NET 8、Windows Forms；恢复 v0.12.1 的完整设置、右键菜单、托盘、原版 Logo 和稳定窗口行为，不使用 v0.13 的 WinUI 运行时。配置和日志默认写入 exe 同目录。
 
 适合 PPT 汇报、会议发言、课堂演示、护理/医疗科室例会等场景。
 
