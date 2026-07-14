@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -17,6 +17,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlyPPTTimer\FlyPPTTimer.csproj" />
+    <ProjectReference Include="..\..\src\FlyPPTTimer.Core\FlyPPTTimer.Core.csproj" />
+    <ProjectReference Include="..\..\src\FlyPPTTimer.Infrastructure.Windows\FlyPPTTimer.Infrastructure.Windows.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

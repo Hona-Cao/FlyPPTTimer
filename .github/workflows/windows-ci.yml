@@ -2,7 +2,7 @@ name: Windows CI
 
 on:
   push:
-    branches: [main, feature/v0.12-stability-ui]
+    branches: [main, feature/v0.12-stability-ui, feature/v0.13-winui-rebuild]
   pull_request:
     branches: [main]
 
@@ -15,8 +15,13 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - name: Restore
-        run: dotnet restore tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj
-      - name: Build
-        run: dotnet build src/FlyPPTTimer/FlyPPTTimer.csproj -c Release --no-restore
+        run: dotnet restore FlyPPTTimer.sln --configfile NuGet.Config -p:NuGetAudit=false
+      - name: Build WinUI
+        shell: pwsh
+        run: |
+          $kit = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Directory | Where-Object Name -Match '^\d+\.' | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          $tools = Join-Path $kit.FullName "x64"
+          $env:Path = "$tools;$env:Path"
+          dotnet build src/FlyPPTTimer.WinUI/FlyPPTTimer.WinUI.csproj -c Release -r win-x64 --no-restore -p:MakePriExeFullPath="$(Join-Path $tools 'makepri.exe')"
       - name: Test
-        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=v0.12.1.trx"
+        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore -p:NuGetAudit=false --logger "trx;LogFileName=v0.13.trx"

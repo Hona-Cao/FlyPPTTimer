@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{3542325C-7DF4-4491-8238-58418654602D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlyPPTTimer.Core", "src\FlyPPTTimer.Core\FlyPPTTimer.Core.csproj", "{FF10C269-AC7C-4D5E-930D-DADD8DD171EC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlyPPTTimer.Infrastructure.Windows", "src\FlyPPTTimer.Infrastructure.Windows\FlyPPTTimer.Infrastructure.Windows.csproj", "{CC9AA3C2-71BB-45C5-BFDE-829F39C21845}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlyPPTTimer.WinUI", "src\FlyPPTTimer.WinUI\FlyPPTTimer.WinUI.csproj", "{577A6D75-C0EE-4D84-846B-7D49E3BBCF81}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{A805165C-2671-4CCB-91E6-CD71A7C1F3F7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlyPPTTimer.Tests", "tests\FlyPPTTimer.Tests\FlyPPTTimer.Tests.csproj", "{BAB556CD-06E0-4266-8072-FB6D7972CAD9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FF10C269-AC7C-4D5E-930D-DADD8DD171EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF10C269-AC7C-4D5E-930D-DADD8DD171EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF10C269-AC7C-4D5E-930D-DADD8DD171EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF10C269-AC7C-4D5E-930D-DADD8DD171EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CC9AA3C2-71BB-45C5-BFDE-829F39C21845}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC9AA3C2-71BB-45C5-BFDE-829F39C21845}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC9AA3C2-71BB-45C5-BFDE-829F39C21845}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC9AA3C2-71BB-45C5-BFDE-829F39C21845}.Release|Any CPU.Build.0 = Release|Any CPU
+		{577A6D75-C0EE-4D84-846B-7D49E3BBCF81}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{577A6D75-C0EE-4D84-846B-7D49E3BBCF81}.Debug|Any CPU.Build.0 = Debug|x86
+		{577A6D75-C0EE-4D84-846B-7D49E3BBCF81}.Release|Any CPU.ActiveCfg = Release|x86
+		{577A6D75-C0EE-4D84-846B-7D49E3BBCF81}.Release|Any CPU.Build.0 = Release|x86
+		{BAB556CD-06E0-4266-8072-FB6D7972CAD9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BAB556CD-06E0-4266-8072-FB6D7972CAD9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BAB556CD-06E0-4266-8072-FB6D7972CAD9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BAB556CD-06E0-4266-8072-FB6D7972CAD9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{FF10C269-AC7C-4D5E-930D-DADD8DD171EC} = {3542325C-7DF4-4491-8238-58418654602D}
+		{CC9AA3C2-71BB-45C5-BFDE-829F39C21845} = {3542325C-7DF4-4491-8238-58418654602D}
+		{577A6D75-C0EE-4D84-846B-7D49E3BBCF81} = {3542325C-7DF4-4491-8238-58418654602D}
+		{BAB556CD-06E0-4266-8072-FB6D7972CAD9} = {A805165C-2671-4CCB-91E6-CD71A7C1F3F7}
+	EndGlobalSection
+EndGlobal

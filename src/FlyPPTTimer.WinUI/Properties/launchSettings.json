@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "FlyPPTTimer.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "FlyPPTTimer.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

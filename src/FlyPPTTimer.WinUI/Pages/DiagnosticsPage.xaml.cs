@@ -1,0 +1,3 @@
+using System.Diagnostics; using Microsoft.UI.Xaml; using Microsoft.UI.Xaml.Controls;
+namespace FlyPPTTimer.WinUI.Pages;
+public sealed partial class DiagnosticsPage:Page{public DiagnosticsPage(){InitializeComponent();Refresh();}private void Refresh()=>LogList.ItemsSource=App.Services.Log.ReadRecent(500);private void Refresh_Click(object s,RoutedEventArgs e)=>Refresh();private void OpenLogs_Click(object s,RoutedEventArgs e)=>Process.Start(new ProcessStartInfo("explorer.exe",FlyPPTTimer.Infrastructure.Windows.AppPaths.LogDirectory){UseShellExecute=true});private void RestartPpt_Click(object s,RoutedEventArgs e)=>App.Services.ViewModel.RestartPowerPoint();}

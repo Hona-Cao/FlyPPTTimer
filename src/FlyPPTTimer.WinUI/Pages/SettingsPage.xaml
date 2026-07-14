@@ -1,0 +1,48 @@
+<Page x:Class="FlyPPTTimer.WinUI.Pages.SettingsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="32" Spacing="20" MaxWidth="900">
+            <StackPanel><TextBlock Text="设置" Style="{StaticResource PageTitleStyle}" /><TextBlock Text="本页使用编辑副本；只有验证通过后才会一次性提交" Style="{StaticResource CaptionStyle}" /></StackPanel>
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="14"><TextBlock Text="PowerPoint 联动" Style="{StaticResource SectionTitleStyle}" />
+                    <Grid ColumnSpacing="20" RowSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="260" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <StackPanel><TextBlock Text="放映时自动开始" /><TextBlock Text="本地或手机启动放映时统一生效" Style="{StaticResource CaptionStyle}" /></StackPanel><ToggleSwitch x:Name="AutoStart" Grid.Column="1" />
+                        <TextBlock Grid.Row="1" Text="退出放映时停止" /><ToggleSwitch x:Name="StopOnExit" Grid.Row="1" Grid.Column="1" />
+                        <TextBlock Grid.Row="2" Text="退出放映时重置" /><ToggleSwitch x:Name="ResetOnExit" Grid.Row="2" Grid.Column="1" />
+                        <TextBlock Grid.Row="3" Text="暂停时闪烁当前时间" /><ToggleSwitch x:Name="FlashPause" Grid.Row="3" Grid.Column="1" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="14"><TextBlock Text="计时提示" Style="{StaticResource SectionTitleStyle}" />
+                    <Grid ColumnSpacing="20" RowSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="260" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Text="提示 1" /><ToggleSwitch x:Name="Prompt1Enabled" Grid.Column="1" Header="启用" />
+                        <TextBlock Grid.Row="1" Text="提示 1 提前秒数" /><NumberBox x:Name="Prompt1Seconds" Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="86400" />
+                        <TextBlock Grid.Row="2" Text="提示 1 文字" /><TextBox x:Name="Prompt1Text" Grid.Row="2" Grid.Column="1" />
+                        <TextBlock Grid.Row="3" Text="提示 2" /><ToggleSwitch x:Name="Prompt2Enabled" Grid.Row="3" Grid.Column="1" Header="启用" />
+                        <TextBlock Grid.Row="4" Text="提示 2 提前秒数" /><NumberBox x:Name="Prompt2Seconds" Grid.Row="4" Grid.Column="1" Minimum="0" Maximum="86400" />
+                        <TextBlock Grid.Row="5" Text="提示 2 文字" /><TextBox x:Name="Prompt2Text" Grid.Row="5" Grid.Column="1" />
+                        <TextBlock Grid.Row="6" Text="结束提示文字" /><TextBox x:Name="EndPromptText" Grid.Row="6" Grid.Column="1" />
+                        <TextBlock Grid.Row="7" Text="结束闪烁秒数" /><NumberBox x:Name="EndFlashSeconds" Grid.Row="7" Grid.Column="1" Minimum="0" Maximum="120" />
+                    </Grid>
+                    <TextBlock Text="提示方式" Style="{StaticResource CaptionStyle}" />
+                    <StackPanel Orientation="Horizontal" Spacing="14"><CheckBox x:Name="Prompt1Beep" Content="提示 1 蜂鸣" /><CheckBox x:Name="Prompt1Speak" Content="语音" /><CheckBox x:Name="Prompt1FlashText" Content="闪烁文字" /><CheckBox x:Name="Prompt1FlashBackground" Content="闪烁背景" /><CheckBox x:Name="Prompt1FlashBorder" Content="闪烁边框" /></StackPanel>
+                    <TextBox x:Name="Prompt1SoundFile" Header="提示 1 自定义 WAV（可留空）" PlaceholderText="完整 WAV 文件路径" />
+                    <StackPanel Orientation="Horizontal" Spacing="14"><CheckBox x:Name="Prompt2Beep" Content="提示 2 蜂鸣" /><CheckBox x:Name="Prompt2Speak" Content="语音" /><CheckBox x:Name="Prompt2FlashText" Content="闪烁文字" /><CheckBox x:Name="Prompt2FlashBackground" Content="闪烁背景" /><CheckBox x:Name="Prompt2FlashBorder" Content="闪烁边框" /></StackPanel>
+                    <TextBox x:Name="Prompt2SoundFile" Header="提示 2 自定义 WAV（可留空）" PlaceholderText="完整 WAV 文件路径" />
+                    <StackPanel Orientation="Horizontal" Spacing="18"><CheckBox x:Name="EndBeep" Content="结束时蜂鸣" /><CheckBox x:Name="EndSpeak" Content="结束时语音" /><CheckBox x:Name="EndFlashText" Content="闪烁文字" /><CheckBox x:Name="EndFlashBackground" Content="闪烁背景" /><CheckBox x:Name="EndFlashBorder" Content="闪烁边框" /></StackPanel>
+                    <TextBox x:Name="EndSoundFile" Header="结束提示自定义 WAV（可留空）" PlaceholderText="完整 WAV 文件路径" />
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardStyle}">
+                <StackPanel Spacing="14"><TextBlock Text="窗口行为" Style="{StaticResource SectionTitleStyle}" />
+                    <Grid ColumnSpacing="20" RowSpacing="12"><Grid.ColumnDefinitions><ColumnDefinition Width="260" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <TextBlock Text="鼠标穿透" /><ToggleSwitch x:Name="ClickThrough" Grid.Column="1" /><TextBlock Grid.Row="1" Text="锁定计时窗口位置" /><ToggleSwitch x:Name="LockPosition" Grid.Row="1" Grid.Column="1" /><TextBlock Grid.Row="2" Text="关闭时最小化到托盘" /><ToggleSwitch x:Name="MinimizeTray" Grid.Row="2" Grid.Column="1" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource CardStyle}"><StackPanel Spacing="12"><TextBlock Text="配置管理" Style="{StaticResource SectionTitleStyle}" /><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="导入配置" Click="Import_Click" /><Button Content="导出配置" Click="Export_Click" /><Button Content="恢复默认" Click="Reset_Click" /></StackPanel></StackPanel></Border>
+            <InfoBar x:Name="ValidationBar" IsOpen="False" />
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right"><Button Content="取消编辑" Click="Cancel_Click" /><Button Content="应用" Style="{StaticResource AccentButtonStyle}" Click="Apply_Click" /></StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

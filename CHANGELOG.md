@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## 0.13.0
+
+- 新建 `FlyPPTTimer.Core`、`FlyPPTTimer.Infrastructure.Windows`、`FlyPPTTimer.WinUI`，以 .NET 8、WinUI 3、Windows App SDK 稳定版和 CommunityToolkit.Mvvm 重构桌面程序。
+- 主窗口改用 Mica、Fluent 卡片和左侧 NavigationView；新增概览、计时、PowerPoint、文件规则、手机遥控、外观、快捷键、设置及诊断页面。
+- 计时悬浮窗改为独立 WinUI/Win32 窗口，支持无边框、透明、置顶、穿透、锁定、多屏、九宫格位置及独立文字/背景透明度。
+- PowerPoint COM 全部保留在专用 STA 有限队列；新增首张幻灯片异步缩略图缓存，并保持计时和远控在 COM 异常时可用。
+- 文件规则新增多选、清空确认、拖放添加和排序、按钮排序、批量时长、状态标签、重新定位与详情预览。
+- 手机演示列表同步桌面顺序、目录、时长和状态，并提供打开、切换、从头及当前页放映。
+- 恢复提示、蜂鸣、语音、自定义 WAV、静音、暂停闪烁及文字/背景/边框独立闪烁入口。
+- 新增 WinUI 构建与独立发布脚本、Windows CI，以及 v0.13 Core 自动化回归。
+
 ## 0.12.1
 
 - PowerPoint 缓存事件和全屏检测统一接入放映生命周期控制器，完整遵守 `AutoStartOnFullscreen` 并去重。

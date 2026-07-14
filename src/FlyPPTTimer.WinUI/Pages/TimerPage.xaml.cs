@@ -1,0 +1,3 @@
+using FlyPPTTimer.Core.Models; using Microsoft.UI.Xaml; using Microsoft.UI.Xaml.Controls;
+namespace FlyPPTTimer.WinUI.Pages;
+public sealed partial class TimerPage : Page { public TimerPage() { InitializeComponent(); DataContext = App.Services.ViewModel; ModeBox.SelectedIndex = App.Services.Controller.Config.Timer.Mode == TimerMode.Countdown ? 0 : 1; } private void Apply_Click(object sender, RoutedEventArgs e) { var edit=App.Services.Controller.CreateEditableConfig(); edit.Timer.DefaultDuration=DurationBox.Text; edit.Timer.Mode=ModeBox.SelectedIndex==0?TimerMode.Countdown:TimerMode.CountUp; edit.Timer.ContinueOvertime=OvertimeSwitch.IsOn; App.Services.ViewModel.ApplyConfig(edit); } }

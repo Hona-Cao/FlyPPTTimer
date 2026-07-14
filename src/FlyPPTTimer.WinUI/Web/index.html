@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f4f7f8">
+  <title>FlyPPTTimer 遥控</title>
+  <link rel="stylesheet" href="/assets/app.css?token=__FLYPPT_TOKEN__">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div><h1>演讲遥控</h1><p id="syncText">正在连接电脑...</p></div>
+      <span id="connection" class="status connecting">连接中</span>
+    </header>
+
+    <nav class="tabs" aria-label="遥控页面">
+      <button class="tab active" data-page="timerPage">计时</button>
+      <button class="tab" data-page="pptPage">演示</button>
+    </nav>
+
+    <section id="timerPage" class="page active">
+      <article class="card timer-card">
+        <div id="timerText" class="timer-text">--:--</div>
+        <div><strong id="timerStatus">等待同步</strong><p id="timerMode">倒计时</p></div>
+      </article>
+      <article class="card control-grid">
+        <button data-command="timer.start" class="primary">开始</button>
+        <button data-command="timer.pause">暂停</button>
+        <button data-command="timer.resume">继续</button>
+        <button data-command="timer.stop" class="warning">停止并重置</button>
+        <button data-command="window.toggle">显示 / 隐藏</button>
+        <button data-command="window.flash">触发闪烁</button>
+        <button data-command="mute.toggle">静音切换</button>
+      </article>
+    </section>
+
+    <section id="pptPage" class="page">
+      <article class="card presentation-card">
+        <div class="eyebrow">当前演示</div>
+        <h2 id="pptName">未检测到 PowerPoint</h2>
+        <p id="pptPath" class="ellipsis">请先打开演示文稿</p>
+        <div class="presentation-meta"><span id="pptShowState">未放映</span><strong id="pptSlide">0 / 0</strong><span id="pptScreen">正常</span></div>
+      </article>
+
+      <article class="card">
+        <div class="eyebrow">演示文稿列表</div>
+        <div id="presentationList" class="presentation-list"></div>
+        <p id="presentationHint" class="hint"></p>
+      </article>
+
+      <article class="card nav-grid">
+        <button data-command="ppt.previous" class="nav-button"><span>‹</span>上一页</button>
+        <button data-command="ppt.next" class="nav-button primary">下一页<span>›</span></button>
+      </article>
+
+      <article class="card control-grid">
+        <button data-command="ppt.startFromBeginning">从头放映</button>
+        <button data-command="ppt.startFromCurrent">从当前页放映</button>
+        <div class="goto-row"><input id="slideNumber" type="number" min="1" inputmode="numeric" placeholder="页码"><button id="gotoSlide">跳转</button></div>
+        <button id="blackScreenButton" data-command="ppt.blackScreenToggle">黑屏 / 恢复</button>
+        <button id="whiteScreenButton" data-command="ppt.whiteScreenToggle">白屏 / 恢复</button>
+        <button data-command="ppt.endShow" class="danger">结束放映</button>
+      </article>
+    </section>
+
+    <div id="message" class="message" role="status">正在建立连接...</div>
+  </main>
+  <script>window.FLYPPT_TOKEN='__FLYPPT_TOKEN__';</script>
+  <script src="/assets/app.js?token=__FLYPPT_TOKEN__"></script>
+</body>
+</html>
