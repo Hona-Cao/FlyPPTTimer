@@ -25,14 +25,14 @@ public sealed class SettingsForm : Form
     private readonly RemoteControlService _remoteControl;
     private readonly NetworkAddressService _networkAddressService;
     private readonly TableLayoutPanel _shell = new() { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = ModernTheme.Surface };
-    private readonly Panel _titleBar = new() { Dock = DockStyle.Fill, BackColor = ModernTheme.Surface, Padding = new Padding(16, 0, 8, 0) };
+    private readonly Panel _titleBar = new() { Dock = DockStyle.Fill, BackColor = ModernTheme.Card, Padding = new Padding(18, 0, 8, 0) };
     private readonly TableLayoutPanel _settingsArea = new() { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = ModernTheme.Surface };
     private readonly FlowLayoutPanel _navBar = new()
     {
         Dock = DockStyle.Fill,
         FlowDirection = FlowDirection.LeftToRight,
         WrapContents = false,
-        Padding = new Padding(8, 7, 8, 7),
+        Padding = new Padding(8, 8, 8, 8),
         Margin = new Padding(0, 0, 0, 12),
         BackColor = ModernTheme.Surface
     };
@@ -100,22 +100,47 @@ public sealed class SettingsForm : Form
 
     private void BuildWindowChrome()
     {
-        _shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        _shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         _shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(_shell);
 
+        var brand = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = ModernTheme.Card,
+            Margin = Padding.Empty
+        };
+        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
+        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        var logo = new PictureBox
+        {
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.CenterImage,
+            Image = LoadBrandImage(),
+            Margin = Padding.Empty,
+            BackColor = ModernTheme.Card
+        };
         var title = new Label
         {
             Text = "演讲计时器设置",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font(Font, FontStyle.Bold),
+            Font = new Font(Font.FontFamily, 11.5F, FontStyle.Bold),
             ForeColor = ModernTheme.Text,
-            BackColor = ModernTheme.Surface
+            BackColor = ModernTheme.Card,
+            Padding = new Padding(4, 0, 0, 0)
         };
         title.MouseDown += DragWindowFromTitleBar;
+        logo.MouseDown += DragWindowFromTitleBar;
+        brand.MouseDown += DragWindowFromTitleBar;
         _titleBar.MouseDown += DragWindowFromTitleBar;
-        _titleBar.Controls.Add(title);
+        brand.Controls.Add(logo, 0, 0);
+        brand.Controls.Add(title, 1, 0);
+        _titleBar.Controls.Add(brand);
+        Disposed += (_, _) => logo.Image?.Dispose();
 
         var buttons = new FlowLayoutPanel
         {
@@ -124,7 +149,7 @@ public sealed class SettingsForm : Form
             WrapContents = false,
             Width = 232,
             Padding = new Padding(0, 8, 0, 8),
-            BackColor = ModernTheme.Surface
+            BackColor = ModernTheme.Card
         };
         buttons.Controls.Add(TitleButton("－", () => WindowState = FormWindowState.Minimized));
         buttons.Controls.Add(TitleButton("□", ToggleMaximize));
@@ -204,7 +229,7 @@ public sealed class SettingsForm : Form
             Height = 58,
             Font = new Font(Font.FontFamily, 14F, FontStyle.Regular),
             Margin = new Padding(6, 0, 0, 0),
-            BackColor = ModernTheme.ControlFill,
+            BackColor = ModernTheme.Card,
             ForeColor = ModernTheme.Text,
             UseCompatibleTextRendering = true
         };
@@ -224,7 +249,7 @@ public sealed class SettingsForm : Form
             ColumnCount = 2,
             Padding = new Padding(24, 20, 24, 30),
             Margin = new Padding(0, 0, 0, 12),
-            BackColor = Color.White
+            BackColor = ModernTheme.Card
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -304,8 +329,8 @@ public sealed class SettingsForm : Form
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font(Font, FontStyle.Bold),
-            ForeColor = Color.FromArgb(20, 73, 118),
-            BackColor = ModernTheme.AccentSoft,
+            ForeColor = Color.FromArgb(28, 79, 112),
+            BackColor = ModernTheme.SectionFill,
             Padding = new Padding(14, 0, 0, 0),
             Margin = new Padding(0, 12, 0, 8)
         };
@@ -323,7 +348,7 @@ public sealed class SettingsForm : Form
             : control is Label labelControl && labelControl.Text.Length > 42 ? 86
             : 64;
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        grid.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(4, 0, 18, 0), AutoEllipsis = true, ForeColor = Color.FromArgb(38, 52, 57) }, 0, row);
+        grid.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(6, 0, 18, 0), AutoEllipsis = true, ForeColor = ModernTheme.Text }, 0, row);
         var displayControl = DecorateControl(control);
         displayControl.Dock = DockStyle.Fill;
         displayControl.Margin = new Padding(3, 9, 3, 9);
@@ -370,7 +395,7 @@ public sealed class SettingsForm : Form
             Padding = control switch
             {
                 DataGridView => new Padding(1),
-                ComboBox => new Padding(10, 6, 10, 6),
+                ComboBox => new Padding(12, 6, 10, 6),
                 TextBox => new Padding(10, 8, 10, 6),
                 CheckBox => new Padding(4, 7, 8, 7),
                 Label => new Padding(0),
@@ -748,13 +773,13 @@ public sealed class SettingsForm : Form
         Row(grid, "配置文件", Button("打开配置文件位置", (_, _) => OpenConfigRequested?.Invoke(this, EventArgs.Empty)), "otherConfigPath");
         Row(grid, "日志文件", Button("打开日志文件位置", (_, _) => OpenLogRequested?.Invoke(this, EventArgs.Empty)), "otherLogPath");
         Section(grid, "版本");
-        Row(grid, "当前版本", new Label { Text = "演讲计时器 0.12.1 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
+        Row(grid, "当前版本", new Label { Text = "演讲计时器 0.13.2 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
         AddTab("其他设置", grid);
     }
 
     private Button Button(string text, EventHandler handler)
     {
-        var b = new Button { Text = text, Height = 50, UseCompatibleTextRendering = true, BackColor = Color.FromArgb(246, 249, 250) };
+        var b = new Button { Text = text, Height = 50, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentSoft };
         b.Click += handler;
         NormalizeControl(b);
         return b;
@@ -764,8 +789,8 @@ public sealed class SettingsForm : Form
     {
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8, 12, 8, 12), WrapContents = false, BackColor = ModernTheme.Surface };
         var ok = new Button { Text = "确定", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentStrong, ForeColor = Color.White };
-        var cancel = new Button { Text = "取消", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = Color.FromArgb(246, 249, 250) };
-        var apply = new Button { Text = "应用", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = Color.FromArgb(246, 249, 250) };
+        var cancel = new Button { Text = "取消", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.Card };
+        var apply = new Button { Text = "应用", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentSoft };
         ok.Click += (_, _) => { Apply(); DialogResult = DialogResult.OK; Hide(); };
         apply.Click += (_, _) => Apply();
         cancel.Click += (_, _) => Hide();
@@ -784,7 +809,7 @@ public sealed class SettingsForm : Form
 
     private ComboBox Combo(string[] items, string selected)
     {
-        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = ModernTheme.ControlFill };
+        var combo = new ModernComboBox();
         combo.Items.AddRange(items);
         combo.SelectedItem = items.Contains(selected) ? selected : items.First();
         return combo;
@@ -795,6 +820,26 @@ public sealed class SettingsForm : Form
         Text = value.ToString("0.##", CultureInfo.InvariantCulture),
         BorderStyle = BorderStyle.None
     };
+
+    private static Image? LoadBrandImage()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "app.ico");
+        try
+        {
+            using var icon = File.Exists(iconPath) ? new Icon(iconPath, 30, 30) : Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            if (icon is not null) return new Bitmap(icon.ToBitmap(), new Size(30, 30));
+        }
+        catch { }
+
+        var path = Path.Combine(AppContext.BaseDirectory, "app.png");
+        if (!File.Exists(path)) return null;
+        try
+        {
+            using var source = Image.FromFile(path);
+            return new Bitmap(source, new Size(30, 30));
+        }
+        catch { return null; }
+    }
 
     private static void BlockMouseWheel(object? sender, MouseEventArgs e)
     {
@@ -1064,17 +1109,11 @@ internal sealed class SettingsNavButton : Button
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         e.Graphics.Clear(Parent?.BackColor ?? ModernTheme.Surface);
         var rect = new Rectangle(1, 1, Width - 2, Height - 2);
-        var fillColor = Selected ? Color.White : ModernTheme.AccentSoft;
+        var fillColor = Selected ? ModernTheme.AccentStrong : ModernTheme.Card;
         using (var path = ModernTheme.RoundedRect(rect, ModernTheme.ButtonRadius))
         using (var fill = new SolidBrush(fillColor))
         {
             e.Graphics.FillPath(fill, path);
-        }
-
-        if (Selected)
-        {
-            using var accent = new SolidBrush(ModernTheme.Accent);
-            e.Graphics.FillRectangle(accent, rect.Left + 20, rect.Bottom - 4, rect.Width - 40, 3);
         }
 
         TextRenderer.DrawText(
@@ -1082,7 +1121,7 @@ internal sealed class SettingsNavButton : Button
             Text,
             Font,
             rect,
-            Selected ? ModernTheme.AccentStrong : ModernTheme.Text,
+            Selected ? Color.White : ModernTheme.Text,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
     }
 }

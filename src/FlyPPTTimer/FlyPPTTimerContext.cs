@@ -122,8 +122,11 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         {
             Renderer = new ModernContextMenuRenderer(),
             BackColor = Color.White,
-            ForeColor = Color.FromArgb(32, 46, 52),
-            Padding = new Padding(6),
+            ForeColor = ModernTheme.Text,
+            Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point),
+            Padding = new Padding(7),
+            ShowImageMargin = false,
+            ShowCheckMargin = false,
             AutoClose = true
         };
         menu.Opened += (_, _) =>
@@ -141,6 +144,13 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         menu.Items.Add("设置", null, (_, _) => _commands.OpenSettings());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Exit());
+        foreach (ToolStripItem item in menu.Items)
+        {
+            if (item is ToolStripSeparator) continue;
+            item.AutoSize = false;
+            item.Size = new Size(224, 38);
+            item.Padding = new Padding(12, 0, 12, 0);
+        }
         return menu;
     }
 

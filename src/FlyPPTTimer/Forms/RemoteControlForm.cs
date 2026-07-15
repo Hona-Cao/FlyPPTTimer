@@ -92,6 +92,7 @@ public sealed class RemoteControlForm : Form
     private Control Header()
     {
         var panel = Card(new Padding(24, 16, 24, 16));
+        panel.BackColor = ModernTheme.HeaderFill;
         panel.ColumnCount = 2;
         panel.RowCount = 1;
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -103,7 +104,7 @@ public sealed class RemoteControlForm : Form
             Dock = DockStyle.Fill,
             RowCount = 2,
             ColumnCount = 1,
-            BackColor = Color.White
+            BackColor = ModernTheme.HeaderFill
         };
         titleStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         titleStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -124,8 +125,8 @@ public sealed class RemoteControlForm : Form
         _toggle.Width = 124;
         _toggle.Height = 48;
         _toggle.Click += (_, _) => ToggleService();
-        ModernTheme.StyleRounded(_toggle, 8);
-        panel.Controls.Add(Center(_toggle), 1, 0);
+        ModernTheme.StyleRounded(_toggle, ModernTheme.ButtonRadius);
+        panel.Controls.Add(Center(_toggle, ModernTheme.HeaderFill), 1, 0);
         return panel;
     }
 
@@ -178,8 +179,8 @@ public sealed class RemoteControlForm : Form
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        var qrCard = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(14) };
-        ModernTheme.StyleRounded(qrCard, 10);
+        var qrCard = new Panel { Dock = DockStyle.Fill, BackColor = ModernTheme.ControlFill, Padding = new Padding(14) };
+        ModernTheme.StyleRounded(qrCard, ModernTheme.CardRadius);
         qrCard.Controls.Add(_qr);
         panel.Controls.Add(qrCard, 0, 0);
 
@@ -205,7 +206,7 @@ public sealed class RemoteControlForm : Form
         side.Controls.Add(Host(_address, new Padding(10, 7, 10, 6), Color.FromArgb(242, 246, 248)), 0, 1);
         side.Controls.Add(Label("访问链接"), 0, 2);
         side.Controls.Add(Host(_url, new Padding(10, 8, 10, 6), Color.FromArgb(242, 246, 248)), 0, 3);
-        side.Controls.Add(FillButton("复制链接", (_, _) => Clipboard.SetText(CurrentUrl())), 0, 4);
+        side.Controls.Add(FillButton("复制链接", (_, _) => Clipboard.SetText(CurrentUrl()), primary: true), 0, 4);
         side.Controls.Add(FillButton("在本机浏览器打开", (_, _) => OpenUrl(CurrentUrl())), 0, 5);
         side.Controls.Add(new Label
         {
@@ -243,13 +244,13 @@ public sealed class RemoteControlForm : Form
             Margin = new Padding(0, 0, 0, 12),
             BackColor = Color.White
         };
-        ModernTheme.StyleRounded(panel, 10);
+        ModernTheme.StyleRounded(panel, ModernTheme.CardRadius);
         return panel;
     }
 
-    private static Control Center(Control control)
+    private static Control Center(Control control, Color? fill = null)
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.White };
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = fill ?? ModernTheme.Card };
         panel.Controls.Add(control, 0, 0);
         control.Anchor = AnchorStyles.None;
         return panel;
@@ -265,7 +266,7 @@ public sealed class RemoteControlForm : Form
         Margin = Padding.Empty
     };
 
-    private static Button FillButton(string text, EventHandler handler)
+    private static Button FillButton(string text, EventHandler handler, bool primary = false)
     {
         var button = new Button
         {
@@ -275,10 +276,18 @@ public sealed class RemoteControlForm : Form
             Margin = new Padding(0, 4, 0, 6),
             AutoSize = false,
             UseCompatibleTextRendering = true,
-            BackColor = Color.FromArgb(238, 244, 246)
+            BackColor = primary ? ModernTheme.AccentStrong : ModernTheme.AccentSoft,
+            ForeColor = primary ? Color.White : ModernTheme.Text
         };
         button.Click += handler;
-        ModernTheme.StyleRounded(button, 8);
+        ModernTheme.StyleRounded(button, ModernTheme.ButtonRadius);
+        if (primary)
+        {
+            button.BackColor = ModernTheme.AccentStrong;
+            button.ForeColor = Color.White;
+            button.FlatAppearance.MouseOverBackColor = ModernTheme.Accent;
+            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(9, 69, 62);
+        }
         return button;
     }
 
@@ -292,10 +301,10 @@ public sealed class RemoteControlForm : Form
             Margin = new Padding(6, 0, 0, 0),
             AutoSize = false,
             UseCompatibleTextRendering = true,
-            BackColor = Color.FromArgb(238, 244, 246)
+            BackColor = ModernTheme.Card
         };
         button.Click += handler;
-        ModernTheme.StyleRounded(button, 8);
+        ModernTheme.StyleRounded(button, ModernTheme.ButtonRadius);
         return button;
     }
 
@@ -349,9 +358,9 @@ public sealed class RemoteControlForm : Form
         if (_address.Items.Count == 0) _address.Items.Add("127.0.0.1");
         _address.SelectedIndex = 0;
         _toggle.Text = _remoteControl.IsRunning ? "关闭服务" : "启动服务";
-        _toggle.BackColor = _remoteControl.IsRunning ? Color.FromArgb(212, 245, 222) : Color.FromArgb(238, 244, 246);
+        _toggle.BackColor = _remoteControl.IsRunning ? ModernTheme.SuccessSoft : ModernTheme.AccentSoft;
         _state.Text = _remoteControl.IsRunning ? "服务已启动，可以扫码连接" : "服务未启动";
-        _state.ForeColor = _remoteControl.IsRunning ? Color.FromArgb(26, 126, 72) : Color.FromArgb(160, 64, 64);
+        _state.ForeColor = _remoteControl.IsRunning ? ModernTheme.Success : Color.FromArgb(160, 64, 64);
         UpdateUrlAndQr();
     }
 
@@ -415,8 +424,8 @@ internal sealed class FlatSelectBox : Control
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
         Height = 36;
-        BackColor = Color.FromArgb(242, 246, 248);
-        ForeColor = Color.Black;
+        BackColor = ModernTheme.ControlFill;
+        ForeColor = ModernTheme.Text;
     }
 
     public List<string> Items { get; } = [];
@@ -446,13 +455,19 @@ internal sealed class FlatSelectBox : Control
             Renderer = new ModernContextMenuRenderer(),
             BackColor = Color.White,
             ForeColor = ModernTheme.Text,
-            Padding = new Padding(6)
+            Font = Font,
+            Padding = new Padding(7),
+            ShowImageMargin = false,
+            ShowCheckMargin = false
         };
 
         for (var i = 0; i < Items.Count; i++)
         {
             var index = i;
-            menu.Items.Add(Items[i], null, (_, _) => SelectedIndex = index);
+            var item = menu.Items.Add(Items[i], null, (_, _) => SelectedIndex = index);
+            item.AutoSize = false;
+            item.Size = new Size(Math.Max(Width, 220), 36);
+            item.Padding = new Padding(10, 0, 10, 0);
         }
 
         menu.Show(this, new Point(0, Height + 4));
