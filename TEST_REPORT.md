@@ -24,7 +24,7 @@
 - v0.14.0 自动化测试：20 项通过，0 项失败，0 项跳过。
 - v0.14.1 Debug 自动化测试：36 项通过，0 项失败，0 项跳过。
 - 本地 `dist/v0.14.1/FlyPPTTimer.exe` SHA-256：`CC927129AD66F287890501642398D018891AF20C2B6E71A121F6E4177D142304`。本地文件仅用于本机构建排错，不作为 PR 审核交付物。
-- CI Artifact 审核 EXE（Actions `29401118043`）SHA-256：`4D90C1A541F346CA5C6761F9B0C986861373C9C45CB3EE967E76DA6AAE150742`。已下载 Artifact 并重新计算，结果与 Artifact 内 `FlyPPTTimer-v0.14.1.sha256` 一致。
+- CI Artifact 审核 EXE（Actions `29405464934`）SHA-256：`7895D17094099C327A90EC1F663BCF69DBBE110EFC70C1D0F62365581066A813`。已下载 Artifact 并重新计算，结果与 Artifact 内 `FlyPPTTimer-v0.14.1.sha256` 及 `CI_ARTIFACT_HASH.txt` 一致。
 - 地址菜单崩溃根因和脱敏日志说明见 `docs/audit/v0.14.1/README.md`；原始日志不提交。
 
 ## 人工验证保留项
