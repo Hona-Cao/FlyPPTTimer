@@ -19,22 +19,24 @@ public sealed class RemoteControlService : IDisposable
     private readonly Func<AppConfig> _getConfig;
     private readonly Action<AppConfig> _saveConfig;
     private readonly AppCommandService _commands;
-    private readonly PowerPointControlService _powerPoint;
+    private readonly PowerPointControlService? _powerPoint;
     private readonly LogService _log;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private readonly Dictionary<string, DateTime> _clients = [];
     private readonly SemaphoreSlim _connectionSlots = new(16, 16);
+    private long _revision;
     internal const int MaxHeaderBytes = 16 * 1024;
     internal const int MaxBodyBytes = 64 * 1024;
 
-    public RemoteControlService(Func<AppConfig> getConfig, Action<AppConfig> saveConfig, AppCommandService commands, PowerPointControlService powerPoint, LogService log)
+    public RemoteControlService(Func<AppConfig> getConfig, Action<AppConfig> saveConfig, AppCommandService commands, PowerPointControlService? powerPoint, LogService log)
     {
         _getConfig = getConfig;
         _saveConfig = saveConfig;
         _commands = commands;
         _powerPoint = powerPoint;
         _log = log;
+        if (_powerPoint is not null) _powerPoint.StateChanged += (_, _) => NotifyStateChanged();
     }
 
     public bool IsRunning { get; private set; }
@@ -51,6 +53,8 @@ public sealed class RemoteControlService : IDisposable
             }
         }
     }
+
+    public void NotifyStateChanged() => Interlocked.Increment(ref _revision);
 
     public void Start()
     {
@@ -72,6 +76,7 @@ public sealed class RemoteControlService : IDisposable
             _saveConfig(config);
             _cts = new CancellationTokenSource();
             IsRunning = true;
+            NotifyStateChanged();
             StatusText = "已启动";
             _log.Info($"Remote control service started on 0.0.0.0:{CurrentPort}");
             _ = Task.Run(() => AcceptLoop(_cts.Token));
@@ -101,6 +106,7 @@ public sealed class RemoteControlService : IDisposable
             _cts = null;
             _listener = null;
             IsRunning = false;
+            NotifyStateChanged();
             StatusText = "未启动";
             lock (_clients) _clients.Clear();
             _log.Info("Remote control service stopped; all remote connections invalidated.");
@@ -119,6 +125,7 @@ public sealed class RemoteControlService : IDisposable
         config.RemoteControl.Token = ConfigService.GenerateToken();
         _saveConfig(config);
         lock (_clients) _clients.Clear();
+        NotifyStateChanged();
         _log.Info("Remote token regenerated; old links invalidated.");
     }
 
@@ -285,7 +292,13 @@ public sealed class RemoteControlService : IDisposable
             string message;
             if (command.Command.StartsWith("ppt.", StringComparison.Ordinal))
             {
-                var result = _powerPoint.Execute(command);
+                if (_powerPoint is null)
+                {
+                    status = 503;
+                    response = ToJson(StateWithClientCount(false, "演示控制服务当前不可用。"));
+                    return false;
+                }
+                var result = _powerPoint.Queue(command);
                 if (!result.Success)
                 {
                     status = 400;
@@ -316,8 +329,9 @@ public sealed class RemoteControlService : IDisposable
         var state = _commands.GetRemoteState();
         state.Ok = ok;
         state.Message = message;
-        state.PresentationState = _powerPoint.GetState();
+        state.PresentationState = _powerPoint?.GetState() ?? new PresentationState { Error = "演示控制服务当前不可用。" };
         state.ConnectedClients = ConnectedClients;
+        state.Revision = Volatile.Read(ref _revision);
         return state;
     }
 

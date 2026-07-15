@@ -8,7 +8,7 @@ namespace FlyPPTTimer.Forms;
 
 public sealed class RemoteControlForm : Form
 {
-    private readonly AppConfig _config;
+    private AppConfig _config;
     private readonly RemoteControlService _remoteControl;
     private readonly NetworkAddressService _networkAddressService;
     private readonly Action<AppConfig> _saveConfig;
@@ -51,14 +51,21 @@ public sealed class RemoteControlForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
         MinimizeBox = false;
         ClientSize = new Size(900, 660);
+        MinimumSize = new Size(720, 560);
         BackColor = ModernTheme.Surface;
 
         Build();
         RefreshState();
+    }
+
+    public void ReloadConfig(AppConfig config)
+    {
+        _config = config;
+        if (!IsDisposed) RefreshState();
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -419,6 +426,7 @@ public sealed class RemoteControlForm : Form
 internal sealed class FlatSelectBox : Control
 {
     private int _selectedIndex = -1;
+    private ContextMenuStrip? _menu;
 
     public FlatSelectBox()
     {
@@ -450,7 +458,9 @@ internal sealed class FlatSelectBox : Control
     {
         base.OnClick(e);
         if (Items.Count == 0) return;
-        using var menu = new ContextMenuStrip
+        _menu?.Close();
+        _menu?.Dispose();
+        var menu = _menu = new ContextMenuStrip
         {
             Renderer = new ModernContextMenuRenderer(),
             BackColor = Color.White,
@@ -470,7 +480,34 @@ internal sealed class FlatSelectBox : Control
             item.Padding = new Padding(10, 0, 10, 0);
         }
 
-        menu.Show(this, new Point(0, Height + 4));
+        menu.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(_menu, menu)) return;
+            _menu = null;
+            menu.Dispose();
+        };
+        var preferred = menu.GetPreferredSize(Size.Empty);
+        var screen = PointToScreen(new Point(0, Height + 4));
+        var area = Screen.FromPoint(screen).WorkingArea;
+        screen.X = Math.Clamp(screen.X, area.Left, Math.Max(area.Left, area.Right - preferred.Width));
+        screen.Y = Math.Clamp(screen.Y, area.Top, Math.Max(area.Top, area.Bottom - preferred.Height));
+        menu.Show(screen);
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (Items.Count > 0 && (keyData == Keys.Space || keyData == Keys.Enter || keyData == Keys.Down))
+        {
+            OnClick(EventArgs.Empty);
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _menu?.Dispose();
+        base.Dispose(disposing);
     }
 
     protected override void OnPaint(PaintEventArgs e)

@@ -16,18 +16,18 @@ body { margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,"
 .tab { min-height:42px; background:transparent; color:var(--muted); }
 .tab.active { background:#fff; color:var(--accent); box-shadow:0 1px 4px #1b343412; }
 .page { display:none; }
-.page.active { display:block; animation:page-in 160ms ease; }
+.page.active { display:block; }
 .card { background:var(--card); border-radius:var(--radius); padding:15px; margin:0 0 12px; box-shadow:0 1px 2px #1835360a; }
 .timer-card { display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .timer-text { font-size:48px; line-height:1; font-weight:800; color:var(--accent); }
 .timer-card p { margin:4px 0 0; color:var(--muted); text-align:right; }
 .control-grid, .nav-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 button, select, input { border:0; border-radius:var(--radius); font:inherit; color:var(--ink); background:#edf3f4; min-height:48px; outline:none; }
-button { padding:0 14px; font-weight:700; cursor:pointer; transition:transform 140ms ease,background-color 140ms ease,opacity 140ms ease; }
-button:active:not(:disabled) { transform:scale(.975); }
+button { padding:0 14px; font-weight:700; cursor:pointer; }
 button.primary { background:var(--accent); color:#fff; }
 button.warning { background:var(--warning); color:#6c5000; }
 button.danger { background:var(--danger-soft); color:var(--danger); }
+button.danger-secondary { background:#f5f0f1; color:#8d4a50; }
 button:disabled { opacity:.42; cursor:not-allowed; }
 button:focus-visible, input:focus-visible { outline:3px solid #65a9ff; outline-offset:2px; }
 button.selected { background:#173f46; color:#fff; }
@@ -47,10 +47,9 @@ input { min-width:0; width:100%; padding:0 12px; }
 .nav-button { font-size:17px; }
 .nav-button span { font-size:28px; vertical-align:-2px; margin:0 8px; }
 .goto-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.message { position:sticky; bottom:10px; min-height:38px; padding:10px 13px; border-radius:var(--radius); background:#26383be8; color:#fff; font-size:13px; line-height:1.4; box-shadow:0 5px 18px #17282b22; opacity:0; transform:translateY(8px); pointer-events:none; transition:opacity 160ms ease,transform 160ms ease; }
-.message.show { opacity:1; transform:none; }
+.message { position:sticky; bottom:10px; min-height:38px; padding:10px 13px; border-radius:var(--radius); background:#26383be8; color:#fff; font-size:13px; line-height:1.4; box-shadow:0 5px 18px #17282b22; display:none; }
+.message.show { display:block; }
 .message.error { background:#8f3037e8; }
-@keyframes page-in { from { opacity:.6; transform:translateY(3px); } to { opacity:1; transform:none; } }
 @media (orientation:landscape) and (min-width:650px) {
   .app-shell { width:96%; max-width:920px; }
   #pptPage.active { display:grid; grid-template-columns:1fr 1fr; gap:12px; }

@@ -4,7 +4,7 @@ namespace FlyPPTTimer.Models;
 
 public sealed class AppConfig
 {
-    public string Version { get; set; } = "0.12.1";
+    public string Version { get; set; } = AppVersion.Current;
     public TimerSettings Timer { get; set; } = new();
     public BehaviorSettings Behavior { get; set; } = new();
     public AppearanceSettings Appearance { get; set; } = new();
@@ -198,6 +198,8 @@ public sealed class RemoteCommand
     public string? Mode { get; set; }
     public int? SlideNumber { get; set; }
     public string? PresentationId { get; set; }
+    public bool? Confirmed { get; set; }
+    public string? OperationId { get; set; }
 }
 
 public sealed class RemoteState
@@ -217,7 +219,8 @@ public sealed class RemoteState
     public bool WindowVisible { get; set; }
     public bool Muted { get; set; }
     public int ConnectedClients { get; set; }
-    public string Version { get; set; } = "0.12.1";
+    public string Version { get; set; } = AppVersion.Current;
+    public long Revision { get; set; }
 }
 
 public sealed class TimerRemoteState
@@ -247,6 +250,23 @@ public sealed class PresentationState
     public DateTime UpdatedAt { get; set; }
     public string Error { get; set; } = "";
     public List<PresentationOption> Presentations { get; set; } = [];
+    public string Operation { get; set; } = "Idle";
+    public string OperationMessage { get; set; } = "";
+    public DateTime? OperationStartedAt { get; set; }
+    public string OperationId { get; set; } = "";
+    public bool IsOperationBusy { get; set; }
+    public bool IsCurrentPresentationManaged { get; set; }
+    public bool WpsDetected { get; set; }
+    public WpsCapabilities WpsCapabilities { get; set; } = new();
+}
+
+public sealed class WpsCapabilities
+{
+    public bool CanEndSlideShow { get; set; }
+    public bool CanClosePresentation { get; set; }
+    public bool CanExitApplication { get; set; }
+    public bool CanForceExit { get; set; }
+    public string Message { get; set; } = "WPS 演示未检测到。";
 }
 
 public sealed class PresentationOption
@@ -256,6 +276,7 @@ public sealed class PresentationOption
     public string Directory { get; set; } = "";
     public bool IsOpen { get; set; }
     public bool IsActive { get; set; }
+    public bool IsManaged { get; set; }
 }
 
 public sealed record PresentationCommandResult(bool Success, string Message, PresentationState State);

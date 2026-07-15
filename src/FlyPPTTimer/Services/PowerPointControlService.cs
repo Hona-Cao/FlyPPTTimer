@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -17,6 +18,8 @@ public sealed class PowerPointControlService : IDisposable
     private readonly LogService _log;
     private readonly System.Threading.Timer _refreshTimer;
     private readonly object _stateSync = new();
+    private readonly object _operationSync = new();
+    private readonly Dictionary<string, ManagedPresentation> _managedPresentations = new(StringComparer.OrdinalIgnoreCase);
     private PresentationState _cachedState = new();
     private bool _lastShowRunning;
     private string _lastShowPath = "";
@@ -24,6 +27,7 @@ public sealed class PowerPointControlService : IDisposable
     private int _refreshQueued;
     private DateTime _lastRefreshFailureLog = DateTime.MinValue;
     private bool _disposed;
+    private PresentationOperationInfo _operation = PresentationOperationInfo.Idle;
 
     public PowerPointControlService(Func<AppConfig> getConfig, LogService log)
     {
@@ -37,10 +41,59 @@ public sealed class PowerPointControlService : IDisposable
 
     public event EventHandler<string>? SlideShowStarted;
     public event EventHandler? SlideShowEnded;
+    public event EventHandler? StateChanged;
 
     public PresentationState GetState()
     {
         lock (_stateSync) return CloneState(_cachedState);
+    }
+
+    /// <summary>
+    /// Accepts a whitelisted presentation command without making the HTTP request wait for COM.
+    /// The existing STA queue remains the sole place where PowerPoint is accessed.
+    /// </summary>
+    public PresentationCommandResult Queue(RemoteCommand command)
+    {
+        if (_disposed) return new PresentationCommandResult(false, "演示控制服务已关闭。", GetState());
+        if (!IsKnownCommand(command.Command)) return new PresentationCommandResult(false, "命令不在演示控制白名单中。", GetState());
+        if (command.Command == "ppt.forceQuitAll" && command.Confirmed != true)
+            return new PresentationCommandResult(false, "强制退出会丢失所有未保存内容，请再次确认。", GetState());
+
+        var operation = CreateOperation(command.Command);
+        lock (_operationSync)
+        {
+            if (_operation.IsBusy)
+                return new PresentationCommandResult(false, "演示操作正在进行，请等待当前操作完成。", GetState());
+            _operation = operation;
+        }
+        NotifyStateChanged();
+
+        if (!_queue.TryAdd(() => RunQueuedOperation(command, operation), 200))
+        {
+            SetOperation(PresentationOperationInfo.Failed(operation, "演示命令队列繁忙，请稍后重试。"));
+            return new PresentationCommandResult(false, "演示命令队列繁忙，请稍后重试。", GetState());
+        }
+
+        var accepted = GetState();
+        return new PresentationCommandResult(true, operation.Message, accepted);
+    }
+
+    private void RunQueuedOperation(RemoteCommand command, PresentationOperationInfo operation)
+    {
+        try
+        {
+            SetOperation(operation with { Message = "正在" + operation.Message });
+            var message = RetryComBusy(() => ExecuteCore(command));
+            UpdateCachedState();
+            SetOperation(PresentationOperationInfo.Idle with { Message = message });
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"PowerPoint command failed: {command.Command}", ex);
+            var error = FriendlyError(ex);
+            lock (_stateSync) _cachedState.Error = error;
+            SetOperation(PresentationOperationInfo.Failed(operation, error));
+        }
     }
 
     public PresentationCommandResult Execute(RemoteCommand command)
@@ -140,12 +193,14 @@ public sealed class PowerPointControlService : IDisposable
             }
         }
         state.UpdatedAt = DateTime.Now;
+        ApplyOperation(state);
         lock (_stateSync) _cachedState = CloneState(state);
         if (state.IsSlideShowRunning && (!_lastShowRunning || !SamePath(_lastShowPath, state.PresentationPath)))
             SlideShowStarted?.Invoke(this, state.PresentationPath);
         else if (!state.IsSlideShowRunning && _lastShowRunning) SlideShowEnded?.Invoke(this, EventArgs.Empty);
         _lastShowRunning = state.IsSlideShowRunning;
         _lastShowPath = state.PresentationPath;
+        NotifyStateChanged();
         return state;
     }
 
@@ -163,9 +218,52 @@ public sealed class PowerPointControlService : IDisposable
             "ppt.blackScreenToggle" => ToggleScreen(SlideShowBlackScreen, "黑屏"),
             "ppt.whiteScreenToggle" => ToggleScreen(SlideShowWhiteScreen, "白屏"),
             "ppt.openPresentation" => OpenPresentation(command.PresentationId),
+            "ppt.closeCurrentPresentation" => CloseCurrentPresentation(),
+            "ppt.exitApplication" => ExitApplication(),
+            "ppt.forceQuitAll" => ForceQuitAll(),
             _ => throw new InvalidOperationException("命令不在 PowerPoint 控制白名单中。")
         };
     }
+
+    private static bool IsKnownCommand(string command) => command is
+        "ppt.refresh" or "ppt.startFromBeginning" or "ppt.startFromCurrent" or "ppt.previous" or "ppt.next" or
+        "ppt.gotoSlide" or "ppt.endShow" or "ppt.blackScreenToggle" or "ppt.whiteScreenToggle" or
+        "ppt.openPresentation" or "ppt.closeCurrentPresentation" or "ppt.exitApplication" or "ppt.forceQuitAll";
+
+    private PresentationOperationInfo CreateOperation(string command)
+    {
+        var (name, message) = command switch
+        {
+            "ppt.openPresentation" => ("OpeningPresentation", "正在打开演示文稿"),
+            "ppt.startFromBeginning" or "ppt.startFromCurrent" => ("StartingSlideshow", "正在启动放映"),
+            "ppt.endShow" => ("StoppingSlideshow", "正在结束放映"),
+            "ppt.closeCurrentPresentation" => ("ClosingPresentation", "正在关闭当前受控文稿"),
+            "ppt.exitApplication" => ("ExitingApplication", "正在退出演示程序"),
+            "ppt.forceQuitAll" => ("ForceExitingApplication", "正在强制退出演示程序"),
+            _ => ("Idle", "正在执行演示命令")
+        };
+        return new PresentationOperationInfo(name, message, DateTime.Now, Guid.NewGuid().ToString("N"), name != "Idle");
+    }
+
+    private void SetOperation(PresentationOperationInfo operation)
+    {
+        lock (_operationSync) _operation = operation;
+        lock (_stateSync) ApplyOperation(_cachedState);
+        NotifyStateChanged();
+    }
+
+    private void ApplyOperation(PresentationState state)
+    {
+        PresentationOperationInfo operation;
+        lock (_operationSync) operation = _operation;
+        state.Operation = operation.Name;
+        state.OperationMessage = operation.Message;
+        state.OperationStartedAt = operation.StartedAt;
+        state.OperationId = operation.Id;
+        state.IsOperationBusy = operation.IsBusy;
+    }
+
+    private void NotifyStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
 
     private string StartShow(bool fromCurrent)
     {
@@ -250,6 +348,12 @@ public sealed class PowerPointControlService : IDisposable
         try
         {
             appObject = TryGetRunningApplication();
+            if (appObject is null)
+            {
+                PresentationOperationInfo current;
+                lock (_operationSync) current = _operation;
+                SetOperation(current with { Name = "StartingApplication", Message = "正在启动 PowerPoint" });
+            }
             if (appObject is not null)
             {
                 presentations = ((dynamic)appObject).Presentations;
@@ -275,7 +379,13 @@ public sealed class PowerPointControlService : IDisposable
             dynamic app = appObject;
             app.Visible = true;
             presentations = app.Presentations;
-            presentation = FindOpenPresentation(presentations, path) ?? ((dynamic)presentations).Open(path);
+            presentation = FindOpenPresentation(presentations, path);
+            if (presentation is null)
+            {
+                // FlyPPTTimer-owned files are always opened read-only. Existing user documents are never changed.
+                presentation = ((dynamic)presentations).Open(path, true, false, true);
+                _managedPresentations[NormalizePath(path)] = new ManagedPresentation(NormalizePath(path), DateTime.Now, true);
+            }
             windows = ((dynamic)presentation).Windows;
             if ((int)((dynamic)windows).Count > 0)
             {
@@ -285,6 +395,109 @@ public sealed class PowerPointControlService : IDisposable
             return $"已打开 {Path.GetFileName(path)}";
         }
         finally { Release(window, windows, presentation, presentations, appObject); }
+    }
+
+    private string CloseCurrentPresentation()
+    {
+        object? appObject = null, presentations = null, presentation = null;
+        try
+        {
+            appObject = GetRunningApplication();
+            dynamic app = appObject;
+            presentation = app.ActivePresentation;
+            if (presentation is null) throw new InvalidOperationException("当前没有可关闭的演示文稿。");
+            var path = SafeString(() => (string)((dynamic)presentation).FullName);
+            var key = NormalizePath(path);
+            if (!_managedPresentations.ContainsKey(key))
+                throw new InvalidOperationException("当前文稿不是由 FlyPPTTimer 打开的，不能通过远程控制静默关闭。");
+            EndShowIfShowing(app, path);
+            try { ((dynamic)presentation).Saved = true; } catch { }
+            ((dynamic)presentation).Close();
+            _managedPresentations.Remove(key);
+            return "已关闭当前 FlyPPTTimer 打开的只读文稿。";
+        }
+        finally { Release(presentation, presentations, appObject); }
+    }
+
+    private string ExitApplication()
+    {
+        object? appObject = null, presentations = null;
+        try
+        {
+            appObject = GetRunningApplication();
+            dynamic app = appObject;
+            presentations = app.Presentations;
+            var unmanaged = new List<string>();
+            for (var i = 1; i <= (int)((dynamic)presentations).Count; i++)
+            {
+                object? item = null;
+                try
+                {
+                    item = ((dynamic)presentations)[i];
+                    var path = SafeString(() => (string)((dynamic)item).FullName);
+                    if (!_managedPresentations.ContainsKey(NormalizePath(path))) unmanaged.Add(path);
+                }
+                finally { Release(item); }
+            }
+            if (unmanaged.Count > 0)
+                throw new InvalidOperationException("仍有用户自行打开的文稿，已拒绝退出 PowerPoint；请先在电脑端处理这些文稿。");
+
+            EndShowIfShowing(app, "");
+            for (var i = (int)((dynamic)presentations).Count; i >= 1; i--)
+            {
+                object? item = null;
+                try
+                {
+                    item = ((dynamic)presentations)[i];
+                    try { ((dynamic)item).Saved = true; } catch { }
+                    ((dynamic)item).Close();
+                }
+                finally { Release(item); }
+            }
+            _managedPresentations.Clear();
+            app.Quit();
+            return "已退出 PowerPoint。";
+        }
+        finally { Release(presentations, appObject); }
+    }
+
+    private string ForceQuitAll()
+    {
+        var names = new[] { "POWERPNT", "WPSOffice", "wpp", "wps" };
+        var processes = Process.GetProcesses().Where(process => names.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase)).ToArray();
+        if (processes.Length == 0) return "未发现正在运行的 PowerPoint 或 WPS 演示进程。";
+        foreach (var process in processes)
+        {
+            try { process.Kill(true); }
+            catch (Exception ex) { _log.Warn($"Failed to force quit {process.ProcessName}: {ex.Message}"); }
+            finally { process.Dispose(); }
+        }
+        _managedPresentations.Clear();
+        return "已请求强制退出全部 PowerPoint/WPS/演示软件。未保存内容不会恢复。";
+    }
+
+    private static void EndShowIfShowing(dynamic app, string path)
+    {
+        object? windows = null, window = null, presentation = null, view = null;
+        try
+        {
+            windows = app.SlideShowWindows;
+            for (var i = 1; i <= (int)((dynamic)windows).Count; i++)
+            {
+                window = ((dynamic)windows)[i];
+                presentation = ((dynamic)window).Presentation;
+                var showingPath = SafeString(() => (string)((dynamic)presentation).FullName);
+                if (string.IsNullOrWhiteSpace(path) || SamePath(showingPath, path))
+                {
+                    view = ((dynamic)window).View;
+                    ((dynamic)view).Exit();
+                    return;
+                }
+                Release(view, presentation, window);
+                view = presentation = window = null;
+            }
+        }
+        finally { Release(view, presentation, window, windows); }
     }
 
     private PresentationState ReadState()
@@ -297,6 +510,7 @@ public sealed class PowerPointControlService : IDisposable
             state.PowerPointRunning = appObject is not null;
             if (appObject is null)
             {
+                PopulateWpsCapabilities(state);
                 AddRuleOptions(state, []);
                 return state;
             }
@@ -346,6 +560,8 @@ public sealed class PowerPointControlService : IDisposable
                     state.TotalSlides = (int)((dynamic)slides).Count;
                 }
             }
+            state.IsCurrentPresentationManaged = _managedPresentations.ContainsKey(NormalizePath(state.PresentationPath));
+            PopulateWpsCapabilities(state);
             AddRuleOptions(state, openPaths);
         }
         catch (Exception ex)
@@ -358,6 +574,19 @@ public sealed class PowerPointControlService : IDisposable
         return state;
     }
 
+    private static void PopulateWpsCapabilities(PresentationState state)
+    {
+        var detected = Process.GetProcesses().Any(process =>
+        {
+            try { return process.ProcessName.Equals("WPSOffice", StringComparison.OrdinalIgnoreCase) || process.ProcessName.Equals("wpp", StringComparison.OrdinalIgnoreCase) || process.ProcessName.Equals("wps", StringComparison.OrdinalIgnoreCase); }
+            finally { process.Dispose(); }
+        });
+        state.WpsDetected = detected;
+        state.WpsCapabilities = detected
+            ? new WpsCapabilities { CanEndSlideShow = false, CanClosePresentation = false, CanExitApplication = false, CanForceExit = true, Message = "检测到 WPS 演示；当前版本未声明可靠的 WPS 文稿 COM 关闭能力，只允许明确确认后的强制退出。" }
+            : new WpsCapabilities();
+    }
+
     private void AddRuleOptions(PresentationState state, IReadOnlyCollection<string> openPaths)
     {
         var activePath = state.PresentationPath;
@@ -367,7 +596,8 @@ public sealed class PowerPointControlService : IDisposable
             {
                 Id = IdForPath(path), Name = Path.GetFileName(path), Directory = Path.GetDirectoryName(path) ?? "",
                 IsOpen = openPaths.Contains(path, StringComparer.OrdinalIgnoreCase),
-                IsActive = SamePath(path, activePath)
+                IsActive = SamePath(path, activePath),
+                IsManaged = _managedPresentations.ContainsKey(NormalizePath(path))
             });
         }
     }
@@ -406,7 +636,13 @@ public sealed class PowerPointControlService : IDisposable
         catch { return null; }
     }
 
-    private static string IdForPath(string path) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path))))[..20];
+    private static string IdForPath(string path) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(NormalizePath(path))))[..20];
+    private static string NormalizePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return "";
+        try { return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        catch { return path.Trim(); }
+    }
     private static bool SamePath(string left, string right)
     {
         if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
@@ -435,8 +671,31 @@ public sealed class PowerPointControlService : IDisposable
         ScreenMode = state.ScreenMode,
         UpdatedAt = state.UpdatedAt,
         Error = state.Error,
-        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, Directory = x.Directory, IsOpen = x.IsOpen, IsActive = x.IsActive }).ToList()
+        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, Directory = x.Directory, IsOpen = x.IsOpen, IsActive = x.IsActive, IsManaged = x.IsManaged }).ToList(),
+        Operation = state.Operation,
+        OperationMessage = state.OperationMessage,
+        OperationStartedAt = state.OperationStartedAt,
+        OperationId = state.OperationId,
+        IsOperationBusy = state.IsOperationBusy,
+        IsCurrentPresentationManaged = state.IsCurrentPresentationManaged,
+        WpsDetected = state.WpsDetected,
+        WpsCapabilities = new WpsCapabilities
+        {
+            CanEndSlideShow = state.WpsCapabilities.CanEndSlideShow,
+            CanClosePresentation = state.WpsCapabilities.CanClosePresentation,
+            CanExitApplication = state.WpsCapabilities.CanExitApplication,
+            CanForceExit = state.WpsCapabilities.CanForceExit,
+            Message = state.WpsCapabilities.Message
+        }
     };
+
+    private sealed record ManagedPresentation(string Path, DateTime OpenedAt, bool ReadOnlyRequested);
+    private sealed record PresentationOperationInfo(string Name, string Message, DateTime? StartedAt, string Id, bool IsBusy)
+    {
+        public static PresentationOperationInfo Idle { get; } = new("Idle", "", null, "", false);
+        public static PresentationOperationInfo Failed(PresentationOperationInfo prior, string message) =>
+            new("Failed", message, prior.StartedAt, prior.Id, false);
+    }
 
     private string Navigate(Action<object> action, string message)
     {

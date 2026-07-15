@@ -292,12 +292,16 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _remoteControl.Stop();
         }
         RegisterHotkeys();
+        _remoteControl.NotifyStateChanged();
+        _remoteControlWindow?.ReloadConfig(_config);
     }
 
     private void SaveConfigOnly(AppConfig config)
     {
         _config = config;
         _configService.Save(_config);
+        _remoteControl.NotifyStateChanged();
+        _remoteControlWindow?.ReloadConfig(_config);
     }
 
     private void ExportConfig()

@@ -25,7 +25,7 @@ function paint(s){
   renderPresentations(p.presentations||[]);setAvailability(t,p);updatePresentationHint(p);if(s.message)notify(s.message);
 }
 function renderPresentations(items){
-  const host=$('presentationList'),signature=items.map(x=>[x.id,x.name,x.directory,x.isActive,x.isOpen].join(':')).join('|');
+  const host=$('presentationList'),signature=items.map(x=>[x.id,x.name,x.directory,x.isActive,x.isOpen,x.isManaged].join(':')).join('|');
   if(host.dataset.signature!==signature){
     host.dataset.signature=signature;host.innerHTML='';
     if(!items.length)host.innerHTML='<div class="hint">没有已打开或文件规则中已启用的演示文稿</div>';
@@ -47,15 +47,17 @@ function refreshPresentationButtons(){
   });
 }
 function setAvailability(t,p){
-  const show=!!p.isSlideShowRunning,has=!!p.hasPresentation,state=t.state||'',running=!!t.running,paused=state.includes('暂停'),stopped=!running&&!paused;
+  const show=!!p.isSlideShowRunning,has=!!p.hasPresentation,state=t.state||'',running=!!t.running,paused=state.includes('暂停'),stopped=!running&&!paused,operationBusy=!!p.isOperationBusy;
   commandButtons.forEach(button=>{
-    const cmd=button.dataset.command;let disabled=busy||!connected;
+    const cmd=button.dataset.command;let disabled=busy||operationBusy||!connected;
     if(cmd==='timer.start')disabled||=!stopped;
     else if(cmd==='timer.pause')disabled||=!running;
     else if(cmd==='timer.resume')disabled||=!paused;
     else if(cmd.startsWith('ppt.')){
       if(['ppt.previous','ppt.next','ppt.gotoSlide','ppt.endShow','ppt.blackScreenToggle','ppt.whiteScreenToggle'].includes(cmd))disabled||=!show;
       if(['ppt.startFromBeginning','ppt.startFromCurrent'].includes(cmd))disabled||=!has;
+      if(cmd==='ppt.closeCurrentPresentation')disabled||=!p.isCurrentPresentationManaged;
+      if(cmd==='ppt.exitApplication')disabled||=!p.powerPointRunning;
     }
     button.disabled=disabled;
   });
@@ -68,15 +70,17 @@ function updatePresentationHint(p){
 }
 function schedulePoll(delay=1000){clearTimeout(pollTimer);pollTimer=setTimeout(poll,delay)}
 async function poll(){
-  if(busy){schedulePoll(300);return}
   try{paint(await api('/state'));schedulePoll(1000)}
   catch(e){connection(false);setAvailability({},{});refreshPresentationButtons();notify('连接失败：'+e.message+'。Clash/TUN 请将本机局域网 IP 和端口设为 DIRECT。',true);schedulePoll(2500)}
 }
 async function command(name,extra={}){
   if(!connected||busy){if(!connected)notify('当前已断开，命令未发送',true);return}
   if(name==='ppt.endShow'&&!confirm('确定结束当前 PowerPoint 放映吗？'))return;
+  if(name==='ppt.closeCurrentPresentation'&&!confirm('只会关闭 FlyPPTTimer 打开的只读文稿。确定继续吗？'))return;
+  if(name==='ppt.exitApplication'&&!confirm('仅当没有用户自行打开的文稿时才会退出 PowerPoint。确定继续吗？'))return;
+  if(name==='ppt.forceQuitAll'&&!confirm('强制退出会终止全部 PowerPoint/WPS/演示软件，未保存内容将丢失。确定强制退出吗？'))return;
   busy=true;setAvailability(timerState(lastState||{}),(lastState||{}).presentationState||{});
-  try{paint(await api('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:name,...extra})}))}
+  try{paint(await api('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:name,confirmed:name==='ppt.forceQuitAll'||undefined,...extra})}))}
   catch(e){notify(e.message,true)}finally{busy=false;setAvailability(timerState(lastState||{}),(lastState||{}).presentationState||{});schedulePoll(100)}
 }
 document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active'));tab.classList.add('active');$(tab.dataset.page).classList.add('active')}));

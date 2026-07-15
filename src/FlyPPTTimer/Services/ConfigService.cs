@@ -140,9 +140,9 @@ public sealed class ConfigService
         }
     }
 
-    private static void Normalize(AppConfig config)
+    internal static void Normalize(AppConfig config)
     {
-        config.Version = "0.12.1";
+        config.Version = AppVersion.Current;
         if (!config.Placement.HasCustomPlacement)
         {
             config.Placement.Anchor = OverlayAnchor.TopCenter;
@@ -159,6 +159,11 @@ public sealed class ConfigService
             }
             if (string.IsNullOrWhiteSpace(rule.Duration)) rule.Duration = config.Timer.DefaultDuration;
         }
+        config.Rules = config.Rules
+            .Where(rule => !string.IsNullOrWhiteSpace(rule.FilePath))
+            .GroupBy(rule => NormalizeRulePath(rule.FilePath), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
         if (string.IsNullOrWhiteSpace(config.Controls.StartPauseHotkey) || config.Controls.StartPauseHotkey.Contains('+')) config.Controls.StartPauseHotkey = "F3";
         if (string.IsNullOrWhiteSpace(config.Controls.StopResetHotkey) || config.Controls.StopResetHotkey.Contains('+')) config.Controls.StopResetHotkey = "F4";
         if (string.IsNullOrWhiteSpace(config.Controls.ToggleWindowHotkey) || config.Controls.ToggleWindowHotkey.Contains('+')) config.Controls.ToggleWindowHotkey = "F5";
@@ -177,5 +182,19 @@ public sealed class ConfigService
         Span<byte> bytes = stackalloc byte[24];
         RandomNumberGenerator.Fill(bytes);
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static string NormalizeRulePath(string path)
+    {
+        try { return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        catch { return path.Trim(); }
+    }
+
+    internal static AppConfig Clone(AppConfig config)
+    {
+        var clone = JsonSerializer.Deserialize<AppConfig>(JsonSerializer.Serialize(config, JsonOptions), JsonOptions)
+            ?? throw new InvalidOperationException("Unable to clone configuration.");
+        Normalize(clone);
+        return clone;
     }
 }

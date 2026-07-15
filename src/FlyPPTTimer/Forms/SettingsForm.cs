@@ -21,7 +21,7 @@ public sealed class SettingsForm : Form
     private const int HtBottomRight = 17;
     private const int ResizeBorder = 8;
 
-    private readonly AppConfig _config;
+    private AppConfig _config;
     private readonly RemoteControlService _remoteControl;
     private readonly NetworkAddressService _networkAddressService;
     private readonly TableLayoutPanel _shell = new() { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = ModernTheme.Surface };
@@ -31,7 +31,7 @@ public sealed class SettingsForm : Form
     {
         Dock = DockStyle.Fill,
         FlowDirection = FlowDirection.LeftToRight,
-        WrapContents = false,
+        WrapContents = true,
         Padding = new Padding(8, 8, 8, 8),
         Margin = new Padding(0, 0, 0, 12),
         BackColor = ModernTheme.Surface
@@ -47,10 +47,12 @@ public sealed class SettingsForm : Form
     private CheckBox? _ruleEnabledBox;
     private Label? _ruleNameLabel;
     private bool _updatingRuleEditor;
+    private bool _isDirty;
+    private readonly Label _dirtyLabel = new() { AutoSize = true, ForeColor = ModernTheme.AccentStrong, Text = "有未应用的更改", Visible = false, Margin = new Padding(10, 16, 12, 0) };
 
     public SettingsForm(AppConfig config, RemoteControlService remoteControl, NetworkAddressService networkAddressService)
     {
-        _config = config;
+        _config = ConfigService.Clone(config);
         _remoteControl = remoteControl;
         _networkAddressService = networkAddressService;
         Text = "演讲计时器设置";
@@ -59,17 +61,31 @@ public sealed class SettingsForm : Form
         Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
         FormBorderStyle = FormBorderStyle.None;
         MaximizeBox = true;
+        Padding = new Padding(ResizeBorder);
         BackColor = ModernTheme.Surface;
         DoubleBuffered = true;
         ClientSize = new Size(980, 760);
         MinimumSize = new Size(780, 560);
         ResizeRedraw = true;
+        Resize += (_, _) => LayoutNavigation();
         HandleCreated += (_, _) => ApplyWindowChromeRegion();
         SizeChanged += (_, _) => ApplyWindowChromeRegion();
         Shown += (_, _) => EnsureVisibleOnPrimaryScreen();
         BuildWindowChrome();
         BuildTabs();
         BuildBottomButtons();
+        TrackDraftChanges();
+        LayoutNavigation();
+    }
+
+    public void ReloadConfig(AppConfig config)
+    {
+        _config = ConfigService.Clone(config);
+        if (!IsDisposed)
+        {
+            Hide();
+            Dispose();
+        }
     }
 
     public event EventHandler<AppConfig>? ConfigApplied;
@@ -78,6 +94,48 @@ public sealed class SettingsForm : Form
     public event EventHandler? ImportRequested;
     public event EventHandler? OpenConfigRequested;
     public event EventHandler? OpenLogRequested;
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            TryHide();
+        }
+        base.OnFormClosing(e);
+    }
+
+    private void TrackDraftChanges()
+    {
+        foreach (var field in _fields.Values) TrackControl(field);
+        _rulesSource.ListChanged += (_, _) => MarkDirty();
+    }
+
+    private void TrackControl(Control control)
+    {
+        control.TextChanged += (_, _) => MarkDirty();
+        if (control is CheckBox checkBox) checkBox.CheckedChanged += (_, _) => MarkDirty();
+        if (control is ComboBox comboBox) comboBox.SelectedIndexChanged += (_, _) => MarkDirty();
+        foreach (Control child in control.Controls) TrackControl(child);
+    }
+
+    private void MarkDirty()
+    {
+        _isDirty = true;
+        _dirtyLabel.Visible = true;
+    }
+
+    private bool TryHide()
+    {
+        if (!_isDirty) { Hide(); return true; }
+        var choice = MessageBox.Show("设置中有未应用的更改。是：应用并关闭；否：放弃更改；取消：继续编辑。", "演讲计时器", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        if (choice == DialogResult.Cancel) return false;
+        if (choice == DialogResult.Yes && !Apply()) return false;
+        _isDirty = false;
+        _dirtyLabel.Visible = false;
+        Hide();
+        return true;
+    }
 
     private void BuildTabs()
     {
@@ -96,6 +154,15 @@ public sealed class SettingsForm : Form
         AddControlTab();
         AddOtherTab();
         SelectSettingsPage(0);
+    }
+
+    private void LayoutNavigation()
+    {
+        if (_settingsArea.RowStyles.Count == 0) return;
+        var available = Math.Max(1, _navBar.ClientSize.Width - _navBar.Padding.Horizontal);
+        var total = _navBar.Controls.Cast<Control>().Sum(control => control.Width + control.Margin.Horizontal);
+        var rows = total > available ? 2 : 1;
+        _settingsArea.RowStyles[0].Height = rows == 1 ? 58 : 108;
     }
 
     private void BuildWindowChrome()
@@ -153,7 +220,7 @@ public sealed class SettingsForm : Form
         };
         buttons.Controls.Add(TitleButton("－", () => WindowState = FormWindowState.Minimized));
         buttons.Controls.Add(TitleButton("□", ToggleMaximize));
-        buttons.Controls.Add(TitleButton("×", () => Hide()));
+        buttons.Controls.Add(TitleButton("×", () => TryHide()));
         _titleBar.Controls.Add(buttons);
         _shell.Controls.Add(_titleBar, 0, 0);
     }
@@ -284,6 +351,7 @@ public sealed class SettingsForm : Form
         button.Click += (_, _) => SelectSettingsPage(index);
         _navBar.Controls.Add(button);
         _pages.Add((button, page));
+        LayoutNavigation();
     }
 
     private void SelectSettingsPage(int index)
@@ -473,9 +541,18 @@ public sealed class SettingsForm : Form
             Margin = Padding.Empty,
             BackColor = Color.White
         };
-        buttons.Controls.Add(SmallButton("添加文件", AddRuleFiles));
-        buttons.Controls.Add(SmallButton("删除", DeleteSelectedRule));
-        buttons.Controls.Add(SmallButton("清空", ClearRules));
+        var add = SmallButton("添加文件", AddRuleFiles);
+        add.BackColor = ModernTheme.AccentStrong;
+        add.ForeColor = Color.White;
+        var remove = SmallButton("删除", DeleteSelectedRule);
+        remove.BackColor = ModernTheme.DangerSoft;
+        remove.ForeColor = ModernTheme.Danger;
+        var clear = SmallButton("清空", ClearRules);
+        clear.BackColor = ModernTheme.DangerSoft;
+        clear.ForeColor = ModernTheme.Danger;
+        buttons.Controls.Add(add);
+        buttons.Controls.Add(remove);
+        buttons.Controls.Add(clear);
         card.Controls.Add(buttons, 0, 0);
 
         _rulesSource.DataSource = new BindingList<FileRule>(_config.Rules.Select(CloneRule).ToList());
@@ -497,6 +574,10 @@ public sealed class SettingsForm : Form
             RowTemplate = { Height = 38 }
         };
         ModernTheme.StyleRounded(_rulesGrid, ModernTheme.ButtonRadius);
+        _rulesGrid.DefaultCellStyle.SelectionBackColor = ModernTheme.AccentSoft;
+        _rulesGrid.DefaultCellStyle.SelectionForeColor = ModernTheme.Text;
+        _rulesGrid.RowsDefaultCellStyle.BackColor = ModernTheme.Card;
+        _rulesGrid.AlternatingRowsDefaultCellStyle.BackColor = ModernTheme.ControlFill;
         _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "文件名", DataPropertyName = nameof(FileRule.FileName), Width = 180, ReadOnly = true });
         _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "文件路径", DataPropertyName = nameof(FileRule.FilePath), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
         _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "计时时长", DataPropertyName = nameof(FileRule.Duration), Width = 120 });
@@ -599,6 +680,7 @@ public sealed class SettingsForm : Form
                 Enabled = true
             });
         }
+        MarkDirty();
     }
 
     private void DeleteSelectedRule()
@@ -606,6 +688,7 @@ public sealed class SettingsForm : Form
         if (_rulesSource.Current is null) return;
         _rulesSource.RemoveCurrent();
         RefreshRuleEditor();
+        MarkDirty();
     }
 
     private void ClearRules()
@@ -614,6 +697,7 @@ public sealed class SettingsForm : Form
         if (MessageBox.Show("确定清空所有文件计时规则？", "演讲计时器", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
         _rulesSource.Clear();
         RefreshRuleEditor();
+        MarkDirty();
     }
 
     private void RefreshRuleEditor()
@@ -645,6 +729,7 @@ public sealed class SettingsForm : Form
         rule.Duration = _ruleDurationBox.Text.Trim();
         rule.Enabled = _ruleEnabledBox.Checked;
         _rulesSource.ResetCurrentItem();
+        MarkDirty();
     }
 
     private IEnumerable<FileRule> CurrentRules()
@@ -773,7 +858,7 @@ public sealed class SettingsForm : Form
         Row(grid, "配置文件", Button("打开配置文件位置", (_, _) => OpenConfigRequested?.Invoke(this, EventArgs.Empty)), "otherConfigPath");
         Row(grid, "日志文件", Button("打开日志文件位置", (_, _) => OpenLogRequested?.Invoke(this, EventArgs.Empty)), "otherLogPath");
         Section(grid, "版本");
-        Row(grid, "当前版本", new Label { Text = "演讲计时器 0.13.2 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
+        Row(grid, "当前版本", new Label { Text = $"演讲计时器 {AppVersion.Current} 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
         AddTab("其他设置", grid);
     }
 
@@ -791,9 +876,10 @@ public sealed class SettingsForm : Form
         var ok = new Button { Text = "确定", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentStrong, ForeColor = Color.White };
         var cancel = new Button { Text = "取消", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.Card };
         var apply = new Button { Text = "应用", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentSoft };
-        ok.Click += (_, _) => { Apply(); DialogResult = DialogResult.OK; Hide(); };
+        ok.Click += (_, _) => { if (Apply()) { DialogResult = DialogResult.OK; Hide(); } };
         apply.Click += (_, _) => Apply();
-        cancel.Click += (_, _) => Hide();
+        cancel.Click += (_, _) => TryHide();
+        bottom.Controls.Add(_dirtyLabel);
         bottom.Controls.Add(ok);
         bottom.Controls.Add(cancel);
         bottom.Controls.Add(apply);
@@ -848,8 +934,45 @@ public sealed class SettingsForm : Form
 
     private T Get<T>(string key) where T : Control => (T)_fields[key];
 
-    private void Apply()
+    private bool ValidateDraft(out string error)
     {
+        if (!TimeSpan.TryParse(Get<TextBox>("duration").Text.Trim(), out _))
+        {
+            error = "默认时长必须是 HH:mm:ss 格式。";
+            return false;
+        }
+        var duplicatePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rule in CurrentRules())
+        {
+            if (!TimeSpan.TryParse(rule.Duration, out _))
+            {
+                error = $"文件规则“{rule.FileName}”的计时时长无效。";
+                return false;
+            }
+            var key = NormalizeRulePath(rule.FilePath);
+            if (!string.IsNullOrWhiteSpace(key) && !duplicatePaths.Add(key))
+            {
+                error = "文件规则中不能重复添加同一份演示文稿。";
+                return false;
+            }
+        }
+        error = "";
+        return true;
+    }
+
+    private static string NormalizeRulePath(string path)
+    {
+        try { return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        catch { return path.Trim(); }
+    }
+
+    private bool Apply()
+    {
+        if (!ValidateDraft(out var validationError))
+        {
+            MessageBox.Show(validationError, "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
         _config.Timer.DefaultDuration = Get<TextBox>("duration").Text;
         _config.Timer.Mode = (string)Get<ComboBox>("mode").SelectedItem! == "倒计时" ? TimerMode.Countdown : TimerMode.CountUp;
         _config.Timer.EnablePerSlideTimer = Get<CheckBox>("perSlide").Checked;
@@ -911,13 +1034,16 @@ public sealed class SettingsForm : Form
         if (HasDuplicateHotkeys(_config.Controls.Hotkeys, out var duplicate))
         {
             MessageBox.Show($"快捷键重复：{duplicate}", "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
+            return false;
         }
         _config.Controls.ClickThrough = Get<CheckBox>("clickThrough").Checked;
         _config.Controls.LockPosition = Get<CheckBox>("lock").Checked;
         _config.Controls.MinimizeToTray = Get<CheckBox>("minTray").Checked;
         _config.Controls.CloseButtonBehavior = (string)Get<ComboBox>("closeBehavior").SelectedItem! == "退出程序" ? CloseButtonBehavior.Exit : CloseButtonBehavior.MinimizeToTray;
         ConfigApplied?.Invoke(this, _config);
+        _isDirty = false;
+        _dirtyLabel.Visible = false;
+        return true;
     }
 
     private static string[] GetScreenItems()

@@ -22,6 +22,8 @@ internal static class ModernTheme
     public static readonly Color Text = Color.FromArgb(27, 42, 48);
     public static readonly Color SuccessSoft = Color.FromArgb(220, 244, 229);
     public static readonly Color Success = Color.FromArgb(23, 120, 69);
+    public static readonly Color DangerSoft = Color.FromArgb(249, 232, 233);
+    public static readonly Color Danger = Color.FromArgb(164, 55, 64);
 
     public static void StyleTabs(TabControl tabs)
     {
