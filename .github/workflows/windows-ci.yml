@@ -29,6 +29,9 @@ jobs:
         run: |
           $hash = (Get-FileHash artifacts/publish/FlyPPTTimer.exe -Algorithm SHA256).Hash
           "$hash  FlyPPTTimer.exe" | Set-Content artifacts/FlyPPTTimer-v0.14.1.sha256 -Encoding ascii
+          $writtenHash = (Get-Content artifacts/FlyPPTTimer-v0.14.1.sha256 -Raw).Trim().Split(' ')[0]
+          if ($hash -ne $writtenHash) { throw "CI Artifact EXE hash verification failed." }
+          "CI Artifact EXE SHA-256: $hash" | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
           Copy-Item build.log artifacts/build.log
           Copy-Item TEST_REPORT.md artifacts/TEST_REPORT.md
       - name: Upload build artifact

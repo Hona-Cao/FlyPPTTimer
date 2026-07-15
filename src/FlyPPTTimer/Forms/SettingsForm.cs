@@ -41,12 +41,13 @@ public sealed class SettingsForm : Form
     private readonly List<(SettingsNavButton Button, ScrollableControl Page)> _pages = [];
     private readonly Dictionary<string, Control> _fields = [];
     private readonly BindingSource _rulesSource = new();
-    private DataGridView? _rulesGrid;
+    private FlowLayoutPanel? _rulesList;
     private TextBox? _rulePathBox;
     private TextBox? _ruleDurationBox;
-    private CheckBox? _ruleEnabledBox;
+    private Button? _ruleEnabledButton;
     private Label? _ruleNameLabel;
     private bool _updatingRuleEditor;
+    private bool _renderingRules;
     private bool _isDirty;
     private readonly Label _dirtyLabel = new() { AutoSize = true, ForeColor = ModernTheme.AccentStrong, Text = "有未应用的更改", Visible = false, Margin = new Padding(10, 16, 12, 0) };
 
@@ -108,7 +109,11 @@ public sealed class SettingsForm : Form
     private void TrackDraftChanges()
     {
         foreach (var field in _fields.Values) TrackControl(field);
-        _rulesSource.ListChanged += (_, _) => MarkDirty();
+        _rulesSource.ListChanged += (_, _) =>
+        {
+            MarkDirty();
+            RenderSettingsRules();
+        };
     }
 
     private void TrackControl(Control control)
@@ -556,48 +561,24 @@ public sealed class SettingsForm : Form
         card.Controls.Add(buttons, 0, 0);
 
         _rulesSource.DataSource = new BindingList<FileRule>(_config.Rules.Select(CloneRule).ToList());
-        _rulesGrid = new DataGridView
+        _rulesList = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            AutoGenerateColumns = false,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            RowHeadersVisible = false,
-            MultiSelect = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            BorderStyle = BorderStyle.None,
-            BackgroundColor = ModernTheme.ControlFill,
-            GridColor = ModernTheme.ControlFill,
-            DataSource = _rulesSource,
+            AutoScroll = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(6),
             Margin = new Padding(0, 0, 0, 12),
-            AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None,
-            RowTemplate = { Height = 38 }
+            BackColor = ModernTheme.ControlFill
         };
-        ModernTheme.StyleRounded(_rulesGrid, ModernTheme.ButtonRadius);
-        _rulesGrid.DefaultCellStyle.SelectionBackColor = ModernTheme.AccentSoft;
-        _rulesGrid.DefaultCellStyle.SelectionForeColor = ModernTheme.Text;
-        _rulesGrid.RowsDefaultCellStyle.BackColor = ModernTheme.Card;
-        _rulesGrid.AlternatingRowsDefaultCellStyle.BackColor = ModernTheme.ControlFill;
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "文件名", DataPropertyName = nameof(FileRule.FileName), Width = 180, ReadOnly = true });
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "文件路径", DataPropertyName = nameof(FileRule.FilePath), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "计时时长", DataPropertyName = nameof(FileRule.Duration), Width = 120 });
-        _rulesGrid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "启用", DataPropertyName = nameof(FileRule.Enabled), Width = 80 });
-        var rulesGrid = _rulesGrid;
-        _rulesGrid.CellFormatting += (_, e) =>
-        {
-            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && rulesGrid.Columns[e.ColumnIndex].DataPropertyName == nameof(FileRule.FilePath) && e.Value is string path)
-            {
-                e.CellStyle!.WrapMode = DataGridViewTriState.False;
-                rulesGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].ToolTipText = path;
-            }
-        };
-        _rulesGrid.SelectionChanged += (_, _) => RefreshRuleEditor();
-        card.Controls.Add(_rulesGrid, 0, 1);
+        ModernTheme.StyleRounded(_rulesList, ModernTheme.ButtonRadius);
+        card.Controls.Add(_rulesList, 0, 1);
 
         card.Controls.Add(BuildRuleEditor(), 0, 2);
         grid.Controls.Add(card, 0, row);
         grid.SetColumnSpan(card, 2);
-        _fields["rules"] = _rulesGrid;
+        _fields["rules"] = _rulesList;
+        RenderSettingsRules();
         RefreshRuleEditor();
     }
 
@@ -622,16 +603,17 @@ public sealed class SettingsForm : Form
         _ruleNameLabel = new Label { Text = "未选择文件", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         _rulePathBox = new TextBox { ReadOnly = true, BorderStyle = BorderStyle.None };
         _ruleDurationBox = new TextBox { BorderStyle = BorderStyle.None };
-        _ruleEnabledBox = new CheckBox { Text = "启用", Checked = true };
+        _ruleEnabledButton = new Button { Text = "已启用", FlatStyle = FlatStyle.Flat, UseCompatibleTextRendering = true };
+        ModernTheme.StyleRounded(_ruleEnabledButton, ModernTheme.ControlRadius);
         _ruleDurationBox.TextChanged += (_, _) => UpdateCurrentRuleFromEditor();
-        _ruleEnabledBox.CheckedChanged += (_, _) => UpdateCurrentRuleFromEditor();
+        _ruleEnabledButton.Click += (_, _) => ToggleCurrentRuleEnabled();
 
         AddEditorCell(editor, "文件", _ruleNameLabel, 0);
         AddEditorCell(editor, "路径", _rulePathBox, 1);
         editor.Controls.Add(new Label { Text = "时长", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0) }, 2, 0);
         editor.Controls.Add(DecorateControl(_ruleDurationBox), 3, 0);
         editor.Controls.Add(new Label { Text = "状态", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0) }, 2, 1);
-        editor.Controls.Add(DecorateControl(_ruleEnabledBox), 3, 1);
+        editor.Controls.Add(DecorateControl(_ruleEnabledButton), 3, 1);
         return editor;
     }
 
@@ -702,7 +684,7 @@ public sealed class SettingsForm : Form
 
     private void RefreshRuleEditor()
     {
-        if (_ruleNameLabel is null || _rulePathBox is null || _ruleDurationBox is null || _ruleEnabledBox is null) return;
+        if (_ruleNameLabel is null || _rulePathBox is null || _ruleDurationBox is null || _ruleEnabledButton is null) return;
         _updatingRuleEditor = true;
         if (_rulesSource.Current is FileRule rule)
         {
@@ -710,7 +692,7 @@ public sealed class SettingsForm : Form
             _rulePathBox.Text = rule.FilePath;
             _rulePathBox.Tag = rule.FilePath;
             _ruleDurationBox.Text = rule.Duration;
-            _ruleEnabledBox.Checked = rule.Enabled;
+            SetRuleEnabledButton(rule.Enabled);
         }
         else
         {
@@ -718,24 +700,85 @@ public sealed class SettingsForm : Form
             _rulePathBox.Text = "";
             _rulePathBox.Tag = null;
             _ruleDurationBox.Text = "";
-            _ruleEnabledBox.Checked = false;
+            SetRuleEnabledButton(false);
         }
         _updatingRuleEditor = false;
     }
 
     private void UpdateCurrentRuleFromEditor()
     {
-        if (_updatingRuleEditor || _rulesSource.Current is not FileRule rule || _ruleDurationBox is null || _ruleEnabledBox is null) return;
+        if (_updatingRuleEditor || _rulesSource.Current is not FileRule rule || _ruleDurationBox is null) return;
         rule.Duration = _ruleDurationBox.Text.Trim();
-        rule.Enabled = _ruleEnabledBox.Checked;
         _rulesSource.ResetCurrentItem();
         MarkDirty();
+    }
+
+    private void ToggleCurrentRuleEnabled()
+    {
+        if (_updatingRuleEditor || _rulesSource.Current is not FileRule rule) return;
+        rule.Enabled = !rule.Enabled;
+        SetRuleEnabledButton(rule.Enabled);
+        _rulesSource.ResetCurrentItem();
+        MarkDirty();
+    }
+
+    private void SetRuleEnabledButton(bool enabled)
+    {
+        if (_ruleEnabledButton is null) return;
+        _ruleEnabledButton.Tag = enabled;
+        _ruleEnabledButton.Text = enabled ? "已启用" : "已禁用";
+        _ruleEnabledButton.BackColor = enabled ? ModernTheme.SuccessSoft : ModernTheme.ControlFill;
+        _ruleEnabledButton.ForeColor = enabled ? ModernTheme.Success : ModernTheme.MutedText;
     }
 
     private IEnumerable<FileRule> CurrentRules()
     {
         return _rulesSource.List.Cast<FileRule>();
     }
+
+    private void RenderSettingsRules()
+    {
+        if (_renderingRules || _rulesList is null || IsDisposed) return;
+        _renderingRules = true;
+        try
+        {
+            var selectedPath = (_rulesSource.Current as FileRule)?.FilePath ?? "";
+            var state = _remoteControl.PresentationController?.GetState();
+            var scroll = _rulesList.AutoScrollPosition;
+            _rulesList.SuspendLayout();
+            foreach (Control control in _rulesList.Controls) control.Dispose();
+            _rulesList.Controls.Clear();
+            var index = 0;
+            foreach (var rule in CurrentRules().OrderBy(rule => rule.FileName, StringComparer.CurrentCultureIgnoreCase))
+            {
+                var option = state?.Presentations.FirstOrDefault(item => SameRulePath(Path.Combine(item.Directory, item.Name), rule.FilePath));
+                var row = new PresentationRuleRow();
+                row.Width = Math.Max(420, _rulesList.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 16);
+                row.Update(rule, option, SameRulePath(selectedPath, rule.FilePath), File.Exists(rule.FilePath));
+                var rowIndex = CurrentRules().ToList().FindIndex(item => ReferenceEquals(item, rule));
+                row.Selected += (_, _) =>
+                {
+                    _rulesSource.Position = rowIndex;
+                    RefreshRuleEditor();
+                    RenderSettingsRules();
+                };
+                row.EnabledChangedByUser += (_, enabled) =>
+                {
+                    rule.Enabled = enabled;
+                    _rulesSource.ResetItem(rowIndex);
+                    MarkDirty();
+                };
+                _rulesList.Controls.Add(row);
+                index++;
+            }
+            _rulesList.ResumeLayout();
+            _rulesList.AutoScrollPosition = new Point(-scroll.X, -scroll.Y);
+        }
+        finally { _renderingRules = false; }
+    }
+
+    private static bool SameRulePath(string? left, string? right) =>
+        string.Equals(PresentationRuleValidator.NormalizePath(left), PresentationRuleValidator.NormalizePath(right), StringComparison.OrdinalIgnoreCase);
 
     private static FileRule CloneRule(FileRule rule) => new()
     {
@@ -936,7 +979,7 @@ public sealed class SettingsForm : Form
 
     private bool ValidateDraft(out string error)
     {
-        if (!TimeSpan.TryParse(Get<TextBox>("duration").Text.Trim(), out _))
+        if (!PresentationRuleValidator.TryNormalizeDuration(Get<TextBox>("duration").Text, out _, out _))
         {
             error = "默认时长必须是 HH:mm:ss 格式。";
             return false;
@@ -944,7 +987,7 @@ public sealed class SettingsForm : Form
         var duplicatePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var rule in CurrentRules())
         {
-            if (!TimeSpan.TryParse(rule.Duration, out _))
+            if (!PresentationRuleValidator.TryNormalizeDuration(rule.Duration, out _, out _))
             {
                 error = $"文件规则“{rule.FileName}”的计时时长无效。";
                 return false;

@@ -5,7 +5,7 @@
 - 分支：`feature/v0.13.2-winforms-ui-polish`（继续更新现有 Draft PR）
 - 基线提交：`4011324e9bc806f5d3e3f1d76a5c4188ea3ef724`
 - 平台：.NET 8、Windows Forms、Windows x64
-- 覆盖地址菜单生命周期、PC 远控演示管理、网页内危险操作确认、PowerPoint 前台激活路径、版本统一与 WinForms 体验修复。
+- 覆盖地址菜单生命周期、PC 远控演示管理、网页内危险操作确认、PowerPoint 前台激活路径、规则时长校验、CI Artifact 哈希核对与 WinForms 体验修复。
 
 ## 历史界面验收（v0.13.2）
 
@@ -22,8 +22,9 @@
 - v0.14.0 Release 单文件发布：成功，0 个警告、0 个错误。
 - v0.14.0 EXE SHA-256：`100C4C1AB754BA1796A64A3F4C17A9E4FB1D8E1A59F0C8E8C9CC12D6E522E543`。
 - v0.14.0 自动化测试：20 项通过，0 项失败，0 项跳过。
-- v0.14.1 Debug 自动化测试：24 项通过，0 项失败，0 项跳过。
-- v0.14.1 Release 单文件 EXE SHA-256：`4D172728E6E09C32AAFF660062CAB254EF22632F60B02B52631DE13D89C22E33`。
+- v0.14.1 Debug 自动化测试：36 项通过，0 项失败，0 项跳过。
+- 本地 `dist/v0.14.1/FlyPPTTimer.exe` SHA-256：`CC927129AD66F287890501642398D018891AF20C2B6E71A121F6E4177D142304`。本地文件仅用于本机构建排错，不作为 PR 审核交付物。
+- CI Artifact 审核 EXE（Actions `29401118043`）SHA-256：`4D90C1A541F346CA5C6761F9B0C986861373C9C45CB3EE967E76DA6AAE150742`。已下载 Artifact 并重新计算，结果与 Artifact 内 `FlyPPTTimer-v0.14.1.sha256` 一致。
 - 地址菜单崩溃根因和脱敏日志说明见 `docs/audit/v0.14.1/README.md`；原始日志不提交。
 
 ## 人工验证保留项
@@ -36,3 +37,4 @@
 - 手机端首次启动 PowerPoint 的 1–3 秒进度提示、重复点击忙碌保护和四种演示退出操作。
 - 地址菜单真实鼠标打开/关闭 30 次、PC 规则即时同步、手机网页退出电脑端 PowerPoint 后持续连接。
 - PowerPoint 小窗口最大化、多个 PowerPoint 窗口的路径匹配、双显示器与演讲者视图、放映前台和计时悬浮窗层级。
+- 必须使用新提交对应的 CI Artifact 重新进行上述人工验收；当前仅完成 Artifact 下载、SHA-256 复算与自动化验证，未伪造 GUI/Office 验收截图。

@@ -54,7 +54,16 @@ public sealed class RemoteControlForm : Form
     private readonly CheckBox _ruleEnabled = new() { Text = "启用" };
     private readonly Label _rulePath = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
     private FileRule? _selectedRule;
+    private string? _selectedPresentationId;
+    private string? _selectedPresentationPath;
     private bool _updatingRuleEditor;
+    private bool _durationDirty;
+    private readonly Dictionary<string, PresentationRuleRow> _ruleRows = new(StringComparer.OrdinalIgnoreCase);
+    private TableLayoutPanel? _presentationLayout;
+    private Control? _ruleEditorCard;
+    private Control? _presentationActions;
+    private Button? _toggleEditorButton;
+    private Button? _toggleActionsButton;
     private readonly System.Windows.Forms.Timer _presentationRefreshTimer = new() { Interval = 1000 };
 
     public RemoteControlForm(AppConfig config, RemoteControlService remoteControl, NetworkAddressService networkAddressService, Action<AppConfig> saveConfig)
@@ -78,6 +87,7 @@ public sealed class RemoteControlForm : Form
 
         Build();
         RefreshState();
+        VisibleChanged += (_, _) => UpdatePresentationRefreshState();
     }
 
     public void ReloadConfig(AppConfig config)
@@ -93,6 +103,14 @@ public sealed class RemoteControlForm : Form
         base.OnFormClosed(e);
     }
 
+    private void UpdatePresentationRefreshState()
+    {
+        _presentationRefreshTimer.Enabled = Visible && _presentationTabActive;
+        if (_presentationRefreshTimer.Enabled) RefreshPresentationPanel();
+    }
+
+    private bool _presentationTabActive;
+
     private void Build()
     {
         var root = new TableLayoutPanel
@@ -103,10 +121,10 @@ public sealed class RemoteControlForm : Form
             Padding = new Padding(18),
             BackColor = ModernTheme.Surface
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
         Controls.Add(root);
 
         root.Controls.Add(Header(), 0, 0);
@@ -134,8 +152,8 @@ public sealed class RemoteControlForm : Form
         tabs.TabPages.Add(presentation);
         tabs.SelectedIndexChanged += (_, _) =>
         {
-            _presentationRefreshTimer.Enabled = tabs.SelectedTab == presentation;
-            if (tabs.SelectedTab == presentation) RefreshPresentationPanel();
+            _presentationTabActive = tabs.SelectedTab == presentation;
+            UpdatePresentationRefreshState();
         };
         _presentationRefreshTimer.Tick += (_, _) => RefreshPresentationPanel();
         return tabs;
@@ -282,51 +300,76 @@ public sealed class RemoteControlForm : Form
             BackColor = ModernTheme.Surface,
             Padding = new Padding(0)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
 
-        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, BackColor = ModernTheme.Surface, WrapContents = false, Padding = new Padding(0, 4, 0, 4) };
+        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, BackColor = ModernTheme.Surface, WrapContents = false, Padding = new Padding(0, 2, 0, 2) };
         var add = SmallAction("添加 PPT", (_, _) => AddPresentationRules(), true);
         var remove = SmallAction("删除规则", (_, _) => DeleteSelectedRule(), false, true);
         var refresh = SmallAction("刷新状态", (_, _) => RefreshPresentationPanel());
+        _toggleEditorButton = SmallAction("收起编辑", (_, _) => TogglePresentationSection(2, _ruleEditorCard, _toggleEditorButton, 76));
+        _toggleActionsButton = SmallAction("收起操作", (_, _) => TogglePresentationSection(3, _presentationActions, _toggleActionsButton, 104));
+        foreach (var button in new[] { add, remove, refresh, _toggleEditorButton, _toggleActionsButton }) button.Width = 96;
         toolbar.Controls.Add(add);
         toolbar.Controls.Add(remove);
         toolbar.Controls.Add(refresh);
+        toolbar.Controls.Add(_toggleEditorButton);
+        toolbar.Controls.Add(_toggleActionsButton);
         toolbar.Controls.Add(_presentationStatus);
         root.Controls.Add(toolbar, 0, 0);
 
         ModernTheme.StyleRounded(_ruleList, ModernTheme.CardRadius);
         root.Controls.Add(_ruleList, 0, 1);
-        root.Controls.Add(BuildRuleEditor(), 0, 2);
-        root.Controls.Add(BuildPresentationActions(), 0, 3);
+        _ruleEditorCard = BuildRuleEditor();
+        _presentationActions = BuildPresentationActions();
+        root.Controls.Add(_ruleEditorCard, 0, 2);
+        root.Controls.Add(_presentationActions, 0, 3);
+        _presentationLayout = root;
         return root;
+    }
+
+    private void TogglePresentationSection(int row, Control? section, Button? button, int expandedHeight)
+    {
+        if (_presentationLayout is null || section is null || button is null) return;
+        section.Visible = !section.Visible;
+        _presentationLayout.RowStyles[row].Height = section.Visible ? expandedHeight : 0;
+        button.Text = section.Visible ? button == _toggleEditorButton ? "收起编辑" : "收起操作" : button == _toggleEditorButton ? "展开编辑" : "展开操作";
     }
 
     private Control BuildRuleEditor()
     {
         var card = Card(new Padding(14, 8, 14, 8));
         card.Margin = new Padding(0, 8, 0, 8);
-        card.ColumnCount = 5;
+        card.ColumnCount = 6;
         card.RowCount = 2;
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 66));
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));
         card.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 124));
-        card.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
-        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 98));
+        card.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         card.Controls.Add(new Label { Text = "路径", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         _toolTip.SetToolTip(_rulePath, "");
         card.Controls.Add(_rulePath, 1, 0);
-        card.SetColumnSpan(_rulePath, 4);
+        card.SetColumnSpan(_rulePath, 5);
         card.Controls.Add(new Label { Text = "时长", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
         card.Controls.Add(Host(_ruleDuration, new Padding(10, 7, 10, 6), ModernTheme.ControlFill), 1, 1);
         card.Controls.Add(Host(_ruleEnabled, new Padding(10, 7, 10, 6), ModernTheme.ControlFill), 2, 1);
-        card.Controls.Add(SmallAction("复制路径", (_, _) => CopySelectedPath()), 3, 1);
-        card.Controls.Add(SmallAction("在资源管理器中显示", (_, _) => ShowSelectedPath()), 4, 1);
-        _ruleDuration.TextChanged += (_, _) => UpdateSelectedRule();
+        card.Controls.Add(SmallAction("保存时长", (_, _) => SaveSelectedDuration(), true), 3, 1);
+        card.Controls.Add(SmallAction("复制路径", (_, _) => CopySelectedPath()), 4, 1);
+        card.Controls.Add(SmallAction("资源管理器", (_, _) => ShowSelectedPath()), 5, 1);
+        _ruleDuration.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            e.SuppressKeyPress = true;
+            SaveSelectedDuration();
+        };
+        _ruleDuration.TextChanged += (_, _) => { if (!_updatingRuleEditor) _durationDirty = true; };
+        _ruleDuration.Leave += (_, _) => SaveSelectedDuration();
         _ruleEnabled.CheckedChanged += (_, _) => UpdateSelectedRule();
         return card;
     }
@@ -482,6 +525,8 @@ public sealed class RemoteControlForm : Form
         if (_selectedRule is null) return;
         _config.Rules.Remove(_selectedRule);
         _selectedRule = null;
+        _selectedPresentationId = null;
+        _selectedPresentationPath = null;
         SaveRulesImmediately();
         RefreshPresentationPanel();
     }
@@ -497,20 +542,51 @@ public sealed class RemoteControlForm : Form
 
     private void RenderRuleRows(PresentationState state)
     {
-        var selectedPath = _selectedRule is null ? "" : NormalizePath(_selectedRule.FilePath);
+        var selectedPath = _selectedPresentationPath ?? _selectedRule?.FilePath ?? "";
+        var items = PresentationRuleValidator.MergeRulesAndOpenPresentations(_config.Rules, state.Presentations);
+
+        var scroll = _ruleList.AutoScrollPosition;
         _ruleList.SuspendLayout();
-        _ruleList.Controls.Clear();
-        foreach (var rule in _config.Rules.OrderBy(rule => rule.FileName, StringComparer.CurrentCultureIgnoreCase))
+        foreach (var obsolete in _ruleRows.Keys.Except(items.Select(item => item.Path), StringComparer.OrdinalIgnoreCase).ToArray())
         {
-            var option = state.Presentations.FirstOrDefault(item =>
-                SamePath(Path.Combine(item.Directory, item.Name), rule.FilePath));
-            var row = new PresentationRuleRow(rule, SamePath(rule.FilePath, selectedPath), option?.IsOpen == true, option?.IsActive == true, File.Exists(rule.FilePath));
+            var row = _ruleRows[obsolete];
+            _ruleList.Controls.Remove(row);
+            row.Dispose();
+            _ruleRows.Remove(obsolete);
+        }
+
+        var index = 0;
+        foreach (var item in items)
+        {
+            var key = item.Path;
+            if (!_ruleRows.TryGetValue(key, out var row))
+            {
+                row = new PresentationRuleRow();
+                row.Selected += (_, _) => SelectPresentation(item.Rule, item.Presentation, item.Path);
+                row.EnabledChangedByUser += (_, enabled) =>
+                {
+                    if (item.Rule is null) return;
+                    item.Rule.Enabled = enabled;
+                    SaveRulesImmediately();
+                    RefreshPresentationPanel();
+                };
+                _ruleRows.Add(key, row);
+                _ruleList.Controls.Add(row);
+            }
             row.Width = Math.Max(420, _ruleList.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 16);
-            row.Selected += (_, _) => { _selectedRule = rule; RefreshPresentationPanel(); };
-            row.EnabledChangedByUser += (_, enabled) => { rule.Enabled = enabled; SaveRulesImmediately(); RefreshPresentationPanel(); };
-            _ruleList.Controls.Add(row);
+            row.Update(item.Rule, item.Presentation, SamePath(item.Path, selectedPath), File.Exists(item.Path));
+            _ruleList.Controls.SetChildIndex(row, index++);
         }
         _ruleList.ResumeLayout();
+        _ruleList.AutoScrollPosition = new Point(-scroll.X, -scroll.Y);
+    }
+
+    private void SelectPresentation(FileRule? rule, PresentationOption? option, string path)
+    {
+        _selectedRule = rule;
+        _selectedPresentationPath = path;
+        _selectedPresentationId = option?.Id ?? PresentationRuleValidator.IdForPath(path);
+        RefreshPresentationPanel();
     }
 
     private void RefreshRuleEditor()
@@ -518,9 +594,10 @@ public sealed class RemoteControlForm : Form
         var rule = _selectedRule;
         if (rule is not null && !_config.Rules.Contains(rule)) rule = _selectedRule = null;
         _updatingRuleEditor = true;
-        _rulePath.Text = rule?.FilePath ?? "未选择规则";
-        _toolTip.SetToolTip(_rulePath, rule?.FilePath ?? "");
+        _rulePath.Text = rule?.FilePath ?? _selectedPresentationPath ?? "未选择规则";
+        _toolTip.SetToolTip(_rulePath, rule?.FilePath ?? _selectedPresentationPath ?? "");
         _ruleDuration.Text = rule?.Duration ?? "";
+        _durationDirty = false;
         _ruleEnabled.Checked = rule?.Enabled ?? false;
         _ruleDuration.Enabled = _ruleEnabled.Enabled = rule is not null;
         _updatingRuleEditor = false;
@@ -528,15 +605,26 @@ public sealed class RemoteControlForm : Form
 
     private void UpdateSelectedRule()
     {
-        if (_updatingRuleEditor || _selectedRule is null || !_ruleDuration.Focused && !_ruleEnabled.Focused) return;
-        if (!TimeSpan.TryParse(_ruleDuration.Text.Trim(), out _))
-        {
-            _presentationStatus.Text = "计时时长必须是 HH:mm:ss 格式。";
-            return;
-        }
-        _selectedRule.Duration = _ruleDuration.Text.Trim();
+        if (_updatingRuleEditor || _selectedRule is null || !_ruleEnabled.Focused) return;
         _selectedRule.Enabled = _ruleEnabled.Checked;
         SaveRulesImmediately();
+    }
+
+    private void SaveSelectedDuration()
+    {
+        if (_updatingRuleEditor || _selectedRule is null || !_durationDirty) return;
+        if (!PresentationRuleValidator.TryNormalizeDuration(_ruleDuration.Text, out var duration, out var error))
+        {
+            _presentationStatus.Text = error;
+            return;
+        }
+        if (string.Equals(_selectedRule.Duration, duration, StringComparison.Ordinal)) return;
+        _selectedRule.Duration = duration;
+        _ruleDuration.Text = duration;
+        _durationDirty = false;
+        SaveRulesImmediately();
+        _presentationStatus.Text = "计时时长已保存并同步手机端。";
+        RefreshPresentationPanel();
     }
 
     private void SaveRulesImmediately()
@@ -559,7 +647,13 @@ public sealed class RemoteControlForm : Form
     private void SendPresentationCommand(string command)
     {
         if (_powerPoint is null) { _presentationStatus.Text = "PowerPoint 控制服务不可用。"; return; }
-        var result = _powerPoint.Queue(new RemoteCommand { Command = command, PresentationId = command == "ppt.openPresentation" ? IdForPath(_selectedRule?.FilePath) : null });
+        var needsSelection = command is "ppt.openPresentation" or "ppt.startFromBeginning" or "ppt.startFromCurrent";
+        if (needsSelection && string.IsNullOrWhiteSpace(_selectedPresentationId))
+        {
+            _presentationStatus.Text = "请先从列表中选择要操作的演示文稿。";
+            return;
+        }
+        var result = _powerPoint.Execute(new RemoteCommand { Command = command, PresentationId = needsSelection ? _selectedPresentationId : null });
         _presentationStatus.Text = result.Message;
         RefreshPresentationPanel();
     }
@@ -581,7 +675,6 @@ public sealed class RemoteControlForm : Form
     }
 
     private static bool SamePath(string? left, string? right) => string.Equals(NormalizePath(left), NormalizePath(right), StringComparison.OrdinalIgnoreCase);
-    private static string? IdForPath(string? path) => string.IsNullOrWhiteSpace(path) ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(NormalizePath(path))))[..20];
 
     private void ToggleService()
     {
@@ -677,39 +770,71 @@ public sealed class RemoteControlForm : Form
 
 internal sealed class PresentationRuleRow : UserControl
 {
-    private readonly FileRule _rule;
+    private readonly TableLayoutPanel _layout;
+    private readonly Label _title;
+    private readonly Label _path;
+    private readonly Label _status;
+    private readonly Button _enabled;
+    private FileRule? _rule;
+    private bool _updating;
     public event EventHandler? Selected;
     public event EventHandler<bool>? EnabledChangedByUser;
 
-    public PresentationRuleRow(FileRule rule, bool selected, bool open, bool active, bool exists)
+    public PresentationRuleRow()
     {
-        _rule = rule;
-        Height = 68;
+        Height = 52;
         Margin = new Padding(0, 0, 0, 8);
-        BackColor = selected ? ModernTheme.AccentSoft : ModernTheme.Card;
         Cursor = Cursors.Hand;
         ModernTheme.StyleRounded(this, ModernTheme.CardRadius);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(12, 7, 10, 7), BackColor = BackColor };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 27));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        var title = new Label { Text = rule.FileName, Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-        var path = new Label { Text = rule.FilePath, Dock = DockStyle.Fill, ForeColor = ModernTheme.MutedText, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-        var status = new Label { Text = !exists ? "文件不存在" : !rule.Enabled ? "已禁用" : active ? "正在放映" : open ? "已打开" : "规则已启用", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, ForeColor = !exists ? ModernTheme.Danger : active ? ModernTheme.AccentStrong : ModernTheme.MutedText, BackColor = !exists ? ModernTheme.DangerSoft : active ? ModernTheme.AccentSoft : ModernTheme.ControlFill };
-        ModernTheme.StyleRounded(status, ModernTheme.ControlRadius);
-        var enabled = new CheckBox { Text = "启用", Checked = rule.Enabled, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
-        enabled.CheckedChanged += (_, _) => EnabledChangedByUser?.Invoke(this, enabled.Checked);
-        layout.Controls.Add(title, 0, 0);
-        layout.Controls.Add(status, 1, 0);
-        layout.Controls.Add(enabled, 2, 0);
-        layout.Controls.Add(path, 0, 1);
-        layout.SetColumnSpan(path, 3);
-        Controls.Add(layout);
+        _layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(12, 3, 10, 3) };
+        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
+        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
+        _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
+        _title = new Label { Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+        _path = new Label { Dock = DockStyle.Fill, ForeColor = ModernTheme.MutedText, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+        _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
+        _enabled = new Button { Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, UseCompatibleTextRendering = true, Margin = Padding.Empty };
+        ModernTheme.StyleRounded(_status, ModernTheme.ControlRadius);
+        ModernTheme.StyleRounded(_enabled, ModernTheme.ControlRadius);
+        _enabled.Click += (_, _) =>
+        {
+            if (_updating || _rule is null) return;
+            EnabledChangedByUser?.Invoke(this, !_rule.Enabled);
+        };
+        _layout.Controls.Add(_title, 0, 0);
+        _layout.Controls.Add(_status, 1, 0);
+        _layout.Controls.Add(_enabled, 2, 0);
+        _layout.Controls.Add(_path, 0, 1);
+        _layout.SetColumnSpan(_path, 3);
+        Controls.Add(_layout);
         Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
-        foreach (Control child in layout.Controls) child.Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
+        foreach (Control child in _layout.Controls) child.Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Update(FileRule? rule, PresentationOption? option, bool selected, bool exists)
+    {
+        _updating = true;
+        _rule = rule;
+        var isShowing = option?.IsSlideShowRunning == true;
+        var isOpen = option?.IsOpen == true;
+        var statusText = !exists ? "文件不存在" : rule is null ? "已打开（无规则）" : !rule.Enabled ? "已禁用" : isShowing ? "正在放映" : option?.IsActive == true ? "当前活动" : isOpen ? "已打开" : "规则已启用";
+        BackColor = selected ? ModernTheme.AccentSoft : ModernTheme.Card;
+        _layout.BackColor = BackColor;
+        _title.Text = rule is null
+            ? option?.Name ?? "演示文稿"
+            : $"{rule.FileName}   {rule.Duration}";
+        _path.Text = rule?.FilePath ?? Path.Combine(option?.Directory ?? "", option?.Name ?? "");
+        _status.Text = statusText;
+        _status.BackColor = !exists ? ModernTheme.DangerSoft : isShowing || selected ? ModernTheme.AccentSoft : ModernTheme.ControlFill;
+        _status.ForeColor = !exists ? ModernTheme.Danger : isShowing || selected ? ModernTheme.AccentStrong : ModernTheme.MutedText;
+        _enabled.Visible = rule is not null;
+        _enabled.Text = rule?.Enabled == true ? "已启用" : "已禁用";
+        _enabled.BackColor = rule?.Enabled == true ? ModernTheme.SuccessSoft : ModernTheme.ControlFill;
+        _enabled.ForeColor = rule?.Enabled == true ? ModernTheme.Success : ModernTheme.MutedText;
+        _updating = false;
     }
 }
 

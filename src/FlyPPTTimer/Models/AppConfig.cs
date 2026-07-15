@@ -276,6 +276,7 @@ public sealed class PresentationOption
     public string Directory { get; set; } = "";
     public bool IsOpen { get; set; }
     public bool IsActive { get; set; }
+    public bool IsSlideShowRunning { get; set; }
     public bool IsManaged { get; set; }
 }
 

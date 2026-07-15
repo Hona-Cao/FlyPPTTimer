@@ -211,8 +211,8 @@ public sealed class PowerPointControlService : IDisposable
         return command.Command switch
         {
             "ppt.refresh" => "状态已刷新",
-            "ppt.startFromBeginning" => StartShow(false),
-            "ppt.startFromCurrent" => StartShow(true),
+            "ppt.startFromBeginning" => StartShow(command.PresentationId, false),
+            "ppt.startFromCurrent" => StartShow(command.PresentationId, true),
             "ppt.previous" => Navigate(view => ((dynamic)view).Previous(), "已切换到上一页"),
             "ppt.next" => Navigate(view => ((dynamic)view).Next(), "已切换到下一页"),
             "ppt.gotoSlide" => GoToSlide(command.SlideNumber),
@@ -267,7 +267,7 @@ public sealed class PowerPointControlService : IDisposable
 
     private void NotifyStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
 
-    private string StartShow(bool fromCurrent)
+    private string StartShow(string? presentationId, bool fromCurrent)
     {
         object? appObject = null, presentation = null, settings = null, slides = null, window = null, view = null, slide = null, showWindows = null, startedWindow = null;
         try
@@ -276,9 +276,9 @@ public sealed class PowerPointControlService : IDisposable
             dynamic app = appObject;
             showWindows = app.SlideShowWindows;
             if ((int)((dynamic)showWindows).Count > 0) return "放映已经在运行，本次重复启动已忽略";
-            presentation = app.ActivePresentation;
+            presentation = ResolvePresentationForShow(app, presentationId);
             if (presentation is null) throw new InvalidOperationException("PowerPoint 中没有活动演示文稿。") ;
-            ActivatePresentationWindow(presentation);
+            var activation = ActivatePresentationWindow(presentation);
             dynamic deck = presentation;
             slides = deck.Slides;
             var total = (int)((dynamic)slides).Count;
@@ -301,10 +301,35 @@ public sealed class PowerPointControlService : IDisposable
             showSettings.EndingSlide = total;
             startedWindow = showSettings.Run();
             var path = SafeString(() => (string)deck.FullName);
-            ActivateSlideShowWindow(app, path, startedWindow);
-            return fromCurrent ? $"已从第 {start} 页开始放映" : "已从头开始放映";
+            var foreground = ActivateSlideShowWindow(app, path, startedWindow);
+            var prefix = fromCurrent ? $"已从第 {start} 页开始放映" : "已从头开始放映";
+            return prefix + activation.Message + foreground.Message;
         }
         finally { Release(startedWindow, showWindows, slide, view, window, slides, settings, presentation, appObject); }
+    }
+
+    private object? ResolvePresentationForShow(dynamic app, string? presentationId)
+    {
+        if (string.IsNullOrWhiteSpace(presentationId))
+        {
+            try { return app.ActivePresentation; }
+            catch { return null; }
+        }
+
+        if (!PresentationRuleValidator.TryResolveEnabledRule(_getConfig().Rules, presentationId, out var path, out var error))
+            throw new InvalidOperationException(error);
+        if (!File.Exists(path)) throw new FileNotFoundException("所选演示文稿文件不存在。", path);
+        object? presentations = null, presentation = null;
+        try
+        {
+            presentations = app.Presentations;
+            presentation = FindOpenPresentation(presentations, path);
+            if (presentation is not null) return presentation;
+            presentation = ((dynamic)presentations).Open(path, true, false, true);
+            _managedPresentations[NormalizePath(path)] = new ManagedPresentation(NormalizePath(path), DateTime.Now, true);
+            return presentation;
+        }
+        finally { Release(presentations); }
     }
 
     private string GoToSlide(int? slideNumber)
@@ -346,34 +371,34 @@ public sealed class PowerPointControlService : IDisposable
         finally { Release(view, window, windows, appObject); }
     }
 
-    private void ActivatePresentationWindow(object presentation)
+    private WindowActivationResult ActivatePresentationWindow(object presentation)
     {
         object? windows = null, window = null, appObject = null;
         try
         {
             dynamic deck = presentation;
             windows = deck.Windows;
-            if ((int)((dynamic)windows).Count <= 0) return;
+            var path = SafeString(() => (string)deck.FullName);
+            if ((int)((dynamic)windows).Count <= 0) return WindowActivationResult.Failed("未找到目标文稿窗口", path, IntPtr.Zero);
             window = ((dynamic)windows)[1];
-            ((dynamic)window).Activate();
-            try { ((dynamic)window).WindowState = NativeMethods.SwMaximize; } catch { }
+            try { ((dynamic)window).Activate(); }
+            catch (Exception ex) { return WindowActivationResult.Failed("文稿已打开但 COM 激活失败", path, IntPtr.Zero, ex); }
+            var maximized = true;
+            try { ((dynamic)window).WindowState = NativeMethods.SwMaximize; }
+            catch (Exception ex) { maximized = false; _log.Warn($"PowerPoint maximize via COM failed: path={path}; {ex.Message}"); }
             try
             {
                 appObject = deck.Application;
                 var hwnd = (IntPtr)(int)((dynamic)appObject).Hwnd;
-                if (hwnd != IntPtr.Zero)
-                {
-                    NativeMethods.ShowWindow(hwnd, NativeMethods.SwMaximize);
-                    NativeMethods.BringWindowToTop(hwnd);
-                    NativeMethods.SetForegroundWindow(hwnd);
-                }
+                var foreground = ActivateNativeWindow(hwnd, path, "文稿窗口", maximized);
+                return foreground;
             }
-            catch { }
+            catch (Exception ex) { return WindowActivationResult.Failed("文稿已打开但无法读取窗口句柄", path, IntPtr.Zero, ex); }
         }
         finally { Release(appObject, window, windows); }
     }
 
-    private void ActivateSlideShowWindow(object app, string presentationPath, object? startedWindow)
+    private WindowActivationResult ActivateSlideShowWindow(object app, string presentationPath, object? startedWindow)
     {
         object? windows = null, window = null, presentation = null;
         var ownsWindow = false;
@@ -394,19 +419,16 @@ public sealed class PowerPointControlService : IDisposable
                     presentation = ((dynamic)window).Presentation;
                     if (SamePath(SafeString(() => (string)((dynamic)presentation).FullName), presentationPath))
                     {
-                        try { ((dynamic)window).Activate(); } catch { }
+                        try { ((dynamic)window).Activate(); }
+                        catch (Exception ex) { return WindowActivationResult.Failed("放映已启动但 COM 激活失败", presentationPath, IntPtr.Zero, ex); }
                         try
                         {
                             var hwnd = (IntPtr)(int)((dynamic)window).HWND;
-                            if (hwnd != IntPtr.Zero)
-                            {
-                                NativeMethods.BringWindowToTop(hwnd);
-                                NativeMethods.SetForegroundWindow(hwnd);
-                            }
+                            var result = ActivateNativeWindow(hwnd, presentationPath, "放映窗口", true, "；放映已启动但置前失败");
+                            SlideShowWindowActivated?.Invoke(this, EventArgs.Empty);
+                            return result;
                         }
-                        catch { }
-                        SlideShowWindowActivated?.Invoke(this, EventArgs.Empty);
-                        return;
+                        catch (Exception ex) { return WindowActivationResult.Failed("放映已启动但无法读取窗口句柄", presentationPath, IntPtr.Zero, ex); }
                     }
                 }
                 Release(presentation, ownsWindow ? window : null, windows);
@@ -416,6 +438,31 @@ public sealed class PowerPointControlService : IDisposable
             }
         }
         finally { Release(presentation, ownsWindow ? window : null, windows); }
+        return WindowActivationResult.Failed("放映已启动但未找到目标放映窗口", presentationPath, IntPtr.Zero);
+    }
+
+    private WindowActivationResult ActivateNativeWindow(IntPtr hwnd, string path, string label, bool maximized, string failurePrefix = "；文稿已打开但最大化或置前失败")
+    {
+        if (hwnd == IntPtr.Zero) return WindowActivationResult.Failed($"未找到目标{label}", path, hwnd);
+        var showResult = NativeMethods.ShowWindow(hwnd, NativeMethods.SwMaximize);
+        var showError = Marshal.GetLastWin32Error();
+        var bringResult = NativeMethods.BringWindowToTop(hwnd);
+        var bringError = Marshal.GetLastWin32Error();
+        var foregroundResult = NativeMethods.SetForegroundWindow(hwnd);
+        var foregroundError = Marshal.GetLastWin32Error();
+        if (!bringResult || !foregroundResult)
+        {
+            NativeMethods.SetWindowPos(hwnd, NativeMethods.HwndTopmost, 0, 0, 0, 0, NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow);
+            NativeMethods.SetWindowPos(hwnd, NativeMethods.HwndNoTopmost, 0, 0, 0, 0, NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow);
+            bringResult = NativeMethods.BringWindowToTop(hwnd);
+            bringError = Marshal.GetLastWin32Error();
+            foregroundResult = NativeMethods.SetForegroundWindow(hwnd);
+            foregroundError = Marshal.GetLastWin32Error();
+        }
+        if (bringResult && foregroundResult && maximized) return WindowActivationResult.Succeeded("；已最大化并置前", path, hwnd);
+        var detail = $"{label} HWND=0x{hwnd.ToInt64():X}; ShowWindow={showResult}/错误{showError}; BringWindowToTop={bringResult}/错误{bringError}; SetForegroundWindow={foregroundResult}/错误{foregroundError}";
+        _log.Warn($"PowerPoint window activation incomplete: path={path}; {detail}");
+        return WindowActivationResult.Failed(failurePrefix + $"（{detail}）", path, hwnd);
     }
 
     private static object? FindSlideShowWindow(object windows, string presentationPath)
@@ -487,14 +534,8 @@ public sealed class PowerPointControlService : IDisposable
                 presentation = ((dynamic)presentations).Open(path, true, false, true);
                 _managedPresentations[NormalizePath(path)] = new ManagedPresentation(NormalizePath(path), DateTime.Now, true);
             }
-            windows = ((dynamic)presentation).Windows;
-            if ((int)((dynamic)windows).Count > 0)
-            {
-                window = ((dynamic)windows)[1];
-                ((dynamic)window).Activate();
-            }
-            ActivatePresentationWindow(presentation);
-            return $"已打开 {Path.GetFileName(path)}";
+            var activation = ActivatePresentationWindow(presentation);
+            return $"已打开 {Path.GetFileName(path)}" + activation.Message;
         }
         finally { Release(window, windows, presentation, presentations, appObject); }
     }
@@ -636,7 +677,20 @@ public sealed class PowerPointControlService : IDisposable
             state.IsSlideShowRunning = (int)((dynamic)windows).Count > 0;
             if (state.IsSlideShowRunning)
             {
-                window = ((dynamic)windows)[1];
+                var activePath = "";
+                try
+                {
+                    active = app.ActivePresentation;
+                    activePath = SafeString(() => (string)((dynamic)active).FullName);
+                }
+                catch { active = null; }
+                window = FindSlideShowWindow(windows, activePath);
+                if (window is null)
+                {
+                    state.Error = "未能按目标文稿匹配放映窗口。";
+                    AddRuleOptions(state, openPaths);
+                    return state;
+                }
                 parent = ((dynamic)window).Presentation;
                 view = ((dynamic)window).View;
                 slide = ((dynamic)view).Slide;
@@ -699,6 +753,7 @@ public sealed class PowerPointControlService : IDisposable
                 Id = IdForPath(path), Name = Path.GetFileName(path), Directory = Path.GetDirectoryName(path) ?? "",
                 IsOpen = openPaths.Contains(path, StringComparer.OrdinalIgnoreCase),
                 IsActive = SamePath(path, activePath),
+                IsSlideShowRunning = state.IsSlideShowRunning && SamePath(path, state.PresentationPath),
                 IsManaged = _managedPresentations.ContainsKey(NormalizePath(path))
             });
         }
@@ -738,7 +793,7 @@ public sealed class PowerPointControlService : IDisposable
         catch { return null; }
     }
 
-    private static string IdForPath(string path) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(NormalizePath(path))))[..20];
+    private static string IdForPath(string path) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(NormalizePath(path).ToUpperInvariant())))[..20];
     private static string NormalizePath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return "";
@@ -773,7 +828,7 @@ public sealed class PowerPointControlService : IDisposable
         ScreenMode = state.ScreenMode,
         UpdatedAt = state.UpdatedAt,
         Error = state.Error,
-        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, Directory = x.Directory, IsOpen = x.IsOpen, IsActive = x.IsActive, IsManaged = x.IsManaged }).ToList(),
+        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, Directory = x.Directory, IsOpen = x.IsOpen, IsActive = x.IsActive, IsSlideShowRunning = x.IsSlideShowRunning, IsManaged = x.IsManaged }).ToList(),
         Operation = state.Operation,
         OperationMessage = state.OperationMessage,
         OperationStartedAt = state.OperationStartedAt,
@@ -792,6 +847,11 @@ public sealed class PowerPointControlService : IDisposable
     };
 
     private sealed record ManagedPresentation(string Path, DateTime OpenedAt, bool ReadOnlyRequested);
+    private sealed record WindowActivationResult(bool Success, string Message, string Path, IntPtr Hwnd)
+    {
+        public static WindowActivationResult Succeeded(string message, string path, IntPtr hwnd) => new(true, message, path, hwnd);
+        public static WindowActivationResult Failed(string message, string path, IntPtr hwnd, Exception? exception = null) => new(false, $"；{message}", path, hwnd);
+    }
     private sealed record PresentationOperationInfo(string Name, string Message, DateTime? StartedAt, string Id, bool IsBusy)
     {
         public static PresentationOperationInfo Idle { get; } = new("Idle", "", null, "", false);
