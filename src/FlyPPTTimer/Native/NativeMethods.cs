@@ -14,6 +14,8 @@ internal static class NativeMethods
     public const int ModControl = 0x0002;
     public const int ModShift = 0x0004;
     public const int ModWin = 0x0008;
+    public const int SwRestore = 9;
+    public const int SwMaximize = 3;
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -22,6 +24,12 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int command);
 
     [DllImport("user32.dll")]
     public static extern bool PostMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);

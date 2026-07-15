@@ -67,6 +67,13 @@
       </article>
     </section>
 
+    <div id="confirmPanel" class="confirm-panel" hidden role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="confirm-card">
+        <h2 id="confirmTitle">确认操作</h2>
+        <p id="confirmText"></p>
+        <div class="confirm-actions"><button id="confirmCancel">取消</button><button id="confirmAccept" class="danger">确认</button></div>
+      </div>
+    </div>
     <div id="message" class="message" role="status">正在建立连接...</div>
   </main>
   <script>window.FLYPPT_TOKEN='__FLYPPT_TOKEN__';</script>

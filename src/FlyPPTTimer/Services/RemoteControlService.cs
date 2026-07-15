@@ -40,6 +40,7 @@ public sealed class RemoteControlService : IDisposable
     }
 
     public bool IsRunning { get; private set; }
+    public PowerPointControlService? PresentationController => _powerPoint;
     public string StatusText { get; private set; } = "未启动";
     public int CurrentPort { get; private set; }
     public int ConnectedClients

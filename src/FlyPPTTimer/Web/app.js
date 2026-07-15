@@ -1,7 +1,7 @@
 const token=window.FLYPPT_TOKEN||'';
 const $=id=>document.getElementById(id);
 const commandButtons=[...document.querySelectorAll('[data-command]')];
-let connected=false,lastState=null,messageTimer=null,pollTimer=null,busy=false;
+let connected=false,lastState=null,messageTimer=null,pollTimer=null,busy=false,pendingConfirmation=null;
 
 function url(path){return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token)}
 async function api(path,options={}){
@@ -73,17 +73,29 @@ async function poll(){
   try{paint(await api('/state'));schedulePoll(1000)}
   catch(e){connection(false);setAvailability({},{});refreshPresentationButtons();notify('连接失败：'+e.message+'。Clash/TUN 请将本机局域网 IP 和端口设为 DIRECT。',true);schedulePoll(2500)}
 }
+function requestConfirmation(name,extra){
+  const details={
+    'ppt.endShow':['结束放映','仅结束电脑端当前放映，不关闭文稿或 PowerPoint。'],
+    'ppt.closeCurrentPresentation':['关闭当前受控文稿','只会关闭 FlyPPTTimer 以只读方式打开的电脑端文稿。'],
+    'ppt.exitApplication':['退出电脑端 PowerPoint','手机遥控网页会保持打开并继续同步；只有没有用户自行打开的文稿时才会退出。'],
+    'ppt.forceQuitAll':['强制退出电脑端程序','将强制退出电脑端全部 PowerPoint/WPS/演示软件，未保存内容可能丢失。']
+  }[name];
+  if(!details)return false;
+  pendingConfirmation={name,extra};
+  $('confirmTitle').textContent=details[0];$('confirmText').textContent=details[1];$('confirmPanel').hidden=false;$('confirmAccept').focus();
+  return true;
+}
+function closeConfirmation(){pendingConfirmation=null;$('confirmPanel').hidden=true;}
 async function command(name,extra={}){
   if(!connected||busy){if(!connected)notify('当前已断开，命令未发送',true);return}
-  if(name==='ppt.endShow'&&!confirm('确定结束当前 PowerPoint 放映吗？'))return;
-  if(name==='ppt.closeCurrentPresentation'&&!confirm('只会关闭 FlyPPTTimer 打开的只读文稿。确定继续吗？'))return;
-  if(name==='ppt.exitApplication'&&!confirm('仅当没有用户自行打开的文稿时才会退出 PowerPoint。确定继续吗？'))return;
-  if(name==='ppt.forceQuitAll'&&!confirm('强制退出会终止全部 PowerPoint/WPS/演示软件，未保存内容将丢失。确定强制退出吗？'))return;
+  if(!extra.confirmed&&requestConfirmation(name,extra))return;
   busy=true;setAvailability(timerState(lastState||{}),(lastState||{}).presentationState||{});
-  try{paint(await api('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:name,confirmed:name==='ppt.forceQuitAll'||undefined,...extra})}))}
+  try{paint(await api('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:name,...extra})}))}
   catch(e){notify(e.message,true)}finally{busy=false;setAvailability(timerState(lastState||{}),(lastState||{}).presentationState||{});schedulePoll(100)}
 }
 document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active'));tab.classList.add('active');$(tab.dataset.page).classList.add('active')}));
+$('confirmCancel').addEventListener('click',closeConfirmation);
+$('confirmAccept').addEventListener('click',()=>{const pending=pendingConfirmation;closeConfirmation();if(pending)command(pending.name,{...pending.extra,confirmed:true});});
 commandButtons.forEach(button=>button.addEventListener('click',()=>command(button.dataset.command)));
 $('gotoSlide').addEventListener('click',()=>{const input=$('slideNumber'),value=Number(input.value),max=Number(input.max);if(!Number.isInteger(value)||value<1||value>max){notify(`请输入 1 到 ${max} 之间的页码`,true);input.focus();return}command('ppt.gotoSlide',{slideNumber:value})});
 poll();

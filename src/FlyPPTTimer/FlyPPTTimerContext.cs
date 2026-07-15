@@ -76,6 +76,10 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _log);
         _powerPoint.SlideShowStarted += (_, path) => RunOnUi(() => HandlePresentationStarted(path, "远程控制"));
         _powerPoint.SlideShowEnded += (_, _) => RunOnUi(() => HandlePresentationEnded("远程控制"));
+        _powerPoint.SlideShowWindowActivated += (_, _) => RunOnUi(() =>
+        {
+            foreach (var overlay in _overlays) overlay.ReassertTopMost();
+        });
         _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _powerPoint, _log);
 
         _timer.Configure(_config);
@@ -339,6 +343,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void HandlePresentationStarted(string presentationPath, string source)
     {
+        _settings?.Hide();
+        _remoteControlWindow?.Hide();
         _presentationLifecycle.Observe(true, presentationPath, source);
     }
 

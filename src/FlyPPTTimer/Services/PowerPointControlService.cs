@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using FlyPPTTimer.Models;
+using FlyPPTTimer.Native;
 
 namespace FlyPPTTimer.Services;
 
@@ -41,6 +42,7 @@ public sealed class PowerPointControlService : IDisposable
 
     public event EventHandler<string>? SlideShowStarted;
     public event EventHandler? SlideShowEnded;
+    public event EventHandler? SlideShowWindowActivated;
     public event EventHandler? StateChanged;
 
     public PresentationState GetState()
@@ -276,6 +278,7 @@ public sealed class PowerPointControlService : IDisposable
             if ((int)((dynamic)showWindows).Count > 0) return "放映已经在运行，本次重复启动已忽略";
             presentation = app.ActivePresentation;
             if (presentation is null) throw new InvalidOperationException("PowerPoint 中没有活动演示文稿。") ;
+            ActivatePresentationWindow(presentation);
             dynamic deck = presentation;
             slides = deck.Slides;
             var total = (int)((dynamic)slides).Count;
@@ -298,6 +301,7 @@ public sealed class PowerPointControlService : IDisposable
             showSettings.EndingSlide = total;
             startedWindow = showSettings.Run();
             var path = SafeString(() => (string)deck.FullName);
+            ActivateSlideShowWindow(app, path, startedWindow);
             return fromCurrent ? $"已从第 {start} 页开始放映" : "已从头开始放映";
         }
         finally { Release(startedWindow, showWindows, slide, view, window, slides, settings, presentation, appObject); }
@@ -333,12 +337,109 @@ public sealed class PowerPointControlService : IDisposable
             dynamic app = appObject;
             windows = app.SlideShowWindows;
             if ((int)((dynamic)windows).Count <= 0) throw new InvalidOperationException("当前没有正在运行的 PowerPoint 放映。") ;
-            window = ((dynamic)windows)[1];
+            window = FindSlideShowWindow(windows, GetState().PresentationPath);
+            if (window is null) throw new InvalidOperationException("未找到当前受控演示文稿对应的放映窗口。");
             view = ((dynamic)window).View;
             action(view);
             return message;
         }
         finally { Release(view, window, windows, appObject); }
+    }
+
+    private void ActivatePresentationWindow(object presentation)
+    {
+        object? windows = null, window = null, appObject = null;
+        try
+        {
+            dynamic deck = presentation;
+            windows = deck.Windows;
+            if ((int)((dynamic)windows).Count <= 0) return;
+            window = ((dynamic)windows)[1];
+            ((dynamic)window).Activate();
+            try { ((dynamic)window).WindowState = NativeMethods.SwMaximize; } catch { }
+            try
+            {
+                appObject = deck.Application;
+                var hwnd = (IntPtr)(int)((dynamic)appObject).Hwnd;
+                if (hwnd != IntPtr.Zero)
+                {
+                    NativeMethods.ShowWindow(hwnd, NativeMethods.SwMaximize);
+                    NativeMethods.BringWindowToTop(hwnd);
+                    NativeMethods.SetForegroundWindow(hwnd);
+                }
+            }
+            catch { }
+        }
+        finally { Release(appObject, window, windows); }
+    }
+
+    private void ActivateSlideShowWindow(object app, string presentationPath, object? startedWindow)
+    {
+        object? windows = null, window = null, presentation = null;
+        var ownsWindow = false;
+        try
+        {
+            for (var attempt = 0; attempt < 20; attempt++)
+            {
+                window = startedWindow;
+                ownsWindow = false;
+                if (window is null)
+                {
+                    windows = ((dynamic)app).SlideShowWindows;
+                    window = FindSlideShowWindow(windows, presentationPath);
+                    ownsWindow = window is not null;
+                }
+                if (window is not null)
+                {
+                    presentation = ((dynamic)window).Presentation;
+                    if (SamePath(SafeString(() => (string)((dynamic)presentation).FullName), presentationPath))
+                    {
+                        try { ((dynamic)window).Activate(); } catch { }
+                        try
+                        {
+                            var hwnd = (IntPtr)(int)((dynamic)window).HWND;
+                            if (hwnd != IntPtr.Zero)
+                            {
+                                NativeMethods.BringWindowToTop(hwnd);
+                                NativeMethods.SetForegroundWindow(hwnd);
+                            }
+                        }
+                        catch { }
+                        SlideShowWindowActivated?.Invoke(this, EventArgs.Empty);
+                        return;
+                    }
+                }
+                Release(presentation, ownsWindow ? window : null, windows);
+                presentation = window = windows = null;
+                ownsWindow = false;
+                Thread.Sleep(100);
+            }
+        }
+        finally { Release(presentation, ownsWindow ? window : null, windows); }
+    }
+
+    private static object? FindSlideShowWindow(object windows, string presentationPath)
+    {
+        for (var i = 1; i <= (int)((dynamic)windows).Count; i++)
+        {
+            object? window = null, presentation = null;
+            var matched = false;
+            try
+            {
+                window = ((dynamic)windows)[i];
+                presentation = ((dynamic)window).Presentation;
+                var path = SafeString(() => (string)((dynamic)presentation).FullName);
+                matched = SamePath(path, presentationPath)
+                    || (string.IsNullOrWhiteSpace(presentationPath) && (int)((dynamic)windows).Count == 1);
+                if (matched) return window;
+            }
+            finally
+            {
+                Release(presentation);
+                if (!matched) Release(window);
+            }
+        }
+        return null;
     }
 
     private string OpenPresentation(string? id)
@@ -392,6 +493,7 @@ public sealed class PowerPointControlService : IDisposable
                 window = ((dynamic)windows)[1];
                 ((dynamic)window).Activate();
             }
+            ActivatePresentationWindow(presentation);
             return $"已打开 {Path.GetFileName(path)}";
         }
         finally { Release(window, windows, presentation, presentations, appObject); }

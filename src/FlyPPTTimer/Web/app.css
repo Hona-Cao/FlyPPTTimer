@@ -50,6 +50,12 @@ input { min-width:0; width:100%; padding:0 12px; }
 .message { position:sticky; bottom:10px; min-height:38px; padding:10px 13px; border-radius:var(--radius); background:#26383be8; color:#fff; font-size:13px; line-height:1.4; box-shadow:0 5px 18px #17282b22; display:none; }
 .message.show { display:block; }
 .message.error { background:#8f3037e8; }
+.confirm-panel { position:fixed; inset:0; z-index:10; display:grid; place-items:center; padding:20px; background:#17282b66; }
+.confirm-panel[hidden] { display:none; }
+.confirm-card { width:min(100%,420px); padding:20px; border-radius:var(--radius); background:#fff; box-shadow:0 12px 32px #17282b33; }
+.confirm-card h2 { margin:0 0 10px; font-size:19px; }
+.confirm-card p { margin:0 0 18px; color:var(--muted); line-height:1.55; }
+.confirm-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 @media (orientation:landscape) and (min-width:650px) {
   .app-shell { width:96%; max-width:920px; }
   #pptPage.active { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
