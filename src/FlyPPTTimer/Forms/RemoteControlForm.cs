@@ -123,10 +123,10 @@ public sealed class RemoteControlForm : Form
             Padding = new Padding(18),
             BackColor = ModernTheme.Surface
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         Controls.Add(root);
 
         root.Controls.Add(Header(), 0, 0);
@@ -145,12 +145,14 @@ public sealed class RemoteControlForm : Form
             BackColor = ModernTheme.Surface,
             Margin = Padding.Empty
         };
-        shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        shell.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var navCard = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             BackColor = ModernTheme.HeaderFill,
@@ -178,7 +180,7 @@ public sealed class RemoteControlForm : Form
     private Button NavigationButton(string text, EventHandler handler)
     {
         var button = NewActionButton(text, handler, 104, primary: false);
-        button.Height = 36;
+        button.Height = Math.Max(36, TextRenderer.MeasureText(text, Font).Height + 14);
         button.Margin = new Padding(0, 0, 8, 0);
         return button;
     }
@@ -200,11 +202,14 @@ public sealed class RemoteControlForm : Form
 
     private Control Header()
     {
-        var panel = Card(new Padding(20, 8, 20, 8));
+        var panel = Card(new Padding(20, 10, 20, 10));
+        panel.Dock = DockStyle.Top;
+        panel.AutoSize = true;
+        panel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         panel.BackColor = ModernTheme.HeaderFill;
         panel.ColumnCount = 2;
         panel.RowCount = 1;
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 142));
 
@@ -215,24 +220,28 @@ public sealed class RemoteControlForm : Form
             ColumnCount = 1,
             BackColor = ModernTheme.HeaderFill
         };
-        titleStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        titleStack.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        titleStack.AutoSize = true;
+        titleStack.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        titleStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        titleStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         titleStack.Controls.Add(new Label
         {
             Text = "手机遥控",
-            Dock = DockStyle.Fill,
+            AutoSize = true,
             Font = new Font(Font.FontFamily, 18F, FontStyle.Bold),
             ForeColor = ModernTheme.Text,
             TextAlign = ContentAlignment.MiddleLeft,
             Margin = Padding.Empty
         }, 0, 0);
+        _hint.AutoSize = true;
+        _hint.Dock = DockStyle.Top;
         _hint.Text = "同一网络下扫码即可控制开始、暂停、重置和显示状态。";
         titleStack.Controls.Add(_hint, 0, 1);
         panel.Controls.Add(titleStack, 0, 0);
 
         _toggle.Text = "关闭服务";
         _toggle.Width = 124;
-        _toggle.Height = 40;
+        _toggle.Height = Math.Max(40, TextRenderer.MeasureText(_toggle.Text, Font).Height + 16);
         _toggle.Click += (_, _) => ToggleService();
         ModernTheme.StyleRounded(_toggle, ModernTheme.ButtonRadius);
         panel.Controls.Add(Center(_toggle, ModernTheme.HeaderFill), 1, 0);
@@ -241,10 +250,13 @@ public sealed class RemoteControlForm : Form
 
     private Control StatusStrip()
     {
-        var panel = Card(new Padding(16, 6, 16, 6));
+        var panel = Card(new Padding(16, 8, 16, 8));
+        panel.Dock = DockStyle.Top;
+        panel.AutoSize = true;
+        panel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         panel.ColumnCount = 3;
         panel.RowCount = 1;
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
@@ -260,12 +272,14 @@ public sealed class RemoteControlForm : Form
         var panel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 2,
             RowCount = 1,
             BackColor = Color.White,
             Padding = new Padding(8, 0, 8, 0)
         };
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         panel.Controls.Add(new Label
@@ -301,13 +315,13 @@ public sealed class RemoteControlForm : Form
             BackColor = Color.White,
             Padding = new Padding(24, 0, 0, 0)
         };
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));
+        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 8));
         side.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         side.Controls.Add(Label("选择本机地址"), 0, 0);
@@ -341,13 +355,14 @@ public sealed class RemoteControlForm : Form
         {
             Dock = DockStyle.Top,
             AutoSize = false,
-            MinimumSize = new Size(700, 540),
-            Height = 540,
+            MinimumSize = new Size(700, 0),
+            Height = 560,
             ColumnCount = 1,
             RowCount = 4,
             BackColor = ModernTheme.Surface,
             Padding = new Padding(0, 0, 4, 0)
         };
+        _ruleList.MinimumSize = new Size(0, PresentationRuleRow.MinimumHeightFor(Font) * 3 + _ruleList.Padding.Vertical);
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -363,7 +378,14 @@ public sealed class RemoteControlForm : Form
         root.Controls.Add(BuildRuleEditor(), 0, 2);
         root.Controls.Add(BuildPresentationActions(), 0, 3);
         scroll.Controls.Add(root);
-        scroll.Resize += (_, _) => root.Height = Math.Max(scroll.ClientSize.Height, root.MinimumSize.Height);
+        void Reflow()
+        {
+            var availableWidth = Math.Max(root.MinimumSize.Width, scroll.ClientSize.Width);
+            var preferredHeight = root.GetPreferredSize(new Size(availableWidth, 0)).Height;
+            root.Height = Math.Max(scroll.ClientSize.Height, preferredHeight);
+        }
+        scroll.Resize += (_, _) => Reflow();
+        scroll.HandleCreated += (_, _) => BeginInvoke(Reflow);
         return scroll;
     }
 
@@ -382,7 +404,7 @@ public sealed class RemoteControlForm : Form
         buttons.Controls.Add(NewActionButton("刷新状态", (_, _) => RefreshPresentationPanel(), 104));
         card.Controls.Add(buttons, 0, 0);
         _presentationStatus.AutoEllipsis = true;
-        _presentationStatus.Height = 24;
+        _presentationStatus.MinimumSize = new Size(0, TextRenderer.MeasureText("状态", Font).Height + 8);
         _presentationStatus.Margin = new Padding(2, 4, 2, 0);
         card.Controls.Add(_presentationStatus, 0, 1);
         return card;
@@ -481,7 +503,8 @@ public sealed class RemoteControlForm : Form
     private Button NewActionButton(string text, EventHandler handler, int minimumWidth, bool primary = false, bool danger = false)
     {
         var measured = TextRenderer.MeasureText(text, Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width + 30;
-        var button = new Button { Text = text, Height = 40, Width = Math.Max(minimumWidth, measured), Margin = new Padding(0, 0, 8, 8), UseCompatibleTextRendering = false, AutoSize = false };
+        var buttonHeight = Math.Max(40, TextRenderer.MeasureText(text, Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Height + 16);
+        var button = new Button { Text = text, Height = buttonHeight, Width = Math.Max(minimumWidth, measured), Margin = new Padding(0, 0, 8, 8), UseCompatibleTextRendering = false, AutoSize = false };
         button.Click += handler;
         ModernTheme.StyleRounded(button, ModernTheme.ButtonRadius);
         button.BackColor = primary ? ModernTheme.AccentStrong : danger ? ModernTheme.DangerSoft : ModernTheme.AccentSoft;
@@ -531,11 +554,11 @@ public sealed class RemoteControlForm : Form
     private static Label Label(string text) => new()
     {
         Text = text,
-        AutoSize = false,
-        Dock = DockStyle.Fill,
+        AutoSize = true,
+        Dock = DockStyle.Top,
         ForeColor = Color.FromArgb(80, 96, 104),
-        TextAlign = ContentAlignment.BottomLeft,
-        Margin = Padding.Empty
+        TextAlign = ContentAlignment.MiddleLeft,
+        Margin = new Padding(0, 0, 0, 4)
     };
 
     private static Button FillButton(string text, EventHandler handler, bool primary = false)
@@ -544,9 +567,11 @@ public sealed class RemoteControlForm : Form
         {
             Text = text,
             Dock = DockStyle.Fill,
-            Height = 40,
+            MinimumSize = new Size(0, 40),
             Margin = new Padding(0, 2, 0, 2),
-            AutoSize = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12, 0, 12, 0),
             UseCompatibleTextRendering = false,
             BackColor = primary ? ModernTheme.AccentStrong : ModernTheme.AccentSoft,
             ForeColor = primary ? Color.White : ModernTheme.Text
@@ -569,9 +594,11 @@ public sealed class RemoteControlForm : Form
         {
             Text = text,
             Width = width,
-            Height = 40,
+            MinimumSize = new Size(width, 40),
             Margin = new Padding(6, 0, 0, 0),
-            AutoSize = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(12, 0, 12, 0),
             UseCompatibleTextRendering = false,
             BackColor = ModernTheme.Card
         };
@@ -587,7 +614,8 @@ public sealed class RemoteControlForm : Form
             Padding = padding,
             Dock = DockStyle.Fill,
             Margin = new Padding(0, 2, 0, 8),
-            FillColor = fill
+            FillColor = fill,
+            MinimumSize = new Size(0, Math.Max(36, control.PreferredSize.Height + padding.Vertical))
         };
         control.Dock = DockStyle.Fill;
         control.Margin = Padding.Empty;
@@ -927,21 +955,21 @@ internal sealed class PresentationRuleRow : UserControl
 
     public PresentationRuleRow()
     {
-        Height = 48;
+        Height = MinimumHeightFor(Font);
         Margin = new Padding(0, 0, 0, 5);
         Cursor = Cursors.Hand;
         ModernTheme.StyleRounded(this, ModernTheme.CardRadius);
 
-        _layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(12, 2, 10, 2) };
+        _layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(12, 4, 10, 4) };
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
-        _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 21));
-        _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 17));
+        _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         _title = new Label { Dock = DockStyle.Fill, Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         _path = new Label { Dock = DockStyle.Fill, ForeColor = ModernTheme.MutedText, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
-        _enabled = new Button { Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, UseCompatibleTextRendering = true, Margin = Padding.Empty };
+        _enabled = new Button { Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, UseCompatibleTextRendering = false, Margin = Padding.Empty };
         ModernTheme.StyleRounded(_status, ModernTheme.ControlRadius);
         ModernTheme.StyleRounded(_enabled, ModernTheme.ControlRadius);
         _enabled.Click += (_, _) =>
@@ -957,6 +985,31 @@ internal sealed class PresentationRuleRow : UserControl
         Controls.Add(_layout);
         Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
         foreach (Control child in _layout.Controls) child.Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
+        ApplyTextMetrics();
+    }
+
+    public static int MinimumHeightFor(Font font)
+    {
+        var titleHeight = TextRenderer.MeasureText("演示文稿", font, Size.Empty, TextFormatFlags.SingleLine).Height;
+        var pathHeight = TextRenderer.MeasureText("C:\\演示文稿\\文件.pptx", font, Size.Empty, TextFormatFlags.SingleLine).Height;
+        return Math.Max(58, titleHeight + pathHeight + 20);
+    }
+
+    protected override void OnFontChanged(EventArgs e)
+    {
+        base.OnFontChanged(e);
+        if (_layout is not null) ApplyTextMetrics();
+    }
+
+    private void ApplyTextMetrics()
+    {
+        var titleHeight = Math.Max(TextRenderer.MeasureText("演示文稿", _title.Font, Size.Empty, TextFormatFlags.SingleLine).Height + 6, 30);
+        var pathHeight = Math.Max(TextRenderer.MeasureText("C:\\演示文稿\\文件.pptx", _path.Font, Size.Empty, TextFormatFlags.SingleLine).Height + 4, 24);
+        _layout.RowStyles[0].SizeType = SizeType.Absolute;
+        _layout.RowStyles[0].Height = titleHeight;
+        _layout.RowStyles[1].SizeType = SizeType.Absolute;
+        _layout.RowStyles[1].Height = pathHeight;
+        Height = _layout.Padding.Vertical + titleHeight + pathHeight;
     }
 
     public void Update(FileRule? rule, PresentationOption? option, bool selected, bool exists)

@@ -33,6 +33,18 @@ public sealed class RemoteControlFormContractTests
     }
 
     [Fact]
+    public void TextBearingRemoteRegions_UseMeasuredOrAutoSizedHeights()
+    {
+        var source = ReadRemoteForm();
+        Assert.Contains("root.RowStyles.Add(new RowStyle(SizeType.AutoSize))", source);
+        Assert.Contains("TextRenderer.MeasureText", source);
+        Assert.Contains("PresentationRuleRow.MinimumHeightFor(Font) * 3", source);
+        Assert.Contains("ApplyTextMetrics", source);
+        Assert.DoesNotContain("root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76))", source);
+        Assert.DoesNotContain("Height = 48;", source);
+    }
+
+    [Fact]
     public void PresentationActivation_UsesComAndWindowApisWithoutInputSimulation()
     {
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "FlyPPTTimer"));

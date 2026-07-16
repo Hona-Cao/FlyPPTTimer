@@ -1,5 +1,13 @@
 # FlyPPTTimer 测试报告
 
+## v0.14.3 当前验证
+
+- 基线：`cfcd44de5b6907a68095b6a85510736a03f1e242`。
+- 本地 Release 自动化测试：40 项通过，0 项失败，0 项跳过。覆盖远控页面的自动高度、字体测量、三条规则最小空间与既有业务契约。
+- 本地 `dist/v0.14.3/FlyPPTTimer.exe` SHA-256：`0ABE74A4876DB4E15941506F679555962651AFBC32C1F8C2137F9E9CD2936B5A`。该文件仅用于本机构建与人工验收准备，不作为 PR 审核交付物。
+- CI EXE 哈希将在 v0.14.3 Artifact 下载并复算后记录；CI Artifact 是唯一审核交付物。
+- 真实 100%、125%、150% DPI、PowerPoint/WPS、手机、双屏和演讲者视图验收待执行，未伪造截图。
+
 ## v0.14.2 当前验证
 
 - 分支：`feature/v0.13.2-winforms-ui-polish`，基线提交：`3c33152f508c59c91c1eda316914e998ed29e20b`。
