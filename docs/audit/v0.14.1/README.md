@@ -15,4 +15,5 @@ v0.14.0 的本地日志在 2026-07-15 记录了 `System.ObjectDisposedException`
 
 - 本地 `dist` EXE 与 GitHub Hosted Runner 发布的单文件 EXE 允许不同，不能互相代替。
 - PR 审核只采用 GitHub Actions Artifact 内的 `publish/FlyPPTTimer.exe` 与同包的 `FlyPPTTimer-v0.14.1.sha256`。
-- 已下载 Actions `29405464934`（提交 `9f218f94391cab02a61406cdef8ff767b9abd401`）的 Artifact 并复算：`7895D17094099C327A90EC1F663BCF69DBBE110EFC70C1D0F62365581066A813`，与 `FlyPPTTimer-v0.14.1.sha256` 及 `CI_ARTIFACT_HASH.txt` 一致。后续代码提交将产生新的 Artifact，必须重新记录对应哈希。
+- 早期压缩单文件发布会令跨运行 EXE 哈希漂移；已改为无压缩单文件发布，并在本机连续两次发布中取得相同哈希。
+- 已下载 Actions `29460620706`（提交 `1210eedb5b22e9bd0af05d7dd559390b69b931ac`）的 Artifact 并复算：`6C2AB904C96B154AED00CAF02AB9F3DD0179FF10EFDCCD5D58496715DC1087BD`，与 `FlyPPTTimer-v0.14.1.sha256` 及 `CI_ARTIFACT_HASH.txt` 一致。后续代码提交将产生新的 Artifact，必须重新记录对应哈希。
