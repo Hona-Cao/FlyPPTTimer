@@ -15,7 +15,7 @@ $log = Join-Path $root "build.log"
 & $dotnet --info 2>&1 | Tee-Object -FilePath $log -Append
 & $dotnet build $project -c Release -p:NuGetAudit=false 2>&1 | Tee-Object -FilePath $log -Append
 if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE" }
-& $dotnet publish $project -c Release -r win-x64 --self-contained true -p:NuGetAudit=false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o $dist 2>&1 | Tee-Object -FilePath $log -Append
+& $dotnet publish $project -c Release -r win-x64 --self-contained true -p:NuGetAudit=false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=false -o $dist 2>&1 | Tee-Object -FilePath $log -Append
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE" }
 Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination (Join-Path $dist "README.md")
 Copy-Item -LiteralPath (Join-Path $root "docs\default-config.json") -Destination (Join-Path $dist "FlyPPTTimer.config.json")

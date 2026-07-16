@@ -234,7 +234,7 @@ internal static class Program
     Set-Content -LiteralPath (Join-Path $installerProject "Program.cs") -Value $program -Encoding UTF8
     $dotnet = Join-Path $root ".dotnet\dotnet.exe"
     if (-not (Test-Path $dotnet)) { $dotnet = "dotnet" }
-    & $dotnet publish (Join-Path $installerProject "FlyPPTTimer_Setup.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o (Join-Path $installerProject "publish")
+    & $dotnet publish (Join-Path $installerProject "FlyPPTTimer_Setup.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=false -o (Join-Path $installerProject "publish")
     if ($LASTEXITCODE -ne 0) { throw "Fallback installer publish failed." }
     $fallbackSetup = Join-Path $installerProject "publish\FlyPPTTimer_Setup.exe"
     if (-not (Test-Path $fallbackSetup)) { throw "Fallback installer was not created." }
