@@ -33,13 +33,21 @@ public sealed class RemoteControlFormContractTests
     }
 
     [Fact]
-    public void TextBearingRemoteRegions_UseMeasuredOrAutoSizedHeights()
+    public void RemoteSurface_UsesOneFontSizeOneControlHeightAndOnePageScroll()
     {
         var source = ReadRemoteForm();
         Assert.Contains("root.RowStyles.Add(new RowStyle(SizeType.AutoSize))", source);
         Assert.Contains("TextRenderer.MeasureText", source);
-        Assert.Contains("PresentationRuleRow.MinimumHeightFor(Font) * 3", source);
+        Assert.Contains("PresentationRuleRow.MinimumHeightFor(Font) * 3 + _ruleList.Padding.Vertical", source);
         Assert.Contains("ApplyTextMetrics", source);
+        Assert.Contains("CollapsibleHeader", source);
+        Assert.Contains("void Reflow() => panel.Width", source);
+        Assert.Contains("ModernTheme.StandardControlHeight", source);
+        Assert.Contains("_ruleList.AutoScroll = false", source);
+        Assert.Contains("RoutePresentationWheel", source);
+        Assert.Contains("RemoteConfirmDialog", source);
+        Assert.DoesNotContain("BottomPanel()", source);
+        Assert.DoesNotContain("18F", source);
         Assert.DoesNotContain("root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76))", source);
         Assert.DoesNotContain("Height = 48;", source);
     }

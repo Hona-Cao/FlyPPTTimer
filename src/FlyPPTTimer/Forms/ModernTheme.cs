@@ -4,6 +4,7 @@ namespace FlyPPTTimer.Forms;
 
 internal static class ModernTheme
 {
+    public const int StandardControlHeight = 42;
     public const int WindowRadius = 8;
     public const int CardRadius = 7;
     public const int ControlRadius = 5;
