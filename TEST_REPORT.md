@@ -1,4 +1,11 @@
-# FlyPPTTimer v0.14.1 测试报告
+# FlyPPTTimer v0.14.2 测试报告
+
+## v0.14.2 scope
+
+- Baseline: `3c33152f508c59c91c1eda316914e998ed29e20b`.
+- Automated coverage includes version propagation, the redacted visible URL, scrollable presentation layout, single-line action button configuration and the More actions surface.
+- CI produces `FlyPPTTimer-v0.14.2-windows-x64` and stores the CI EXE SHA-256 in its artifact.
+- Manual GUI/Office acceptance is pending the CI artifact. The v0.14.1 report and evidence remain historical records.
 
 ## 范围
 

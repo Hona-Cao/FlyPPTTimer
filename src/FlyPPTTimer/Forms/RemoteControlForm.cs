@@ -298,20 +298,21 @@ public sealed class RemoteControlForm : Form
             ColumnCount = 1,
             RowCount = 4,
             BackColor = ModernTheme.Surface,
-            Padding = new Padding(0)
+            Padding = new Padding(0),
+            AutoScroll = true
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 122));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 154));
 
-        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, BackColor = ModernTheme.Surface, WrapContents = false, Padding = new Padding(0, 2, 0, 2) };
+        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, BackColor = ModernTheme.Card, WrapContents = true, Padding = new Padding(12, 8, 12, 6), Margin = new Padding(0, 0, 0, 8) };
+        ModernTheme.StyleRounded(toolbar, ModernTheme.CardRadius);
         var add = SmallAction("添加 PPT", (_, _) => AddPresentationRules(), true);
         var remove = SmallAction("删除规则", (_, _) => DeleteSelectedRule(), false, true);
         var refresh = SmallAction("刷新状态", (_, _) => RefreshPresentationPanel());
-        _toggleEditorButton = SmallAction("收起编辑", (_, _) => TogglePresentationSection(2, _ruleEditorCard, _toggleEditorButton, 76));
-        _toggleActionsButton = SmallAction("收起操作", (_, _) => TogglePresentationSection(3, _presentationActions, _toggleActionsButton, 104));
-        foreach (var button in new[] { add, remove, refresh, _toggleEditorButton, _toggleActionsButton }) button.Width = 96;
+        _toggleEditorButton = SmallAction("收起编辑", (_, _) => TogglePresentationSection(2, _ruleEditorCard, _toggleEditorButton, 122));
+        _toggleActionsButton = SmallAction("收起操作", (_, _) => TogglePresentationSection(3, _presentationActions, _toggleActionsButton, 154));
         toolbar.Controls.Add(add);
         toolbar.Controls.Add(remove);
         toolbar.Controls.Add(refresh);
@@ -320,6 +321,8 @@ public sealed class RemoteControlForm : Form
         toolbar.Controls.Add(_presentationStatus);
         root.Controls.Add(toolbar, 0, 0);
 
+        _ruleList.BackColor = ModernTheme.Card;
+        _ruleList.Padding = new Padding(12);
         ModernTheme.StyleRounded(_ruleList, ModernTheme.CardRadius);
         root.Controls.Add(_ruleList, 0, 1);
         _ruleEditorCard = BuildRuleEditor();
@@ -376,20 +379,49 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildPresentationActions()
     {
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, BackColor = ModernTheme.Surface, WrapContents = true, Padding = new Padding(0, 2, 0, 0) };
-        panel.Controls.Add(SmallAction("只读打开/切换", (_, _) => SendPresentationCommand("ppt.openPresentation"), true));
-        panel.Controls.Add(SmallAction("从头放映", (_, _) => SendPresentationCommand("ppt.startFromBeginning")));
-        panel.Controls.Add(SmallAction("从当前页放映", (_, _) => SendPresentationCommand("ppt.startFromCurrent")));
-        panel.Controls.Add(SmallAction("结束放映", (_, _) => SendPresentationCommand("ppt.endShow")));
-        panel.Controls.Add(SmallAction("关闭当前受控文稿", (_, _) => SendPresentationCommand("ppt.closeCurrentPresentation"), false, true));
-        panel.Controls.Add(SmallAction("退出 PowerPoint", (_, _) => SendPresentationCommand("ppt.exitApplication"), false, true));
-        panel.Controls.Add(SmallAction("强制退出 PowerPoint/WPS", (_, _) => ConfirmForceQuit(), false, true));
-        return panel;
+        var card = Card(new Padding(16, 10, 16, 10));
+        card.Margin = new Padding(0, 0, 0, 4);
+        card.RowCount = 2;
+        card.ColumnCount = 1;
+        card.RowStyles.Add(new RowStyle(SizeType.Percent, 56));
+        card.RowStyles.Add(new RowStyle(SizeType.Percent, 44));
+        var normal = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, BackColor = Color.White };
+        normal.Controls.Add(SmallAction("只读打开/切换", (_, _) => SendPresentationCommand("ppt.openPresentation"), true));
+        normal.Controls.Add(SmallAction("从头放映", (_, _) => SendPresentationCommand("ppt.startFromBeginning")));
+        normal.Controls.Add(SmallAction("从当前页放映", (_, _) => SendPresentationCommand("ppt.startFromCurrent")));
+        normal.Controls.Add(SmallAction("结束放映", (_, _) => SendPresentationCommand("ppt.endShow")));
+        normal.Controls.Add(SmallAction("更多操作", ShowMoreActions));
+        var danger = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, BackColor = Color.White };
+        danger.Controls.Add(SmallAction("退出 PowerPoint", (_, _) => SendPresentationCommand("ppt.exitApplication"), false, true));
+        danger.Controls.Add(SmallAction("强制退出 PowerPoint/WPS", (_, _) => ConfirmForceQuit(), false, true));
+        card.Controls.Add(normal, 0, 0);
+        card.Controls.Add(danger, 0, 1);
+        return card;
+    }
+
+    private void ShowMoreActions(object? sender, EventArgs e)
+    {
+        if (sender is not Control owner) return;
+        var menu = new ContextMenuStrip { Renderer = new ModernContextMenuRenderer(), ShowImageMargin = false };
+        menu.Items.Add("复制路径", null, (_, _) => CopySelectedPath());
+        menu.Items.Add("在资源管理器中显示", null, (_, _) => ShowSelectedPath());
+        menu.Items.Add("关闭当前受控文稿", null, (_, _) => SendPresentationCommand("ppt.closeCurrentPresentation"));
+        menu.Closed += (_, _) => menu.Dispose();
+        menu.Show(owner, new Point(0, owner.Height));
     }
 
     private Button SmallAction(string text, EventHandler handler, bool primary = false, bool danger = false)
     {
-        var button = new Button { Text = text, Height = 42, Width = 142, Margin = new Padding(0, 0, 8, 8), UseCompatibleTextRendering = true };
+        var button = new Button
+        {
+            Text = text,
+            Height = Math.Max(42, TextRenderer.MeasureText(text, SystemFonts.MessageBoxFont).Height + 18),
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(0, 0, 8, 8),
+            UseCompatibleTextRendering = false,
+            TextAlign = ContentAlignment.MiddleCenter
+        };
         button.Click += handler;
         button.BackColor = primary ? ModernTheme.AccentStrong : danger ? ModernTheme.DangerSoft : ModernTheme.AccentSoft;
         button.ForeColor = primary ? Color.White : danger ? ModernTheme.Danger : ModernTheme.Text;
@@ -719,8 +751,8 @@ public sealed class RemoteControlForm : Form
     private void UpdateUrlAndQr()
     {
         var url = CurrentUrl();
-        _url.Text = url;
-        _toolTip.SetToolTip(_url, url);
+        _url.Text = DisplayUrl(url);
+        _toolTip.SetToolTip(_url, "已隐藏访问 token；复制链接和二维码仍使用完整有效地址。");
         _qr.Image?.Dispose();
         using var generator = new QRCodeGenerator();
         using var data = generator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
@@ -734,6 +766,13 @@ public sealed class RemoteControlForm : Form
         if (string.IsNullOrWhiteSpace(address)) address = "127.0.0.1";
         var port = _remoteControl.CurrentPort > 0 ? _remoteControl.CurrentPort : ReadPort();
         return $"http://{address}:{port}/?token={_config.RemoteControl.Token}";
+    }
+
+    private static string DisplayUrl(string url)
+    {
+        var marker = "token=";
+        var index = url.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        return index < 0 ? url : url[..(index + marker.Length)] + "••••";
     }
 
     private string BuildFirewallCommand()

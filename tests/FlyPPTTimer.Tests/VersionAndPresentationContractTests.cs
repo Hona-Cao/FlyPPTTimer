@@ -10,7 +10,7 @@ public sealed class VersionAndPresentationContractTests
     {
         Assert.Equal(AppVersion.Current, new AppConfig().Version);
         Assert.Equal(AppVersion.Current, new RemoteState().Version);
-        Assert.Equal("0.14.1", AppVersion.Current);
+        Assert.Equal("0.14.2", AppVersion.Current);
     }
 
     [Fact]

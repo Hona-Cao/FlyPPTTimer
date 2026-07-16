@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.14.2
+
+- Reworked the remote presentation page into responsive toolbar, list, rule-editor and action-card regions.
+- Measured presentation action buttons, prevented internal text wrapping, added page scrolling for constrained sizes, and separated dangerous PowerPoint/WPS actions.
+- Masked the token in the visible remote URL while retaining the complete URL for copy and QR code flows.
+- Added v0.14.2 CI artifact, audit, acceptance and release-note records without modifying v0.14.1 evidence.
+
 ## 0.14.1
 
 - 修复远程控制地址菜单在 WinForms 关闭流程中提前释放 `ContextMenuStrip` 导致的 `ObjectDisposedException` 和程序退出。

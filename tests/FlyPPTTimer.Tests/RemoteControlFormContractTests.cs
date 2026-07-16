@@ -22,6 +22,17 @@ public sealed class RemoteControlFormContractTests
     }
 
     [Fact]
+    public void PresentationLayout_UsesScrollableCardsAndRedactsVisibleTokens()
+    {
+        var source = ReadRemoteForm();
+        Assert.Contains("AutoScroll = true", source);
+        Assert.Contains("DisplayUrl(url)", source);
+        Assert.Contains("更多操作", source);
+        Assert.Contains("强制退出 PowerPoint/WPS", source);
+        Assert.Contains("UseCompatibleTextRendering = false", source);
+    }
+
+    [Fact]
     public void PresentationActivation_UsesComAndWindowApisWithoutInputSimulation()
     {
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "FlyPPTTimer"));
