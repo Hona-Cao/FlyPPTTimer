@@ -2,10 +2,11 @@
 
 ## 0.14.2
 
-- Reworked the remote presentation page into responsive toolbar, list, rule-editor and action-card regions.
-- Measured presentation action buttons, prevented internal text wrapping, added page scrolling for constrained sizes, and separated dangerous PowerPoint/WPS actions.
-- Masked the token in the visible remote URL while retaining the complete URL for copy and QR code flows.
-- Added v0.14.2 CI artifact, audit, acceptance and release-note records without modifying v0.14.1 evidence.
+- 重构远程控制“演示文稿”页：圆角导航、工具栏、规则列表、规则编辑、主要放映操作和危险操作明确分区。
+- 按实际字体测量按钮尺寸，按钮保持单行；窄窗口以自动换行和页面滚动处理，避免高 DPI 下裁切、重叠和异常换行。
+- 访问链接默认隐藏 token；复制链接和二维码继续使用完整有效地址。
+- 低频规则操作移入“更多操作”菜单，普通放映操作与退出/强制退出危险操作分离。
+- CI Artifact 升级为 `FlyPPTTimer-v0.14.2-windows-x64`，保留 v0.14.1 的全部记录。
 
 ## 0.14.1
 

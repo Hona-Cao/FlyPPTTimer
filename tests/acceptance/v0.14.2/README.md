@@ -1,13 +1,12 @@
-# v0.14.2 acceptance checklist
+# v0.14.2 人工验收截图清单
 
-Use the **CI artifact** `FlyPPTTimer-v0.14.2-windows-x64` for acceptance.
+未执行真实 GUI 验收前，不创建或伪造截图。
 
-- [ ] 100% DPI: default and minimum window, empty list and at least three PPT entries.
-- [ ] 125% DPI: no clipped text, button wrapping, overlap, or overflow.
-- [ ] 150% DPI: toolbar, list, editor and action cards remain usable; narrow layout scrolls or reflows.
-- [ ] Normal and destructive actions are clearly separated and clickable.
-- [ ] Navigation is rounded/custom rather than a classic raised TabControl.
-- [ ] Visible URL masks the token; copy and QR flows still work with the full URL.
-- [ ] Real PowerPoint, WPS limitations, and dual-display behavior are recorded separately.
+完成后仅提交已脱敏截图，覆盖：
 
-Do not commit screenshots containing QR codes, tokens, full URLs, LAN IPs, filenames, or private paths.
+- 100%、125%、150% DPI 下的远控“演示文稿”页；
+- 默认和最小窗口尺寸下的工具栏、三条 PPT 规则、规则编辑和危险操作区；
+- 隐藏 token 的连接链接；
+- 无文字裁切、按钮换行、控件重叠或原生立体页签。
+
+截图必须遮挡二维码、token、完整 URL、局域网 IP、私人文件名和路径。

@@ -1,11 +1,15 @@
-# FlyPPTTimer v0.14.2 测试报告
+# FlyPPTTimer 测试报告
 
-## v0.14.2 scope
+## v0.14.2 当前验证
 
-- Baseline: `3c33152f508c59c91c1eda316914e998ed29e20b`.
-- Automated coverage includes version propagation, the redacted visible URL, scrollable presentation layout, single-line action button configuration and the More actions surface.
-- CI produces `FlyPPTTimer-v0.14.2-windows-x64` and stores the CI EXE SHA-256 in its artifact.
-- Manual GUI/Office acceptance is pending the CI artifact. The v0.14.1 report and evidence remain historical records.
+- 分支：`feature/v0.13.2-winforms-ui-polish`，基线提交：`3c33152f508c59c91c1eda316914e998ed29e20b`。
+- 自动化测试：38 项通过，0 项失败，0 项跳过。该结果覆盖版本契约、访问链接 token 脱敏、既有远控规则与 PowerPoint 控制契约。
+- 本地 `dist/v0.14.2/FlyPPTTimer.exe` SHA-256：`8B769F808846C71B48543496F4E8AD26C2FE63853171BF9196A192403A30E341`。该文件仅用于本机构建与人工验收准备，不作为 PR 审核交付物。
+- v0.14.2 CI Artifact 哈希将在对应 Actions 成功后下载并重新计算；PR 审核只以该 Artifact 内的 EXE 和校验文件为准。
+- v0.14.1 的 Artifact、SHA-256、审计材料和历史验证记录完整保留在下方，不以本地 v0.14.2 构建替代其结论。
+- v0.14.2 的 100%、125%、150% DPI，默认/最小窗口、真实 PowerPoint/WPS、手机、双屏与演讲者视图尚待人工验收，未创建或伪造截图。
+
+## v0.14.1 历史测试报告
 
 ## 范围
 

@@ -1,15 +1,17 @@
-# v0.14.2 audit record
+# v0.14.2 审计记录
 
-## Scope
+## 布局修复范围
 
-Remote presentation layout and privacy refresh on top of commit `3c33152f508c59c91c1eda316914e998ed29e20b`.
+v0.14.1 的演示文稿页将工具栏、编辑和多组操作压入固定高度与固定宽度的 WinForms 容器，真实 DPI 下可能产生裁字、按钮换行和区域遮挡。
 
-## Evidence
+v0.14.2 使用自定义圆角页面导航、按字体测量的单行按钮、自动换行操作流和可滚动页面。规则列表使用主要固定可伸缩空间，默认窗口以至少三条规则为目标；最小尺寸通过页面滚动而非压缩文字处理。
 
-- Automated tests are published by the v0.14.2 Windows CI workflow.
-- The workflow emits a distinct `FlyPPTTimer-v0.14.2-windows-x64` artifact with an EXE SHA-256 file.
-- No v0.14.1 audit material or delivery file is replaced.
+## 隐私边界
 
-## Screenshot privacy checklist
+- 桌面窗口显示的访问链接默认隐藏 token。
+- 复制操作和二维码仍使用完整链接。
+- 后续验收截图不得包含二维码、token、完整 URL、局域网 IP、私人文件名或路径。
 
-Before committing screenshots, redact the QR code, token, complete URL, LAN IP address, private filenames, and private paths.
+## 验收边界
+
+本机 GUI、DPI、PowerPoint/WPS、手机、双屏和演讲者视图验证必须使用 v0.14.2 的 CI Artifact，不能用源码检查或其他版本的 EXE 代替。

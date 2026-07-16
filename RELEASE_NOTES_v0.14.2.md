@@ -1,17 +1,17 @@
 # FlyPPTTimer v0.14.2
 
-## Remote presentation window
+## 远控窗口
 
-- Rebuilt the presentation page around a toolbar, an expandable PPT-list area, a rule editor card, and a separate action card.
-- Buttons now size from their measured text and keep a single-line rendering mode; narrow layouts wrap controls between rows and the page scrolls rather than overlapping controls.
-- The normal presentation actions and the destructive PowerPoint/WPS actions are visibly separated. Low-frequency actions are available through **More actions**.
-- The visible access link masks its token. Copying the link and generating the QR code still use the complete valid URL.
+- “演示文稿”页改为圆角导航和四个清晰区域：工具栏、PPT 列表、规则编辑、操作区。
+- 主要放映操作、更多操作和危险操作分组显示；按钮依字体测量保持单行。
+- 窄窗口以自动换行和页面滚动处理，默认尺寸为 PPT 列表预留三条规则空间。
 
-## Delivery
+## 隐私与发布
 
-- Version, assemblies, configuration protocol version and CI artifact names are updated to `0.14.2`.
-- v0.14.1 release notes, audit evidence, acceptance evidence, artifacts and hash records are preserved unchanged.
+- 桌面远控窗口默认用 `token=••••••` 显示访问链接；复制链接和二维码不受影响。
+- 新 CI Artifact 名称为 `FlyPPTTimer-v0.14.2-windows-x64`。
+- v0.14.1 的版本目录、Artifact、审计记录和验收材料保持不变。
 
-## Manual verification still required
+## 人工验收
 
-Verify the CI artifact at 100%, 125% and 150% DPI, including minimum-size behavior, real PowerPoint/WPS behavior and dual-display slideshow activation. Any screenshots must redact QR codes, tokens, full URLs, LAN IP addresses, and private file paths.
+100%、125%、150% DPI、真实 PowerPoint/WPS、手机、双屏与演讲者视图仍需在本机人工验收；不得以自动化测试替代。

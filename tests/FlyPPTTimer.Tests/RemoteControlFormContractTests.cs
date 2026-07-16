@@ -26,7 +26,7 @@ public sealed class RemoteControlFormContractTests
     {
         var source = ReadRemoteForm();
         Assert.Contains("AutoScroll = true", source);
-        Assert.Contains("DisplayUrl(url)", source);
+        Assert.Contains("RemoteUrlPrivacy.MaskToken(url)", source);
         Assert.Contains("更多操作", source);
         Assert.Contains("强制退出 PowerPoint/WPS", source);
         Assert.Contains("UseCompatibleTextRendering = false", source);
