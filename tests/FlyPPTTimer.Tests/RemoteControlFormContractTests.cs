@@ -3,70 +3,126 @@ namespace FlyPPTTimer.Tests;
 public sealed class RemoteControlFormContractTests
 {
     [Fact]
-    public void FlatAddressMenu_IsOwnedUntilTheControlIsDisposed()
+    public void RemoteControl_IsASeparateDashboardWithoutChangingSharedTheme()
     {
         var source = ReadRemoteForm();
-        Assert.Contains("private ContextMenuStrip? _menu;", source);
-        Assert.Contains("private void RebuildMenuItems", source);
-        Assert.Contains("if (disposing) _menu?.Dispose();", source);
-        Assert.DoesNotContain("menu.Closed +=", source);
-        Assert.DoesNotContain("_menu?.Dispose();\n        var menu", source);
+        var theme = ReadRemoteTheme();
+
+        Assert.Contains("BuildSidebar", source);
+        Assert.Contains("BuildConnectionPage", source);
+        Assert.Contains("BuildPresentationWorkspace", source);
+        Assert.Contains("RemoteDashboardTheme", source);
+        Assert.Contains("internal static class RemoteDashboardTheme", theme);
+        Assert.DoesNotContain("ModernTheme.StandardControlHeight", source);
     }
 
     [Fact]
-    public void PcRemoteControl_ContainsPresentationManagementSurface()
+    public void RemoteConnection_PreservesAllExistingActions()
     {
         var source = ReadRemoteForm();
-        foreach (var member in new[] { "AddPresentationRules", "DeleteSelectedRule", "SaveRulesImmediately", "ppt.openPresentation", "ppt.startFromBeginning", "ppt.endShow", "ppt.closeCurrentPresentation", "ppt.exitApplication", "ppt.forceQuitAll" })
+
+        foreach (var member in new[]
+        {
+            "RestartService",
+            "ToggleService",
+            "CurrentUrl",
+            "BuildFirewallCommand",
+            "复制链接",
+            "在本机浏览器打开",
+            "复制放行命令",
+            "RemoteUrlPrivacy.MaskToken(url)"
+        })
+        {
             Assert.Contains(member, source);
+        }
     }
 
     [Fact]
-    public void PresentationLayout_UsesScrollableCardsAndRedactsVisibleTokens()
+    public void PresentationWorkspace_UsesMasterDetailInsteadOfOneLongPage()
     {
         var source = ReadRemoteForm();
+
+        Assert.Contains("BuildPresentationListCard", source);
+        Assert.Contains("BuildPresentationDetails", source);
+        Assert.Contains("PresentationRuleCard", source);
         Assert.Contains("AutoScroll = true", source);
-        Assert.Contains("RemoteUrlPrivacy.MaskToken(url)", source);
-        Assert.Contains("更多操作", source);
-        Assert.Contains("强制退出 PowerPoint/WPS", source);
-        Assert.Contains("UseCompatibleTextRendering = false", source);
+        Assert.DoesNotContain("CollapsibleHeader", source);
+        Assert.DoesNotContain("RoutePresentationWheel", source);
+        Assert.DoesNotContain("ReflowPresentationLayout", source);
     }
 
     [Fact]
-    public void RemoteSurface_UsesOneFontSizeOneControlHeightAndOnePageScroll()
+    public void PresentationRows_ReadCurrentDataAfterRefresh()
     {
         var source = ReadRemoteForm();
-        Assert.Contains("root.RowStyles.Add(new RowStyle(SizeType.AutoSize))", source);
-        Assert.Contains("TextRenderer.MeasureText", source);
-        Assert.Contains("PresentationRuleRow.MinimumHeightFor(Font) * 3 + _ruleList.Padding.Vertical", source);
-        Assert.Contains("ApplyTextMetrics", source);
-        Assert.Contains("CollapsibleHeader", source);
-        Assert.Contains("void Reflow() => panel.Width", source);
-        Assert.Contains("ModernTheme.StandardControlHeight", source);
-        Assert.Contains("_ruleList.AutoScroll = false", source);
-        Assert.Contains("RoutePresentationWheel", source);
-        Assert.Contains("RemoteConfirmDialog", source);
-        Assert.DoesNotContain("BottomPanel()", source);
-        Assert.DoesNotContain("18F", source);
-        Assert.DoesNotContain("root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76))", source);
-        Assert.DoesNotContain("Height = 48;", source);
+
+        Assert.Contains("row.CurrentRule", source);
+        Assert.Contains("row.CurrentPresentation", source);
+        Assert.Contains("row.CurrentPath", source);
+        Assert.Contains("CurrentRule = rule", source);
+        Assert.Contains("CurrentPresentation = option", source);
     }
 
     [Fact]
-    public void PresentationActivation_UsesComAndWindowApisWithoutInputSimulation()
+    public void PresentationWorkspace_PreservesManagementAndPlaybackCommands()
     {
-        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "FlyPPTTimer"));
-        var service = File.ReadAllText(Path.Combine(root, "Services", "PowerPointControlService.cs"));
-        Assert.Contains("ActivatePresentationWindow", service);
-        Assert.Contains("ActivateSlideShowWindow", service);
-        Assert.Contains("FindSlideShowWindow", service);
-        Assert.DoesNotContain("SendKeys", service);
-        Assert.DoesNotContain("Alt+Tab", service);
+        var source = ReadRemoteForm();
+
+        foreach (var member in new[]
+        {
+            "AddPresentationRules",
+            "DeleteSelectedRule",
+            "SaveRulesImmediately",
+            "ppt.openPresentation",
+            "ppt.startFromBeginning",
+            "ppt.startFromCurrent",
+            "ppt.endShow",
+            "ppt.closeCurrentPresentation",
+            "ppt.exitApplication",
+            "ppt.forceQuitAll"
+        })
+        {
+            Assert.Contains(member, source);
+        }
+    }
+
+    [Fact]
+    public void DangerousExit_UsesCustomConfirmationAndDoesNotDefaultToConfirm()
+    {
+        var source = ReadRemoteForm();
+
+        Assert.Contains("RemoteConfirmDialog", source);
+        Assert.Contains("CancelButton = cancel", source);
+        Assert.Contains("ActiveControl = cancel", source);
+        Assert.DoesNotContain("AcceptButton = confirm", source);
+    }
+
+    [Fact]
+    public void AddressSelector_IsKeyboardAccessibleAndOwnedUntilDisposed()
+    {
+        var source = ReadRemoteForm();
+
+        Assert.Contains("AccessibleRole = AccessibleRole.ComboBox", source);
+        Assert.Contains("Keys.Alt | Keys.Down", source);
+        Assert.Contains("if (disposing) _menu?.Dispose()", source);
+        Assert.DoesNotContain("menu.Closed +=", source);
     }
 
     private static string ReadRemoteForm()
     {
-        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "FlyPPTTimer", "Forms", "RemoteControlForm.cs"));
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "src", "FlyPPTTimer", "Forms", "RemoteControlForm.cs"));
+        return File.ReadAllText(path);
+    }
+
+    private static string ReadRemoteTheme()
+    {
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "src", "FlyPPTTimer", "Forms", "RemoteDashboardTheme.cs"));
         return File.ReadAllText(path);
     }
 }

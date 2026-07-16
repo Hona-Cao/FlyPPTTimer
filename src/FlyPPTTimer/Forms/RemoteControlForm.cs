@@ -6,6 +6,11 @@ using System.Globalization;
 
 namespace FlyPPTTimer.Forms;
 
+/// <summary>
+/// Redesigned remote-control workspace.
+/// The service, presentation, rule, token and command logic remains connected to the existing services;
+/// this file replaces only the window composition and user interaction surface.
+/// </summary>
 public sealed class RemoteControlForm : Form
 {
     private AppConfig _config;
@@ -15,22 +20,12 @@ public sealed class RemoteControlForm : Form
     private readonly Action<AppConfig> _saveConfig;
 
     private readonly PictureBox _qr = new() { SizeMode = PictureBoxSizeMode.Zoom, Dock = DockStyle.Fill };
-    private readonly FlatSelectBox _address = new();
-    private readonly TextBox _url = new() { ReadOnly = true, BorderStyle = BorderStyle.None };
+    private readonly RemoteFlatSelectBox _address = new();
+    private readonly TextBox _url = new() { ReadOnly = true, BorderStyle = BorderStyle.None, TabStop = false };
     private readonly TextBox _port = new() { BorderStyle = BorderStyle.None, TextAlign = HorizontalAlignment.Center };
-    private readonly Label _state = new()
-    {
-        AutoSize = false,
-        Dock = DockStyle.Fill,
-        TextAlign = ContentAlignment.MiddleLeft
-    };
-    private readonly Label _hint = new()
-    {
-        AutoSize = false,
-        Dock = DockStyle.Fill,
-        TextAlign = ContentAlignment.TopLeft,
-        ForeColor = Color.FromArgb(80, 96, 104)
-    };
+    private readonly Label _state = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft, AutoEllipsis = true };
+    private readonly Label _stateDescription = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft, AutoEllipsis = true };
+    private readonly Label _connectionFeedback = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
     private readonly Button _toggle = new();
     private readonly ToolTip _toolTip = new()
     {
@@ -39,39 +34,64 @@ public sealed class RemoteControlForm : Form
         ReshowDelay = 100,
         ShowAlways = true
     };
-    private ContextMenuStrip? _moreActionsMenu;
+
+    private readonly Label _pageTitle = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft };
+    private readonly Label _pageSubtitle = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft };
+    private Button? _connectionNav;
+    private Button? _presentationNav;
+    private Panel? _contentHost;
+    private Control? _connectionPage;
+    private Control? _presentationPage;
+
     private readonly FlowLayoutPanel _ruleList = new()
     {
         Dock = DockStyle.Fill,
-        AutoScroll = false,
+        AutoScroll = true,
         FlowDirection = FlowDirection.TopDown,
         WrapContents = false,
-        BackColor = ModernTheme.ControlFill,
-        Padding = new Padding(8)
+        BackColor = RemoteDashboardTheme.Card,
+        Padding = new Padding(0, 4, 4, 4)
     };
-    private readonly Label _presentationStatus = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = ModernTheme.MutedText };
-    private readonly TextBox _ruleDuration = new() { BorderStyle = BorderStyle.None };
+    private readonly Label _ruleCount = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label _presentationStatus = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+    private readonly Label _detailTitle = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+    private readonly TextBox _ruleDuration = new() { BorderStyle = BorderStyle.None, TextAlign = HorizontalAlignment.Center };
     private readonly Button _ruleEnabled = new() { Text = "已启用", UseCompatibleTextRendering = false };
-    private readonly Label _rulePath = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly TextBox _rulePath = new()
+    {
+        Dock = DockStyle.Fill,
+        ReadOnly = true,
+        BorderStyle = BorderStyle.None,
+        Multiline = true,
+        WordWrap = true,
+        ScrollBars = ScrollBars.None,
+        TabStop = false
+    };
+    private readonly Dictionary<string, PresentationRuleCard> _ruleRows = new(StringComparer.OrdinalIgnoreCase);
+    private readonly System.Windows.Forms.Timer _presentationRefreshTimer = new() { Interval = 1000 };
+    private ContextMenuStrip? _moreActionsMenu;
+    private ToolStripMenuItem? _copyPathMenuItem;
+    private ToolStripMenuItem? _showPathMenuItem;
+
+    private Button? _deleteRuleButton;
+    private Button? _saveDurationButton;
+    private Button? _moreActionsButton;
+    private Button? _openPresentationButton;
+    private Button? _startFromBeginningButton;
+    private Button? _startFromCurrentButton;
+
     private FileRule? _selectedRule;
     private string? _selectedPresentationId;
     private string? _selectedPresentationPath;
     private bool _updatingRuleEditor;
     private bool _durationDirty;
-    private readonly Dictionary<string, PresentationRuleRow> _ruleRows = new(StringComparer.OrdinalIgnoreCase);
-    private Panel? _contentHost;
-    private Control? _connectionPage;
-    private Control? _presentationPage;
-    private Panel? _presentationScroll;
-    private TableLayoutPanel? _presentationLayout;
-    private Control? _presentationToolbar;
-    private Control? _presentationEditor;
-    private Control? _presentationActions;
-    private Button? _connectionNav;
-    private Button? _presentationNav;
-    private readonly System.Windows.Forms.Timer _presentationRefreshTimer = new() { Interval = 1000 };
+    private bool _presentationTabActive;
 
-    public RemoteControlForm(AppConfig config, RemoteControlService remoteControl, NetworkAddressService networkAddressService, Action<AppConfig> saveConfig)
+    public RemoteControlForm(
+        AppConfig config,
+        RemoteControlService remoteControl,
+        NetworkAddressService networkAddressService,
+        Action<AppConfig> saveConfig)
     {
         _config = config;
         _remoteControl = remoteControl;
@@ -82,14 +102,30 @@ public sealed class RemoteControlForm : Form
         Text = "远程控制";
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
-        _state.Font = Font;
+        Font = RemoteDashboardTheme.CreateFont(9.5F);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
-        MinimizeBox = false;
-        ClientSize = new Size(1000, 720);
-        MinimumSize = new Size(760, 600);
-        BackColor = ModernTheme.Surface;
+        MinimizeBox = true;
+        ClientSize = new Size(1180, 780);
+        MinimumSize = new Size(980, 680);
+        BackColor = RemoteDashboardTheme.Window;
+
+        _state.Font = RemoteDashboardTheme.CreateFont(12F, FontStyle.Bold);
+        _state.ForeColor = RemoteDashboardTheme.Success;
+        _stateDescription.Font = RemoteDashboardTheme.CreateFont(9F);
+        _stateDescription.ForeColor = RemoteDashboardTheme.MutedText;
+        _connectionFeedback.Font = RemoteDashboardTheme.CreateFont(9F);
+        _connectionFeedback.ForeColor = RemoteDashboardTheme.Info;
+        _pageTitle.Font = RemoteDashboardTheme.CreateFont(19F, FontStyle.Bold);
+        _pageTitle.ForeColor = RemoteDashboardTheme.Text;
+        _pageSubtitle.Font = RemoteDashboardTheme.CreateFont(9.5F);
+        _pageSubtitle.ForeColor = RemoteDashboardTheme.MutedText;
+        _presentationStatus.Font = RemoteDashboardTheme.CreateFont(9F);
+        _presentationStatus.ForeColor = RemoteDashboardTheme.Info;
+        _ruleCount.Font = RemoteDashboardTheme.CreateFont(9F);
+        _ruleCount.ForeColor = RemoteDashboardTheme.MutedText;
+        _detailTitle.Font = RemoteDashboardTheme.CreateFont(11F, FontStyle.Bold);
+        _detailTitle.ForeColor = RemoteDashboardTheme.Text;
 
         Build();
         RefreshState();
@@ -99,7 +135,11 @@ public sealed class RemoteControlForm : Form
     public void ReloadConfig(AppConfig config)
     {
         _config = config;
-        if (!IsDisposed) RefreshState();
+        if (!IsDisposed)
+        {
+            RefreshState();
+            if (_presentationTabActive) RefreshPresentationPanel();
+        }
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -110,385 +150,667 @@ public sealed class RemoteControlForm : Form
         base.OnFormClosed(e);
     }
 
+    private void Build()
+    {
+        var shell = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, RemoteDashboardTheme.SidebarWidth));
+        shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        Controls.Add(shell);
+
+        shell.Controls.Add(BuildSidebar(), 0, 0);
+        shell.Controls.Add(BuildWorkspace(), 1, 0);
+    }
+
+    private Control BuildSidebar()
+    {
+        var sidebar = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = RemoteDashboardTheme.Sidebar,
+            Padding = new Padding(14, 18, 14, 18),
+            Margin = Padding.Empty
+        };
+
+        var border = new Panel
+        {
+            Dock = DockStyle.Right,
+            Width = 1,
+            BackColor = RemoteDashboardTheme.Border
+        };
+        sidebar.Controls.Add(border);
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, RemoteDashboardTheme.NavigationHeight + 8));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, RemoteDashboardTheme.NavigationHeight + 8));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var brand = new Label
+        {
+            Text = "FlyPPTTimer\r\n远程控制",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = RemoteDashboardTheme.CreateFont(11F, FontStyle.Bold),
+            ForeColor = RemoteDashboardTheme.Text,
+            Padding = new Padding(12, 0, 0, 0)
+        };
+        layout.Controls.Add(brand, 0, 0);
+
+        _connectionNav = CreateNavigationButton("远程连接", "连接手机或浏览器", (_, _) => ShowContentPage(false));
+        _presentationNav = CreateNavigationButton("演示文稿", "规则、状态与放映", (_, _) => ShowContentPage(true));
+        layout.Controls.Add(_connectionNav, 0, 1);
+        layout.Controls.Add(_presentationNav, 0, 2);
+        sidebar.Controls.Add(layout);
+        layout.BringToFront();
+        return sidebar;
+    }
+
+    private Button CreateNavigationButton(string title, string description, EventHandler click)
+    {
+        var button = new Button
+        {
+            Text = title + "\r\n" + description,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 4, 0, 4),
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(16, 0, 8, 0),
+            Font = RemoteDashboardTheme.CreateFont(9.5F),
+            FlatStyle = FlatStyle.Flat,
+            FlatAppearance = { BorderSize = 0 },
+            Cursor = Cursors.Hand,
+            UseVisualStyleBackColor = false,
+            UseCompatibleTextRendering = false
+        };
+        button.Click += click;
+        RemoteDashboardTheme.ApplyRoundedRegion(button, RemoteDashboardTheme.ControlRadius);
+        button.SizeChanged += (_, _) => RemoteDashboardTheme.ApplyRoundedRegion(button, RemoteDashboardTheme.ControlRadius);
+        return button;
+    }
+
+    private Control BuildWorkspace()
+    {
+        var workspace = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = RemoteDashboardTheme.Window,
+            Padding = new Padding(RemoteDashboardTheme.PagePadding, 18, RemoteDashboardTheme.PagePadding, RemoteDashboardTheme.PagePadding),
+            Margin = Padding.Empty
+        };
+        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+        workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        workspace.Controls.Add(BuildPageHeader(), 0, 0);
+
+        _contentHost = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty
+        };
+        _connectionPage = BuildConnectionPage();
+        _presentationPage = BuildPresentationPage();
+        _contentHost.Controls.Add(_connectionPage);
+        _contentHost.Controls.Add(_presentationPage);
+        workspace.Controls.Add(_contentHost, 0, 1);
+
+        _presentationRefreshTimer.Tick += (_, _) => RefreshPresentationPanel();
+        ShowContentPage(false);
+        return workspace;
+    }
+
+    private Control BuildPageHeader()
+    {
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        header.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+        header.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
+        header.Controls.Add(_pageTitle, 0, 0);
+        header.Controls.Add(_pageSubtitle, 0, 1);
+        return header;
+    }
+
+    private void ShowContentPage(bool presentation)
+    {
+        if (_connectionPage is null || _presentationPage is null || _connectionNav is null || _presentationNav is null) return;
+
+        _connectionPage.Visible = !presentation;
+        _presentationPage.Visible = presentation;
+        if (presentation) _presentationPage.BringToFront();
+        else _connectionPage.BringToFront();
+
+        SetNavigationState(_connectionNav, !presentation);
+        SetNavigationState(_presentationNav, presentation);
+        _pageTitle.Text = presentation ? "演示文稿" : "远程连接";
+        _pageSubtitle.Text = presentation
+            ? "管理演示文稿规则、状态与播放控制"
+            : "通过手机或浏览器远程控制您的演示";
+
+        _presentationTabActive = presentation;
+        UpdatePresentationRefreshState();
+    }
+
+    private static void SetNavigationState(Button button, bool selected)
+    {
+        button.BackColor = selected ? RemoteDashboardTheme.AccentSoft : RemoteDashboardTheme.Sidebar;
+        button.ForeColor = selected ? RemoteDashboardTheme.Accent : RemoteDashboardTheme.MutedText;
+        button.FlatAppearance.MouseOverBackColor = selected ? RemoteDashboardTheme.AccentSoft : RemoteDashboardTheme.CardMuted;
+        button.FlatAppearance.MouseDownBackColor = RemoteDashboardTheme.AccentSoft;
+    }
+
     private void UpdatePresentationRefreshState()
     {
         _presentationRefreshTimer.Enabled = Visible && _presentationTabActive;
         if (_presentationRefreshTimer.Enabled) RefreshPresentationPanel();
     }
 
-    private bool _presentationTabActive;
+    private Control BuildConnectionPage()
+    {
+        var scroll = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty
+        };
+        var body = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = false,
+            Height = 640,
+            MinimumSize = new Size(740, 640),
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        body.Controls.Add(BuildServiceStatusCard(), 0, 0);
+        body.Controls.Add(BuildConnectionColumns(), 0, 1);
+        scroll.Controls.Add(body);
 
-    private void Build()
+        void Reflow()
+        {
+            body.Width = Math.Max(body.MinimumSize.Width, scroll.ClientSize.Width - (scroll.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
+        }
+        scroll.Resize += (_, _) => Reflow();
+        scroll.HandleCreated += (_, _) => BeginInvoke((MethodInvoker)Reflow);
+        return scroll;
+    }
+
+    private Control BuildServiceStatusCard()
+    {
+        var card = new RemoteCard
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 0, 14),
+            Padding = new Padding(18, 12, 18, 12)
+        };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 5,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+
+        var indicator = new Label
+        {
+            Text = "●",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = RemoteDashboardTheme.CreateFont(20F),
+            ForeColor = RemoteDashboardTheme.Success
+        };
+        layout.Controls.Add(indicator, 0, 0);
+
+        var statusText = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = Color.Transparent,
+            Padding = new Padding(4, 0, 8, 0)
+        };
+        statusText.RowStyles.Add(new RowStyle(SizeType.Percent, 54));
+        statusText.RowStyles.Add(new RowStyle(SizeType.Percent, 46));
+        statusText.Controls.Add(_state, 0, 0);
+        statusText.Controls.Add(_stateDescription, 0, 1);
+        layout.Controls.Add(statusText, 1, 0);
+
+        var portBlock = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = Color.Transparent,
+            Padding = new Padding(8, 0, 8, 0)
+        };
+        portBlock.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        portBlock.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        portBlock.Controls.Add(new Label
+        {
+            Text = "端口",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.BottomCenter,
+            ForeColor = RemoteDashboardTheme.MutedText
+        }, 0, 0);
+        var portHost = CreateInputHost(_port, new Padding(10, 9, 10, 7));
+        portHost.Margin = new Padding(0, 2, 0, 0);
+        portBlock.Controls.Add(portHost, 0, 1);
+        layout.Controls.Add(portBlock, 2, 0);
+
+        var restart = CreateActionButton("重启服务", (_, _) => RestartService(), ButtonKind.Secondary);
+        restart.Margin = new Padding(8, 14, 4, 14);
+        restart.Dock = DockStyle.Fill;
+        layout.Controls.Add(restart, 3, 0);
+
+        _toggle.Text = "关闭服务";
+        RemoteDashboardTheme.StyleButton(_toggle, ButtonKind.DangerOutline);
+        _toggle.Margin = new Padding(4, 14, 0, 14);
+        _toggle.Dock = DockStyle.Fill;
+        _toggle.Click += (_, _) => ToggleService();
+        layout.Controls.Add(_toggle, 4, 0);
+
+        card.Controls.Add(layout);
+        return card;
+    }
+
+    private Control BuildConnectionColumns()
+    {
+        var columns = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 41));
+        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 59));
+        columns.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        columns.Controls.Add(BuildQrCard(), 0, 0);
+        columns.Controls.Add(BuildBrowserAccessCard(), 1, 0);
+        return columns;
+    }
+
+    private Control BuildQrCard()
+    {
+        var card = new RemoteCard
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 7, 0),
+            Padding = new Padding(22, 18, 22, 18)
+        };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
+        layout.Controls.Add(CreateSectionTitle("手机扫码连接"), 0, 0);
+        layout.Controls.Add(CreateSecondaryText("使用手机浏览器扫描二维码访问"), 0, 1);
+
+        var qrOuter = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent,
+            ColumnCount = 1,
+            RowCount = 1,
+            Padding = new Padding(18)
+        };
+        var qrCard = new RemoteCard
+        {
+            Size = new Size(286, 286),
+            Anchor = AnchorStyles.None,
+            FillColor = Color.White,
+            BorderColor = RemoteDashboardTheme.BorderStrong,
+            Padding = new Padding(16)
+        };
+        qrCard.Controls.Add(_qr);
+        qrOuter.Controls.Add(qrCard, 0, 0);
+        layout.Controls.Add(qrOuter, 0, 2);
+
+        var tip = new RemoteCard
+        {
+            Dock = DockStyle.Fill,
+            FillColor = RemoteDashboardTheme.InfoSoft,
+            BorderColor = Color.FromArgb(191, 219, 254),
+            CornerRadius = RemoteDashboardTheme.ControlRadius,
+            Padding = new Padding(14, 10, 14, 10)
+        };
+        tip.Controls.Add(new Label
+        {
+            Text = "手机无法访问时，请确认手机与电脑连接到同一 Wi-Fi，再检查防火墙设置。",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = RemoteDashboardTheme.Info,
+            Font = RemoteDashboardTheme.CreateFont(9F)
+        });
+        layout.Controls.Add(tip, 0, 3);
+        card.Controls.Add(layout);
+        return card;
+    }
+
+    private Control BuildBrowserAccessCard()
+    {
+        var card = new RemoteCard
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(7, 0, 0, 0),
+            Padding = new Padding(24, 18, 24, 18)
+        };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 12,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+
+        layout.Controls.Add(CreateSectionTitle("通过浏览器访问"), 0, 0);
+        layout.Controls.Add(CreateSecondaryText("选择电脑的网络地址，手机请使用相同网络访问。"), 0, 1);
+        layout.Controls.Add(CreateFieldLabel("选择本机地址"), 0, 2);
+        _address.SelectedIndexChanged += (_, _) => UpdateUrlAndQr();
+        layout.Controls.Add(CreateInputHost(_address, new Padding(12, 8, 12, 7)), 0, 3);
+        layout.Controls.Add(CreateSecondaryText("优先选择 Wi-Fi 或有线局域网地址。"), 0, 4);
+        layout.Controls.Add(CreateFieldLabel("访问链接"), 0, 5);
+        layout.Controls.Add(CreateInputHost(_url, new Padding(12, 9, 12, 7)), 0, 6);
+
+        var copy = CreateActionButton("复制链接", (_, _) => CopyText(CurrentUrl(), "访问链接已复制，可粘贴到手机或分享给他人。"), ButtonKind.Primary);
+        copy.Dock = DockStyle.Fill;
+        copy.Margin = new Padding(0, 4, 0, 4);
+        layout.Controls.Add(copy, 0, 7);
+
+        var open = CreateActionButton("在本机浏览器打开", (_, _) => OpenCurrentUrl(), ButtonKind.Secondary);
+        open.Dock = DockStyle.Fill;
+        open.Margin = new Padding(0, 4, 0, 4);
+        layout.Controls.Add(open, 0, 8);
+
+        var firewall = CreateActionButton("复制放行命令", (_, _) => CopyText(BuildFirewallCommand(), "防火墙放行命令已复制。请以管理员身份运行终端后粘贴执行。"), ButtonKind.Secondary);
+        firewall.Dock = DockStyle.Fill;
+        firewall.Margin = new Padding(0, 4, 0, 4);
+        layout.Controls.Add(firewall, 0, 9);
+
+        var feedback = new RemoteCard
+        {
+            Dock = DockStyle.Fill,
+            FillColor = RemoteDashboardTheme.InfoSoft,
+            BorderColor = Color.FromArgb(191, 219, 254),
+            CornerRadius = RemoteDashboardTheme.ControlRadius,
+            Padding = new Padding(14, 8, 14, 8)
+        };
+        _connectionFeedback.Text = "请确保手机与电脑连接到同一 Wi-Fi，才能正常访问和控制。";
+        feedback.Controls.Add(_connectionFeedback);
+        layout.Controls.Add(feedback, 0, 11);
+        card.Controls.Add(layout);
+        return card;
+    }
+
+    private Control BuildPresentationPage()
     {
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 3,
-            Padding = new Padding(18),
-            BackColor = ModernTheme.Surface
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        Controls.Add(root);
-
-        root.Controls.Add(Header(), 0, 0);
-        root.Controls.Add(StatusStrip(), 0, 1);
-        root.Controls.Add(BuildContentPages(), 0, 2);
+        root.Controls.Add(BuildPresentationToolbar(), 0, 0);
+        root.Controls.Add(BuildPresentationStatusBanner(), 0, 1);
+        root.Controls.Add(BuildPresentationWorkspace(), 0, 2);
+        return root;
     }
 
-    private Control BuildContentPages()
+    private Control BuildPresentationToolbar()
     {
-        var shell = new TableLayoutPanel
+        var card = new RemoteCard
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            BackColor = ModernTheme.Surface,
-            Margin = Padding.Empty
+            Margin = new Padding(0, 0, 0, 10),
+            Padding = new Padding(12, 8, 12, 8)
         };
-        shell.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var navCard = new FlowLayoutPanel
+        var actions = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            BackColor = ModernTheme.HeaderFill,
-            Padding = new Padding(8, 5, 8, 5),
-            Margin = new Padding(0, 0, 0, 8)
+            AutoScroll = false,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
-        ModernTheme.StyleRounded(navCard, ModernTheme.CardRadius);
-        _connectionNav = NavigationButton("远程连接", (_, _) => ShowContentPage(false));
-        _presentationNav = NavigationButton("演示文稿", (_, _) => ShowContentPage(true));
-        navCard.Controls.Add(_connectionNav);
-        navCard.Controls.Add(_presentationNav);
-        shell.Controls.Add(navCard, 0, 0);
-
-        _contentHost = new Panel { Dock = DockStyle.Fill, BackColor = ModernTheme.Surface, AutoScroll = false };
-        _connectionPage = ConnectionPanel();
-        _presentationPage = PresentationPanel();
-        _contentHost.Controls.Add(_connectionPage);
-        _contentHost.Controls.Add(_presentationPage);
-        shell.Controls.Add(_contentHost, 0, 1);
-        _presentationRefreshTimer.Tick += (_, _) => RefreshPresentationPanel();
-        ShowContentPage(false);
-        return shell;
+        var add = CreateActionButton("添加 PPT", (_, _) => AddPresentationRules(), ButtonKind.Primary, 112);
+        _deleteRuleButton = CreateActionButton("删除规则", (_, _) => DeleteSelectedRule(), ButtonKind.DangerOutline, 112);
+        var refresh = CreateActionButton("刷新状态", (_, _) => RefreshPresentationPanel(), ButtonKind.Secondary, 112);
+        actions.Controls.Add(add);
+        actions.Controls.Add(_deleteRuleButton);
+        actions.Controls.Add(refresh);
+        card.Controls.Add(actions);
+        return card;
     }
 
-    private Button NavigationButton(string text, EventHandler handler)
+    private Control BuildPresentationStatusBanner()
     {
-        var button = NewActionButton(text, handler, 104, primary: false);
-        button.Height = ModernTheme.StandardControlHeight;
-        button.Margin = new Padding(0, 0, 8, 0);
-        return button;
-    }
-
-    private void ShowContentPage(bool presentation)
-    {
-        if (_connectionPage is null || _presentationPage is null || _connectionNav is null || _presentationNav is null) return;
-        _connectionPage.Visible = !presentation;
-        _presentationPage.Visible = presentation;
-        _connectionPage.BringToFront();
-        if (presentation) _presentationPage.BringToFront();
-        _connectionNav.BackColor = presentation ? ModernTheme.ControlFill : Color.White;
-        _connectionNav.ForeColor = presentation ? ModernTheme.Text : ModernTheme.AccentStrong;
-        _presentationNav.BackColor = presentation ? Color.White : ModernTheme.ControlFill;
-        _presentationNav.ForeColor = presentation ? ModernTheme.AccentStrong : ModernTheme.Text;
-        _presentationTabActive = presentation;
-        UpdatePresentationRefreshState();
-        if (presentation) ReflowPresentationLayout();
-    }
-
-    private Control Header()
-    {
-        var panel = Card(new Padding(16, 6, 16, 6));
-        panel.Dock = DockStyle.Top;
-        panel.AutoSize = false;
-        panel.Height = SectionHeight();
-        panel.MinimumSize = new Size(0, panel.Height);
-        panel.BackColor = ModernTheme.HeaderFill;
-        panel.ColumnCount = 2;
-        panel.RowCount = 1;
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        panel.Controls.Add(new Label
-        {
-            Text = "手机遥控",
-            Dock = DockStyle.Fill,
-            Font = new Font(Font, FontStyle.Bold),
-            ForeColor = ModernTheme.Text,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Margin = Padding.Empty
-        }, 0, 0);
-        _hint.AutoSize = false;
-        _hint.Dock = DockStyle.Fill;
-        _hint.AutoEllipsis = true;
-        _hint.TextAlign = ContentAlignment.MiddleLeft;
-        _hint.Text = "同一网络下扫码即可控制开始、暂停、重置和显示状态。";
-        panel.Controls.Add(_hint, 1, 0);
-
-        return panel;
-    }
-
-    private Control StatusStrip()
-    {
-        var panel = Card(new Padding(16, 6, 16, 6));
-        panel.Dock = DockStyle.Top;
-        panel.AutoSize = false;
-        panel.Height = SectionHeight();
-        panel.MinimumSize = new Size(0, panel.Height);
-        panel.ColumnCount = 4;
-        panel.RowCount = 1;
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
-
-        panel.Controls.Add(_state, 0, 0);
-        panel.Controls.Add(PortPanel(), 1, 0);
-        panel.Controls.Add(FillButton("重启服务", (_, _) => RestartService()), 2, 0);
-        _toggle.Text = "关闭服务";
-        _toggle.Width = 110;
-        _toggle.Height = ModernTheme.StandardControlHeight;
-        _toggle.Click += (_, _) => ToggleService();
-        ModernTheme.StyleRounded(_toggle, ModernTheme.ButtonRadius);
-        panel.Controls.Add(Center(_toggle, ModernTheme.Card), 3, 0);
-        return panel;
-    }
-
-    private static int SectionHeight() => ModernTheme.StandardControlHeight + 12;
-
-    private Control PortPanel()
-    {
-        var panel = new TableLayoutPanel
+        var card = new RemoteCard
         {
             Dock = DockStyle.Fill,
-            AutoSize = false,
+            Margin = new Padding(0, 0, 0, 10),
+            FillColor = RemoteDashboardTheme.InfoSoft,
+            BorderColor = Color.FromArgb(191, 219, 254),
+            CornerRadius = RemoteDashboardTheme.ControlRadius,
+            Padding = new Padding(14, 7, 14, 7)
+        };
+        _presentationStatus.Text = "选择左侧演示文稿以编辑规则或执行放映操作。";
+        card.Controls.Add(_presentationStatus);
+        return card;
+    }
+
+    private Control BuildPresentationWorkspace()
+    {
+        var split = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
-            BackColor = Color.White,
-            Padding = new Padding(8, 0, 8, 0)
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
         };
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        panel.Controls.Add(new Label
-        {
-            Text = "端口",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = Color.FromArgb(80, 96, 104)
-        }, 0, 0);
-        panel.Controls.Add(Host(_port, new Padding(10, 8, 10, 6), Color.FromArgb(242, 246, 248)), 1, 0);
-        return panel;
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 43));
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 57));
+        split.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        split.Controls.Add(BuildPresentationListCard(), 0, 0);
+        split.Controls.Add(BuildPresentationDetails(), 1, 0);
+        return split;
     }
 
-    private Control ConnectionPanel()
+    private Control BuildPresentationListCard()
     {
-        var scroll = new Panel { Dock = DockStyle.Fill, BackColor = ModernTheme.Surface, AutoScroll = true };
-        var panel = Card(new Padding(24, 16, 24, 16));
-        panel.Dock = DockStyle.Top;
-        panel.MinimumSize = new Size(720, 380);
-        panel.Height = 380;
-        panel.ColumnCount = 2;
-        panel.RowCount = 1;
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        var qrCard = new Panel { Dock = DockStyle.Fill, BackColor = ModernTheme.ControlFill, Padding = new Padding(14) };
-        ModernTheme.StyleRounded(qrCard, ModernTheme.CardRadius);
-        qrCard.Controls.Add(_qr);
-        panel.Controls.Add(qrCard, 0, 0);
-
-        var side = new TableLayoutPanel
+        var card = new RemoteCard
         {
             Dock = DockStyle.Fill,
-            RowCount = 9,
-            ColumnCount = 1,
-            BackColor = Color.White,
-            Padding = new Padding(24, 0, 0, 0)
+            Margin = new Padding(0, 0, 7, 0),
+            Padding = new Padding(14, 12, 10, 10)
         };
-        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        side.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        side.RowStyles.Add(new RowStyle(SizeType.Absolute, 6));
-        side.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        side.Controls.Add(Label("选择本机地址"), 0, 0);
-        _address.SelectedIndexChanged += (_, _) => UpdateUrlAndQr();
-        side.Controls.Add(Host(_address, new Padding(10, 7, 10, 6), Color.FromArgb(242, 246, 248)), 0, 1);
-        side.Controls.Add(Label("访问链接"), 0, 2);
-        side.Controls.Add(Host(_url, new Padding(10, 8, 10, 6), Color.FromArgb(242, 246, 248)), 0, 3);
-        side.Controls.Add(FillButton("复制链接", (_, _) => Clipboard.SetText(CurrentUrl()), primary: true), 0, 4);
-        side.Controls.Add(FillButton("在本机浏览器打开", (_, _) => OpenUrl(CurrentUrl())), 0, 5);
-        side.Controls.Add(FillButton("复制放行命令", (_, _) => Clipboard.SetText(BuildFirewallCommand())), 0, 6);
-        side.Controls.Add(new Label
+        var layout = new TableLayoutPanel
         {
-            Text = "手机无法访问时，请先确认手机和电脑在同一 Wi-Fi，再复制放行命令添加防火墙规则。",
             Dock = DockStyle.Fill,
-            ForeColor = Color.FromArgb(80, 96, 104),
-            TextAlign = ContentAlignment.TopLeft
-        }, 0, 8);
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        layout.Controls.Add(CreateSectionTitle("演示文稿列表"), 0, 0);
+        _ruleList.SizeChanged += (_, _) => UpdateRuleRowWidths();
+        layout.Controls.Add(_ruleList, 0, 1);
+        _ruleCount.Text = "共 0 项";
+        layout.Controls.Add(_ruleCount, 0, 2);
+        card.Controls.Add(layout);
+        return card;
+    }
 
-        panel.Controls.Add(side, 1, 0);
-        scroll.Controls.Add(panel);
-        // The page height follows its content; filling the viewport vertically
-        // leaves a large empty card after resize.
-        void Reflow() => panel.Width = Math.Max(720, scroll.ClientSize.Width);
+    private Control BuildPresentationDetails()
+    {
+        var scroll = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = new Padding(7, 0, 0, 0)
+        };
+        var stack = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = false,
+            Height = 594,
+            MinimumSize = new Size(460, 594),
+            ColumnCount = 1,
+            RowCount = 3,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 252));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 218));
+        stack.RowStyles.Add(new RowStyle(SizeType.Absolute, 124));
+        stack.Controls.Add(BuildRuleEditorCard(), 0, 0);
+        stack.Controls.Add(BuildPresentationOperationCard(), 0, 1);
+        stack.Controls.Add(BuildDangerCard(), 0, 2);
+        scroll.Controls.Add(stack);
+
+        void Reflow()
+        {
+            stack.Width = Math.Max(stack.MinimumSize.Width, scroll.ClientSize.Width - (scroll.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0));
+        }
         scroll.Resize += (_, _) => Reflow();
         scroll.HandleCreated += (_, _) => BeginInvoke((MethodInvoker)Reflow);
         return scroll;
     }
 
-    private Control PresentationPanel()
+    private Control BuildRuleEditorCard()
     {
-        var scroll = new Panel
+        var card = new RemoteCard
         {
             Dock = DockStyle.Fill,
-            BackColor = ModernTheme.Surface,
-            AutoScroll = true
+            Margin = new Padding(0, 0, 0, 10),
+            Padding = new Padding(18, 14, 18, 14)
         };
-        var root = new TableLayoutPanel
+        var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
-            AutoSize = false,
-            MinimumSize = new Size(720, 0),
+            Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
-            BackColor = ModernTheme.Surface,
-            Padding = new Padding(0, 0, 4, 0)
+            RowCount = 5,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
         };
-        _ruleList.AutoScroll = false;
-        _ruleList.Dock = DockStyle.Top;
-        _ruleList.MinimumSize = new Size(0, PresentationRuleRow.MinimumHeightFor(Font) * 3 + _ruleList.Padding.Vertical);
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, _ruleList.MinimumSize.Height));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _detailTitle.Text = "规则编辑（尚未选择演示文稿）";
+        layout.Controls.Add(_detailTitle, 0, 0);
+        layout.Controls.Add(CreateFieldLabel("文件路径"), 0, 1);
+        var pathHost = CreateInputHost(_rulePath, new Padding(12, 8, 12, 8), 64);
+        pathHost.Margin = new Padding(0, 2, 0, 6);
+        layout.Controls.Add(pathHost, 0, 2);
+        layout.Controls.Add(CreateFieldLabel("自动播放时长与规则状态"), 0, 3);
 
-        _presentationToolbar = PresentationToolbar();
-        _presentationEditor = BuildRuleEditor();
-        _presentationActions = BuildPresentationActions();
-        root.Controls.Add(_presentationToolbar, 0, 0);
+        var editor = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+        var durationHost = CreateInputHost(_ruleDuration, new Padding(10, 9, 10, 7));
+        durationHost.Margin = new Padding(0, 4, 8, 4);
+        editor.Controls.Add(durationHost, 0, 0);
 
-        _ruleList.BackColor = ModernTheme.Card;
-        _ruleList.Padding = new Padding(12);
-        ModernTheme.StyleRounded(_ruleList, ModernTheme.CardRadius);
-        _ruleList.Margin = new Padding(0, 0, 0, 10);
-        root.Controls.Add(_ruleList, 0, 1);
-        root.Controls.Add(_presentationEditor, 0, 2);
-        root.Controls.Add(_presentationActions, 0, 3);
-        _presentationScroll = scroll;
-        _presentationLayout = root;
-        _ruleList.MouseWheel += RoutePresentationWheel;
-        scroll.Controls.Add(root);
-        scroll.Resize += (_, _) => ReflowPresentationLayout();
-        scroll.HandleCreated += (_, _) => BeginInvoke((MethodInvoker)ReflowPresentationLayout);
-        return scroll;
-    }
-
-    private void ReflowPresentationLayout()
-    {
-        if (_presentationScroll is null || _presentationLayout is null || _presentationToolbar is null || _presentationEditor is null || _presentationActions is null) return;
-
-        var width = Math.Max(_presentationLayout.MinimumSize.Width, _presentationScroll.ClientSize.Width);
-        _presentationLayout.Width = width;
-        _presentationLayout.PerformLayout();
-
-        var minimumListHeight = PresentationRuleRow.MinimumHeightFor(Font) * 3 + _ruleList.Padding.Vertical;
-        var rulesHeight = _ruleList.Padding.Vertical + _ruleList.Controls.Cast<Control>().Where(control => control.Visible).Sum(control => control.Height + control.Margin.Vertical);
-        var fixedHeight = _presentationToolbar.GetPreferredSize(new Size(width, 0)).Height
-            + _presentationEditor.GetPreferredSize(new Size(width, 0)).Height
-            + _presentationActions.GetPreferredSize(new Size(width, 0)).Height
-            + _presentationLayout.Padding.Vertical;
-        var viewportHeight = Math.Max(0, _presentationScroll.ClientSize.Height - fixedHeight);
-        var listHeight = Math.Max(minimumListHeight, Math.Max(rulesHeight, viewportHeight));
-
-        _ruleList.Height = listHeight;
-        _presentationLayout.RowStyles[1].SizeType = SizeType.Absolute;
-        _presentationLayout.RowStyles[1].Height = listHeight;
-        _presentationLayout.Height = fixedHeight + listHeight;
-        _presentationLayout.PerformLayout();
-    }
-
-    private void RoutePresentationWheel(object? sender, MouseEventArgs e)
-    {
-        if (_presentationScroll is null) return;
-        var maximum = Math.Max(0, _presentationScroll.VerticalScroll.Maximum - _presentationScroll.VerticalScroll.LargeChange + 1);
-        var step = Math.Max(Font.Height * 3, 48);
-        var current = -_presentationScroll.AutoScrollPosition.Y;
-        var next = Math.Clamp(current + (e.Delta < 0 ? step : -step), 0, maximum);
-        _presentationScroll.AutoScrollPosition = new Point(0, next);
-        if (e is HandledMouseEventArgs handled) handled.Handled = true;
-    }
-
-    private Control PresentationToolbar()
-    {
-        var card = Card(new Padding(12, 8, 12, 8));
-        card.Dock = DockStyle.Top;
-        card.AutoSize = true;
-        card.ColumnCount = 1;
-        card.RowCount = 1;
-        card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var buttons = NewWrappingActions();
-        buttons.Controls.Add(NewActionButton("添加 PPT", (_, _) => AddPresentationRules(), 104, primary: true));
-        buttons.Controls.Add(NewActionButton("删除规则", (_, _) => DeleteSelectedRule(), 104, danger: true));
-        buttons.Controls.Add(NewActionButton("刷新状态", (_, _) => RefreshPresentationPanel(), 104));
-        _presentationStatus.AutoSize = true;
-        _presentationStatus.Dock = DockStyle.None;
-        _presentationStatus.AutoEllipsis = true;
-        _presentationStatus.Margin = new Padding(4, 0, 0, 8);
-        buttons.Controls.Add(_presentationStatus);
-        card.Controls.Add(buttons, 0, 0);
-        return card;
-    }
-
-    private Control BuildRuleEditor()
-    {
-        var card = Card(new Padding(14, 10, 14, 10));
-        card.Dock = DockStyle.Top;
-        card.AutoSize = true;
-        card.Margin = new Padding(0, 0, 0, 10);
-        card.ColumnCount = 1;
-        card.RowCount = 2;
-        card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var body = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 2, Margin = new Padding(0, 6, 0, 0) };
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var pathRow = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 0, 0, 6) };
-        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 52));
-        pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        pathRow.Controls.Add(new Label { Text = "路径", AutoSize = true, Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-        _toolTip.SetToolTip(_rulePath, "");
-        pathRow.Controls.Add(Host(_rulePath, new Padding(10, 8, 10, 8), ModernTheme.ControlFill), 1, 0);
-        body.Controls.Add(pathRow, 0, 0);
-        var editActions = NewWrappingActions();
-        editActions.Controls.Add(new Label { Text = "时长", AutoSize = false, Width = 52, Height = ModernTheme.StandardControlHeight, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(0, 0, 4, 0) });
-        var durationHost = Host(_ruleDuration, new Padding(10, 8, 10, 8), ModernTheme.ControlFill);
-        durationHost.Width = 130;
-        durationHost.Height = ModernTheme.StandardControlHeight;
-        editActions.Controls.Add(durationHost);
-        ModernTheme.StyleRounded(_ruleEnabled, ModernTheme.ControlRadius);
-        _ruleEnabled.Height = ModernTheme.StandardControlHeight;
-        _ruleEnabled.MinimumSize = new Size(76, ModernTheme.StandardControlHeight);
+        RemoteDashboardTheme.StyleButton(_ruleEnabled, ButtonKind.Secondary);
+        _ruleEnabled.Margin = new Padding(0, 4, 8, 4);
+        _ruleEnabled.Dock = DockStyle.Fill;
         _ruleEnabled.Click += (_, _) => ToggleSelectedRuleEnabled();
-        editActions.Controls.Add(_ruleEnabled);
-        editActions.Controls.Add(NewActionButton("保存时长", (_, _) => SaveSelectedDuration(), 108, primary: true));
-        editActions.Controls.Add(MoreActionsButton());
-        body.Controls.Add(editActions, 0, 1);
-        card.Controls.Add(CollapsibleHeader("规则编辑", body), 0, 0);
-        card.Controls.Add(body, 0, 1);
+        editor.Controls.Add(_ruleEnabled, 1, 0);
+
+        _moreActionsButton = CreateActionButton("更多操作", (_, _) => ShowMoreActions(_moreActionsButton), ButtonKind.Secondary, 108);
+        _moreActionsButton.Margin = new Padding(0, 4, 8, 4);
+        _moreActionsButton.Dock = DockStyle.Left;
+        editor.Controls.Add(_moreActionsButton, 2, 0);
+
+        _saveDurationButton = CreateActionButton("保存时长", (_, _) => SaveSelectedDuration(), ButtonKind.Primary, 108);
+        _saveDurationButton.Margin = new Padding(0, 4, 0, 4);
+        _saveDurationButton.Dock = DockStyle.Fill;
+        editor.Controls.Add(_saveDurationButton, 3, 0);
+        layout.Controls.Add(editor, 0, 4);
+
         _ruleDuration.KeyDown += (_, e) =>
         {
             if (e.KeyCode != Keys.Enter) return;
@@ -497,184 +819,181 @@ public sealed class RemoteControlForm : Form
         };
         _ruleDuration.TextChanged += (_, _) => { if (!_updatingRuleEditor) _durationDirty = true; };
         _ruleDuration.Leave += (_, _) => SaveSelectedDuration();
+        card.Controls.Add(layout);
         return card;
     }
 
-    private Control BuildPresentationActions()
+    private Control BuildPresentationOperationCard()
     {
-        var card = Card(new Padding(14, 10, 14, 10));
-        card.Dock = DockStyle.Top;
-        card.AutoSize = true;
-        card.ColumnCount = 1;
-        card.RowCount = 2;
-        card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        card.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var body = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 3, Margin = new Padding(0, 6, 0, 0) };
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        body.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        var main = NewWrappingActions();
-        main.Controls.Add(NewActionButton("只读打开/切换", (_, _) => SendPresentationCommand("ppt.openPresentation"), 140, primary: true));
-        main.Controls.Add(NewActionButton("从头放映", (_, _) => SendPresentationCommand("ppt.startFromBeginning"), 104));
-        main.Controls.Add(NewActionButton("从当前页放映", (_, _) => SendPresentationCommand("ppt.startFromCurrent"), 124));
-        main.Controls.Add(NewActionButton("结束放映", (_, _) => SendPresentationCommand("ppt.endShow"), 104));
-        body.Controls.Add(main, 0, 0);
-        body.Controls.Add(SectionTitle("危险操作", ModernTheme.Danger), 0, 1);
-        var danger = NewWrappingActions();
-        danger.Margin = new Padding(0, 4, 0, 0);
-        danger.Controls.Add(NewActionButton("退出 PowerPoint", (_, _) => SendPresentationCommand("ppt.exitApplication"), 132, danger: true));
-        danger.Controls.Add(NewActionButton("强制退出 PowerPoint/WPS", (_, _) => ConfirmForceQuit(), 196, danger: true));
-        body.Controls.Add(danger, 0, 2);
-        card.Controls.Add(CollapsibleHeader("放映操作", body), 0, 0);
-        card.Controls.Add(body, 0, 1);
-        return card;
-    }
-
-    private Button CollapsibleHeader(string title, Control body)
-    {
-        var button = NewActionButton($"{title}  展开", (_, _) => { }, 120);
-        button.Dock = DockStyle.Top;
-        button.Margin = Padding.Empty;
-        button.BackColor = ModernTheme.SectionFill;
-        button.ForeColor = ModernTheme.AccentStrong;
-        button.FlatAppearance.BorderColor = ModernTheme.SectionFill;
-        body.Visible = false;
-        button.Click += (_, _) =>
-        {
-            body.Visible = !body.Visible;
-            button.Text = body.Visible ? $"{title}  收起" : $"{title}  展开";
-            button.Parent?.PerformLayout();
-            ReflowPresentationLayout();
-        };
-        return button;
-    }
-
-    private FlowLayoutPanel NewWrappingActions() => new()
-    {
-        Dock = DockStyle.Top,
-        AutoSize = true,
-        AutoSizeMode = AutoSizeMode.GrowAndShrink,
-        FlowDirection = FlowDirection.LeftToRight,
-        WrapContents = true,
-        BackColor = Color.Transparent,
-        Margin = Padding.Empty,
-        Padding = Padding.Empty
-    };
-
-    private Label SectionTitle(string text, Color? color = null) => new()
-    {
-        Text = text,
-        AutoSize = true,
-        Font = new Font(Font, FontStyle.Bold),
-        ForeColor = color ?? ModernTheme.AccentStrong,
-        Margin = new Padding(0, 0, 0, 4)
-    };
-
-    private Button NewActionButton(string text, EventHandler handler, int minimumWidth, bool primary = false, bool danger = false)
-    {
-        var measured = TextRenderer.MeasureText(text, Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width + 30;
-        var button = new Button { Text = text, Height = ModernTheme.StandardControlHeight, MinimumSize = new Size(0, ModernTheme.StandardControlHeight), Width = Math.Max(minimumWidth, measured), Margin = new Padding(0, 0, 8, 8), UseCompatibleTextRendering = false, AutoSize = false };
-        button.Click += handler;
-        ModernTheme.StyleRounded(button, ModernTheme.ButtonRadius);
-        button.BackColor = primary ? ModernTheme.AccentStrong : danger ? ModernTheme.DangerSoft : ModernTheme.AccentSoft;
-        button.ForeColor = primary ? Color.White : danger ? ModernTheme.Danger : ModernTheme.Text;
-        button.FlatAppearance.BorderColor = button.BackColor;
-        button.FlatAppearance.MouseOverBackColor = primary ? ModernTheme.Accent : danger ? Color.FromArgb(244, 214, 216) : ModernTheme.ControlHover;
-        button.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(9, 69, 62) : danger ? Color.FromArgb(238, 200, 203) : Color.FromArgb(214, 227, 231);
-        return button;
-    }
-
-    private TableLayoutPanel Card(Padding padding)
-    {
-        var panel = new TableLayoutPanel
+        var card = new RemoteCard
         {
             Dock = DockStyle.Fill,
-            Padding = padding,
-            Margin = new Padding(0, 0, 0, 12),
-            BackColor = Color.White
+            Margin = new Padding(0, 0, 0, 10),
+            Padding = new Padding(18, 14, 18, 14)
         };
-        ModernTheme.StyleRounded(panel, ModernTheme.CardRadius);
-        return panel;
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.Controls.Add(CreateSectionTitle("演示操作"), 0, 0);
+
+        var tiles = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 2,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
+        };
+        tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        tiles.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        tiles.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        _openPresentationButton = CreateTileButton("只读打开 / 切换", "在只读模式下打开目标文稿", (_, _) => SendPresentationCommand("ppt.openPresentation"));
+        _startFromBeginningButton = CreateTileButton("从头放映", "从第一张幻灯片开始", (_, _) => SendPresentationCommand("ppt.startFromBeginning"));
+        _startFromCurrentButton = CreateTileButton("从当前页放映", "从当前幻灯片开始", (_, _) => SendPresentationCommand("ppt.startFromCurrent"));
+        var end = CreateTileButton("结束放映", "停止当前放映并返回", (_, _) => SendPresentationCommand("ppt.endShow"), danger: true);
+        tiles.Controls.Add(_openPresentationButton, 0, 0);
+        tiles.Controls.Add(_startFromBeginningButton, 1, 0);
+        tiles.Controls.Add(_startFromCurrentButton, 0, 1);
+        tiles.Controls.Add(end, 1, 1);
+        layout.Controls.Add(tiles, 0, 1);
+        card.Controls.Add(layout);
+        return card;
     }
 
-    private static Control Center(Control control, Color? fill = null)
+    private Control BuildDangerCard()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = fill ?? ModernTheme.Card };
-        panel.Controls.Add(control, 0, 0);
-        control.Anchor = AnchorStyles.None;
-        return panel;
+        var card = new RemoteCard
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(18, 12, 18, 12),
+            FillColor = Color.White,
+            BorderColor = Color.FromArgb(254, 202, 202)
+        };
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var title = CreateSectionTitle("危险操作");
+        title.ForeColor = RemoteDashboardTheme.Danger;
+        layout.Controls.Add(title, 0, 0);
+
+        var buttons = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty
+        };
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        var exit = CreateActionButton("退出 PowerPoint", (_, _) => SendPresentationCommand("ppt.exitApplication"), ButtonKind.DangerOutline);
+        exit.Dock = DockStyle.Fill;
+        exit.Margin = new Padding(0, 3, 5, 3);
+        var force = CreateActionButton("强制退出 PowerPoint / WPS", (_, _) => ConfirmForceQuit(), ButtonKind.DangerOutline);
+        force.Dock = DockStyle.Fill;
+        force.Margin = new Padding(5, 3, 0, 3);
+        buttons.Controls.Add(exit, 0, 0);
+        buttons.Controls.Add(force, 1, 0);
+        layout.Controls.Add(buttons, 0, 1);
+        card.Controls.Add(layout);
+        return card;
     }
 
-    private static Label Label(string text) => new()
+    private static Label CreateSectionTitle(string text) => new()
     {
         Text = text,
-        AutoSize = true,
-        Dock = DockStyle.Top,
-        ForeColor = Color.FromArgb(80, 96, 104),
+        Dock = DockStyle.Fill,
         TextAlign = ContentAlignment.MiddleLeft,
-        Margin = new Padding(0, 0, 0, 4)
+        Font = RemoteDashboardTheme.CreateFont(11F, FontStyle.Bold),
+        ForeColor = RemoteDashboardTheme.Text,
+        AutoEllipsis = true
     };
 
-    private static Button FillButton(string text, EventHandler handler, bool primary = false)
+    private static Label CreateFieldLabel(string text) => new()
     {
+        Text = text,
+        Dock = DockStyle.Fill,
+        TextAlign = ContentAlignment.BottomLeft,
+        Font = RemoteDashboardTheme.CreateFont(9F, FontStyle.Bold),
+        ForeColor = RemoteDashboardTheme.Text,
+        AutoEllipsis = true
+    };
+
+    private static Label CreateSecondaryText(string text) => new()
+    {
+        Text = text,
+        Dock = DockStyle.Fill,
+        TextAlign = ContentAlignment.MiddleLeft,
+        Font = RemoteDashboardTheme.CreateFont(9F),
+        ForeColor = RemoteDashboardTheme.MutedText,
+        AutoEllipsis = true
+    };
+
+    private static Button CreateActionButton(string text, EventHandler click, ButtonKind kind, int minimumWidth = 0)
+    {
+        using var measureFont = RemoteDashboardTheme.CreateFont(9.5F);
+        var measured = TextRenderer.MeasureText(text, measureFont, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width + 34;
         var button = new Button
         {
             Text = text,
-            Dock = DockStyle.Fill,
-            Height = ModernTheme.StandardControlHeight,
-            MinimumSize = new Size(0, ModernTheme.StandardControlHeight),
-            Margin = new Padding(0, 2, 0, 2),
-            AutoSize = false,
-            Padding = new Padding(12, 0, 12, 0),
-            UseCompatibleTextRendering = false,
-            BackColor = primary ? ModernTheme.AccentStrong : ModernTheme.AccentSoft,
-            ForeColor = primary ? Color.White : ModernTheme.Text
+            Width = Math.Max(minimumWidth, measured),
+            Margin = new Padding(0, 0, 8, 0),
+            AutoSize = false
         };
-        button.Click += handler;
-        ModernTheme.StyleRounded(button, ModernTheme.ButtonRadius);
-        if (primary)
-        {
-            button.BackColor = ModernTheme.AccentStrong;
-            button.ForeColor = Color.White;
-            button.FlatAppearance.MouseOverBackColor = ModernTheme.Accent;
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(9, 69, 62);
-        }
+        RemoteDashboardTheme.StyleButton(button, kind);
+        button.Click += click;
         return button;
     }
 
-    private static Button Button(string text, EventHandler handler, int width)
+    private static Button CreateTileButton(string title, string description, EventHandler click, bool danger = false)
     {
         var button = new Button
         {
-            Text = text,
-            Width = width,
-            MinimumSize = new Size(width, ModernTheme.StandardControlHeight),
-            Margin = new Padding(6, 0, 0, 0),
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(12, 0, 12, 0),
-            UseCompatibleTextRendering = false,
-            BackColor = ModernTheme.Card
+            Text = title + "\r\n" + description,
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4),
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(16, 4, 10, 4),
+            Font = RemoteDashboardTheme.CreateFont(9F),
+            AutoSize = false
         };
-        button.Click += handler;
-        ModernTheme.StyleRounded(button, ModernTheme.ButtonRadius);
+        RemoteDashboardTheme.StyleButton(button, danger ? ButtonKind.DangerOutline : ButtonKind.Secondary);
+        button.Click += click;
         return button;
     }
 
-    private static Control Host(Control control, Padding padding, Color fill)
+    private static RemoteCard CreateInputHost(Control control, Padding padding, int height = RemoteDashboardTheme.InputHeight)
     {
-        var host = new RoundedHostPanel
+        var host = new RemoteCard
         {
-            Padding = padding,
             Dock = DockStyle.Fill,
-            Margin = new Padding(0, 2, 0, 8),
-            FillColor = fill,
-            Height = ModernTheme.StandardControlHeight,
-            MinimumSize = new Size(0, ModernTheme.StandardControlHeight)
+            Height = height,
+            MinimumSize = new Size(0, height),
+            FillColor = RemoteDashboardTheme.CardMuted,
+            BorderColor = RemoteDashboardTheme.Border,
+            CornerRadius = RemoteDashboardTheme.ControlRadius,
+            Padding = padding
         };
         control.Dock = DockStyle.Fill;
         control.Margin = Padding.Empty;
-        control.BackColor = fill;
+        control.BackColor = RemoteDashboardTheme.CardMuted;
+        control.ForeColor = RemoteDashboardTheme.Text;
+        control.Font = RemoteDashboardTheme.CreateFont(9.5F);
         host.Controls.Add(control);
         return host;
     }
@@ -692,7 +1011,13 @@ public sealed class RemoteControlForm : Form
         {
             var normalized = NormalizePath(path);
             if (_config.Rules.Any(rule => string.Equals(NormalizePath(rule.FilePath), normalized, StringComparison.OrdinalIgnoreCase))) continue;
-            _config.Rules.Add(new FileRule { FileName = Path.GetFileName(path), FilePath = normalized, Duration = _config.Timer.DefaultDuration, Enabled = true });
+            _config.Rules.Add(new FileRule
+            {
+                FileName = Path.GetFileName(path),
+                FilePath = normalized,
+                Duration = _config.Timer.DefaultDuration,
+                Enabled = true
+            });
         }
         SaveRulesImmediately();
         RefreshPresentationPanel();
@@ -700,12 +1025,17 @@ public sealed class RemoteControlForm : Form
 
     private void DeleteSelectedRule()
     {
-        if (_selectedRule is null) return;
+        if (_selectedRule is null)
+        {
+            SetPresentationFeedback("请先选择一条规则。", FeedbackKind.Warning);
+            return;
+        }
         _config.Rules.Remove(_selectedRule);
         _selectedRule = null;
         _selectedPresentationId = null;
         _selectedPresentationPath = null;
         SaveRulesImmediately();
+        SetPresentationFeedback("规则已删除。", FeedbackKind.Info);
         RefreshPresentationPanel();
     }
 
@@ -713,18 +1043,18 @@ public sealed class RemoteControlForm : Form
     {
         if (IsDisposed) return;
         var state = _powerPoint?.GetState() ?? new PresentationState { Error = "PowerPoint 控制服务不可用。" };
-        _presentationStatus.Text = !string.IsNullOrWhiteSpace(state.OperationMessage) ? state.OperationMessage : state.Error;
+        var message = !string.IsNullOrWhiteSpace(state.OperationMessage) ? state.OperationMessage : state.Error;
+        if (!string.IsNullOrWhiteSpace(message)) SetPresentationFeedback(message, string.IsNullOrWhiteSpace(state.Error) ? FeedbackKind.Info : FeedbackKind.Warning);
         RenderRuleRows(state);
         RefreshRuleEditor();
-        ReflowPresentationLayout();
     }
 
     private void RenderRuleRows(PresentationState state)
     {
-        var selectedPath = _selectedPresentationPath ?? _selectedRule?.FilePath ?? "";
+        var selectedPath = _selectedPresentationPath ?? _selectedRule?.FilePath ?? string.Empty;
         var items = PresentationRuleValidator.MergeRulesAndOpenPresentations(_config.Rules, state.Presentations);
+        var scrollY = -_ruleList.AutoScrollPosition.Y;
 
-        var scroll = _presentationScroll?.AutoScrollPosition ?? Point.Empty;
         _ruleList.SuspendLayout();
         foreach (var obsolete in _ruleRows.Keys.Except(items.Select(item => item.Path), StringComparer.OrdinalIgnoreCase).ToArray())
         {
@@ -740,25 +1070,33 @@ public sealed class RemoteControlForm : Form
             var key = item.Path;
             if (!_ruleRows.TryGetValue(key, out var row))
             {
-                row = new PresentationRuleRow();
-                row.Selected += (_, _) => SelectPresentation(item.Rule, item.Presentation, item.Path);
-                row.ContentMouseWheel += RoutePresentationWheel;
+                row = new PresentationRuleCard();
+                row.Selected += (_, _) => SelectPresentation(row.CurrentRule, row.CurrentPresentation, row.CurrentPath);
                 row.EnabledChangedByUser += (_, enabled) =>
                 {
-                    if (item.Rule is null) return;
-                    item.Rule.Enabled = enabled;
+                    var currentRule = row.CurrentRule;
+                    if (currentRule is null) return;
+                    currentRule.Enabled = enabled;
                     SaveRulesImmediately();
+                    SetPresentationFeedback(enabled ? "规则已启用。" : "规则已禁用。", FeedbackKind.Info);
                     RefreshPresentationPanel();
                 };
                 _ruleRows.Add(key, row);
                 _ruleList.Controls.Add(row);
             }
-            row.Width = Math.Max(420, _ruleList.ClientSize.Width - _ruleList.Padding.Horizontal - 8);
             row.Update(item.Rule, item.Presentation, SamePath(item.Path, selectedPath), File.Exists(item.Path));
             _ruleList.Controls.SetChildIndex(row, index++);
         }
         _ruleList.ResumeLayout();
-        if (_presentationScroll is not null) _presentationScroll.AutoScrollPosition = new Point(-scroll.X, -scroll.Y);
+        _ruleCount.Text = $"共 {items.Count} 项";
+        UpdateRuleRowWidths();
+        if (scrollY > 0) _ruleList.AutoScrollPosition = new Point(0, scrollY);
+    }
+
+    private void UpdateRuleRowWidths()
+    {
+        var width = Math.Max(320, _ruleList.ClientSize.Width - _ruleList.Padding.Horizontal - ( _ruleList.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0) - 2);
+        foreach (Control control in _ruleList.Controls) control.Width = width;
     }
 
     private void SelectPresentation(FileRule? rule, PresentationOption? option, string path)
@@ -773,21 +1111,35 @@ public sealed class RemoteControlForm : Form
     {
         var rule = _selectedRule;
         if (rule is not null && !_config.Rules.Contains(rule)) rule = _selectedRule = null;
+        var hasSelection = !string.IsNullOrWhiteSpace(_selectedPresentationId);
+        var hasRule = rule is not null;
+
         _updatingRuleEditor = true;
-        _rulePath.Text = rule?.FilePath ?? _selectedPresentationPath ?? "未选择规则";
-        _toolTip.SetToolTip(_rulePath, rule?.FilePath ?? _selectedPresentationPath ?? "");
-        _ruleDuration.Text = rule?.Duration ?? "";
+        var selectedName = rule?.FileName ?? (!string.IsNullOrWhiteSpace(_selectedPresentationPath) ? Path.GetFileName(_selectedPresentationPath) : null);
+        _detailTitle.Text = selectedName is null ? "规则编辑（尚未选择演示文稿）" : $"规则编辑（{selectedName}）";
+        _rulePath.Text = rule?.FilePath ?? _selectedPresentationPath ?? "请从左侧列表选择演示文稿";
+        _toolTip.SetToolTip(_rulePath, rule?.FilePath ?? _selectedPresentationPath ?? string.Empty);
+        _ruleDuration.Text = rule?.Duration ?? string.Empty;
         _durationDirty = false;
         SetRuleEnabledButton(rule?.Enabled == true);
-        _ruleDuration.Enabled = _ruleEnabled.Enabled = rule is not null;
+        _ruleDuration.Enabled = hasRule;
+        _ruleEnabled.Enabled = hasRule;
         _updatingRuleEditor = false;
+
+        if (_deleteRuleButton is not null) _deleteRuleButton.Enabled = hasRule;
+        if (_saveDurationButton is not null) _saveDurationButton.Enabled = hasRule;
+        if (_moreActionsButton is not null) _moreActionsButton.Enabled = hasSelection;
+        if (_openPresentationButton is not null) _openPresentationButton.Enabled = hasSelection;
+        if (_startFromBeginningButton is not null) _startFromBeginningButton.Enabled = hasSelection;
+        if (_startFromCurrentButton is not null) _startFromCurrentButton.Enabled = hasSelection;
     }
 
     private void SetRuleEnabledButton(bool enabled)
     {
-        _ruleEnabled.Text = enabled ? "已启用" : "已禁用";
-        _ruleEnabled.BackColor = enabled ? ModernTheme.SuccessSoft : ModernTheme.ControlFill;
-        _ruleEnabled.ForeColor = enabled ? ModernTheme.Success : ModernTheme.MutedText;
+        _ruleEnabled.Text = enabled ? "规则已启用" : "规则已禁用";
+        _ruleEnabled.BackColor = enabled ? RemoteDashboardTheme.SuccessSoft : RemoteDashboardTheme.CardMuted;
+        _ruleEnabled.ForeColor = enabled ? RemoteDashboardTheme.Success : RemoteDashboardTheme.MutedText;
+        _ruleEnabled.FlatAppearance.BorderColor = enabled ? Color.FromArgb(167, 231, 196) : RemoteDashboardTheme.BorderStrong;
     }
 
     private void ToggleSelectedRuleEnabled()
@@ -796,14 +1148,8 @@ public sealed class RemoteControlForm : Form
         _selectedRule.Enabled = !_selectedRule.Enabled;
         SetRuleEnabledButton(_selectedRule.Enabled);
         SaveRulesImmediately();
+        SetPresentationFeedback(_selectedRule.Enabled ? "规则已启用。" : "规则已禁用。", FeedbackKind.Info);
         RefreshPresentationPanel();
-    }
-
-    private Button MoreActionsButton()
-    {
-        var button = NewActionButton("更多操作", (_, _) => { }, 104);
-        button.Click += (_, _) => ShowMoreActions(button);
-        return button;
     }
 
     private void ShowMoreActions(Button? button)
@@ -811,30 +1157,35 @@ public sealed class RemoteControlForm : Form
         if (button is null || IsDisposed) return;
         _moreActionsMenu ??= CreateMoreActionsMenu();
         if (_moreActionsMenu.Visible) return;
-        _moreActionsMenu.Show(button, new Point(0, button.Height));
+        if (_copyPathMenuItem is not null) _copyPathMenuItem.Enabled = !string.IsNullOrWhiteSpace(_selectedPresentationPath);
+        if (_showPathMenuItem is not null) _showPathMenuItem.Enabled = !string.IsNullOrWhiteSpace(_selectedPresentationPath) && File.Exists(_selectedPresentationPath);
+        _moreActionsMenu.Show(button, new Point(0, button.Height + 4));
     }
 
     private ContextMenuStrip CreateMoreActionsMenu()
     {
         var menu = new ContextMenuStrip
         {
-            Renderer = new ModernContextMenuRenderer(),
+            Renderer = new RemoteMenuRenderer(),
             BackColor = Color.White,
-            ForeColor = ModernTheme.Text,
-            Font = Font,
+            ForeColor = RemoteDashboardTheme.Text,
+            Font = RemoteDashboardTheme.CreateFont(9.5F),
             ShowImageMargin = false,
             ShowCheckMargin = false,
             AutoClose = true,
             Padding = new Padding(6)
         };
-        menu.Items.Add("复制路径", null, (_, _) => CopySelectedPath());
-        menu.Items.Add("在资源管理器中显示", null, (_, _) => ShowSelectedPath());
+        _copyPathMenuItem = new ToolStripMenuItem("复制文件路径", null, (_, _) => CopySelectedPath());
+        _showPathMenuItem = new ToolStripMenuItem("在资源管理器中显示", null, (_, _) => ShowSelectedPath());
+        menu.Items.Add(_copyPathMenuItem);
+        menu.Items.Add(_showPathMenuItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("关闭当前受控文稿", null, (_, _) => SendPresentationCommand("ppt.closeCurrentPresentation"));
         foreach (ToolStripItem item in menu.Items.OfType<ToolStripMenuItem>())
         {
             item.AutoSize = false;
-            item.Height = ModernTheme.StandardControlHeight;
+            item.Height = 40;
+            item.Padding = new Padding(10, 0, 10, 0);
         }
         return menu;
     }
@@ -844,15 +1195,19 @@ public sealed class RemoteControlForm : Form
         if (_updatingRuleEditor || _selectedRule is null || !_durationDirty) return;
         if (!PresentationRuleValidator.TryNormalizeDuration(_ruleDuration.Text, out var duration, out var error))
         {
-            _presentationStatus.Text = error;
+            SetPresentationFeedback(error, FeedbackKind.Warning);
             return;
         }
-        if (string.Equals(_selectedRule.Duration, duration, StringComparison.Ordinal)) return;
+        if (string.Equals(_selectedRule.Duration, duration, StringComparison.Ordinal))
+        {
+            _durationDirty = false;
+            return;
+        }
         _selectedRule.Duration = duration;
         _ruleDuration.Text = duration;
         _durationDirty = false;
         SaveRulesImmediately();
-        _presentationStatus.Text = "计时时长已保存并同步手机端。";
+        SetPresentationFeedback("计时时长已保存并同步手机端。", FeedbackKind.Success);
         RefreshPresentationPanel();
     }
 
@@ -864,46 +1219,76 @@ public sealed class RemoteControlForm : Form
 
     private void CopySelectedPath()
     {
-        if (_selectedRule is not null) Clipboard.SetText(_selectedRule.FilePath);
+        var path = _selectedRule?.FilePath ?? _selectedPresentationPath;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            SetPresentationFeedback("请先选择演示文稿。", FeedbackKind.Warning);
+            return;
+        }
+        CopyText(path, "文件路径已复制。", presentationFeedback: true);
     }
 
     private void ShowSelectedPath()
     {
-        if (_selectedRule is null || !File.Exists(_selectedRule.FilePath)) return;
-        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{_selectedRule.FilePath}\"") { UseShellExecute = true });
+        var path = _selectedRule?.FilePath ?? _selectedPresentationPath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            SetPresentationFeedback("文件不存在，无法在资源管理器中显示。", FeedbackKind.Warning);
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+        }
+        catch
+        {
+            SetPresentationFeedback("无法打开资源管理器，请检查文件路径。", FeedbackKind.Warning);
+        }
     }
 
     private void SendPresentationCommand(string command)
     {
-        if (_powerPoint is null) { _presentationStatus.Text = "PowerPoint 控制服务不可用。"; return; }
+        if (_powerPoint is null)
+        {
+            SetPresentationFeedback("PowerPoint 控制服务不可用。", FeedbackKind.Warning);
+            return;
+        }
         var needsSelection = command is "ppt.openPresentation" or "ppt.startFromBeginning" or "ppt.startFromCurrent";
         if (needsSelection && string.IsNullOrWhiteSpace(_selectedPresentationId))
         {
-            _presentationStatus.Text = "请先从列表中选择要操作的演示文稿。";
+            SetPresentationFeedback("请先从列表中选择要操作的演示文稿。", FeedbackKind.Warning);
             return;
         }
-        var result = _powerPoint.Execute(new RemoteCommand { Command = command, PresentationId = needsSelection ? _selectedPresentationId : null });
-        _presentationStatus.Text = result.Message;
+        var result = _powerPoint.Execute(new RemoteCommand
+        {
+            Command = command,
+            PresentationId = needsSelection ? _selectedPresentationId : null
+        });
+        SetPresentationFeedback(result.Message, result.Success ? FeedbackKind.Success : FeedbackKind.Warning);
         RefreshPresentationPanel();
     }
 
     private void ConfirmForceQuit()
     {
-        if (!RemoteConfirmDialog.Confirm(this, Font, "强制退出会终止电脑端全部 PowerPoint/WPS/演示软件，未保存内容将丢失。确定继续吗？")) return;
+        if (!RemoteConfirmDialog.Confirm(this, Font, "强制退出会终止电脑端全部 PowerPoint/WPS/演示软件，未保存内容将丢失。")) return;
         if (_powerPoint is null) return;
         var result = _powerPoint.Queue(new RemoteCommand { Command = "ppt.forceQuitAll", Confirmed = true });
-        _presentationStatus.Text = result.Message;
+        SetPresentationFeedback(result.Message, result.Success ? FeedbackKind.Info : FeedbackKind.Warning);
         RefreshPresentationPanel();
     }
 
-    private static string NormalizePath(string? path)
+    private void SetPresentationFeedback(string? message, FeedbackKind kind)
     {
-        if (string.IsNullOrWhiteSpace(path)) return "";
-        try { return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
-        catch { return path.Trim(); }
+        _presentationStatus.Text = string.IsNullOrWhiteSpace(message)
+            ? "选择左侧演示文稿以编辑规则或执行放映操作。"
+            : message;
+        _presentationStatus.ForeColor = kind switch
+        {
+            FeedbackKind.Success => RemoteDashboardTheme.Success,
+            FeedbackKind.Warning => RemoteDashboardTheme.Warning,
+            _ => RemoteDashboardTheme.Info
+        };
     }
-
-    private static bool SamePath(string? left, string? right) => string.Equals(NormalizePath(left), NormalizePath(right), StringComparison.OrdinalIgnoreCase);
 
     private void ToggleService()
     {
@@ -929,19 +1314,33 @@ public sealed class RemoteControlForm : Form
     private void RefreshState()
     {
         if (_config.RemoteControl.Enabled && !_remoteControl.IsRunning) _remoteControl.Start();
-        _port.Text = Math.Clamp(_remoteControl.CurrentPort > 0 ? _remoteControl.CurrentPort : _config.RemoteControl.Port <= 0 ? 1 : _config.RemoteControl.Port, 1, 65535).ToString(CultureInfo.InvariantCulture);
-        _address.Items.Clear();
-        foreach (var item in _networkAddressService.GetIPv4Addresses())
-        {
-            _address.Items.Add(item.Address);
-        }
+        _port.Text = Math.Clamp(
+            _remoteControl.CurrentPort > 0
+                ? _remoteControl.CurrentPort
+                : _config.RemoteControl.Port <= 0 ? 1 : _config.RemoteControl.Port,
+            1,
+            65535).ToString(CultureInfo.InvariantCulture);
 
+        var previousAddress = _address.SelectedItem?.ToString();
+        _address.Items.Clear();
+        foreach (var item in _networkAddressService.GetIPv4Addresses()) _address.Items.Add(item.Address);
         if (_address.Items.Count == 0) _address.Items.Add("127.0.0.1");
-        _address.SelectedIndex = 0;
-        _toggle.Text = _remoteControl.IsRunning ? "关闭服务" : "启动服务";
-        _toggle.BackColor = _remoteControl.IsRunning ? ModernTheme.SuccessSoft : ModernTheme.AccentSoft;
-        _state.Text = _remoteControl.IsRunning ? "服务已启动，可以扫码连接" : "服务未启动";
-        _state.ForeColor = _remoteControl.IsRunning ? ModernTheme.Success : Color.FromArgb(160, 64, 64);
+        var previousIndex = previousAddress is null ? -1 : _address.Items.FindIndex(value => string.Equals(value, previousAddress, StringComparison.OrdinalIgnoreCase));
+        _address.SelectedIndex = previousIndex >= 0 ? previousIndex : 0;
+
+        var running = _remoteControl.IsRunning;
+        _toggle.Text = running ? "关闭服务" : "启动服务";
+        _toggle.BackColor = running ? Color.White : RemoteDashboardTheme.Accent;
+        _toggle.ForeColor = running ? RemoteDashboardTheme.Danger : Color.White;
+        _toggle.FlatAppearance.BorderSize = running ? 1 : 0;
+        _toggle.FlatAppearance.BorderColor = running ? Color.FromArgb(248, 113, 113) : RemoteDashboardTheme.Accent;
+        _toggle.FlatAppearance.MouseOverBackColor = running ? RemoteDashboardTheme.DangerSoft : RemoteDashboardTheme.AccentHover;
+        _toggle.FlatAppearance.MouseDownBackColor = running ? Color.FromArgb(254, 226, 226) : RemoteDashboardTheme.AccentPressed;
+        _state.Text = running ? "服务已启动，可扫码连接" : "服务未启动";
+        _stateDescription.Text = running
+            ? "手机与电脑处于同一 Wi-Fi 时即可连接"
+            : "启动服务后，手机才能访问远程控制页面";
+        _state.ForeColor = running ? RemoteDashboardTheme.Success : RemoteDashboardTheme.Danger;
         UpdateUrlAndQr();
     }
 
@@ -965,13 +1364,6 @@ public sealed class RemoteControlForm : Form
         return $"http://{address}:{port}/?token={_config.RemoteControl.Token}";
     }
 
-    private static string DisplayUrl(string url)
-    {
-        var marker = "token=";
-        var index = url.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-        return index < 0 ? url : url[..(index + marker.Length)] + "••••";
-    }
-
     private string BuildFirewallCommand()
     {
         var port = _remoteControl.CurrentPort > 0 ? _remoteControl.CurrentPort : ReadPort();
@@ -986,29 +1378,72 @@ public sealed class RemoteControlForm : Form
         {
             port = _config.RemoteControl.Port <= 0 ? 1 : _config.RemoteControl.Port;
         }
-
         port = Math.Clamp(port, 1, 65535);
         _port.Text = port.ToString(CultureInfo.InvariantCulture);
         return port;
     }
 
-    private static void OpenUrl(string url)
+    private void CopyText(string text, string successMessage, bool presentationFeedback = false)
     {
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
-        catch { }
+        try
+        {
+            Clipboard.SetText(text);
+            if (presentationFeedback) SetPresentationFeedback(successMessage, FeedbackKind.Success);
+            else
+            {
+                _connectionFeedback.Text = successMessage;
+                _connectionFeedback.ForeColor = RemoteDashboardTheme.Success;
+            }
+        }
+        catch
+        {
+            if (presentationFeedback) SetPresentationFeedback("复制失败，请稍后重试。", FeedbackKind.Warning);
+            else
+            {
+                _connectionFeedback.Text = "复制失败，请稍后重试。";
+                _connectionFeedback.ForeColor = RemoteDashboardTheme.Warning;
+            }
+        }
     }
 
-    private static void BlockMouseWheel(object? sender, MouseEventArgs e)
+    private void OpenCurrentUrl()
     {
-        if (e is HandledMouseEventArgs handled) handled.Handled = true;
+        try
+        {
+            Process.Start(new ProcessStartInfo(CurrentUrl()) { UseShellExecute = true });
+            _connectionFeedback.Text = "已在本机默认浏览器中打开远程控制页面。";
+            _connectionFeedback.ForeColor = RemoteDashboardTheme.Success;
+        }
+        catch
+        {
+            _connectionFeedback.Text = "无法打开浏览器，请复制链接后手动访问。";
+            _connectionFeedback.ForeColor = RemoteDashboardTheme.Warning;
+        }
     }
+
+    private static string NormalizePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return string.Empty;
+        try { return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        catch { return path.Trim(); }
+    }
+
+    private static bool SamePath(string? left, string? right) =>
+        string.Equals(NormalizePath(left), NormalizePath(right), StringComparison.OrdinalIgnoreCase);
+}
+
+internal enum FeedbackKind
+{
+    Info,
+    Success,
+    Warning
 }
 
 internal sealed class RemoteConfirmDialog : Form
 {
     private RemoteConfirmDialog(Font font, string message)
     {
-        Text = "演讲计时器";
+        Text = "确认危险操作";
         Font = font;
         AutoScaleMode = AutoScaleMode.Dpi;
         StartPosition = FormStartPosition.CenterParent;
@@ -1016,26 +1451,36 @@ internal sealed class RemoteConfirmDialog : Form
         ShowInTaskbar = false;
         MinimizeBox = false;
         MaximizeBox = false;
-        ClientSize = new Size(520, 170);
-        BackColor = ModernTheme.Surface;
+        ClientSize = new Size(560, 220);
+        BackColor = RemoteDashboardTheme.Window;
 
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(18),
+            Padding = new Padding(24),
             ColumnCount = 1,
-            RowCount = 2,
-            BackColor = ModernTheme.Surface
+            RowCount = 3,
+            BackColor = RemoteDashboardTheme.Window
         };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, ModernTheme.StandardControlHeight));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         root.Controls.Add(new Label
         {
-            Text = message,
+            Text = "强制退出 PowerPoint / WPS",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = ModernTheme.Text
+            Font = RemoteDashboardTheme.CreateFont(13F, FontStyle.Bold),
+            ForeColor = RemoteDashboardTheme.Danger
         }, 0, 0);
+        root.Controls.Add(new Label
+        {
+            Text = message + "\r\n此操作无法撤销，请确认所有重要文件已经保存。",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = RemoteDashboardTheme.CreateFont(9.5F),
+            ForeColor = RemoteDashboardTheme.Text
+        }, 0, 1);
 
         var actions = new FlowLayoutPanel
         {
@@ -1044,14 +1489,16 @@ internal sealed class RemoteConfirmDialog : Form
             WrapContents = false,
             Margin = Padding.Empty
         };
-        var confirm = DialogButton("强制退出电脑端程序", DialogResult.OK, ModernTheme.DangerSoft, ModernTheme.Danger, 190);
-        var cancel = DialogButton("取消", DialogResult.Cancel, ModernTheme.ControlFill, ModernTheme.Text, 104);
+        var confirm = new Button { Text = "仍然强制退出", DialogResult = DialogResult.OK, Width = 150, Margin = new Padding(8, 4, 0, 4) };
+        var cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Width = 104, Margin = new Padding(8, 4, 0, 4) };
+        RemoteDashboardTheme.StyleButton(confirm, ButtonKind.Danger);
+        RemoteDashboardTheme.StyleButton(cancel, ButtonKind.Secondary);
         actions.Controls.Add(confirm);
         actions.Controls.Add(cancel);
-        root.Controls.Add(actions, 0, 1);
+        root.Controls.Add(actions, 0, 2);
         Controls.Add(root);
-        AcceptButton = confirm;
         CancelButton = cancel;
+        ActiveControl = cancel;
     }
 
     public static bool Confirm(IWin32Window owner, Font font, string message)
@@ -1059,143 +1506,211 @@ internal sealed class RemoteConfirmDialog : Form
         using var dialog = new RemoteConfirmDialog(font, message);
         return dialog.ShowDialog(owner) == DialogResult.OK;
     }
-
-    private static Button DialogButton(string text, DialogResult result, Color fill, Color foreground, int width)
-    {
-        var button = new Button
-        {
-            Text = text,
-            DialogResult = result,
-            Width = width,
-            Height = ModernTheme.StandardControlHeight,
-            Margin = new Padding(8, 0, 0, 0),
-            BackColor = fill,
-            ForeColor = foreground,
-            UseCompatibleTextRendering = false
-        };
-        ModernTheme.StyleRounded(button, ModernTheme.ButtonRadius);
-        button.BackColor = fill;
-        button.ForeColor = foreground;
-        button.FlatAppearance.BorderColor = fill;
-        return button;
-    }
 }
 
-internal sealed class PresentationRuleRow : UserControl
+internal sealed class PresentationRuleCard : RemoteCard
 {
     private readonly TableLayoutPanel _layout;
+    private readonly Label _fileBadge;
     private readonly Label _title;
+    private readonly Label _duration;
     private readonly Label _path;
     private readonly Label _status;
     private readonly Button _enabled;
-    private FileRule? _rule;
     private bool _updating;
+    private bool _selected;
+
+    public FileRule? CurrentRule { get; private set; }
+    public PresentationOption? CurrentPresentation { get; private set; }
+    public string CurrentPath { get; private set; } = string.Empty;
+
     public event EventHandler? Selected;
     public event EventHandler<bool>? EnabledChangedByUser;
-    public event MouseEventHandler? ContentMouseWheel;
 
-    public PresentationRuleRow()
+    public PresentationRuleCard()
     {
-        Height = MinimumHeightFor(Font);
-        Margin = new Padding(0, 0, 0, 5);
+        Height = RemoteDashboardTheme.PresentationRowHeight;
+        MinimumSize = new Size(320, RemoteDashboardTheme.PresentationRowHeight);
+        Margin = new Padding(0, 0, 0, 8);
         Cursor = Cursors.Hand;
-        ModernTheme.StyleRounded(this, ModernTheme.CardRadius);
+        FillColor = RemoteDashboardTheme.Card;
+        BorderColor = RemoteDashboardTheme.Border;
+        CornerRadius = RemoteDashboardTheme.ControlRadius;
+        Padding = new Padding(12, 10, 10, 10);
 
-        _layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(12, 4, 10, 4) };
+        _layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 3,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));
-        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
-        _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        _layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        _title = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-        _path = new Label { Dock = DockStyle.Fill, ForeColor = ModernTheme.MutedText, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-        _status = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
-        _enabled = new Button { Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, UseCompatibleTextRendering = false, Margin = Padding.Empty };
-        ModernTheme.StyleRounded(_status, ModernTheme.ControlRadius);
-        ModernTheme.StyleRounded(_enabled, ModernTheme.ControlRadius);
+        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+        _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        _layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        _fileBadge = new Label
+        {
+            Text = "PPT",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = RemoteDashboardTheme.CreateFont(8.5F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(234, 88, 12),
+            BackColor = Color.FromArgb(255, 247, 237),
+            Margin = new Padding(0, 3, 8, 3)
+        };
+        RemoteDashboardTheme.ApplyRoundedRegion(_fileBadge, 6);
+        _fileBadge.SizeChanged += (_, _) => RemoteDashboardTheme.ApplyRoundedRegion(_fileBadge, 6);
+
+        _title = new Label
+        {
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = RemoteDashboardTheme.CreateFont(9.5F, FontStyle.Bold),
+            ForeColor = RemoteDashboardTheme.Text,
+            AutoEllipsis = true
+        };
+        _duration = new Label
+        {
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = RemoteDashboardTheme.CreateFont(8.5F),
+            ForeColor = RemoteDashboardTheme.MutedText,
+            AutoEllipsis = true
+        };
+        _path = new Label
+        {
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.TopLeft,
+            Font = RemoteDashboardTheme.CreateFont(8F),
+            ForeColor = RemoteDashboardTheme.SubtleText,
+            AutoEllipsis = true
+        };
+        _status = new Label
+        {
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Font = RemoteDashboardTheme.CreateFont(8.5F, FontStyle.Bold),
+            Margin = new Padding(4, 3, 0, 3)
+        };
+        _enabled = new Button
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4, 3, 0, 3),
+            UseCompatibleTextRendering = false,
+            AutoSize = false
+        };
+        RemoteDashboardTheme.StyleButton(_enabled, ButtonKind.Secondary);
+        _enabled.Font = RemoteDashboardTheme.CreateFont(8.5F);
+        _enabled.Padding = Padding.Empty;
         _enabled.Click += (_, _) =>
         {
-            if (_updating || _rule is null) return;
-            EnabledChangedByUser?.Invoke(this, !_rule.Enabled);
+            if (_updating || CurrentRule is null) return;
+            EnabledChangedByUser?.Invoke(this, !CurrentRule.Enabled);
         };
-        _layout.Controls.Add(_title, 0, 0);
-        _layout.Controls.Add(_status, 1, 0);
-        _layout.Controls.Add(_enabled, 2, 0);
-        _layout.Controls.Add(_path, 0, 1);
+
+        _layout.Controls.Add(_fileBadge, 0, 0);
+        _layout.SetRowSpan(_fileBadge, 2);
+        _layout.Controls.Add(_title, 1, 0);
+        _layout.Controls.Add(_status, 2, 0);
+        _layout.Controls.Add(_duration, 1, 1);
+        _layout.Controls.Add(_enabled, 2, 1);
+        _layout.Controls.Add(_path, 0, 2);
         _layout.SetColumnSpan(_path, 3);
         Controls.Add(_layout);
-        Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
-        MouseWheel += (_, e) => ContentMouseWheel?.Invoke(this, e);
-        foreach (Control child in _layout.Controls)
-        {
-            child.Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
-            child.MouseWheel += (_, e) => ContentMouseWheel?.Invoke(this, e);
-        }
-        ApplyTextMetrics();
-    }
 
-    public static int MinimumHeightFor(Font font)
-    {
-        var titleHeight = TextRenderer.MeasureText("演示文稿", font, Size.Empty, TextFormatFlags.SingleLine).Height;
-        var pathHeight = TextRenderer.MeasureText("C:\\演示文稿\\文件.pptx", font, Size.Empty, TextFormatFlags.SingleLine).Height;
-        return ModernTheme.StandardControlHeight + pathHeight + 12;
-    }
-
-    protected override void OnFontChanged(EventArgs e)
-    {
-        base.OnFontChanged(e);
-        if (_layout is not null) ApplyTextMetrics();
-    }
-
-    private void ApplyTextMetrics()
-    {
-        var titleHeight = ModernTheme.StandardControlHeight;
-        var pathHeight = Math.Max(TextRenderer.MeasureText("C:\\演示文稿\\文件.pptx", _path.Font, Size.Empty, TextFormatFlags.SingleLine).Height + 4, 24);
-        _layout.RowStyles[0].SizeType = SizeType.Absolute;
-        _layout.RowStyles[0].Height = titleHeight;
-        _layout.RowStyles[1].SizeType = SizeType.Absolute;
-        _layout.RowStyles[1].Height = pathHeight;
-        Height = _layout.Padding.Vertical + titleHeight + pathHeight;
+        WireSelection(this);
+        MouseEnter += (_, _) => ApplyVisualState(true);
+        MouseLeave += (_, _) => ApplyVisualState(false);
     }
 
     public void Update(FileRule? rule, PresentationOption? option, bool selected, bool exists)
     {
         _updating = true;
-        _rule = rule;
+        CurrentRule = rule;
+        CurrentPresentation = option;
+        CurrentPath = rule?.FilePath ?? Path.Combine(option?.Directory ?? string.Empty, option?.Name ?? string.Empty);
+        _selected = selected;
+
         var isShowing = option?.IsSlideShowRunning == true;
         var isOpen = option?.IsOpen == true;
-        var statusText = !exists ? "文件不存在" : rule is null ? "已打开（无规则）" : !rule.Enabled ? "已禁用" : isShowing ? "正在放映" : option?.IsActive == true ? "当前活动" : isOpen ? "已打开" : "规则已启用";
-        BackColor = selected ? ModernTheme.AccentSoft : ModernTheme.Card;
-        _layout.BackColor = BackColor;
-        _title.Text = rule is null
-            ? option?.Name ?? "演示文稿"
-            : $"{rule.FileName}   {rule.Duration}";
-        _path.Text = rule?.FilePath ?? Path.Combine(option?.Directory ?? "", option?.Name ?? "");
+        var statusText = !exists
+            ? "文件不存在"
+            : rule is null
+                ? "已打开 · 无规则"
+                : !rule.Enabled
+                    ? "规则已禁用"
+                    : isShowing
+                        ? "正在放映"
+                        : option?.IsActive == true
+                            ? "当前活动"
+                            : isOpen ? "已打开" : "规则已启用";
+
+        _title.Text = rule?.FileName ?? option?.Name ?? "演示文稿";
+        _duration.Text = rule is null ? "未添加计时规则" : $"自动时长  {rule.Duration}";
+        _path.Text = CurrentPath;
         _status.Text = statusText;
-        _status.BackColor = !exists ? ModernTheme.DangerSoft : isShowing || selected ? ModernTheme.AccentSoft : ModernTheme.ControlFill;
-        _status.ForeColor = !exists ? ModernTheme.Danger : isShowing || selected ? ModernTheme.AccentStrong : ModernTheme.MutedText;
+        _status.BackColor = !exists
+            ? RemoteDashboardTheme.DangerSoft
+            : isShowing || option?.IsActive == true
+                ? RemoteDashboardTheme.AccentSoft
+                : RemoteDashboardTheme.CardMuted;
+        _status.ForeColor = !exists
+            ? RemoteDashboardTheme.Danger
+            : isShowing || option?.IsActive == true
+                ? RemoteDashboardTheme.Accent
+                : RemoteDashboardTheme.MutedText;
+        RemoteDashboardTheme.ApplyRoundedRegion(_status, 6);
+
         _enabled.Visible = rule is not null;
         _enabled.Text = rule?.Enabled == true ? "已启用" : "已禁用";
-        _enabled.BackColor = rule?.Enabled == true ? ModernTheme.SuccessSoft : ModernTheme.ControlFill;
-        _enabled.ForeColor = rule?.Enabled == true ? ModernTheme.Success : ModernTheme.MutedText;
+        _enabled.BackColor = rule?.Enabled == true ? RemoteDashboardTheme.SuccessSoft : RemoteDashboardTheme.CardMuted;
+        _enabled.ForeColor = rule?.Enabled == true ? RemoteDashboardTheme.Success : RemoteDashboardTheme.MutedText;
+        _enabled.FlatAppearance.BorderColor = rule?.Enabled == true ? Color.FromArgb(167, 231, 196) : RemoteDashboardTheme.BorderStrong;
+        ApplyVisualState(false);
         _updating = false;
+    }
+
+    private void WireSelection(Control control)
+    {
+        if (!ReferenceEquals(control, _enabled)) control.Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
+        foreach (Control child in control.Controls) WireSelection(child);
+    }
+
+    private void ApplyVisualState(bool hovered)
+    {
+        FillColor = _selected
+            ? RemoteDashboardTheme.AccentSoft
+            : hovered ? RemoteDashboardTheme.CardMuted : RemoteDashboardTheme.Card;
+        BorderColor = _selected ? RemoteDashboardTheme.Accent : RemoteDashboardTheme.Border;
+        Invalidate();
     }
 }
 
-internal sealed class FlatSelectBox : Control
+internal sealed class RemoteFlatSelectBox : Control
 {
     private int _selectedIndex = -1;
     private ContextMenuStrip? _menu;
 
-    public FlatSelectBox()
+    public RemoteFlatSelectBox()
     {
-        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
-        Height = ModernTheme.StandardControlHeight;
-        BackColor = ModernTheme.ControlFill;
-        ForeColor = ModernTheme.Text;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.UserPaint | ControlStyles.Selectable, true);
+        Height = RemoteDashboardTheme.InputHeight;
+        BackColor = RemoteDashboardTheme.CardMuted;
+        ForeColor = RemoteDashboardTheme.Text;
+        Font = RemoteDashboardTheme.CreateFont(9.5F);
+        TabStop = true;
+        Cursor = Cursors.Hand;
+        AccessibleRole = AccessibleRole.ComboBox;
+        AccessibleName = "选择本机地址";
     }
 
-    public List<string> Items { get; } = [];
+    public List<string> Items { get; } = new();
     public event EventHandler? SelectedIndexChanged;
 
     public int SelectedIndex
@@ -1216,7 +1731,20 @@ internal sealed class FlatSelectBox : Control
     protected override void OnClick(EventArgs e)
     {
         base.OnClick(e);
+        Focus();
         ShowMenu();
+    }
+
+    protected override void OnGotFocus(EventArgs e)
+    {
+        base.OnGotFocus(e);
+        Invalidate();
+    }
+
+    protected override void OnLostFocus(EventArgs e)
+    {
+        base.OnLostFocus(e);
+        Invalidate();
     }
 
     private void ShowMenu()
@@ -1238,11 +1766,11 @@ internal sealed class FlatSelectBox : Control
         if (_menu is not null) return _menu;
         _menu = new ContextMenuStrip
         {
-            Renderer = new ModernContextMenuRenderer(),
+            Renderer = new RemoteMenuRenderer(),
             BackColor = Color.White,
-            ForeColor = ModernTheme.Text,
+            ForeColor = RemoteDashboardTheme.Text,
             Font = Font,
-            Padding = new Padding(7),
+            Padding = new Padding(6),
             ShowImageMargin = false,
             ShowCheckMargin = false,
             AutoClose = true
@@ -1258,7 +1786,7 @@ internal sealed class FlatSelectBox : Control
             var index = i;
             var item = menu.Items.Add(Items[i], null, (_, _) => SelectedIndex = index);
             item.AutoSize = false;
-            item.Size = new Size(Math.Max(Width, 220), ModernTheme.StandardControlHeight);
+            item.Size = new Size(Math.Max(Width, 240), 40);
             item.Padding = new Padding(10, 0, 10, 0);
         }
     }
@@ -1292,21 +1820,60 @@ internal sealed class FlatSelectBox : Control
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var fill = new SolidBrush(BackColor);
-        e.Graphics.FillRectangle(fill, ClientRectangle);
-
-        var textRect = new Rectangle(2, 0, Math.Max(0, Width - 34), Height);
+        e.Graphics.Clear(BackColor);
+        var textRect = new Rectangle(2, 0, Math.Max(0, Width - 38), Height);
         TextRenderer.DrawText(
             e.Graphics,
-            SelectedItem?.ToString() ?? "",
+            SelectedItem?.ToString() ?? string.Empty,
             Font,
             textRect,
             ForeColor,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
-        var cx = Width - 18;
-        var cy = Height / 2 + 1;
-        using var brush = new SolidBrush(Color.FromArgb(80, 96, 104));
-        e.Graphics.FillPolygon(brush, new Point[] { new(cx - 5, cy - 3), new(cx + 5, cy - 3), new(cx, cy + 3) });
+        var centerX = Width - 18;
+        var centerY = Height / 2 + 1;
+        using var arrow = new SolidBrush(RemoteDashboardTheme.MutedText);
+        e.Graphics.FillPolygon(arrow, new[]
+        {
+            new Point(centerX - 5, centerY - 3),
+            new Point(centerX + 5, centerY - 3),
+            new Point(centerX, centerY + 3)
+        });
+        if (Focused)
+        {
+            using var focusPen = new Pen(RemoteDashboardTheme.Accent, 1.5F);
+            using var path = RemoteDashboardTheme.RoundedRectangle(new Rectangle(1, 1, Width - 3, Height - 3), 6);
+            e.Graphics.DrawPath(focusPen, path);
+        }
     }
+}
+
+internal sealed class RemoteMenuRenderer : ToolStripProfessionalRenderer
+{
+    protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+    {
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using var path = RemoteDashboardTheme.RoundedRectangle(new Rectangle(Point.Empty, e.ToolStrip.Size - new Size(1, 1)), 8);
+        using var brush = new SolidBrush(Color.White);
+        e.Graphics.FillPath(brush, path);
+    }
+
+    protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+    {
+        if (!e.Item.Selected) return;
+        var rectangle = new Rectangle(4, 2, Math.Max(1, e.Item.Width - 8), Math.Max(1, e.Item.Height - 4));
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using var path = RemoteDashboardTheme.RoundedRectangle(rectangle, 6);
+        using var brush = new SolidBrush(RemoteDashboardTheme.AccentSoft);
+        e.Graphics.FillPath(brush, path);
+    }
+
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+    {
+        using var pen = new Pen(RemoteDashboardTheme.Border);
+        var y = e.Item.ContentRectangle.Top + e.Item.ContentRectangle.Height / 2;
+        e.Graphics.DrawLine(pen, 12, y, e.Item.Width - 12, y);
+    }
+
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { }
 }
