@@ -15,3 +15,7 @@ v0.14.2 使用自定义圆角页面导航、按字体测量的单行按钮、自
 ## 验收边界
 
 本机 GUI、DPI、PowerPoint/WPS、手机、双屏和演讲者视图验证必须使用 v0.14.2 的 CI Artifact，不能用源码检查或其他版本的 EXE 代替。
+
+## CI 交付核验
+
+Windows Actions `29467802850` 成功。下载 `FlyPPTTimer-v0.14.2-windows-x64` 后重新计算 `publish/FlyPPTTimer.exe`，SHA-256 为 `77DB15DE63CAF9621AAAC559B3E52787B902F45192201E0A6D72DB0D80F044CC`，与 Artifact 中的 SHA 文件和 `CI_ARTIFACT_HASH.txt` 一致。
