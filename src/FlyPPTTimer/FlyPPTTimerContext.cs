@@ -9,6 +9,7 @@ namespace FlyPPTTimer;
 public sealed class FlyPPTTimerContext : ApplicationContext
 {
     private readonly LogService _log = new();
+    private readonly SynchronizationContext _uiContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
     private readonly ConfigService _configService;
     private readonly TimerService _timer;
     private readonly AlertService _alerts;
@@ -16,6 +17,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly HotkeyService _hotkeys;
     private readonly NetworkAddressService _networkAddresses = new();
     private readonly AppCommandService _commands;
+    private readonly PowerPointControlService _powerPoint;
+    private readonly PresentationLifecycleController _presentationLifecycle;
     private readonly RemoteControlService _remoteControl;
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _overlayMenu;
@@ -36,7 +39,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private SettingsForm? _settings;
     private RemoteControlForm? _remoteControlWindow;
     private AppConfig _config;
-    private bool _autoStartedFromFullscreen;
     private string _screenSignature = "";
 
     public FlyPPTTimerContext()
@@ -44,9 +46,10 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _log.Info("Application started.");
         _configService = new ConfigService(_log);
         _config = _configService.Load();
+        _powerPoint = new PowerPointControlService(() => _config, _log);
         _timer = new TimerService(_log);
         _alerts = new AlertService(_log);
-        _fullscreen = new FullscreenDetector(_log);
+        _fullscreen = new FullscreenDetector(() => _powerPoint.GetState(), _log);
         _hotkeys = new HotkeyService(_log);
         _overlayMenu = BuildCommandMenu();
         _trayMenu = BuildCommandMenu();
@@ -62,7 +65,22 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             FlashOverlay,
             ShowSettings,
             _log);
-        _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _log);
+        _presentationLifecycle = new PresentationLifecycleController(
+            () => _config,
+            ApplyPresentationRuleDuration,
+            _alerts.ResetTriggers,
+            _commands.StopReset,
+            _commands.Start,
+            reset => _timer.Stop(reset),
+            _timer.Reset,
+            _log);
+        _powerPoint.SlideShowStarted += (_, path) => RunOnUi(() => HandlePresentationStarted(path, "远程控制"));
+        _powerPoint.SlideShowEnded += (_, _) => RunOnUi(() => HandlePresentationEnded("远程控制"));
+        _powerPoint.SlideShowWindowActivated += (_, _) => RunOnUi(() =>
+        {
+            foreach (var overlay in _overlays) overlay.ReassertTopMost();
+        });
+        _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _powerPoint, _log);
 
         _timer.Configure(_config);
         RebuildOverlays();
@@ -108,8 +126,11 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         {
             Renderer = new ModernContextMenuRenderer(),
             BackColor = Color.White,
-            ForeColor = Color.FromArgb(32, 46, 52),
-            Padding = new Padding(6),
+            ForeColor = ModernTheme.Text,
+            Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point),
+            Padding = new Padding(7),
+            ShowImageMargin = false,
+            ShowCheckMargin = false,
             AutoClose = true
         };
         menu.Opened += (_, _) =>
@@ -127,6 +148,13 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         menu.Items.Add("设置", null, (_, _) => _commands.OpenSettings());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Exit());
+        foreach (ToolStripItem item in menu.Items)
+        {
+            if (item is ToolStripSeparator) continue;
+            item.AutoSize = false;
+            item.Size = new Size(224, 38);
+            item.Padding = new Padding(12, 0, 12, 0);
+        }
         return menu;
     }
 
@@ -268,12 +296,16 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _remoteControl.Stop();
         }
         RegisterHotkeys();
+        _remoteControl.NotifyStateChanged();
+        _remoteControlWindow?.ReloadConfig(_config);
     }
 
     private void SaveConfigOnly(AppConfig config)
     {
         _config = config;
         _configService.Save(_config);
+        _remoteControl.NotifyStateChanged();
+        _remoteControlWindow?.ReloadConfig(_config);
     }
 
     private void ExportConfig()
@@ -306,19 +338,25 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void OnFullscreenChanged(object? sender, FullscreenState state)
     {
-        if (state.IsFullscreen && _config.Behavior.AutoStartOnFullscreen)
-        {
-            _alerts.ResetTriggers();
-            ApplyPresentationRuleDuration(state.PresentationPath);
-            _autoStartedFromFullscreen = true;
-            _commands.StopReset();
-            _commands.Start();
-        }
-        else if (!state.IsFullscreen && _autoStartedFromFullscreen && _config.Behavior.StopWhenLeavingFullscreen && _timer.State is TimerState.Running or TimerState.Paused)
-        {
-            _commands.StopReset();
-            _autoStartedFromFullscreen = false;
-        }
+        _presentationLifecycle.Observe(state.IsFullscreen, state.PresentationPath, "FullscreenDetector");
+    }
+
+    private void HandlePresentationStarted(string presentationPath, string source)
+    {
+        _settings?.Hide();
+        _remoteControlWindow?.Hide();
+        _presentationLifecycle.Observe(true, presentationPath, source);
+    }
+
+    private void HandlePresentationEnded(string source)
+    {
+        _presentationLifecycle.Observe(false, "", source);
+    }
+
+    private void RunOnUi(Action action)
+    {
+        if (SynchronizationContext.Current == _uiContext) action();
+        else _uiContext.Send(_ => action(), null);
     }
 
     private void RebuildOverlays()
@@ -439,6 +477,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _hotkeys.Dispose();
         _fullscreen.Dispose();
         _remoteControl.Dispose();
+        _powerPoint.Dispose();
         _screenTimer.Dispose();
         _menuCloseTimer.Dispose();
         foreach (var timerWindow in _overlays) timerWindow.Dispose();
@@ -455,6 +494,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _menuOwner.Dispose();
             _hotkeys.Dispose();
             _fullscreen.Dispose();
+            _powerPoint.Dispose();
             _screenTimer.Dispose();
             _menuCloseTimer.Dispose();
             foreach (var overlay in _overlays) overlay.Dispose();

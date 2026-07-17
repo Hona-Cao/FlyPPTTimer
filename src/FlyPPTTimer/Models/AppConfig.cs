@@ -4,7 +4,7 @@ namespace FlyPPTTimer.Models;
 
 public sealed class AppConfig
 {
-    public string Version { get; set; } = "0.10.0";
+    public string Version { get; set; } = AppVersion.Current;
     public TimerSettings Timer { get; set; } = new();
     public BehaviorSettings Behavior { get; set; } = new();
     public AppearanceSettings Appearance { get; set; } = new();
@@ -196,10 +196,19 @@ public sealed class RemoteCommand
     public string? Duration { get; set; }
     public long? DurationMs { get; set; }
     public string? Mode { get; set; }
+    public int? SlideNumber { get; set; }
+    public string? PresentationId { get; set; }
+    public bool? Confirmed { get; set; }
+    public string? OperationId { get; set; }
 }
 
 public sealed class RemoteState
 {
+    public bool Ok { get; set; } = true;
+    public string Message { get; set; } = "";
+    public TimerRemoteState TimerState { get; set; } = new();
+    public PresentationState PresentationState { get; set; } = new();
+    // Flat timer fields remain for v0.10 clients.
     public string Mode { get; set; } = "";
     public string State { get; set; } = "";
     public bool Running { get; set; }
@@ -210,5 +219,65 @@ public sealed class RemoteState
     public bool WindowVisible { get; set; }
     public bool Muted { get; set; }
     public int ConnectedClients { get; set; }
-    public string Version { get; set; } = "0.10.0";
+    public string Version { get; set; } = AppVersion.Current;
+    public long Revision { get; set; }
 }
+
+public sealed class TimerRemoteState
+{
+    public string Mode { get; set; } = "";
+    public string State { get; set; } = "";
+    public bool Running { get; set; }
+    public long DurationMs { get; set; }
+    public long ElapsedMs { get; set; }
+    public long RemainingMs { get; set; }
+    public string DisplayText { get; set; } = "";
+    public bool WindowVisible { get; set; }
+    public bool Muted { get; set; }
+}
+
+public sealed class PresentationState
+{
+    public bool PowerPointInstalled { get; set; }
+    public bool PowerPointRunning { get; set; }
+    public bool HasPresentation { get; set; }
+    public bool IsSlideShowRunning { get; set; }
+    public string PresentationName { get; set; } = "";
+    public string PresentationPath { get; set; } = "";
+    public int CurrentSlide { get; set; }
+    public int TotalSlides { get; set; }
+    public string ScreenMode { get; set; } = "正常";
+    public DateTime UpdatedAt { get; set; }
+    public string Error { get; set; } = "";
+    public List<PresentationOption> Presentations { get; set; } = [];
+    public string Operation { get; set; } = "Idle";
+    public string OperationMessage { get; set; } = "";
+    public DateTime? OperationStartedAt { get; set; }
+    public string OperationId { get; set; } = "";
+    public bool IsOperationBusy { get; set; }
+    public bool IsCurrentPresentationManaged { get; set; }
+    public bool WpsDetected { get; set; }
+    public WpsCapabilities WpsCapabilities { get; set; } = new();
+}
+
+public sealed class WpsCapabilities
+{
+    public bool CanEndSlideShow { get; set; }
+    public bool CanClosePresentation { get; set; }
+    public bool CanExitApplication { get; set; }
+    public bool CanForceExit { get; set; }
+    public string Message { get; set; } = "WPS 演示未检测到。";
+}
+
+public sealed class PresentationOption
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Directory { get; set; } = "";
+    public bool IsOpen { get; set; }
+    public bool IsActive { get; set; }
+    public bool IsSlideShowRunning { get; set; }
+    public bool IsManaged { get; set; }
+}
+
+public sealed record PresentationCommandResult(bool Success, string Message, PresentationState State);

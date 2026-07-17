@@ -115,7 +115,6 @@ public sealed class TimerService
     private void Tick()
     {
         var snapshot = CreateSnapshot();
-        Updated?.Invoke(this, snapshot);
         if (_mode == TimerMode.Countdown && !FinishRaised && snapshot.Remaining <= TimeSpan.Zero)
         {
             FinishRaised = true;
@@ -126,11 +125,17 @@ public sealed class TimerService
                 _uiTimer.Stop();
             }
             Log.Info("Timer finished.");
-            Finished?.Invoke(this, snapshot);
+            var finalSnapshot = CreateSnapshot();
+            Updated?.Invoke(this, finalSnapshot);
+            Finished?.Invoke(this, finalSnapshot);
+            return;
         }
+        Updated?.Invoke(this, snapshot);
     }
 
     private void RaiseUpdate() => Updated?.Invoke(this, CreateSnapshot());
+
+    internal void ProcessTickForTest() => Tick();
 
     public TimerSnapshot CreateSnapshot()
     {

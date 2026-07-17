@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using FlyPPTTimer.Models;
@@ -23,7 +24,7 @@ public sealed class NetworkAddressService
                     Address = addr,
                     Type = type.label,
                     Priority = type.priority,
-                    Recommended = type.priority <= 3 && !addr.StartsWith("127.") && !addr.StartsWith("169.254.")
+                    Recommended = type.priority <= 3 && IsLanAddress(addr)
                 });
             }
         }
@@ -45,10 +46,25 @@ public sealed class NetworkAddressService
         var name = (ni.Name + " " + ni.Description).ToLowerInvariant();
         if (address.StartsWith("127.")) return ("本机测试", 90);
         if (address.StartsWith("169.254.")) return ("自动私有地址", 80);
+        if (IsProxyAddress(address, name)) return ("代理/TUN 虚拟网卡（手机不可用）", 85);
+        if (name.Contains("virtual") || name.Contains("vmware") || name.Contains("hyper-v") || name.Contains("virtualbox")) return ("虚拟网卡", 70);
         if (name.Contains("wi-fi") || name.Contains("wireless") || name.Contains("wlan")) return ("无线网络", 1);
         if (name.Contains("remote ndis") || name.Contains("usb") || name.Contains("rndis") || name.Contains("mobile") || name.Contains("tether")) return ("手机热点或 USB 共享网络", 2);
         if (ni.NetworkInterfaceType == NetworkInterfaceType.Ethernet) return ("以太网", 3);
-        if (name.Contains("virtual") || name.Contains("vmware") || name.Contains("hyper-v") || name.Contains("virtualbox")) return ("虚拟网卡", 70);
         return ("其他网络", 50);
+    }
+
+    internal static bool IsProxyAddress(string address, string adapterName) =>
+        address.StartsWith("198.18.") || address.StartsWith("198.19.") ||
+        adapterName.Contains("clash", StringComparison.OrdinalIgnoreCase) ||
+        adapterName.Contains("tun", StringComparison.OrdinalIgnoreCase) ||
+        adapterName.Contains("wintun", StringComparison.OrdinalIgnoreCase) ||
+        adapterName.Contains("proxy", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsLanAddress(string address)
+    {
+        if (!IPAddress.TryParse(address, out var ip)) return false;
+        var b = ip.GetAddressBytes();
+        return b[0] == 10 || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168);
     }
 }

@@ -21,18 +21,18 @@ public sealed class SettingsForm : Form
     private const int HtBottomRight = 17;
     private const int ResizeBorder = 8;
 
-    private readonly AppConfig _config;
+    private AppConfig _config;
     private readonly RemoteControlService _remoteControl;
     private readonly NetworkAddressService _networkAddressService;
     private readonly TableLayoutPanel _shell = new() { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = ModernTheme.Surface };
-    private readonly Panel _titleBar = new() { Dock = DockStyle.Fill, BackColor = ModernTheme.Surface, Padding = new Padding(16, 0, 8, 0) };
+    private readonly Panel _titleBar = new() { Dock = DockStyle.Fill, BackColor = ModernTheme.Card, Padding = new Padding(18, 0, 8, 0) };
     private readonly TableLayoutPanel _settingsArea = new() { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = ModernTheme.Surface };
     private readonly FlowLayoutPanel _navBar = new()
     {
         Dock = DockStyle.Fill,
         FlowDirection = FlowDirection.LeftToRight,
-        WrapContents = false,
-        Padding = new Padding(8, 7, 8, 7),
+        WrapContents = true,
+        Padding = new Padding(8, 8, 8, 8),
         Margin = new Padding(0, 0, 0, 12),
         BackColor = ModernTheme.Surface
     };
@@ -41,16 +41,19 @@ public sealed class SettingsForm : Form
     private readonly List<(SettingsNavButton Button, ScrollableControl Page)> _pages = [];
     private readonly Dictionary<string, Control> _fields = [];
     private readonly BindingSource _rulesSource = new();
-    private DataGridView? _rulesGrid;
+    private FlowLayoutPanel? _rulesList;
     private TextBox? _rulePathBox;
     private TextBox? _ruleDurationBox;
-    private CheckBox? _ruleEnabledBox;
+    private Button? _ruleEnabledButton;
     private Label? _ruleNameLabel;
     private bool _updatingRuleEditor;
+    private bool _renderingRules;
+    private bool _isDirty;
+    private readonly Label _dirtyLabel = new() { AutoSize = true, ForeColor = ModernTheme.AccentStrong, Text = "有未应用的更改", Visible = false, Margin = new Padding(10, 16, 12, 0) };
 
     public SettingsForm(AppConfig config, RemoteControlService remoteControl, NetworkAddressService networkAddressService)
     {
-        _config = config;
+        _config = ConfigService.Clone(config);
         _remoteControl = remoteControl;
         _networkAddressService = networkAddressService;
         Text = "演讲计时器设置";
@@ -59,17 +62,31 @@ public sealed class SettingsForm : Form
         Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
         FormBorderStyle = FormBorderStyle.None;
         MaximizeBox = true;
+        Padding = new Padding(ResizeBorder);
         BackColor = ModernTheme.Surface;
         DoubleBuffered = true;
         ClientSize = new Size(980, 760);
         MinimumSize = new Size(780, 560);
         ResizeRedraw = true;
+        Resize += (_, _) => LayoutNavigation();
         HandleCreated += (_, _) => ApplyWindowChromeRegion();
         SizeChanged += (_, _) => ApplyWindowChromeRegion();
         Shown += (_, _) => EnsureVisibleOnPrimaryScreen();
         BuildWindowChrome();
         BuildTabs();
         BuildBottomButtons();
+        TrackDraftChanges();
+        LayoutNavigation();
+    }
+
+    public void ReloadConfig(AppConfig config)
+    {
+        _config = ConfigService.Clone(config);
+        if (!IsDisposed)
+        {
+            Hide();
+            Dispose();
+        }
     }
 
     public event EventHandler<AppConfig>? ConfigApplied;
@@ -78,6 +95,52 @@ public sealed class SettingsForm : Form
     public event EventHandler? ImportRequested;
     public event EventHandler? OpenConfigRequested;
     public event EventHandler? OpenLogRequested;
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            TryHide();
+        }
+        base.OnFormClosing(e);
+    }
+
+    private void TrackDraftChanges()
+    {
+        foreach (var field in _fields.Values) TrackControl(field);
+        _rulesSource.ListChanged += (_, _) =>
+        {
+            MarkDirty();
+            RenderSettingsRules();
+        };
+    }
+
+    private void TrackControl(Control control)
+    {
+        control.TextChanged += (_, _) => MarkDirty();
+        if (control is CheckBox checkBox) checkBox.CheckedChanged += (_, _) => MarkDirty();
+        if (control is ComboBox comboBox) comboBox.SelectedIndexChanged += (_, _) => MarkDirty();
+        foreach (Control child in control.Controls) TrackControl(child);
+    }
+
+    private void MarkDirty()
+    {
+        _isDirty = true;
+        _dirtyLabel.Visible = true;
+    }
+
+    private bool TryHide()
+    {
+        if (!_isDirty) { Hide(); return true; }
+        var choice = MessageBox.Show("设置中有未应用的更改。是：应用并关闭；否：放弃更改；取消：继续编辑。", "演讲计时器", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        if (choice == DialogResult.Cancel) return false;
+        if (choice == DialogResult.Yes && !Apply()) return false;
+        _isDirty = false;
+        _dirtyLabel.Visible = false;
+        Hide();
+        return true;
+    }
 
     private void BuildTabs()
     {
@@ -98,37 +161,71 @@ public sealed class SettingsForm : Form
         SelectSettingsPage(0);
     }
 
+    private void LayoutNavigation()
+    {
+        if (_settingsArea.RowStyles.Count == 0) return;
+        var available = Math.Max(1, _navBar.ClientSize.Width - _navBar.Padding.Horizontal);
+        var total = _navBar.Controls.Cast<Control>().Sum(control => control.Width + control.Margin.Horizontal);
+        var rows = total > available ? 2 : 1;
+        _settingsArea.RowStyles[0].Height = rows == 1 ? 58 : 108;
+    }
+
     private void BuildWindowChrome()
     {
-        _shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        _shell.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         _shell.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(_shell);
 
+        var brand = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = ModernTheme.Card,
+            Margin = Padding.Empty
+        };
+        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 44));
+        brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        var logo = new PictureBox
+        {
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.CenterImage,
+            Image = LoadBrandImage(),
+            Margin = Padding.Empty,
+            BackColor = ModernTheme.Card
+        };
         var title = new Label
         {
             Text = "演讲计时器设置",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font(Font, FontStyle.Bold),
+            Font = new Font(Font.FontFamily, 11.5F, FontStyle.Bold),
             ForeColor = ModernTheme.Text,
-            BackColor = ModernTheme.Surface
+            BackColor = ModernTheme.Card,
+            Padding = new Padding(4, 0, 0, 0)
         };
         title.MouseDown += DragWindowFromTitleBar;
+        logo.MouseDown += DragWindowFromTitleBar;
+        brand.MouseDown += DragWindowFromTitleBar;
         _titleBar.MouseDown += DragWindowFromTitleBar;
-        _titleBar.Controls.Add(title);
+        brand.Controls.Add(logo, 0, 0);
+        brand.Controls.Add(title, 1, 0);
+        _titleBar.Controls.Add(brand);
+        Disposed += (_, _) => logo.Image?.Dispose();
 
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Right,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Width = 126,
-            Padding = new Padding(0, 7, 0, 7),
-            BackColor = ModernTheme.Surface
+            Width = 232,
+            Padding = new Padding(0, 8, 0, 8),
+            BackColor = ModernTheme.Card
         };
         buttons.Controls.Add(TitleButton("－", () => WindowState = FormWindowState.Minimized));
         buttons.Controls.Add(TitleButton("□", ToggleMaximize));
-        buttons.Controls.Add(TitleButton("×", () => Hide()));
+        buttons.Controls.Add(TitleButton("×", () => TryHide()));
         _titleBar.Controls.Add(buttons);
         _shell.Controls.Add(_titleBar, 0, 0);
     }
@@ -200,10 +297,11 @@ public sealed class SettingsForm : Form
         var button = new Button
         {
             Text = text,
-            Width = 34,
-            Height = 30,
-            Margin = new Padding(4, 0, 0, 0),
-            BackColor = ModernTheme.ControlFill,
+            Width = 68,
+            Height = 58,
+            Font = new Font(Font.FontFamily, 14F, FontStyle.Regular),
+            Margin = new Padding(6, 0, 0, 0),
+            BackColor = ModernTheme.Card,
             ForeColor = ModernTheme.Text,
             UseCompatibleTextRendering = true
         };
@@ -223,7 +321,7 @@ public sealed class SettingsForm : Form
             ColumnCount = 2,
             Padding = new Padding(24, 20, 24, 30),
             Margin = new Padding(0, 0, 0, 12),
-            BackColor = Color.White
+            BackColor = ModernTheme.Card
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -258,6 +356,7 @@ public sealed class SettingsForm : Form
         button.Click += (_, _) => SelectSettingsPage(index);
         _navBar.Controls.Add(button);
         _pages.Add((button, page));
+        LayoutNavigation();
     }
 
     private void SelectSettingsPage(int index)
@@ -303,8 +402,8 @@ public sealed class SettingsForm : Form
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font(Font, FontStyle.Bold),
-            ForeColor = Color.FromArgb(20, 73, 118),
-            BackColor = ModernTheme.AccentSoft,
+            ForeColor = Color.FromArgb(28, 79, 112),
+            BackColor = ModernTheme.SectionFill,
             Padding = new Padding(14, 0, 0, 0),
             Margin = new Padding(0, 12, 0, 8)
         };
@@ -322,7 +421,7 @@ public sealed class SettingsForm : Form
             : control is Label labelControl && labelControl.Text.Length > 42 ? 86
             : 64;
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        grid.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(4, 0, 18, 0), AutoEllipsis = true, ForeColor = Color.FromArgb(38, 52, 57) }, 0, row);
+        grid.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(6, 0, 18, 0), AutoEllipsis = true, ForeColor = ModernTheme.Text }, 0, row);
         var displayControl = DecorateControl(control);
         displayControl.Dock = DockStyle.Fill;
         displayControl.Margin = new Padding(3, 9, 3, 9);
@@ -369,7 +468,7 @@ public sealed class SettingsForm : Form
             Padding = control switch
             {
                 DataGridView => new Padding(1),
-                ComboBox => new Padding(10, 6, 10, 6),
+                ComboBox => new Padding(12, 6, 10, 6),
                 TextBox => new Padding(10, 8, 10, 6),
                 CheckBox => new Padding(4, 7, 8, 7),
                 Label => new Padding(0),
@@ -447,50 +546,39 @@ public sealed class SettingsForm : Form
             Margin = Padding.Empty,
             BackColor = Color.White
         };
-        buttons.Controls.Add(SmallButton("添加文件", AddRuleFiles));
-        buttons.Controls.Add(SmallButton("删除", DeleteSelectedRule));
-        buttons.Controls.Add(SmallButton("清空", ClearRules));
+        var add = SmallButton("添加文件", AddRuleFiles);
+        add.BackColor = ModernTheme.AccentStrong;
+        add.ForeColor = Color.White;
+        var remove = SmallButton("删除", DeleteSelectedRule);
+        remove.BackColor = ModernTheme.DangerSoft;
+        remove.ForeColor = ModernTheme.Danger;
+        var clear = SmallButton("清空", ClearRules);
+        clear.BackColor = ModernTheme.DangerSoft;
+        clear.ForeColor = ModernTheme.Danger;
+        buttons.Controls.Add(add);
+        buttons.Controls.Add(remove);
+        buttons.Controls.Add(clear);
         card.Controls.Add(buttons, 0, 0);
 
         _rulesSource.DataSource = new BindingList<FileRule>(_config.Rules.Select(CloneRule).ToList());
-        _rulesGrid = new DataGridView
+        _rulesList = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            AutoGenerateColumns = false,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            RowHeadersVisible = false,
-            MultiSelect = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            BorderStyle = BorderStyle.None,
-            BackgroundColor = ModernTheme.ControlFill,
-            GridColor = ModernTheme.ControlFill,
-            DataSource = _rulesSource,
+            AutoScroll = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(6),
             Margin = new Padding(0, 0, 0, 12),
-            AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None,
-            RowTemplate = { Height = 38 }
+            BackColor = ModernTheme.ControlFill
         };
-        ModernTheme.StyleRounded(_rulesGrid, ModernTheme.ButtonRadius);
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "文件名", DataPropertyName = nameof(FileRule.FileName), Width = 180, ReadOnly = true });
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "文件路径", DataPropertyName = nameof(FileRule.FilePath), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, ReadOnly = true });
-        _rulesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "计时时长", DataPropertyName = nameof(FileRule.Duration), Width = 120 });
-        _rulesGrid.Columns.Add(new DataGridViewCheckBoxColumn { HeaderText = "启用", DataPropertyName = nameof(FileRule.Enabled), Width = 80 });
-        var rulesGrid = _rulesGrid;
-        _rulesGrid.CellFormatting += (_, e) =>
-        {
-            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && rulesGrid.Columns[e.ColumnIndex].DataPropertyName == nameof(FileRule.FilePath) && e.Value is string path)
-            {
-                e.CellStyle!.WrapMode = DataGridViewTriState.False;
-                rulesGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].ToolTipText = path;
-            }
-        };
-        _rulesGrid.SelectionChanged += (_, _) => RefreshRuleEditor();
-        card.Controls.Add(_rulesGrid, 0, 1);
+        ModernTheme.StyleRounded(_rulesList, ModernTheme.ButtonRadius);
+        card.Controls.Add(_rulesList, 0, 1);
 
         card.Controls.Add(BuildRuleEditor(), 0, 2);
         grid.Controls.Add(card, 0, row);
         grid.SetColumnSpan(card, 2);
-        _fields["rules"] = _rulesGrid;
+        _fields["rules"] = _rulesList;
+        RenderSettingsRules();
         RefreshRuleEditor();
     }
 
@@ -515,16 +603,17 @@ public sealed class SettingsForm : Form
         _ruleNameLabel = new Label { Text = "未选择文件", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         _rulePathBox = new TextBox { ReadOnly = true, BorderStyle = BorderStyle.None };
         _ruleDurationBox = new TextBox { BorderStyle = BorderStyle.None };
-        _ruleEnabledBox = new CheckBox { Text = "启用", Checked = true };
+        _ruleEnabledButton = new Button { Text = "已启用", FlatStyle = FlatStyle.Flat, UseCompatibleTextRendering = true };
+        ModernTheme.StyleRounded(_ruleEnabledButton, ModernTheme.ControlRadius);
         _ruleDurationBox.TextChanged += (_, _) => UpdateCurrentRuleFromEditor();
-        _ruleEnabledBox.CheckedChanged += (_, _) => UpdateCurrentRuleFromEditor();
+        _ruleEnabledButton.Click += (_, _) => ToggleCurrentRuleEnabled();
 
         AddEditorCell(editor, "文件", _ruleNameLabel, 0);
         AddEditorCell(editor, "路径", _rulePathBox, 1);
         editor.Controls.Add(new Label { Text = "时长", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0) }, 2, 0);
         editor.Controls.Add(DecorateControl(_ruleDurationBox), 3, 0);
         editor.Controls.Add(new Label { Text = "状态", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0) }, 2, 1);
-        editor.Controls.Add(DecorateControl(_ruleEnabledBox), 3, 1);
+        editor.Controls.Add(DecorateControl(_ruleEnabledButton), 3, 1);
         return editor;
     }
 
@@ -573,6 +662,7 @@ public sealed class SettingsForm : Form
                 Enabled = true
             });
         }
+        MarkDirty();
     }
 
     private void DeleteSelectedRule()
@@ -580,6 +670,7 @@ public sealed class SettingsForm : Form
         if (_rulesSource.Current is null) return;
         _rulesSource.RemoveCurrent();
         RefreshRuleEditor();
+        MarkDirty();
     }
 
     private void ClearRules()
@@ -588,11 +679,12 @@ public sealed class SettingsForm : Form
         if (MessageBox.Show("确定清空所有文件计时规则？", "演讲计时器", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
         _rulesSource.Clear();
         RefreshRuleEditor();
+        MarkDirty();
     }
 
     private void RefreshRuleEditor()
     {
-        if (_ruleNameLabel is null || _rulePathBox is null || _ruleDurationBox is null || _ruleEnabledBox is null) return;
+        if (_ruleNameLabel is null || _rulePathBox is null || _ruleDurationBox is null || _ruleEnabledButton is null) return;
         _updatingRuleEditor = true;
         if (_rulesSource.Current is FileRule rule)
         {
@@ -600,7 +692,7 @@ public sealed class SettingsForm : Form
             _rulePathBox.Text = rule.FilePath;
             _rulePathBox.Tag = rule.FilePath;
             _ruleDurationBox.Text = rule.Duration;
-            _ruleEnabledBox.Checked = rule.Enabled;
+            SetRuleEnabledButton(rule.Enabled);
         }
         else
         {
@@ -608,23 +700,85 @@ public sealed class SettingsForm : Form
             _rulePathBox.Text = "";
             _rulePathBox.Tag = null;
             _ruleDurationBox.Text = "";
-            _ruleEnabledBox.Checked = false;
+            SetRuleEnabledButton(false);
         }
         _updatingRuleEditor = false;
     }
 
     private void UpdateCurrentRuleFromEditor()
     {
-        if (_updatingRuleEditor || _rulesSource.Current is not FileRule rule || _ruleDurationBox is null || _ruleEnabledBox is null) return;
+        if (_updatingRuleEditor || _rulesSource.Current is not FileRule rule || _ruleDurationBox is null) return;
         rule.Duration = _ruleDurationBox.Text.Trim();
-        rule.Enabled = _ruleEnabledBox.Checked;
         _rulesSource.ResetCurrentItem();
+        MarkDirty();
+    }
+
+    private void ToggleCurrentRuleEnabled()
+    {
+        if (_updatingRuleEditor || _rulesSource.Current is not FileRule rule) return;
+        rule.Enabled = !rule.Enabled;
+        SetRuleEnabledButton(rule.Enabled);
+        _rulesSource.ResetCurrentItem();
+        MarkDirty();
+    }
+
+    private void SetRuleEnabledButton(bool enabled)
+    {
+        if (_ruleEnabledButton is null) return;
+        _ruleEnabledButton.Tag = enabled;
+        _ruleEnabledButton.Text = enabled ? "已启用" : "已禁用";
+        _ruleEnabledButton.BackColor = enabled ? ModernTheme.SuccessSoft : ModernTheme.ControlFill;
+        _ruleEnabledButton.ForeColor = enabled ? ModernTheme.Success : ModernTheme.MutedText;
     }
 
     private IEnumerable<FileRule> CurrentRules()
     {
         return _rulesSource.List.Cast<FileRule>();
     }
+
+    private void RenderSettingsRules()
+    {
+        if (_renderingRules || _rulesList is null || IsDisposed) return;
+        _renderingRules = true;
+        try
+        {
+            var selectedPath = (_rulesSource.Current as FileRule)?.FilePath ?? "";
+            var state = _remoteControl.PresentationController?.GetState();
+            var scroll = _rulesList.AutoScrollPosition;
+            _rulesList.SuspendLayout();
+            foreach (Control control in _rulesList.Controls) control.Dispose();
+            _rulesList.Controls.Clear();
+            var index = 0;
+            foreach (var rule in CurrentRules().OrderBy(rule => rule.FileName, StringComparer.CurrentCultureIgnoreCase))
+            {
+                var option = state?.Presentations.FirstOrDefault(item => SameRulePath(Path.Combine(item.Directory, item.Name), rule.FilePath));
+                var row = new PresentationRuleRow();
+                row.Width = Math.Max(420, _rulesList.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 16);
+                row.Update(rule, option, SameRulePath(selectedPath, rule.FilePath), File.Exists(rule.FilePath));
+                var rowIndex = CurrentRules().ToList().FindIndex(item => ReferenceEquals(item, rule));
+                row.Selected += (_, _) =>
+                {
+                    _rulesSource.Position = rowIndex;
+                    RefreshRuleEditor();
+                    RenderSettingsRules();
+                };
+                row.EnabledChangedByUser += (_, enabled) =>
+                {
+                    rule.Enabled = enabled;
+                    _rulesSource.ResetItem(rowIndex);
+                    MarkDirty();
+                };
+                _rulesList.Controls.Add(row);
+                index++;
+            }
+            _rulesList.ResumeLayout();
+            _rulesList.AutoScrollPosition = new Point(-scroll.X, -scroll.Y);
+        }
+        finally { _renderingRules = false; }
+    }
+
+    private static bool SameRulePath(string? left, string? right) =>
+        string.Equals(PresentationRuleValidator.NormalizePath(left), PresentationRuleValidator.NormalizePath(right), StringComparison.OrdinalIgnoreCase);
 
     private static FileRule CloneRule(FileRule rule) => new()
     {
@@ -747,13 +901,13 @@ public sealed class SettingsForm : Form
         Row(grid, "配置文件", Button("打开配置文件位置", (_, _) => OpenConfigRequested?.Invoke(this, EventArgs.Empty)), "otherConfigPath");
         Row(grid, "日志文件", Button("打开日志文件位置", (_, _) => OpenLogRequested?.Invoke(this, EventArgs.Empty)), "otherLogPath");
         Section(grid, "版本");
-        Row(grid, "当前版本", new Label { Text = "演讲计时器 0.10.0 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
+        Row(grid, "当前版本", new Label { Text = $"演讲计时器 {AppVersion.Current} 便携版", TextAlign = ContentAlignment.MiddleLeft }, "otherVersion");
         AddTab("其他设置", grid);
     }
 
     private Button Button(string text, EventHandler handler)
     {
-        var b = new Button { Text = text, Height = 50, UseCompatibleTextRendering = true, BackColor = Color.FromArgb(246, 249, 250) };
+        var b = new Button { Text = text, Height = 50, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentSoft };
         b.Click += handler;
         NormalizeControl(b);
         return b;
@@ -763,11 +917,12 @@ public sealed class SettingsForm : Form
     {
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8, 12, 8, 12), WrapContents = false, BackColor = ModernTheme.Surface };
         var ok = new Button { Text = "确定", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentStrong, ForeColor = Color.White };
-        var cancel = new Button { Text = "取消", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = Color.FromArgb(246, 249, 250) };
-        var apply = new Button { Text = "应用", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = Color.FromArgb(246, 249, 250) };
-        ok.Click += (_, _) => { Apply(); DialogResult = DialogResult.OK; Hide(); };
+        var cancel = new Button { Text = "取消", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.Card };
+        var apply = new Button { Text = "应用", Width = 132, Height = 54, MinimumSize = new Size(132, 54), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentSoft };
+        ok.Click += (_, _) => { if (Apply()) { DialogResult = DialogResult.OK; Hide(); } };
         apply.Click += (_, _) => Apply();
-        cancel.Click += (_, _) => Hide();
+        cancel.Click += (_, _) => TryHide();
+        bottom.Controls.Add(_dirtyLabel);
         bottom.Controls.Add(ok);
         bottom.Controls.Add(cancel);
         bottom.Controls.Add(apply);
@@ -783,7 +938,7 @@ public sealed class SettingsForm : Form
 
     private ComboBox Combo(string[] items, string selected)
     {
-        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = ModernTheme.ControlFill };
+        var combo = new ModernComboBox();
         combo.Items.AddRange(items);
         combo.SelectedItem = items.Contains(selected) ? selected : items.First();
         return combo;
@@ -795,6 +950,26 @@ public sealed class SettingsForm : Form
         BorderStyle = BorderStyle.None
     };
 
+    private static Image? LoadBrandImage()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "app.ico");
+        try
+        {
+            using var icon = File.Exists(iconPath) ? new Icon(iconPath, 30, 30) : Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            if (icon is not null) return new Bitmap(icon.ToBitmap(), new Size(30, 30));
+        }
+        catch { }
+
+        var path = Path.Combine(AppContext.BaseDirectory, "app.png");
+        if (!File.Exists(path)) return null;
+        try
+        {
+            using var source = Image.FromFile(path);
+            return new Bitmap(source, new Size(30, 30));
+        }
+        catch { return null; }
+    }
+
     private static void BlockMouseWheel(object? sender, MouseEventArgs e)
     {
         if (e is HandledMouseEventArgs handled) handled.Handled = true;
@@ -802,8 +977,45 @@ public sealed class SettingsForm : Form
 
     private T Get<T>(string key) where T : Control => (T)_fields[key];
 
-    private void Apply()
+    private bool ValidateDraft(out string error)
     {
+        if (!PresentationRuleValidator.TryNormalizeDuration(Get<TextBox>("duration").Text, out _, out _))
+        {
+            error = "默认时长必须是 HH:mm:ss 格式。";
+            return false;
+        }
+        var duplicatePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rule in CurrentRules())
+        {
+            if (!PresentationRuleValidator.TryNormalizeDuration(rule.Duration, out _, out _))
+            {
+                error = $"文件规则“{rule.FileName}”的计时时长无效。";
+                return false;
+            }
+            var key = NormalizeRulePath(rule.FilePath);
+            if (!string.IsNullOrWhiteSpace(key) && !duplicatePaths.Add(key))
+            {
+                error = "文件规则中不能重复添加同一份演示文稿。";
+                return false;
+            }
+        }
+        error = "";
+        return true;
+    }
+
+    private static string NormalizeRulePath(string path)
+    {
+        try { return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        catch { return path.Trim(); }
+    }
+
+    private bool Apply()
+    {
+        if (!ValidateDraft(out var validationError))
+        {
+            MessageBox.Show(validationError, "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
+        }
         _config.Timer.DefaultDuration = Get<TextBox>("duration").Text;
         _config.Timer.Mode = (string)Get<ComboBox>("mode").SelectedItem! == "倒计时" ? TimerMode.Countdown : TimerMode.CountUp;
         _config.Timer.EnablePerSlideTimer = Get<CheckBox>("perSlide").Checked;
@@ -865,13 +1077,16 @@ public sealed class SettingsForm : Form
         if (HasDuplicateHotkeys(_config.Controls.Hotkeys, out var duplicate))
         {
             MessageBox.Show($"快捷键重复：{duplicate}", "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
+            return false;
         }
         _config.Controls.ClickThrough = Get<CheckBox>("clickThrough").Checked;
         _config.Controls.LockPosition = Get<CheckBox>("lock").Checked;
         _config.Controls.MinimizeToTray = Get<CheckBox>("minTray").Checked;
         _config.Controls.CloseButtonBehavior = (string)Get<ComboBox>("closeBehavior").SelectedItem! == "退出程序" ? CloseButtonBehavior.Exit : CloseButtonBehavior.MinimizeToTray;
         ConfigApplied?.Invoke(this, _config);
+        _isDirty = false;
+        _dirtyLabel.Visible = false;
+        return true;
     }
 
     private static string[] GetScreenItems()
@@ -1063,17 +1278,11 @@ internal sealed class SettingsNavButton : Button
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         e.Graphics.Clear(Parent?.BackColor ?? ModernTheme.Surface);
         var rect = new Rectangle(1, 1, Width - 2, Height - 2);
-        var fillColor = Selected ? Color.White : ModernTheme.AccentSoft;
+        var fillColor = Selected ? ModernTheme.AccentStrong : ModernTheme.Card;
         using (var path = ModernTheme.RoundedRect(rect, ModernTheme.ButtonRadius))
         using (var fill = new SolidBrush(fillColor))
         {
             e.Graphics.FillPath(fill, path);
-        }
-
-        if (Selected)
-        {
-            using var accent = new SolidBrush(ModernTheme.Accent);
-            e.Graphics.FillRectangle(accent, rect.Left + 20, rect.Bottom - 4, rect.Width - 40, 3);
         }
 
         TextRenderer.DrawText(
@@ -1081,7 +1290,7 @@ internal sealed class SettingsNavButton : Button
             Text,
             Font,
             rect,
-            Selected ? ModernTheme.AccentStrong : ModernTheme.Text,
+            Selected ? Color.White : ModernTheme.Text,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
     }
 }

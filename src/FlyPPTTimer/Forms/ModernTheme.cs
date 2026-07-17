@@ -4,19 +4,27 @@ namespace FlyPPTTimer.Forms;
 
 internal static class ModernTheme
 {
+    public const int StandardControlHeight = 42;
     public const int WindowRadius = 8;
     public const int CardRadius = 7;
     public const int ControlRadius = 5;
     public const int ButtonRadius = 6;
-    public static readonly Color Surface = Color.FromArgb(242, 246, 248);
+    public static readonly Color Surface = Color.FromArgb(244, 247, 249);
     public static readonly Color Card = Color.White;
-    public static readonly Color AccentSoft = Color.FromArgb(232, 241, 246);
-    public static readonly Color Accent = Color.FromArgb(22, 101, 92);
-    public static readonly Color AccentStrong = Color.FromArgb(20, 92, 84);
-    public static readonly Color ControlFill = Color.FromArgb(246, 249, 250);
-    public static readonly Color MutedText = Color.FromArgb(80, 96, 104);
-    public static readonly Color Border = Color.FromArgb(205, 218, 223);
-    public static readonly Color Text = Color.FromArgb(32, 46, 52);
+    public static readonly Color HeaderFill = Color.FromArgb(231, 243, 240);
+    public static readonly Color SectionFill = Color.FromArgb(232, 241, 246);
+    public static readonly Color AccentSoft = Color.FromArgb(224, 241, 237);
+    public static readonly Color Accent = Color.FromArgb(16, 112, 99);
+    public static readonly Color AccentStrong = Color.FromArgb(12, 87, 78);
+    public static readonly Color ControlFill = Color.FromArgb(239, 244, 246);
+    public static readonly Color ControlHover = Color.FromArgb(228, 237, 240);
+    public static readonly Color MutedText = Color.FromArgb(82, 98, 106);
+    public static readonly Color Border = Color.FromArgb(215, 225, 229);
+    public static readonly Color Text = Color.FromArgb(27, 42, 48);
+    public static readonly Color SuccessSoft = Color.FromArgb(220, 244, 229);
+    public static readonly Color Success = Color.FromArgb(23, 120, 69);
+    public static readonly Color DangerSoft = Color.FromArgb(249, 232, 233);
+    public static readonly Color Danger = Color.FromArgb(164, 55, 64);
 
     public static void StyleTabs(TabControl tabs)
     {
@@ -63,9 +71,11 @@ internal static class ModernTheme
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderColor = button.BackColor;
             button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = AccentSoft;
-            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(218, 233, 238);
+            button.FlatAppearance.MouseOverBackColor = ControlHover;
+            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(214, 227, 231);
             button.ForeColor = Text;
+            button.Cursor = Cursors.Hand;
+            button.UseVisualStyleBackColor = false;
         }
         else if (control is TextBox textBox)
         {
@@ -163,5 +173,67 @@ internal sealed class ModernContextMenuRenderer : ToolStripProfessionalRenderer
         e.Graphics.FillPath(brush, path);
     }
 
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+    {
+        using var pen = new Pen(ModernTheme.Border);
+        var y = e.Item.ContentRectangle.Top + e.Item.ContentRectangle.Height / 2;
+        e.Graphics.DrawLine(pen, 12, y, e.Item.Width - 12, y);
+    }
+
     protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { }
+}
+
+internal sealed class ModernComboBox : ComboBox
+{
+    private const int WmPaint = 0x000F;
+
+    public ModernComboBox()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList;
+        DrawMode = DrawMode.OwnerDrawFixed;
+        FlatStyle = FlatStyle.Flat;
+        BackColor = ModernTheme.ControlFill;
+        ForeColor = ModernTheme.Text;
+        ItemHeight = 30;
+    }
+
+    protected override void OnDrawItem(DrawItemEventArgs e)
+    {
+        if (e.Index < 0) return;
+        var selected = (e.State & DrawItemState.Selected) != 0;
+        using var fill = new SolidBrush(selected ? ModernTheme.AccentSoft : Color.White);
+        e.Graphics.FillRectangle(fill, e.Bounds);
+        TextRenderer.DrawText(
+            e.Graphics,
+            GetItemText(Items[e.Index]),
+            Font,
+            Rectangle.Inflate(e.Bounds, -10, 0),
+            ModernTheme.Text,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        if (m.Msg != WmPaint || Width <= 0 || Height <= 0) return;
+
+        using var graphics = Graphics.FromHwnd(Handle);
+        using var fill = new SolidBrush(ModernTheme.ControlFill);
+        graphics.FillRectangle(fill, ClientRectangle);
+        var textRect = new Rectangle(2, 0, Math.Max(0, Width - 36), Height);
+        TextRenderer.DrawText(
+            graphics,
+            Text,
+            Font,
+            textRect,
+            ModernTheme.Text,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        var centerX = Width - 17;
+        var centerY = Height / 2 + 1;
+        using var arrow = new SolidBrush(ModernTheme.MutedText);
+        graphics.FillPolygon(arrow, new Point[] {
+            new Point(centerX - 4, centerY - 2),
+            new Point(centerX + 4, centerY - 2),
+            new Point(centerX, centerY + 3) });
+    }
 }

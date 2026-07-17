@@ -97,6 +97,13 @@ public sealed class TimerOverlayForm : Form
         }
     }
 
+    public void ReassertTopMost()
+    {
+        if (!Visible || !_config.Appearance.AlwaysOnTop) return;
+        TopMost = false;
+        TopMost = true;
+    }
+
     public void Flash(PromptSettings prompt, int seconds)
     {
         _pauseFlashActive = false;

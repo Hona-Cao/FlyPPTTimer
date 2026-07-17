@@ -1,0 +1,42 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main, feature/v0.12-stability-ui, feature/v0.13.2-winforms-ui-polish]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj
+      - name: Restore publish runtime
+        run: dotnet restore src/FlyPPTTimer/FlyPPTTimer.csproj -r win-x64
+      - name: Build release
+        run: dotnet build src/FlyPPTTimer/FlyPPTTimer.csproj -c Release --no-restore | Tee-Object -FilePath build.log
+      - name: Test
+        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=v0.16.1.trx" --results-directory artifacts/test-results
+      - name: Publish single file
+        run: dotnet publish src/FlyPPTTimer/FlyPPTTimer.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=false -o artifacts/publish
+      - name: Create checksum and collect audit material
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash artifacts/publish/FlyPPTTimer.exe -Algorithm SHA256).Hash
+          "$hash  FlyPPTTimer.exe" | Set-Content artifacts/FlyPPTTimer-v0.16.1.sha256 -Encoding ascii
+          $writtenHash = (Get-Content artifacts/FlyPPTTimer-v0.16.1.sha256 -Raw).Trim().Split(' ')[0]
+          if ($hash -ne $writtenHash) { throw "CI Artifact EXE hash verification failed." }
+          "CI Artifact EXE SHA-256: $hash" | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
+          Copy-Item build.log artifacts/build.log
+          Copy-Item TEST_REPORT.md artifacts/TEST_REPORT.md
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlyPPTTimer-v0.16.1-windows-x64
+          path: artifacts
+          if-no-files-found: error

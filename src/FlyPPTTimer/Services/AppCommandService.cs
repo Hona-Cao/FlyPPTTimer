@@ -126,7 +126,7 @@ public sealed class AppCommandService
     private RemoteState GetRemoteStateCore()
     {
         var snapshot = _timer.CreateSnapshot();
-        return new RemoteState
+        var timerState = new TimerRemoteState
         {
             Mode = snapshot.Mode == TimerMode.Countdown ? "倒计时" : "正计时",
             State = snapshot.State switch
@@ -142,8 +142,21 @@ public sealed class AppCommandService
             RemainingMs = (long)snapshot.Remaining.TotalMilliseconds,
             DisplayText = AlertService.Format(snapshot.Display, AlertService.ShouldShowHours(snapshot)),
             WindowVisible = _isOverlayVisible(),
-            Muted = _alerts.Muted,
-            Version = "0.10.0"
+            Muted = _alerts.Muted
+        };
+        return new RemoteState
+        {
+            TimerState = timerState,
+            Mode = timerState.Mode,
+            State = timerState.State,
+            Running = timerState.Running,
+            DurationMs = timerState.DurationMs,
+            ElapsedMs = timerState.ElapsedMs,
+            RemainingMs = timerState.RemainingMs,
+            DisplayText = timerState.DisplayText,
+            WindowVisible = timerState.WindowVisible,
+            Muted = timerState.Muted,
+            Version = AppVersion.Current
         };
     }
 

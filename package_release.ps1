@@ -3,35 +3,46 @@ $ErrorActionPreference = "Stop"
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 
 $root = $PSScriptRoot
-$version = "0.10"
-$dist = Join-Path $root "dist"
+$projectPath = Join-Path $root "src\FlyPPTTimer\FlyPPTTimer.csproj"
+[xml]$project = Get-Content -LiteralPath $projectPath -Raw
+$fullVersion = [string]$project.Project.PropertyGroup.Version
+if ([string]::IsNullOrWhiteSpace($fullVersion)) { throw "Project version is missing: $projectPath" }
+$version = $fullVersion -replace '\.0$', ''
+$dist = Join-Path $root "dist\v$fullVersion"
 $releaseRoot = Join-Path $root "releases\v$version"
+if (Test-Path -LiteralPath $releaseRoot) { throw "Release directory already exists and will not be overwritten: $releaseRoot" }
 $assets = Join-Path $releaseRoot "assets"
 $portable = Join-Path $assets "portable"
 $installerSource = Join-Path $assets "installer-source"
 $setupExe = Join-Path $assets "FlyPPTTimer_Setup_v$version.exe"
 $portableZip = Join-Path $assets "FlyPPTTimer_Portable_v$version.zip"
+$distSetupExe = Join-Path $root "dist\FlyPPTTimer-v$version-setup-win-x64.exe"
+$distSetupHash = "$distSetupExe.sha256"
 $iexpressWork = "C:\Temp\FlyPPTTimerPackage_v$version"
 $iexpressSource = Join-Path $iexpressWork "source"
 $iexpressSetup = Join-Path $iexpressWork "FlyPPTTimer_Setup_v$version.exe"
 
-& (Join-Path $root "build.ps1")
-Copy-Item -LiteralPath (Join-Path $root "docs\default-config.json") -Destination (Join-Path $dist "FlyPPTTimer.config.json") -Force
+if (-not (Test-Path -LiteralPath $dist)) {
+    & (Join-Path $root "build.ps1")
+}
 
-Remove-Item -LiteralPath $assets, $iexpressWork -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $iexpressWork -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $portable, $installerSource, $iexpressSource | Out-Null
 
-$runtimeFiles = @(
-    "FlyPPTTimer.exe",
-    "FlyPPTTimer.config.json",
-    "app.ico",
-    "README.md"
-)
+$runtimeFiles = [ordered]@{
+    "FlyPPTTimer.exe" = Join-Path $dist "FlyPPTTimer.exe"
+    "FlyPPTTimer.config.json" = Join-Path $dist "FlyPPTTimer.config.json"
+    "app.ico" = Join-Path $root "src\FlyPPTTimer\Assets\app.ico"
+    "README.md" = Join-Path $root "README.md"
+}
 
-foreach ($file in $runtimeFiles) {
-    Copy-Item -LiteralPath (Join-Path $dist $file) -Destination $portable -Force
-    Copy-Item -LiteralPath (Join-Path $dist $file) -Destination $installerSource -Force
-    Copy-Item -LiteralPath (Join-Path $dist $file) -Destination $iexpressSource -Force
+foreach ($file in $runtimeFiles.GetEnumerator()) {
+    if (-not (Test-Path -LiteralPath $file.Value)) {
+        throw "Release runtime file is missing: $($file.Value)"
+    }
+    Copy-Item -LiteralPath $file.Value -Destination (Join-Path $portable $file.Key) -Force
+    Copy-Item -LiteralPath $file.Value -Destination (Join-Path $installerSource $file.Key) -Force
+    Copy-Item -LiteralPath $file.Value -Destination (Join-Path $iexpressSource $file.Key) -Force
 }
 
 Compress-Archive -Path (Join-Path $portable "*") -DestinationPath $portableZip -Force
@@ -40,7 +51,14 @@ $installScript = @'
 $ErrorActionPreference = "Stop"
 $installDir = Join-Path $env:LOCALAPPDATA "FlyPPTTimer"
 New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-Copy-Item -LiteralPath ".\FlyPPTTimer.exe", ".\FlyPPTTimer.config.json", ".\app.ico", ".\README.md" -Destination $installDir -Force
+$configPath = Join-Path $installDir "FlyPPTTimer.config.json"
+if (Test-Path -LiteralPath $configPath) {
+    Copy-Item -LiteralPath $configPath -Destination ($configPath + ".upgrade." + (Get-Date -Format "yyyyMMddHHmmss") + ".backup.json") -Force
+}
+Copy-Item -LiteralPath ".\FlyPPTTimer.exe", ".\app.ico", ".\README.md" -Destination $installDir -Force
+if (-not (Test-Path -LiteralPath $configPath)) {
+    Copy-Item -LiteralPath ".\FlyPPTTimer.config.json" -Destination $configPath
+}
 
 $shell = New-Object -ComObject WScript.Shell
 $startMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\FlyPPTTimer"
@@ -129,7 +147,7 @@ if (-not (Test-Path $iexpressSetup)) {
     New-Item -ItemType Directory -Path $installerProject | Out-Null
     Compress-Archive -Path (Join-Path $iexpressSource "*") -DestinationPath $payloadZip -Force
 
-    $csproj = @'
+    $csproj = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -137,13 +155,19 @@ if (-not (Test-Path $iexpressSetup)) {
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <AssemblyName>FlyPPTTimer_Setup</AssemblyName>
+    <Version>$fullVersion</Version>
+    <AssemblyVersion>$fullVersion.0</AssemblyVersion>
+    <FileVersion>$fullVersion.0</FileVersion>
+    <InformationalVersion>$fullVersion</InformationalVersion>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="payload.zip" />
   </ItemGroup>
 </Project>
-'@
+"@
     Set-Content -LiteralPath (Join-Path $installerProject "FlyPPTTimer_Setup.csproj") -Value $csproj -Encoding UTF8
+    Copy-Item -LiteralPath (Join-Path $root "src\FlyPPTTimer\Assets\app.ico") -Destination (Join-Path $installerProject "app.ico") -Force
 
     $program = @'
 using System;
@@ -172,7 +196,20 @@ internal static class Program
             {
                 resource.CopyTo(file);
             }
-            ZipFile.ExtractToDirectory(tempZip, installDir, true);
+            var extractDir = Path.Combine(Path.GetTempPath(), "FlyPPTTimer_install_" + Guid.NewGuid().ToString("N"));
+            ZipFile.ExtractToDirectory(tempZip, extractDir, true);
+            var configPath = Path.Combine(installDir, "FlyPPTTimer.config.json");
+            if (File.Exists(configPath))
+            {
+                File.Copy(configPath, configPath + ".upgrade." + DateTime.Now.ToString("yyyyMMddHHmmss") + ".backup.json", true);
+            }
+            foreach (var file in Directory.GetFiles(extractDir))
+            {
+                var target = Path.Combine(installDir, Path.GetFileName(file));
+                if (Path.GetFileName(file).Equals("FlyPPTTimer.config.json", StringComparison.OrdinalIgnoreCase) && File.Exists(target)) continue;
+                File.Copy(file, target, true);
+            }
+            Directory.Delete(extractDir, true);
             TryCreateShortcut(
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "FlyPPTTimer.lnk"),
                 installDir);
@@ -208,12 +245,17 @@ internal static class Program
     Set-Content -LiteralPath (Join-Path $installerProject "Program.cs") -Value $program -Encoding UTF8
     $dotnet = Join-Path $root ".dotnet\dotnet.exe"
     if (-not (Test-Path $dotnet)) { $dotnet = "dotnet" }
-    & $dotnet publish (Join-Path $installerProject "FlyPPTTimer_Setup.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o (Join-Path $installerProject "publish")
+    & $dotnet publish (Join-Path $installerProject "FlyPPTTimer_Setup.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=false -o (Join-Path $installerProject "publish")
     if ($LASTEXITCODE -ne 0) { throw "Fallback installer publish failed." }
     $fallbackSetup = Join-Path $installerProject "publish\FlyPPTTimer_Setup.exe"
     if (-not (Test-Path $fallbackSetup)) { throw "Fallback installer was not created." }
     Copy-Item -LiteralPath $fallbackSetup -Destination $iexpressSetup -Force
 }
 Copy-Item -LiteralPath $iexpressSetup -Destination $setupExe -Force
+Copy-Item -LiteralPath $iexpressSetup -Destination $distSetupExe -Force
 
-Get-Item $setupExe, $portableZip | Select-Object FullName, Length
+$setupHash = (Get-FileHash -LiteralPath $distSetupExe -Algorithm SHA256).Hash
+"$setupHash  $([IO.Path]::GetFileName($distSetupExe))" |
+    Set-Content -LiteralPath $distSetupHash -Encoding ASCII
+
+Get-Item $setupExe, $distSetupExe, $distSetupHash, $portableZip | Select-Object FullName, Length
