@@ -1,6 +1,6 @@
-﻿# FlyPPTTimer
+# FlyPPTTimer
 
-Windows 便携版 PPT/演讲计时器。当前版本 v0.15.0 使用 C#、.NET 8、Windows Forms；保留既有计时、多屏、托盘、手机遥控和 PowerPoint 放映流程，并以全新主从式工作区重做 PC 远程控制窗口。配置和日志默认写入 exe 同目录。
+Windows 便携版 PPT/演讲计时器。当前版本 v0.16.1 使用 C#、.NET 8 和 Windows Forms；远程控制窗口采用纯文字、短文案和固定主从式工作区，并修正高 DPI 下的文字裁切、边框和对齐。配置和日志默认写入 exe 同目录。
 
 适合 PPT 汇报、会议发言、课堂演示、护理/医疗科室例会等场景。
 

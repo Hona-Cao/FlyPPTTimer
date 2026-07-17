@@ -16,6 +16,8 @@ $portable = Join-Path $assets "portable"
 $installerSource = Join-Path $assets "installer-source"
 $setupExe = Join-Path $assets "FlyPPTTimer_Setup_v$version.exe"
 $portableZip = Join-Path $assets "FlyPPTTimer_Portable_v$version.zip"
+$distSetupExe = Join-Path $root "dist\FlyPPTTimer-v$version-setup-win-x64.exe"
+$distSetupHash = "$distSetupExe.sha256"
 $iexpressWork = "C:\Temp\FlyPPTTimerPackage_v$version"
 $iexpressSource = Join-Path $iexpressWork "source"
 $iexpressSetup = Join-Path $iexpressWork "FlyPPTTimer_Setup_v$version.exe"
@@ -27,17 +29,20 @@ if (-not (Test-Path -LiteralPath $dist)) {
 Remove-Item -LiteralPath $iexpressWork -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $portable, $installerSource, $iexpressSource | Out-Null
 
-$runtimeFiles = @(
-    "FlyPPTTimer.exe",
-    "FlyPPTTimer.config.json",
-    "app.ico",
-    "README.md"
-)
+$runtimeFiles = [ordered]@{
+    "FlyPPTTimer.exe" = Join-Path $dist "FlyPPTTimer.exe"
+    "FlyPPTTimer.config.json" = Join-Path $dist "FlyPPTTimer.config.json"
+    "app.ico" = Join-Path $root "src\FlyPPTTimer\Assets\app.ico"
+    "README.md" = Join-Path $root "README.md"
+}
 
-foreach ($file in $runtimeFiles) {
-    Copy-Item -LiteralPath (Join-Path $dist $file) -Destination $portable -Force
-    Copy-Item -LiteralPath (Join-Path $dist $file) -Destination $installerSource -Force
-    Copy-Item -LiteralPath (Join-Path $dist $file) -Destination $iexpressSource -Force
+foreach ($file in $runtimeFiles.GetEnumerator()) {
+    if (-not (Test-Path -LiteralPath $file.Value)) {
+        throw "Release runtime file is missing: $($file.Value)"
+    }
+    Copy-Item -LiteralPath $file.Value -Destination (Join-Path $portable $file.Key) -Force
+    Copy-Item -LiteralPath $file.Value -Destination (Join-Path $installerSource $file.Key) -Force
+    Copy-Item -LiteralPath $file.Value -Destination (Join-Path $iexpressSource $file.Key) -Force
 }
 
 Compress-Archive -Path (Join-Path $portable "*") -DestinationPath $portableZip -Force
@@ -142,7 +147,7 @@ if (-not (Test-Path $iexpressSetup)) {
     New-Item -ItemType Directory -Path $installerProject | Out-Null
     Compress-Archive -Path (Join-Path $iexpressSource "*") -DestinationPath $payloadZip -Force
 
-    $csproj = @'
+    $csproj = @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -150,13 +155,19 @@ if (-not (Test-Path $iexpressSetup)) {
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <AssemblyName>FlyPPTTimer_Setup</AssemblyName>
+    <Version>$fullVersion</Version>
+    <AssemblyVersion>$fullVersion.0</AssemblyVersion>
+    <FileVersion>$fullVersion.0</FileVersion>
+    <InformationalVersion>$fullVersion</InformationalVersion>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="payload.zip" />
   </ItemGroup>
 </Project>
-'@
+"@
     Set-Content -LiteralPath (Join-Path $installerProject "FlyPPTTimer_Setup.csproj") -Value $csproj -Encoding UTF8
+    Copy-Item -LiteralPath (Join-Path $root "src\FlyPPTTimer\Assets\app.ico") -Destination (Join-Path $installerProject "app.ico") -Force
 
     $program = @'
 using System;
@@ -241,5 +252,10 @@ internal static class Program
     Copy-Item -LiteralPath $fallbackSetup -Destination $iexpressSetup -Force
 }
 Copy-Item -LiteralPath $iexpressSetup -Destination $setupExe -Force
+Copy-Item -LiteralPath $iexpressSetup -Destination $distSetupExe -Force
 
-Get-Item $setupExe, $portableZip | Select-Object FullName, Length
+$setupHash = (Get-FileHash -LiteralPath $distSetupExe -Algorithm SHA256).Hash
+"$setupHash  $([IO.Path]::GetFileName($distSetupExe))" |
+    Set-Content -LiteralPath $distSetupHash -Encoding ASCII
+
+Get-Item $setupExe, $distSetupExe, $distSetupHash, $portableZip | Select-Object FullName, Length
