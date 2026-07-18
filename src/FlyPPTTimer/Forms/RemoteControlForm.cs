@@ -75,6 +75,10 @@ public sealed class RemoteControlForm : Form
         new(StringComparer.OrdinalIgnoreCase);
     private readonly System.Windows.Forms.Timer _presentationRefreshTimer =
         new() { Interval = 1000 };
+    private readonly System.Windows.Forms.Timer _responsiveLayoutTimer =
+        new() { Interval = 75 };
+    private readonly System.Windows.Forms.Timer _placementSaveTimer =
+        new() { Interval = 400 };
     private readonly ToolTip _toolTip = new()
     {
         AutoPopDelay = 30000,
@@ -98,6 +102,29 @@ public sealed class RemoteControlForm : Form
     private Control? _connectionPage;
     private Control? _presentationPage;
     private Panel? _ruleListHost;
+    private TableLayoutPanel? _shell;
+    private TableLayoutPanel? _workspace;
+    private Panel? _connectionScroll;
+    private TableLayoutPanel? _connectionBody;
+    private TableLayoutPanel? _connectionColumns;
+    private TableLayoutPanel? _browserLayout;
+    private TableLayoutPanel? _browserActions;
+    private TableLayoutPanel? _presentationRoot;
+    private TableLayoutPanel? _presentationSplit;
+    private Panel? _presentationDetailsViewport;
+    private FlowLayoutPanel? _presentationDetailsFlow;
+    private TableLayoutPanel? _presentationActionsLayout;
+    private TableLayoutPanel? _presentationCardLayout;
+    private RemoteSurface? _ruleEditorCard;
+    private RemoteSurface? _presentationActionsCard;
+    private RemoteSurface? _dangerActionsCard;
+    private RemoteSurface? _qrFrame;
+    private TableLayoutPanel? _qrCenter;
+    private RemoteTextButton? _copyLinkButton;
+    private RemoteTextButton? _openBrowserButton;
+    private RemoteTextButton? _firewallButton;
+    private RemoteTextButton? _endSlideShowButton;
+    private Action? _reflowConnection;
 
     private ContextMenuStrip? _moreActionsMenu;
     private ToolStripMenuItem? _copyPathMenuItem;
@@ -109,6 +136,13 @@ public sealed class RemoteControlForm : Form
     private bool _updatingRuleEditor;
     private bool _durationDirty;
     private bool _presentationTabActive;
+    private bool _restoringPlacement;
+    private bool _savingPlacement;
+    private bool _placementLoaded;
+    private bool _responsiveLayoutPending;
+    private bool _initialLayoutApplied;
+    private RemoteLayoutMode? _layoutMode;
+    private FormWindowState _lastWindowState = FormWindowState.Normal;
 
     public RemoteControlForm(
         AppConfig config,
@@ -116,6 +150,8 @@ public sealed class RemoteControlForm : Form
         NetworkAddressService networkAddressService,
         Action<AppConfig> saveConfig)
     {
+        AutoScaleMode = AutoScaleMode.Dpi;
+        AutoScaleDimensions = new SizeF(96F, 96F);
         _config = config;
         _remoteControl = remoteControl;
         _powerPoint = remoteControl.PresentationController;
@@ -123,32 +159,124 @@ public sealed class RemoteControlForm : Form
         _saveConfig = saveConfig;
 
         Text = "远程控制";
-        StartPosition = FormStartPosition.CenterScreen;
-        AutoScaleMode = AutoScaleMode.Dpi;
+        StartPosition = FormStartPosition.Manual;
         Font = RemoteDashboardTheme.CreateFont(9.5F);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = true;
-        ClientSize = new Size(1180, 760);
-        MinimumSize = new Size(1040, 700);
         BackColor = RemoteDashboardTheme.Window;
 
         ConfigureText();
         Build();
         RefreshState();
-        VisibleChanged += (_, _) => UpdatePresentationRefreshState();
+        _responsiveLayoutTimer.Tick += (_, _) => ApplyScheduledResponsiveLayout();
+        _placementSaveTimer.Tick += (_, _) => SavePlacementNow();
     }
 
     public void ReloadConfig(AppConfig config)
     {
         _config = config;
+        if (_savingPlacement) return;
         if (IsDisposed) return;
         RefreshState();
         if (_presentationTabActive) RefreshPresentationPanel();
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        if (!_placementLoaded) RestoreWindowPlacement();
+        PrepareInitialLayout();
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        if (!_initialLayoutApplied) PrepareInitialLayout();
+    }
+
+    private void PrepareInitialLayout()
+    {
+        if (_initialLayoutApplied || ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
+
+        _restoringPlacement = true;
+        try
+        {
+            if (_config.RemoteControl.Window.Maximized)
+                WindowState = FormWindowState.Maximized;
+
+            _responsiveLayoutTimer.Stop();
+            _responsiveLayoutPending = false;
+            ApplyResponsiveLayout(RemoteWindowLayoutService.GetLayoutMode(ClientSize, DeviceDpi));
+            _responsiveLayoutTimer.Stop();
+            _responsiveLayoutPending = false;
+            _initialLayoutApplied = true;
+        }
+        finally
+        {
+            _restoringPlacement = false;
+        }
+    }
+
+    protected override void OnDpiChanged(DpiChangedEventArgs e)
+    {
+        SuspendLayout();
+        _restoringPlacement = true;
+        try
+        {
+            Bounds = e.SuggestedRectangle;
+            base.OnDpiChanged(e);
+            UpdateMinimumSizeForCurrentScreen();
+            ScheduleResponsiveLayout();
+            PerformLayout();
+        }
+        finally
+        {
+            _restoringPlacement = false;
+            ResumeLayout(true);
+            Invalidate(true);
+        }
+        SchedulePlacementSave();
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+        ScheduleResponsiveLayout();
+        if (_lastWindowState == FormWindowState.Maximized && WindowState == FormWindowState.Normal)
+            SchedulePlacementSave();
+        _lastWindowState = WindowState;
+    }
+
+    protected override void OnMove(EventArgs e)
+    {
+        base.OnMove(e);
+        SchedulePlacementSave();
+    }
+
+    protected override void OnResizeEnd(EventArgs e)
+    {
+        base.OnResizeEnd(e);
+        SchedulePlacementSave();
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        UpdatePresentationRefreshState();
+        if (!Visible) SavePlacementNow();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        SavePlacementNow();
+        base.OnFormClosing(e);
+    }
+
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        _responsiveLayoutTimer.Dispose();
+        _placementSaveTimer.Dispose();
         _presentationRefreshTimer.Dispose();
         _moreActionsMenu?.Dispose();
         _qr.Image?.Dispose();
@@ -194,7 +322,7 @@ public sealed class RemoteControlForm : Form
 
     private void Build()
     {
-        var shell = new TableLayoutPanel
+        var shell = _shell = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
@@ -285,7 +413,7 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildWorkspace()
     {
-        var workspace = new TableLayoutPanel
+        var workspace = _workspace = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
@@ -365,9 +493,298 @@ public sealed class RemoteControlForm : Form
         if (_presentationRefreshTimer.Enabled) RefreshPresentationPanel();
     }
 
+    private void ScheduleResponsiveLayout()
+    {
+        if (IsDisposed || !IsHandleCreated || WindowState == FormWindowState.Minimized) return;
+        _responsiveLayoutPending = true;
+        _responsiveLayoutTimer.Stop();
+        _responsiveLayoutTimer.Start();
+    }
+
+    private void ApplyScheduledResponsiveLayout()
+    {
+        _responsiveLayoutTimer.Stop();
+        if (!_responsiveLayoutPending || IsDisposed || ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
+        _responsiveLayoutPending = false;
+        ApplyResponsiveLayout(RemoteWindowLayoutService.GetLayoutMode(ClientSize, DeviceDpi));
+    }
+
+    private void ApplyResponsiveLayout(RemoteLayoutMode mode)
+    {
+        var changed = _layoutMode != mode;
+        _layoutMode = mode;
+        var compact = mode == RemoteLayoutMode.Compact;
+        var sidebarDip = compact ? RemoteDashboardTheme.CompactSidebarWidth : RemoteDashboardTheme.SidebarWidth;
+        var pagePaddingDip = compact ? RemoteDashboardTheme.CompactPagePadding : RemoteDashboardTheme.PagePadding;
+        var cardGapDip = compact ? RemoteDashboardTheme.CompactCardGap : RemoteDashboardTheme.CardGap;
+        var sectionGapDip = compact ? RemoteDashboardTheme.CompactSectionGap : RemoteDashboardTheme.SectionGap;
+        var controlGapDip = compact ? RemoteDashboardTheme.CompactControlGap : RemoteDashboardTheme.ControlGap;
+
+        SuspendLayout();
+        try
+        {
+            if (_shell is not null) _shell.ColumnStyles[0].Width = LogicalToDeviceUnits(sidebarDip);
+            if (_workspace is not null)
+            {
+                _workspace.Padding = new Padding(
+                    LogicalToDeviceUnits(pagePaddingDip),
+                    LogicalToDeviceUnits(16),
+                    LogicalToDeviceUnits(pagePaddingDip),
+                    LogicalToDeviceUnits(pagePaddingDip));
+            }
+            if (_connectionBody is not null)
+            {
+                _connectionBody.RowStyles[2].Height = LogicalToDeviceUnits(cardGapDip);
+                _connectionBody.MinimumSize = new Size(
+                    LogicalToDeviceUnits(compact ? 700 : 800),
+                    LogicalToDeviceUnits(compact ? 552 : 570));
+            }
+            if (_connectionColumns is not null)
+                _connectionColumns.ColumnStyles[1].Width = LogicalToDeviceUnits(cardGapDip);
+            if (_browserLayout is not null)
+            {
+                _browserLayout.RowStyles[4].Height = LogicalToDeviceUnits(controlGapDip);
+                _browserLayout.RowStyles[7].Height = LogicalToDeviceUnits(controlGapDip);
+                _browserLayout.RowStyles[9].Height = LogicalToDeviceUnits(sectionGapDip);
+                _browserLayout.RowStyles[8].Height = LogicalToDeviceUnits(compact ? 104 : 48);
+            }
+            if (_presentationRoot is not null)
+                _presentationRoot.RowStyles[4].Height = LogicalToDeviceUnits(sectionGapDip);
+            if (_presentationSplit is not null)
+                _presentationSplit.ColumnStyles[1].Width = LogicalToDeviceUnits(cardGapDip);
+
+            ConfigureBrowserActions(compact, controlGapDip);
+            ConfigurePresentationActions(compact, sectionGapDip);
+            _connectionScroll!.AutoScroll = compact;
+            if (_presentationDetailsViewport is not null)
+                _presentationDetailsViewport.AutoScroll = compact;
+
+            if (changed)
+            {
+                var oldTitleFont = _pageTitle.Font;
+                _pageTitle.Font = RemoteDashboardTheme.CreateFont(
+                    RemoteWindowLayoutService.GetPageTitleFontSize(mode),
+                    FontStyle.Bold);
+                oldTitleFont.Dispose();
+            }
+
+            _reflowConnection?.Invoke();
+            UpdateQrFrameSize();
+            UpdatePresentationDetailsBounds();
+            PerformLayout();
+        }
+        finally
+        {
+            ResumeLayout(true);
+            Invalidate(true);
+        }
+    }
+
+    private void ConfigureBrowserActions(bool compact, int controlGapDip)
+    {
+        if (_browserActions is null || _copyLinkButton is null || _openBrowserButton is null || _firewallButton is null)
+            return;
+
+        var actions = _browserActions;
+        actions.SuspendLayout();
+        actions.ColumnStyles.Clear();
+        actions.RowStyles.Clear();
+        if (!compact)
+        {
+            actions.ColumnCount = 5;
+            actions.RowCount = 1;
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LogicalToDeviceUnits(controlGapDip)));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LogicalToDeviceUnits(controlGapDip)));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            actions.SetCellPosition(_copyLinkButton, new TableLayoutPanelCellPosition(0, 0));
+            actions.SetCellPosition(_openBrowserButton, new TableLayoutPanelCellPosition(2, 0));
+            actions.SetCellPosition(_firewallButton, new TableLayoutPanelCellPosition(4, 0));
+            actions.SetColumnSpan(_firewallButton, 1);
+        }
+        else
+        {
+            actions.ColumnCount = 3;
+            actions.RowCount = 3;
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LogicalToDeviceUnits(controlGapDip)));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(48)));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(controlGapDip)));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(48)));
+            actions.SetCellPosition(_copyLinkButton, new TableLayoutPanelCellPosition(0, 0));
+            actions.SetCellPosition(_openBrowserButton, new TableLayoutPanelCellPosition(2, 0));
+            actions.SetCellPosition(_firewallButton, new TableLayoutPanelCellPosition(0, 2));
+            actions.SetColumnSpan(_firewallButton, 3);
+        }
+        actions.ResumeLayout(true);
+    }
+
+    private void ConfigurePresentationActions(bool compact, int sectionGapDip)
+    {
+        if (_presentationActionsLayout is null ||
+            _openPresentationButton is null ||
+            _startFromBeginningButton is null ||
+            _startFromCurrentButton is null ||
+            _endSlideShowButton is null ||
+            _presentationActionsCard is null ||
+            _presentationCardLayout is null)
+            return;
+
+        var actions = _presentationActionsLayout;
+        actions.SuspendLayout();
+        actions.ColumnStyles.Clear();
+        actions.RowStyles.Clear();
+        if (!compact)
+        {
+            actions.ColumnCount = 4;
+            actions.RowCount = 1;
+            for (var i = 0; i < 4; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            SetPlaybackPosition(_openPresentationButton, 0, 0, true, false);
+            SetPlaybackPosition(_startFromBeginningButton, 1, 0, false, false);
+            SetPlaybackPosition(_startFromCurrentButton, 2, 0, false, false);
+            SetPlaybackPosition(_endSlideShowButton, 3, 0, false, true);
+            _presentationCardLayout.RowStyles[2].Height = LogicalToDeviceUnits(RemoteDashboardTheme.ButtonHeight);
+            _presentationActionsCard.Height = LogicalToDeviceUnits(98);
+        }
+        else
+        {
+            actions.ColumnCount = 2;
+            actions.RowCount = 3;
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, LogicalToDeviceUnits(sectionGapDip)));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+            SetPlaybackPosition(_openPresentationButton, 0, 0, true, false);
+            SetPlaybackPosition(_startFromBeginningButton, 1, 0, false, true);
+            SetPlaybackPosition(_startFromCurrentButton, 0, 2, true, false);
+            SetPlaybackPosition(_endSlideShowButton, 1, 2, false, true);
+            _presentationCardLayout.RowStyles[2].Height = LogicalToDeviceUnits(80 + sectionGapDip);
+            _presentationActionsCard.Height = LogicalToDeviceUnits(138 + sectionGapDip);
+        }
+        actions.ResumeLayout(true);
+    }
+
+    private static void SetPlaybackPosition(
+        RemoteTextButton button,
+        int column,
+        int row,
+        bool first,
+        bool last)
+    {
+        if (button.Parent is not TableLayoutPanel layout) return;
+        layout.SetCellPosition(button, new TableLayoutPanelCellPosition(column, row));
+        button.Dock = DockStyle.Fill;
+        button.Margin = new Padding(first ? 0 : 3, 0, last ? 0 : 3, 0);
+    }
+
+    private void UpdatePresentationDetailsBounds()
+    {
+        if (_presentationDetailsViewport is null ||
+            _presentationDetailsFlow is null ||
+            _ruleEditorCard is null ||
+            _presentationActionsCard is null ||
+            _dangerActionsCard is null)
+            return;
+
+        var scrollbar = _presentationDetailsViewport.AutoScroll
+            ? SystemInformation.VerticalScrollBarWidth
+            : 0;
+        var width = Math.Max(1, _presentationDetailsViewport.ClientSize.Width - scrollbar);
+        foreach (var card in new[] { _ruleEditorCard, _presentationActionsCard, _dangerActionsCard })
+            card.Width = width;
+        _presentationDetailsFlow.Width = width;
+        _presentationDetailsFlow.Height = _ruleEditorCard.Height + _ruleEditorCard.Margin.Vertical +
+                                          _presentationActionsCard.Height + _presentationActionsCard.Margin.Vertical +
+                                          _dangerActionsCard.Height + _dangerActionsCard.Margin.Vertical;
+    }
+
+    private void RestoreWindowPlacement()
+    {
+        _restoringPlacement = true;
+        try
+        {
+            var screens = Screen.AllScreens.Select(RemoteScreenDpiProvider.FromScreen).ToArray();
+            var preferred = Screen.FromPoint(Cursor.Position).DeviceName;
+            var selected = RemoteWindowLayoutService.SelectScreen(
+                screens,
+                _config.RemoteControl.Window.HasValue ? _config.RemoteControl.Window.ScreenDeviceName : null,
+                preferred);
+            Location = selected.WorkingArea.Location;
+            var nonClient = SizeFromClientSize(Size.Empty);
+            var plan = RemoteWindowLayoutService.CreateRestorePlan(
+                _config.RemoteControl.Window,
+                screens,
+                preferred,
+                nonClient);
+            MinimumSize = SizeFromClientSize(RemoteWindowLayoutService.GetMinimumClientSizePhysical(plan.Screen));
+            Bounds = plan.WindowBoundsPhysical;
+            ClientSize = plan.ClientSizePhysical;
+            Bounds = RemoteWindowLayoutService.ClampToWorkingArea(Bounds, plan.Screen.WorkingArea);
+            _placementLoaded = true;
+            _lastWindowState = FormWindowState.Normal;
+        }
+        finally
+        {
+            _restoringPlacement = false;
+        }
+    }
+
+    private void UpdateMinimumSizeForCurrentScreen()
+    {
+        if (!IsHandleCreated) return;
+        var screen = RemoteScreenDpiProvider.FromScreen(Screen.FromControl(this));
+        MinimumSize = SizeFromClientSize(RemoteWindowLayoutService.GetMinimumClientSizePhysical(screen));
+    }
+
+    private void SchedulePlacementSave()
+    {
+        if (!_placementLoaded || _restoringPlacement || _savingPlacement || !Visible ||
+            !RemoteWindowLayoutService.CanSave(WindowState))
+            return;
+        _placementSaveTimer.Stop();
+        _placementSaveTimer.Start();
+    }
+
+    private void SavePlacementNow()
+    {
+        _placementSaveTimer.Stop();
+        if (!_placementLoaded || _restoringPlacement || _savingPlacement || !IsHandleCreated ||
+            !RemoteWindowLayoutService.CanSave(WindowState))
+            return;
+
+        _savingPlacement = true;
+        try
+        {
+            var maximized = WindowState == FormWindowState.Maximized;
+            var normalBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            var screen = RemoteScreenDpiProvider.FromScreen(Screen.FromRectangle(normalBounds));
+            var nonClient = SizeFromClientSize(Size.Empty);
+            var normalClient = WindowState == FormWindowState.Normal
+                ? ClientSize
+                : new Size(
+                    Math.Max(1, normalBounds.Width - nonClient.Width),
+                    Math.Max(1, normalBounds.Height - nonClient.Height));
+            _config.RemoteControl.Window = RemoteWindowLayoutService.CapturePlacement(
+                normalBounds,
+                normalClient,
+                screen,
+                maximized);
+            _saveConfig(_config);
+        }
+        finally
+        {
+            _savingPlacement = false;
+        }
+    }
+
     private Control BuildConnectionPage()
     {
-        var scroll = new Panel
+        var scroll = _connectionScroll = new Panel
         {
             Dock = DockStyle.Fill,
             AutoScroll = true,
@@ -375,20 +792,20 @@ public sealed class RemoteControlForm : Form
             Margin = Padding.Empty
         };
 
-        var body = new TableLayoutPanel
+        var body = _connectionBody = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = false,
-            Height = 590,
-            MinimumSize = new Size(800, 590),
+            Height = 570,
+            MinimumSize = new Size(800, 570),
             ColumnCount = 1,
             RowCount = 4,
             BackColor = RemoteDashboardTheme.Window,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 12));
-        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         body.RowStyles.Add(new RowStyle(SizeType.Absolute, RemoteDashboardTheme.CardGap));
         body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         body.Controls.Add(BuildServiceCard(), 0, 1);
@@ -402,6 +819,7 @@ public sealed class RemoteControlForm : Form
             body.Height = Math.Max(body.MinimumSize.Height, scroll.ClientSize.Height);
         }
 
+        _reflowConnection = Reflow;
         scroll.Resize += (_, _) => Reflow();
         scroll.HandleCreated += (_, _) => BeginInvoke((MethodInvoker)Reflow);
         return scroll;
@@ -409,7 +827,7 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildServiceCard()
     {
-        var card = NewSurface(new Padding(16, 12, 16, 12));
+        var card = NewSurface(new Padding(16, 8, 16, 8));
         card.AccessibleName = "服务状态卡";
         card.Dock = DockStyle.Fill;
         card.Margin = Padding.Empty;
@@ -425,9 +843,9 @@ public sealed class RemoteControlForm : Form
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 52));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 84));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 84));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 84));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
 
         _state.Dock = DockStyle.Fill;
         _state.Margin = Padding.Empty;
@@ -441,20 +859,17 @@ public sealed class RemoteControlForm : Form
         layout.Controls.Add(portLabel, 1, 0);
 
         var portHost = CreateInputHost(_port, new Padding(8, 7, 8, 7), 40);
-        portHost.Anchor = AnchorStyles.None;
-        portHost.Size = new Size(84, 40);
-        portHost.Margin = Padding.Empty;
+        portHost.Dock = DockStyle.Fill;
+        portHost.Margin = new Padding(4, 0, 4, 0);
         layout.Controls.Add(portHost, 2, 0);
 
         var restart = CreateActionButton("重启", (_, _) => RestartService(), RemoteButtonKind.Secondary, 76);
-        restart.Anchor = AnchorStyles.None;
-        restart.Size = new Size(76, 40);
+        restart.Dock = DockStyle.Fill;
         restart.Margin = new Padding(4, 0, 4, 0);
         layout.Controls.Add(restart, 3, 0);
 
         _serviceToggle = CreateActionButton("关闭", (_, _) => ToggleService(), RemoteButtonKind.DangerOutline, 76);
-        _serviceToggle.Anchor = AnchorStyles.None;
-        _serviceToggle.Size = new Size(76, 40);
+        _serviceToggle.Dock = DockStyle.Fill;
         _serviceToggle.Margin = new Padding(4, 0, 4, 0);
         layout.Controls.Add(_serviceToggle, 4, 0);
 
@@ -464,7 +879,7 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildConnectionColumns()
     {
-        var columns = new TableLayoutPanel
+        var columns = _connectionColumns = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 3,
@@ -484,7 +899,7 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildQrCard()
     {
-        var card = NewSurface(new Padding(20, 16, 20, 16));
+        var card = NewSurface(new Padding(16, 12, 16, 12));
         card.AccessibleName = "二维码卡";
         card.Dock = DockStyle.Fill;
         card.Margin = Padding.Empty;
@@ -498,28 +913,29 @@ public sealed class RemoteControlForm : Form
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, RemoteDashboardTheme.SectionGap));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 6));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 8));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         layout.Controls.Add(CreateSectionTitle("手机扫码"), 0, 0);
 
-        var qrCenter = new TableLayoutPanel
+        var qrCenter = _qrCenter = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 1,
             BackColor = Color.Transparent,
             Margin = Padding.Empty,
-            Padding = new Padding(12)
+            Padding = new Padding(4)
         };
-        var qrFrame = NewSurface(new Padding(14));
+        var qrFrame = _qrFrame = NewSurface(new Padding(10));
         qrFrame.Size = new Size(252, 252);
         qrFrame.Anchor = AnchorStyles.None;
         qrFrame.BorderColor = RemoteDashboardTheme.BorderStrong;
         qrFrame.Controls.Add(_qr);
         qrCenter.Controls.Add(qrFrame, 0, 0);
+        qrCenter.Resize += (_, _) => UpdateQrFrameSize();
         layout.Controls.Add(qrCenter, 0, 2);
 
         var tip = NewSurface(new Padding(12, 8, 12, 8));
@@ -541,6 +957,21 @@ public sealed class RemoteControlForm : Form
         return card;
     }
 
+    private void UpdateQrFrameSize()
+    {
+        if (_qrCenter is null || _qrFrame is null || _qrCenter.ClientSize.Width <= 0 || _qrCenter.ClientSize.Height <= 0)
+            return;
+
+        var available = Math.Max(
+            1,
+            Math.Min(
+                _qrCenter.ClientSize.Width - _qrCenter.Padding.Horizontal - LogicalToDeviceUnits(8),
+                _qrCenter.ClientSize.Height - _qrCenter.Padding.Vertical - LogicalToDeviceUnits(4)));
+        var maximum = LogicalToDeviceUnits(320);
+        var side = Math.Min(maximum, available);
+        _qrFrame.Size = new Size(side, side);
+    }
+
     private Control BuildBrowserCard()
     {
         var card = NewSurface(new Padding(22, 16, 22, 16));
@@ -548,7 +979,7 @@ public sealed class RemoteControlForm : Form
         card.Dock = DockStyle.Fill;
         card.Margin = Padding.Empty;
 
-        var layout = new TableLayoutPanel
+        var layout = _browserLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
@@ -579,7 +1010,7 @@ public sealed class RemoteControlForm : Form
         layout.Controls.Add(CreateFieldLabel("链接"), 0, 5);
         layout.Controls.Add(CreateInputHost(_url, new Padding(10, 9, 10, 7)), 0, 6);
 
-        var actions = new TableLayoutPanel
+        var actions = _browserActions = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 5,
@@ -594,7 +1025,7 @@ public sealed class RemoteControlForm : Form
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, RemoteDashboardTheme.ControlGap));
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
 
-        var copy = CreateActionButton(
+        var copy = _copyLinkButton = CreateActionButton(
             "复制链接",
             (_, _) => CopyText(CurrentUrl(), "已复制。"),
             RemoteButtonKind.Primary);
@@ -602,7 +1033,7 @@ public sealed class RemoteControlForm : Form
         copy.Margin = new Padding(0, 4, 0, 4);
         actions.Controls.Add(copy, 0, 0);
 
-        var open = CreateActionButton(
+        var open = _openBrowserButton = CreateActionButton(
             "浏览器打开",
             (_, _) => OpenCurrentUrl(),
             RemoteButtonKind.Secondary);
@@ -610,7 +1041,7 @@ public sealed class RemoteControlForm : Form
         open.Margin = new Padding(0, 4, 0, 4);
         actions.Controls.Add(open, 2, 0);
 
-        var firewall = CreateActionButton(
+        var firewall = _firewallButton = CreateActionButton(
             "放行命令",
             (_, _) => CopyText(BuildFirewallCommand(), "命令已复制。"),
             RemoteButtonKind.Secondary);
@@ -633,7 +1064,7 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildPresentationPage()
     {
-        var root = new TableLayoutPanel
+        var root = _presentationRoot = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
@@ -643,7 +1074,7 @@ public sealed class RemoteControlForm : Form
             Padding = Padding.Empty
         };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 10));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 10));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, RemoteDashboardTheme.SectionGap));
@@ -656,7 +1087,7 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildPresentationToolbar()
     {
-        var card = NewSurface(new Padding(8, 2, 8, 2));
+        var card = NewSurface(new Padding(10, 8, 10, 8));
         card.AccessibleName = "演示工具栏";
         card.Dock = DockStyle.Fill;
         card.Margin = Padding.Empty;
@@ -703,7 +1134,7 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildPresentationWorkspace()
     {
-        var split = new TableLayoutPanel
+        var split = _presentationSplit = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 3,
@@ -762,34 +1193,41 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildPresentationDetails()
     {
-        var details = new TableLayoutPanel
+        var viewport = _presentationDetailsViewport = new Panel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 7,
+            AutoScroll = false,
             BackColor = RemoteDashboardTheme.Window,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        details.RowStyles.Add(new RowStyle(SizeType.Absolute, 222));
-        details.RowStyles.Add(new RowStyle(SizeType.Absolute, RemoteDashboardTheme.SectionGap));
-        details.RowStyles.Add(new RowStyle(SizeType.Absolute, 106));
-        details.RowStyles.Add(new RowStyle(SizeType.Absolute, RemoteDashboardTheme.SectionGap));
-        details.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
-        details.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
-        details.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        details.Controls.Add(BuildRuleEditor(), 0, 0);
-        details.Controls.Add(BuildPresentationActions(), 0, 2);
-        details.Controls.Add(BuildDangerActions(), 0, 4);
-        return details;
+
+        var flow = _presentationDetailsFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = false,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = false,
+            BackColor = RemoteDashboardTheme.Window,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        flow.Controls.Add(BuildRuleEditor());
+        flow.Controls.Add(BuildPresentationActions());
+        flow.Controls.Add(BuildDangerActions());
+        viewport.Controls.Add(flow);
+        viewport.Resize += (_, _) => UpdatePresentationDetailsBounds();
+        return viewport;
     }
 
     private Control BuildRuleEditor()
     {
-        var card = NewSurface(new Padding(16, 12, 16, 12));
+        var card = _ruleEditorCard = NewSurface(new Padding(16, 12, 16, 12));
         card.AccessibleName = "规则编辑卡";
-        card.Dock = DockStyle.Fill;
-        card.Margin = Padding.Empty;
+        card.Dock = DockStyle.None;
+        card.Height = 222;
+        card.Margin = new Padding(0, 0, 0, RemoteDashboardTheme.SectionGap);
 
         var layout = new TableLayoutPanel
         {
@@ -832,9 +1270,10 @@ public sealed class RemoteControlForm : Form
         durationHost.Margin = new Padding(0, 4, RemoteDashboardTheme.ControlGap, 4);
         controls.Controls.Add(durationHost);
 
-        _ruleEnabledButton = CreateActionButton("启用", (_, _) => ToggleSelectedRuleEnabled(), RemoteButtonKind.Secondary, 72);
-        _ruleEnabledButton.Width = 76;
+        _ruleEnabledButton = CreateActionButton("启用规则", (_, _) => ToggleSelectedRuleEnabled(), RemoteButtonKind.Secondary, 88);
+        _ruleEnabledButton.Width = 100;
         _ruleEnabledButton.Height = 40;
+        _ruleEnabledButton.Padding = new Padding(6, 0, 6, 0);
         _ruleEnabledButton.Margin = new Padding(0, 4, RemoteDashboardTheme.ControlGap, 4);
         controls.Controls.Add(_ruleEnabledButton);
 
@@ -869,12 +1308,13 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildPresentationActions()
     {
-        var card = NewSurface(new Padding(8, 7, 8, 7));
+        var card = _presentationActionsCard = NewSurface(new Padding(8, 7, 8, 7));
         card.AccessibleName = "放映卡";
-        card.Dock = DockStyle.Fill;
-        card.Margin = Padding.Empty;
+        card.Dock = DockStyle.None;
+        card.Height = 106;
+        card.Margin = new Padding(0, 0, 0, RemoteDashboardTheme.SectionGap);
 
-        var layout = new TableLayoutPanel
+        var layout = _presentationCardLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
@@ -885,10 +1325,10 @@ public sealed class RemoteControlForm : Form
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 6));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, RemoteDashboardTheme.ButtonHeight));
         layout.Controls.Add(CreateSectionTitle("放映"), 0, 0);
 
-        var actions = new TableLayoutPanel
+        var actions = _presentationActionsLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 4,
@@ -912,7 +1352,7 @@ public sealed class RemoteControlForm : Form
             "当前页放映",
             (_, _) => SendPresentationCommand("ppt.startFromCurrent"),
             RemoteButtonKind.Secondary);
-        var end = CreateActionButton(
+        var end = _endSlideShowButton = CreateActionButton(
             "结束放映",
             (_, _) => SendPresentationCommand("ppt.endShow"),
             RemoteButtonKind.DangerOutline);
@@ -929,9 +1369,11 @@ public sealed class RemoteControlForm : Form
 
     private Control BuildDangerActions()
     {
-        var card = NewSurface(new Padding(16, 5, 16, 5));
+        var card = _dangerActionsCard = NewSurface(new Padding(16, 5, 16, 5));
         card.AccessibleName = "危险操作卡";
-        card.Dock = DockStyle.Fill;
+        card.Dock = DockStyle.None;
+        card.Height = 92;
+        card.Margin = Padding.Empty;
         card.BorderColor = Color.FromArgb(247, 190, 190);
 
         var layout = new TableLayoutPanel
@@ -992,7 +1434,7 @@ public sealed class RemoteControlForm : Form
     {
         button.Dock = DockStyle.Fill;
         button.Padding = new Padding(6, 0, 6, 0);
-        button.Margin = new Padding(first ? 0 : 3, 4, last ? 0 : 3, 4);
+        button.Margin = new Padding(first ? 0 : 3, 0, last ? 0 : 3, 0);
         layout.Controls.Add(button, column, 0);
     }
 
@@ -1021,7 +1463,7 @@ public sealed class RemoteControlForm : Form
             Margin = Padding.Empty,
             UseCompatibleTextRendering = false
         };
-        label.MinimumSize = new Size(0, RemoteDashboardTheme.GetSafeTextHeight(label, label.Font, 8));
+        label.MinimumSize = new Size(0, 34);
         return label;
     }
 
@@ -1040,7 +1482,7 @@ public sealed class RemoteControlForm : Form
             AutoEllipsis = false,
             UseCompatibleTextRendering = false
         };
-        label.MinimumSize = new Size(0, RemoteDashboardTheme.GetSafeTextHeight(label, font, 6));
+        label.MinimumSize = new Size(0, 26);
         return label;
     }
 
@@ -1118,6 +1560,7 @@ public sealed class RemoteControlForm : Form
                 FileName = Path.GetFileName(path),
                 FilePath = normalized,
                 Duration = _config.Timer.DefaultDuration,
+                Mode = _config.Timer.Mode,
                 Enabled = true
             });
         }
@@ -1205,7 +1648,7 @@ public sealed class RemoteControlForm : Form
                     currentRule.Enabled = enabled;
                     SaveRulesImmediately();
                     SetPresentationFeedback(
-                        enabled ? "已启用。" : "已禁用。",
+                        enabled ? "规则已启用。" : "规则已禁用。",
                         FeedbackKind.Info);
                     RefreshPresentationPanel();
                 };
@@ -1298,7 +1741,7 @@ public sealed class RemoteControlForm : Form
     private void SetRuleButton(bool enabled)
     {
         if (_ruleEnabledButton is null) return;
-        _ruleEnabledButton.Text = enabled ? "禁用" : "启用";
+        _ruleEnabledButton.Text = enabled ? "禁用规则" : "启用规则";
         _ruleEnabledButton.Kind = enabled
             ? RemoteButtonKind.Secondary
             : RemoteButtonKind.Primary;
@@ -1311,7 +1754,7 @@ public sealed class RemoteControlForm : Form
         SetRuleButton(_selectedRule.Enabled);
         SaveRulesImmediately();
         SetPresentationFeedback(
-            _selectedRule.Enabled ? "已启用。" : "已禁用。",
+            _selectedRule.Enabled ? "规则已启用。" : "规则已禁用。",
             FeedbackKind.Info);
         RefreshPresentationPanel();
     }
@@ -1559,7 +2002,7 @@ public sealed class RemoteControlForm : Form
 
         var previousAddress = _address.SelectedAddress;
         _address.SetAddresses(
-            _networkAddressService.GetIPv4Addresses().Select(item => item.Address),
+            _networkAddressService.GetRemoteAccessAddresses().Select(item => item.Address),
             previousAddress);
 
         var running = _remoteControl.IsRunning;
@@ -1582,6 +2025,18 @@ public sealed class RemoteControlForm : Form
     private void UpdateUrlAndQr()
     {
         var url = CurrentUrl();
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _url.Text = "未检测到可供手机访问的局域网地址";
+            _toolTip.SetToolTip(_url, "请让手机与电脑连接同一 Wi-Fi 或局域网后刷新。");
+            _qr.Image?.Dispose();
+            _qr.Image = null;
+            if (_copyLinkButton is not null) _copyLinkButton.Enabled = false;
+            if (_openBrowserButton is not null) _openBrowserButton.Enabled = false;
+            return;
+        }
+        if (_copyLinkButton is not null) _copyLinkButton.Enabled = true;
+        if (_openBrowserButton is not null) _openBrowserButton.Enabled = true;
         _url.Text = RemoteUrlPrivacy.MaskToken(url);
         _toolTip.SetToolTip(
             _url,
@@ -1603,8 +2058,7 @@ public sealed class RemoteControlForm : Form
     private string CurrentUrl()
     {
         var address = _address.SelectedAddress;
-        if (string.IsNullOrWhiteSpace(address))
-            address = "127.0.0.1";
+        if (string.IsNullOrWhiteSpace(address)) return "";
 
         var port = _remoteControl.CurrentPort > 0
             ? _remoteControl.CurrentPort
@@ -1649,6 +2103,12 @@ public sealed class RemoteControlForm : Form
         string successMessage,
         bool presentationFeedback = false)
     {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _connectionFeedback.Text = "未检测到可供手机访问的局域网地址。";
+            _connectionFeedback.ForeColor = RemoteDashboardTheme.Warning;
+            return;
+        }
         try
         {
             Clipboard.SetText(text);
@@ -1684,10 +2144,17 @@ public sealed class RemoteControlForm : Form
 
     private void OpenCurrentUrl()
     {
+        var url = CurrentUrl();
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            _connectionFeedback.Text = "请先让手机与电脑连接同一局域网。";
+            _connectionFeedback.ForeColor = RemoteDashboardTheme.Warning;
+            return;
+        }
         try
         {
             Process.Start(
-                new ProcessStartInfo(CurrentUrl())
+                new ProcessStartInfo(url)
                 {
                     UseShellExecute = true
                 });

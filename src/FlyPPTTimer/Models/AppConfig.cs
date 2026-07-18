@@ -20,6 +20,14 @@ public sealed class TimerSettings
     public TimerMode Mode { get; set; } = TimerMode.Countdown;
     public bool EnablePerSlideTimer { get; set; }
     public bool ContinueOvertime { get; set; } = true;
+    public TimerEndAction EndAction { get; set; } = TimerEndAction.None;
+}
+
+public enum TimerEndAction
+{
+    None,
+    BlackScreen,
+    ExitSlideShow
 }
 
 public enum TimerMode
@@ -35,8 +43,8 @@ public sealed class BehaviorSettings
     public bool ResetWhenLeavingFullscreen { get; set; } = true;
     public bool FlashOnPauseResume { get; set; } = true;
     public bool FlashPausedTime { get; set; } = false;
-    public PromptSettings Prompt1 { get; set; } = new() { Enabled = true, TriggerBeforeEndSeconds = 120, Text = "还剩 {remaining}", FlashText = true };
-    public PromptSettings Prompt2 { get; set; } = new() { Enabled = false, TriggerBeforeEndSeconds = 30, Text = "即将结束 {remaining}", FlashBackground = true };
+    public PromptSettings Prompt1 { get; set; } = new() { Enabled = true, TriggerBeforeEndSeconds = 120, Text = "时间即将结束", Speak = true, Beep = false, FlashBackground = true };
+    public PromptSettings Prompt2 { get; set; } = new() { Enabled = false, TriggerBeforeEndSeconds = 30, Text = "时间即将结束", Speak = true, Beep = false, FlashBackground = true };
     public EndPromptSettings EndPrompt { get; set; } = new();
     public string[] FullscreenProcessWhitelist { get; set; } =
     [
@@ -56,11 +64,15 @@ public class PromptSettings
     public int TriggerBeforeEndSeconds { get; set; }
     public string Text { get; set; } = "";
     public bool Speak { get; set; }
-    public bool Beep { get; set; } = true;
+    public bool Beep { get; set; }
     public bool FlashText { get; set; }
     public bool FlashBackground { get; set; }
     public bool PlaySound { get; set; }
     public string SoundFile { get; set; } = "";
+    public string FlashStyle { get; set; } = "闪烁背景";
+    public int FlashOnMs { get; set; } = 350;
+    public int FlashOffMs { get; set; } = 350;
+    public int FlashSeconds { get; set; } = 3;
 }
 
 public sealed class EndPromptSettings : PromptSettings
@@ -68,28 +80,27 @@ public sealed class EndPromptSettings : PromptSettings
     public EndPromptSettings()
     {
         Enabled = true;
-        Text = "计时结束";
+        Text = "预设时间到";
         Speak = true;
-        Beep = true;
+        Beep = false;
         FlashBackground = true;
+        FlashSeconds = 8;
     }
-
-    public int FlashSeconds { get; set; } = 8;
 }
 
 public sealed class AppearanceSettings
 {
-    public string ColorScheme { get; set; } = "默认";
+    public string ColorScheme { get; set; } = "医疗卫生（蓝白）";
     public string FontFamily { get; set; } = "Microsoft YaHei UI";
-    public float FontSize { get; set; } = 20;
+    public float FontSize { get; set; } = 18;
     public string FontStyle { get; set; } = "Bold";
-    public string TextColor { get; set; } = "#FFFFFF";
-    public string BackgroundColor { get; set; } = "#202733";
+    public string TextColor { get; set; } = "#0B3A66";
+    public string BackgroundColor { get; set; } = "#F3F8FC";
     public string TimeoutTextColor { get; set; } = "#FFFFFF";
     public string TimeoutBackgroundColor { get; set; } = "#B00020";
-    public string FlashBackgroundColor { get; set; } = "#FFC107";
-    public int Width { get; set; } = 200;
-    public int Height { get; set; } = 60;
+    public string FlashBackgroundColor { get; set; } = "#4EA3D8";
+    public int Width { get; set; } = 140;
+    public int Height { get; set; } = 50;
     public int BackgroundOpacity { get; set; } = 88;
     public int TextOpacity { get; set; } = 100;
     public string Shape { get; set; } = "圆角矩形（小）";
@@ -106,7 +117,6 @@ public sealed class ControlSettings
     public string StartPauseHotkey { get; set; } = "F3";
     public string StopResetHotkey { get; set; } = "F4";
     public string ToggleWindowHotkey { get; set; } = "F5";
-    public string OpenSettingsHotkey { get; set; } = "F6";
     public Dictionary<string, string> Hotkeys { get; set; } = DefaultHotkeys();
     public bool ClickThrough { get; set; } = false;
     public bool LockPosition { get; set; } = false;
@@ -134,8 +144,7 @@ public sealed class ControlSettings
         ["preset5"] = "Ctrl+Alt+2",
         ["preset8"] = "Ctrl+Alt+3",
         ["preset10"] = "Ctrl+Alt+4",
-        ["preset15"] = "Ctrl+Alt+5",
-        ["openSettings"] = "F6"
+        ["preset15"] = "Ctrl+Alt+5"
     };
 }
 
@@ -177,6 +186,7 @@ public sealed class FileRule
     public string FileName { get; set; } = "";
     public string FilePath { get; set; } = "";
     public string Duration { get; set; } = "00:08:00";
+    public TimerMode Mode { get; set; } = TimerMode.Countdown;
     public bool Enabled { get; set; } = true;
     public string TitlePattern { get; set; } = "";
     public string Feature { get; set; } = "";
@@ -188,6 +198,18 @@ public sealed class RemoteControlSettings
     public bool UseRandomPort { get; set; } = true;
     public int Port { get; set; }
     public string Token { get; set; } = "";
+    public RemoteWindowPlacement Window { get; set; } = new();
+}
+
+public sealed class RemoteWindowPlacement
+{
+    public bool HasValue { get; set; }
+    public string ScreenDeviceName { get; set; } = "";
+    public double LeftRatio { get; set; }
+    public double TopRatio { get; set; }
+    public int WidthDip { get; set; } = 1180;
+    public int HeightDip { get; set; } = 760;
+    public bool Maximized { get; set; }
 }
 
 public sealed class RemoteCommand
@@ -216,8 +238,10 @@ public sealed class RemoteState
     public long ElapsedMs { get; set; }
     public long RemainingMs { get; set; }
     public string DisplayText { get; set; } = "";
+    public bool IsOvertime { get; set; }
     public bool WindowVisible { get; set; }
     public bool Muted { get; set; }
+    public bool TimeUpBlackoutActive { get; set; }
     public int ConnectedClients { get; set; }
     public string Version { get; set; } = AppVersion.Current;
     public long Revision { get; set; }
@@ -232,8 +256,11 @@ public sealed class TimerRemoteState
     public long ElapsedMs { get; set; }
     public long RemainingMs { get; set; }
     public string DisplayText { get; set; } = "";
+    public bool IsOvertime { get; set; }
+    public bool ContinueOvertime { get; set; }
     public bool WindowVisible { get; set; }
     public bool Muted { get; set; }
+    public bool TimeUpBlackoutActive { get; set; }
 }
 
 public sealed class PresentationState

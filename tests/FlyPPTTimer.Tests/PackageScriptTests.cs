@@ -12,4 +12,14 @@ public sealed class PackageScriptTests
         Assert.Contains("continue;", script);
         Assert.Contains("Release directory already exists and will not be overwritten", script);
     }
+
+    [Fact]
+    public void PackageScript_PreservesThreePartVersionInArtifactNames()
+    {
+        var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "package_release.ps1"));
+        var script = File.ReadAllText(path);
+
+        Assert.Contains("$version = $fullVersion.Trim()", script);
+        Assert.DoesNotContain("$fullVersion -replace '\\.0$'", script);
+    }
 }

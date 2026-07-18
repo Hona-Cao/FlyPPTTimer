@@ -44,7 +44,7 @@ internal sealed class RemotePresentationRow : RemoteSurface
         };
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
-        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
+        _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
         _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         _layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -143,7 +143,7 @@ internal sealed class RemotePresentationRow : RemoteSurface
                     : RemoteDashboardTheme.MutedText;
 
         _toggle.Visible = rule is not null;
-        _toggle.Text = rule?.Enabled == true ? "禁用" : "启用";
+        _toggle.Text = rule?.Enabled == true ? "禁用规则" : "启用规则";
         _toggle.Kind = rule?.Enabled == true ? RemoteButtonKind.Secondary : RemoteButtonKind.Primary;
         _updating = false;
         ApplyVisualState();

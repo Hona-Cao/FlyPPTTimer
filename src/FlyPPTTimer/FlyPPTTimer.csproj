@@ -5,14 +5,17 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>FlyPPTTimer</AssemblyName>
     <RootNamespace>FlyPPTTimer</RootNamespace>
-    <Version>0.16.1</Version>
-    <AssemblyVersion>0.16.1.0</AssemblyVersion>
-    <FileVersion>0.16.1.0</FileVersion>
-    <InformationalVersion>0.16.1</InformationalVersion>
+    <Version>0.18.9</Version>
+    <AssemblyVersion>0.18.9.0</AssemblyVersion>
+    <FileVersion>0.18.9.0</FileVersion>
+    <InformationalVersion>0.18.9</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

@@ -16,6 +16,9 @@ public sealed class AppCommandService
     private readonly Action _openSettings;
     private readonly LogService _log;
     private readonly SynchronizationContext? _uiContext;
+    private readonly ISystemAudioService _systemAudio;
+    private readonly Func<bool> _isTimeUpBlackoutActive;
+    private readonly Action _dismissTimeUpBlackout;
 
     public AppCommandService(
         TimerService timer,
@@ -28,7 +31,10 @@ public sealed class AppCommandService
         Func<bool> isOverlayVisible,
         Action<int> flashOverlay,
         Action openSettings,
-        LogService log)
+        LogService log,
+        ISystemAudioService? systemAudio = null,
+        Func<bool>? isTimeUpBlackoutActive = null,
+        Action? dismissTimeUpBlackout = null)
     {
         _timer = timer;
         _alerts = alerts;
@@ -41,6 +47,9 @@ public sealed class AppCommandService
         _flashOverlay = flashOverlay;
         _openSettings = openSettings;
         _log = log;
+        _systemAudio = systemAudio ?? new SystemAudioService(log);
+        _isTimeUpBlackoutActive = isTimeUpBlackoutActive ?? (() => false);
+        _dismissTimeUpBlackout = dismissTimeUpBlackout ?? (() => { });
         _uiContext = SynchronizationContext.Current;
     }
 
@@ -72,18 +81,24 @@ public sealed class AppCommandService
         _timer.Stop(true);
     }
 
-    public void SetDuration(TimeSpan duration)
+    public void SetDuration(TimeSpan duration, string? presentationId = null)
     {
+        var wholeSeconds = Math.Clamp((long)Math.Round(duration.TotalSeconds), 1, (long)TimeSpan.FromHours(24).TotalSeconds - 1);
+        duration = TimeSpan.FromSeconds(wholeSeconds);
         var config = _getConfig();
         config.Timer.DefaultDuration = duration.ToString(@"hh\:mm\:ss");
+        var rule = FindRule(config, presentationId);
+        if (rule is not null) rule.Duration = config.Timer.DefaultDuration;
         _timer.SetDuration(duration);
         _saveConfig(config);
     }
 
-    public void SetMode(TimerMode mode)
+    public void SetMode(TimerMode mode, string? presentationId = null)
     {
         var config = _getConfig();
         config.Timer.Mode = mode;
+        var rule = FindRule(config, presentationId);
+        if (rule is not null) rule.Mode = mode;
         _timer.SetMode(mode);
         _saveConfig(config);
     }
@@ -94,7 +109,12 @@ public sealed class AppCommandService
     public void HideOverlay() => _hideOverlay();
     public void FlashOverlay() => _flashOverlay(3);
     public void TestPrompt() => _alerts.TriggerEnd(_getConfig(), _timer.CreateSnapshot());
-    public void ToggleMute() => _alerts.ToggleMute();
+    public string LastCommandMessage { get; private set; } = "";
+    public void ToggleMute()
+    {
+        var muted = _systemAudio.ToggleMute();
+        LastCommandMessage = muted ? "电脑已静音" : "电脑声音已恢复";
+    }
     public void AddDuration(TimeSpan delta)
     {
         var next = _timer.Duration + delta;
@@ -126,6 +146,7 @@ public sealed class AppCommandService
     private RemoteState GetRemoteStateCore()
     {
         var snapshot = _timer.CreateSnapshot();
+        var config = _getConfig();
         var timerState = new TimerRemoteState
         {
             Mode = snapshot.Mode == TimerMode.Countdown ? "倒计时" : "正计时",
@@ -141,8 +162,11 @@ public sealed class AppCommandService
             ElapsedMs = (long)snapshot.Elapsed.TotalMilliseconds,
             RemainingMs = (long)snapshot.Remaining.TotalMilliseconds,
             DisplayText = AlertService.Format(snapshot.Display, AlertService.ShouldShowHours(snapshot)),
+            IsOvertime = snapshot.IsOvertime,
+            ContinueOvertime = config.Timer.ContinueOvertime,
             WindowVisible = _isOverlayVisible(),
-            Muted = _alerts.Muted
+            Muted = _systemAudio.IsMuted,
+            TimeUpBlackoutActive = _isTimeUpBlackoutActive()
         };
         return new RemoteState
         {
@@ -154,8 +178,10 @@ public sealed class AppCommandService
             ElapsedMs = timerState.ElapsedMs,
             RemainingMs = timerState.RemainingMs,
             DisplayText = timerState.DisplayText,
+            IsOvertime = timerState.IsOvertime,
             WindowVisible = timerState.WindowVisible,
             Muted = timerState.Muted,
+            TimeUpBlackoutActive = timerState.TimeUpBlackoutActive,
             Version = AppVersion.Current
         };
     }
@@ -189,12 +215,16 @@ public sealed class AppCommandService
             case "timer.stop": StopReset(); return true;
             case "timer.reset": Reset(); return true;
             case "timer.setDuration":
-                if (command.DurationMs is > 0) SetDuration(TimeSpan.FromMilliseconds(command.DurationMs.Value));
-                else if (TimeSpan.TryParse(command.Duration, out var duration)) SetDuration(duration);
+                if (command.DurationMs is > 0) SetDuration(TimeSpan.FromMilliseconds(command.DurationMs.Value), command.PresentationId);
+                else if (TimeSpan.TryParse(command.Duration, out var duration)) SetDuration(duration, command.PresentationId);
                 else return false;
                 return true;
             case "timer.setMode":
-                SetMode(command.Mode == "countup" || command.Mode == "正计时" ? TimerMode.CountUp : TimerMode.Countdown);
+                SetMode(command.Mode == "countup" || command.Mode == "正计时" ? TimerMode.CountUp : TimerMode.Countdown, command.PresentationId);
+                return true;
+            case "timeup.dismiss":
+                _dismissTimeUpBlackout();
+                LastCommandMessage = "已退出“时间到”黑屏";
                 return true;
             case "window.show": ShowOverlay(); return true;
             case "window.hide": HideOverlay(); return true;
@@ -209,4 +239,12 @@ public sealed class AppCommandService
     }
 
     private bool ShouldMarshalToUi() => _uiContext is not null && SynchronizationContext.Current != _uiContext;
+
+    private static FileRule? FindRule(AppConfig config, string? presentationId)
+    {
+        if (string.IsNullOrWhiteSpace(presentationId)) return null;
+        return config.Rules.FirstOrDefault(rule =>
+            !string.IsNullOrWhiteSpace(rule.FilePath)
+            && PresentationRuleValidator.IdForPath(rule.FilePath) == presentationId);
+    }
 }

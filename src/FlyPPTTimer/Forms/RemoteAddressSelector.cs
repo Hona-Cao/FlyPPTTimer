@@ -8,7 +8,7 @@ internal sealed class RemoteAddressSelector : RemoteSurface
     private IReadOnlyList<string> _addresses = Array.Empty<string>();
 
     public event EventHandler? SelectedAddressChanged;
-    public string SelectedAddress { get; private set; } = "127.0.0.1";
+    public string SelectedAddress { get; private set; } = "";
 
     public RemoteAddressSelector()
     {
@@ -17,7 +17,7 @@ internal sealed class RemoteAddressSelector : RemoteSurface
         FillColor = RemoteDashboardTheme.Field;
         BorderColor = RemoteDashboardTheme.Border;
         CornerRadius = RemoteDashboardTheme.ControlRadius;
-        Padding = new Padding(12, 5, 5, 5);
+        Padding = new Padding(1);
         TabStop = false;
 
         _value = new Label
@@ -28,15 +28,17 @@ internal sealed class RemoteAddressSelector : RemoteSurface
             ForeColor = RemoteDashboardTheme.Text,
             BackColor = RemoteDashboardTheme.Field,
             AutoEllipsis = true,
-            UseCompatibleTextRendering = false
+            UseCompatibleTextRendering = false,
+            Padding = new Padding(10, 0, 6, 0),
+            Margin = Padding.Empty
         };
         _select = new RemoteTextButton
         {
-            Dock = DockStyle.Right,
-            Width = 72,
+            Dock = DockStyle.Fill,
             Text = "选择",
             Kind = RemoteButtonKind.Quiet,
-            Margin = Padding.Empty
+            Margin = Padding.Empty,
+            Padding = new Padding(8, 0, 8, 0)
         };
         _select.Click += (_, _) => OpenMenu();
 
@@ -47,24 +49,38 @@ internal sealed class RemoteAddressSelector : RemoteSurface
             ShowCheckMargin = false,
             Font = RemoteDashboardTheme.CreateFont(9.5F)
         };
-        Controls.Add(_value);
-        Controls.Add(_select);
-        _select.BringToFront();
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = RemoteDashboardTheme.Field,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.Controls.Add(_value, 0, 0);
+        layout.Controls.Add(_select, 1, 0);
+        Controls.Add(layout);
         UpdateValue();
     }
 
     public void SetAddresses(IEnumerable<string> addresses, string? preferred)
     {
         var values = addresses.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        _addresses = values.Length == 0 ? new[] { "127.0.0.1" } : values;
+        _addresses = values;
         SelectedAddress = !string.IsNullOrWhiteSpace(preferred) && _addresses.Contains(preferred, StringComparer.OrdinalIgnoreCase)
             ? preferred
-            : _addresses[0];
+            : _addresses.FirstOrDefault() ?? "";
+        _select.Enabled = _addresses.Count > 1;
         UpdateValue();
     }
 
     private void OpenMenu()
     {
+        if (_addresses.Count == 0) return;
         _menu.Items.Clear();
         foreach (var address in _addresses)
         {
@@ -85,8 +101,8 @@ internal sealed class RemoteAddressSelector : RemoteSurface
 
     private void UpdateValue()
     {
-        _value.Text = SelectedAddress;
-        _value.AccessibleName = $"当前地址 {SelectedAddress}";
+        _value.Text = string.IsNullOrWhiteSpace(SelectedAddress) ? "未检测到局域网地址" : SelectedAddress;
+        _value.AccessibleName = string.IsNullOrWhiteSpace(SelectedAddress) ? "未检测到局域网地址" : $"当前地址 {SelectedAddress}";
     }
 
     protected override void Dispose(bool disposing)

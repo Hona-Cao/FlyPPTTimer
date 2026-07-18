@@ -3,6 +3,23 @@ namespace FlyPPTTimer.Tests;
 public sealed class RemoteControlFormContractTests
 {
     [Fact]
+    public void RemoteTextButton_UsesOneManualClickPath()
+    {
+        using var button = new FlyPPTTimer.Forms.RemoteTextButton();
+        var getStyle = typeof(Control).GetMethod(
+            "GetStyle",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+        Assert.False((bool)getStyle.Invoke(button, [ControlStyles.StandardClick])!);
+        Assert.False((bool)getStyle.Invoke(button, [ControlStyles.StandardDoubleClick])!);
+
+        var clicks = 0;
+        button.Click += (_, _) => clicks++;
+        button.PerformClick();
+        Assert.Equal(1, clicks);
+    }
+
+    [Fact]
     public void V016_RemoteControlUsesTextFirstLayout()
     {
         var source = ReadRemoteForm();
@@ -170,36 +187,35 @@ public sealed class RemoteControlFormContractTests
     }
 
     [Fact]
-    public void V0161_UsesSafeTextAndSingleLineServiceLayout()
+    public void V0162_UsesStableLogicalTextHeightsAndSingleLineServiceLayout()
     {
         var source = ReadRemoteForm();
         var theme = ReadRemoteTheme();
         var button = ReadRemoteButton();
 
-        Assert.Equal("0.16.1", FlyPPTTimer.AppVersion.Current);
+        Assert.Equal("0.18.9", FlyPPTTimer.AppVersion.Current);
         Assert.Contains("ColumnCount = 5", source);
         Assert.Contains("RowCount = 1", source);
         Assert.DoesNotContain("_stateDescription", source);
-        Assert.Contains("GetSafeTextHeight", theme);
-        Assert.Contains("国Ag端口", theme);
-        Assert.Contains("TextFormatFlags.GlyphOverhangPadding", theme);
+        Assert.DoesNotContain("GetSafeTextHeight", theme);
+        Assert.Contains("DefaultButtonHeight = 40", button);
+        Assert.Contains("MinimumSize = new Size(MinimumSize.Width, DefaultButtonHeight)", button);
         Assert.Contains("TextFormatFlags.GlyphOverhangPadding", button);
         Assert.DoesNotContain("TextFormatFlags.NoPadding", button);
     }
 
     [Fact]
-    public void V0161_RefinedDetailsUseExplicitSpacerRows()
+    public void V0162_CompactDetailsUseContentFlowAndScopedScrolling()
     {
         var source = ReadRemoteForm();
         var theme = ReadRemoteTheme();
 
-        Assert.Contains("RowCount = 7", source);
-        Assert.Contains("new RowStyle(SizeType.Absolute, 222)", source);
-        Assert.Contains("new RowStyle(SizeType.Absolute, 106)", source);
-        Assert.Contains("new RowStyle(SizeType.Absolute, 92)", source);
-        Assert.Contains("new RowStyle(SizeType.Absolute, RemoteDashboardTheme.SectionGap)", source);
-        Assert.Contains("new RowStyle(SizeType.Percent, 100)", source);
-        Assert.DoesNotContain("BuildPresentationDetails()\n    {\n        var scroll", source);
+        Assert.Contains("private FlowLayoutPanel? _presentationDetailsFlow", source);
+        Assert.Contains("_presentationDetailsViewport.AutoScroll = compact", source);
+        Assert.Contains("ConfigurePresentationActions(compact", source);
+        Assert.Contains("actions.RowCount = 3", source);
+        Assert.True(source.Split("actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50))").Length - 1 >= 2);
+        Assert.Contains("SetPlaybackPosition(_startFromCurrentButton, 0, 2", source);
         Assert.Contains("public const int CardGap = 14", theme);
         Assert.Contains("public const int SectionGap = 12", theme);
         Assert.Contains("public const int ControlGap = 10", theme);
@@ -221,6 +237,74 @@ public sealed class RemoteControlFormContractTests
         Assert.Contains("button.Padding = new Padding(6, 0, 6, 0)", source);
         Assert.DoesNotContain("ComboBox", source);
         Assert.DoesNotContain("Region =", theme);
+    }
+
+    [Fact]
+    public void V0162_UsesPerMonitorLogicalLayoutWithoutRemoteScaleForGeometry()
+    {
+        var source = ReadRemoteForm();
+        var theme = ReadRemoteTheme();
+        var button = ReadRemoteButton();
+
+        Assert.Contains("AutoScaleMode = AutoScaleMode.Dpi", source);
+        Assert.Contains("AutoScaleDimensions = new SizeF(96F, 96F)", source);
+        Assert.Contains("RemoteWindowLayoutService.GetLayoutMode", source);
+        Assert.Contains("protected override void OnDpiChanged", source);
+        Assert.Contains("ScheduleResponsiveLayout", source);
+        Assert.Contains("PrepareInitialLayout", source);
+        Assert.Contains("if (!_initialLayoutApplied) PrepareInitialLayout()", source);
+        Assert.DoesNotContain("BeginInvoke((MethodInvoker)(() => WindowState = FormWindowState.Maximized))", source);
+        Assert.Contains("_restoringPlacement", source);
+        Assert.Contains("_savingPlacement", source);
+        Assert.Contains("_placementLoaded", source);
+        Assert.DoesNotContain("RemoteDashboardTheme.Scale(", source);
+        Assert.Contains("RemoteDashboardTheme.Scale(this, CornerRadius)", theme);
+        Assert.Contains("RemoteDashboardTheme.Scale(this, RemoteDashboardTheme.ControlRadius)", button);
+    }
+
+    [Fact]
+    public void V0162_RefinementKeepsEmbeddedControlsInsideTheirSurfaces()
+    {
+        var source = ReadRemoteForm();
+        var selector = ReadAddressSelector();
+
+        Assert.Contains("Padding = new Padding(1)", selector);
+        Assert.Contains("ColumnCount = 2", selector);
+        Assert.Contains("ColumnStyle(SizeType.Absolute, 76)", selector);
+        Assert.Contains("UpdateQrFrameSize", source);
+        Assert.Contains("_qrCenter.ClientSize.Width", source);
+        Assert.Contains("_qrCenter.ClientSize.Height", source);
+        Assert.Contains("LogicalToDeviceUnits(320)", source);
+    }
+
+    [Fact]
+    public void V0162_RefinementPreventsDoubleClickToggleAndExplainsRuleState()
+    {
+        var source = ReadRemoteForm();
+        var row = ReadRemoteRow();
+        var button = ReadRemoteButton();
+
+        Assert.Contains("ControlStyles.StandardClick | ControlStyles.StandardDoubleClick, false", button);
+        Assert.Contains("\"禁用规则\"", source);
+        Assert.Contains("\"启用规则\"", source);
+        Assert.Contains("规则已禁用", source);
+        Assert.Contains("\"禁用规则\"", row);
+        Assert.Contains("\"启用规则\"", row);
+    }
+
+    [Fact]
+    public void V0162_SettingsRulesFillWidthAndSynchronizeFromRemoteChanges()
+    {
+        var settings = ReadSettingsForm();
+        var context = ReadContext();
+
+        Assert.Contains("public void SyncRules(IReadOnlyList<FileRule> rules)", settings);
+        Assert.Contains("_settings?.SyncRules(_config.Rules)", context);
+        Assert.Contains("_rulesList.SizeChanged +=", settings);
+        Assert.Contains("UpdateSettingsRuleWidths", settings);
+        Assert.Contains("ColumnStyle(SizeType.Percent, 60)", settings);
+        Assert.Contains("ColumnStyle(SizeType.Percent, 40)", settings);
+        Assert.Contains("Height = 42", settings);
     }
 
     private static string ReadRemoteForm() => File.ReadAllText(Path.GetFullPath(Path.Combine(
@@ -247,4 +331,14 @@ public sealed class RemoteControlFormContractTests
         AppContext.BaseDirectory,
         "..", "..", "..", "..", "..",
         "src", "FlyPPTTimer", "Forms", "RemoteAddressSelector.cs")));
+
+    private static string ReadSettingsForm() => File.ReadAllText(Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory,
+        "..", "..", "..", "..", "..",
+        "src", "FlyPPTTimer", "Forms", "SettingsForm.cs")));
+
+    private static string ReadContext() => File.ReadAllText(Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory,
+        "..", "..", "..", "..", "..",
+        "src", "FlyPPTTimer", "FlyPPTTimerContext.cs")));
 }

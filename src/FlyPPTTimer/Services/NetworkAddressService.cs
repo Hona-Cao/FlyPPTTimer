@@ -41,6 +41,10 @@ public sealed class NetworkAddressService
             .ToList();
     }
 
+    public List<NetworkAddressInfo> GetRemoteAccessAddresses() => GetIPv4Addresses()
+        .Where(x => x.Recommended && IsLanAddress(x.Address))
+        .ToList();
+
     private static (string label, int priority) Classify(NetworkInterface ni, string address)
     {
         var name = (ni.Name + " " + ni.Description).ToLowerInvariant();

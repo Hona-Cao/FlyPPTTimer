@@ -7,7 +7,7 @@ $projectPath = Join-Path $root "src\FlyPPTTimer\FlyPPTTimer.csproj"
 [xml]$project = Get-Content -LiteralPath $projectPath -Raw
 $fullVersion = [string]$project.Project.PropertyGroup.Version
 if ([string]::IsNullOrWhiteSpace($fullVersion)) { throw "Project version is missing: $projectPath" }
-$version = $fullVersion -replace '\.0$', ''
+$version = $fullVersion.Trim()
 $dist = Join-Path $root "dist\v$fullVersion"
 $releaseRoot = Join-Path $root "releases\v$version"
 if (Test-Path -LiteralPath $releaseRoot) { throw "Release directory already exists and will not be overwritten: $releaseRoot" }
@@ -16,6 +16,8 @@ $portable = Join-Path $assets "portable"
 $installerSource = Join-Path $assets "installer-source"
 $setupExe = Join-Path $assets "FlyPPTTimer_Setup_v$version.exe"
 $portableZip = Join-Path $assets "FlyPPTTimer_Portable_v$version.zip"
+$distPortableZip = Join-Path $root "dist\FlyPPTTimer-v$version-portable-win-x64.zip"
+$distPortableHash = "$distPortableZip.sha256"
 $distSetupExe = Join-Path $root "dist\FlyPPTTimer-v$version-setup-win-x64.exe"
 $distSetupHash = "$distSetupExe.sha256"
 $iexpressWork = "C:\Temp\FlyPPTTimerPackage_v$version"
@@ -46,6 +48,10 @@ foreach ($file in $runtimeFiles.GetEnumerator()) {
 }
 
 Compress-Archive -Path (Join-Path $portable "*") -DestinationPath $portableZip -Force
+Copy-Item -LiteralPath $portableZip -Destination $distPortableZip -Force
+$portableHash = (Get-FileHash -LiteralPath $distPortableZip -Algorithm SHA256).Hash
+"$portableHash  $([IO.Path]::GetFileName($distPortableZip))" |
+    Set-Content -LiteralPath $distPortableHash -Encoding ASCII
 
 $installScript = @'
 $ErrorActionPreference = "Stop"
@@ -258,4 +264,4 @@ $setupHash = (Get-FileHash -LiteralPath $distSetupExe -Algorithm SHA256).Hash
 "$setupHash  $([IO.Path]::GetFileName($distSetupExe))" |
     Set-Content -LiteralPath $distSetupHash -Encoding ASCII
 
-Get-Item $setupExe, $distSetupExe, $distSetupHash, $portableZip | Select-Object FullName, Length
+Get-Item $setupExe, $distSetupExe, $distSetupHash, $portableZip, $distPortableZip, $distPortableHash | Select-Object FullName, Length

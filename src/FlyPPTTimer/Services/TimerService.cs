@@ -29,7 +29,7 @@ public sealed class TimerService
     {
         _mode = config.Timer.Mode;
         _duration = ParseDuration(config.Timer.DefaultDuration);
-        _continueOvertime = config.Timer.ContinueOvertime;
+        _continueOvertime = config.Timer.EndAction == TimerEndAction.None && config.Timer.ContinueOvertime;
         if (State == TimerState.Stopped)
         {
             RaiseUpdate();
@@ -115,12 +115,12 @@ public sealed class TimerService
     private void Tick()
     {
         var snapshot = CreateSnapshot();
-        if (_mode == TimerMode.Countdown && !FinishRaised && snapshot.Remaining <= TimeSpan.Zero)
+        if (!FinishRaised && snapshot.Elapsed >= snapshot.Duration)
         {
             FinishRaised = true;
-            State = TimerState.Finished;
             if (!_continueOvertime)
             {
+                State = TimerState.Finished;
                 _stopwatch.Stop();
                 _uiTimer.Stop();
             }
@@ -140,14 +140,18 @@ public sealed class TimerService
     public TimerSnapshot CreateSnapshot()
     {
         var elapsed = _stopwatch.Elapsed;
-        var remaining = _mode == TimerMode.Countdown ? _duration - elapsed : TimeSpan.Zero;
+        var remaining = _duration - elapsed;
         var display = _mode == TimerMode.Countdown ? remaining : elapsed;
-        if (_mode == TimerMode.Countdown && remaining < TimeSpan.Zero)
+        if (remaining < TimeSpan.Zero)
         {
-            display = _continueOvertime ? elapsed - _duration : TimeSpan.Zero;
+            if (_mode == TimerMode.Countdown)
+                display = _continueOvertime ? elapsed - _duration : TimeSpan.Zero;
+            else if (!_continueOvertime)
+                display = _duration;
             remaining = TimeSpan.Zero;
         }
-        return new TimerSnapshot(State, _mode, elapsed, remaining, display, _duration);
+        var isOvertime = _continueOvertime && elapsed > _duration;
+        return new TimerSnapshot(State, _mode, elapsed, remaining, display, _duration, isOvertime);
     }
 
     public static TimeSpan ParseDuration(string value)
@@ -164,4 +168,4 @@ public enum TimerState
     Finished
 }
 
-public sealed record TimerSnapshot(TimerState State, TimerMode Mode, TimeSpan Elapsed, TimeSpan Remaining, TimeSpan Display, TimeSpan Duration);
+public sealed record TimerSnapshot(TimerState State, TimerMode Mode, TimeSpan Elapsed, TimeSpan Remaining, TimeSpan Display, TimeSpan Duration, bool IsOvertime);

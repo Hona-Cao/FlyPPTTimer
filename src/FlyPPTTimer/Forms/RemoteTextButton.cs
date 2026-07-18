@@ -5,6 +5,7 @@ namespace FlyPPTTimer.Forms;
 /// <summary>Fully owner-drawn text button; native WinForms button chrome never participates.</summary>
 internal sealed class RemoteTextButton : Control, IButtonControl
 {
+    public const int DefaultButtonHeight = 40;
     private bool _hovered;
     private bool _pressed;
     private bool _isDefault;
@@ -35,9 +36,12 @@ internal sealed class RemoteTextButton : Control, IButtonControl
             ControlStyles.ResizeRedraw |
             ControlStyles.Selectable,
             true);
+        // Mouse activation is raised manually in OnMouseUp. Disabling the
+        // standard Control click prevents one physical click toggling twice.
+        SetStyle(ControlStyles.StandardClick | ControlStyles.StandardDoubleClick, false);
         AutoSize = false;
-        Height = RemoteDashboardTheme.ButtonHeight;
-        MinimumSize = new Size(0, RemoteDashboardTheme.ButtonHeight);
+        Height = DefaultButtonHeight;
+        MinimumSize = new Size(0, DefaultButtonHeight);
         Font = RemoteDashboardTheme.CreateFont(9.5F);
         Cursor = Cursors.Hand;
         TabStop = true;
@@ -135,10 +139,7 @@ internal sealed class RemoteTextButton : Control, IButtonControl
     protected override void OnFontChanged(EventArgs e)
     {
         base.OnFontChanged(e);
-        MinimumSize = new Size(MinimumSize.Width, Math.Max(
-            RemoteDashboardTheme.ButtonHeight,
-            RemoteDashboardTheme.GetSafeTextHeight(this, Font, 10)));
-        if (Height < MinimumSize.Height) Height = MinimumSize.Height;
+        MinimumSize = new Size(MinimumSize.Width, DefaultButtonHeight);
         Invalidate();
     }
 

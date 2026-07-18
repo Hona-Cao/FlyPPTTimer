@@ -21,15 +21,15 @@ jobs:
       - name: Build release
         run: dotnet build src/FlyPPTTimer/FlyPPTTimer.csproj -c Release --no-restore | Tee-Object -FilePath build.log
       - name: Test
-        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=v0.16.1.trx" --results-directory artifacts/test-results
+        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=v0.18.9.trx" --results-directory artifacts/test-results
       - name: Publish single file
         run: dotnet publish src/FlyPPTTimer/FlyPPTTimer.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=false -o artifacts/publish
       - name: Create checksum and collect audit material
         shell: pwsh
         run: |
           $hash = (Get-FileHash artifacts/publish/FlyPPTTimer.exe -Algorithm SHA256).Hash
-          "$hash  FlyPPTTimer.exe" | Set-Content artifacts/FlyPPTTimer-v0.16.1.sha256 -Encoding ascii
-          $writtenHash = (Get-Content artifacts/FlyPPTTimer-v0.16.1.sha256 -Raw).Trim().Split(' ')[0]
+          "$hash  FlyPPTTimer.exe" | Set-Content artifacts/FlyPPTTimer-v0.18.9.sha256 -Encoding ascii
+          $writtenHash = (Get-Content artifacts/FlyPPTTimer-v0.18.9.sha256 -Raw).Trim().Split(' ')[0]
           if ($hash -ne $writtenHash) { throw "CI Artifact EXE hash verification failed." }
           "CI Artifact EXE SHA-256: $hash" | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
           Copy-Item build.log artifacts/build.log
@@ -37,6 +37,6 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FlyPPTTimer-v0.16.1-windows-x64
+          name: FlyPPTTimer-v0.18.9-windows-x64
           path: artifacts
           if-no-files-found: error

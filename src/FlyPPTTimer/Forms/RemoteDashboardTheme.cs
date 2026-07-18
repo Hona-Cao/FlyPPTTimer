@@ -20,6 +20,11 @@ internal static class RemoteDashboardTheme
     public const int CardGap = 14;
     public const int SectionGap = 12;
     public const int ControlGap = 10;
+    public const int CompactSidebarWidth = 158;
+    public const int CompactPagePadding = 16;
+    public const int CompactCardGap = 10;
+    public const int CompactSectionGap = 8;
+    public const int CompactControlGap = 8;
 
     public static readonly Color Window = Color.FromArgb(246, 248, 251);
     public static readonly Color Sidebar = Color.FromArgb(252, 253, 255);
@@ -78,18 +83,6 @@ internal static class RemoteDashboardTheme
 
     public static int Scale(Control control, int logicalPixels) =>
         Math.Max(1, logicalPixels * Math.Max(96, control.DeviceDpi) / 96);
-
-    public static int GetSafeTextHeight(Control control, Font font, int extraLogicalPixels = 6)
-    {
-        var measuredHeight = TextRenderer.MeasureText(
-            "国Ag端口",
-            font,
-            Size.Empty,
-            TextFormatFlags.SingleLine |
-            TextFormatFlags.NoPrefix |
-            TextFormatFlags.GlyphOverhangPadding).Height;
-        return measuredHeight + Scale(control, extraLogicalPixels);
-    }
 
     public static Color OpaqueParentBackColor(Control control, Color fallback)
     {

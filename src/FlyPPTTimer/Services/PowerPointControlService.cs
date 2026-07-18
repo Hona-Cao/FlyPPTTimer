@@ -301,11 +301,26 @@ public sealed class PowerPointControlService : IDisposable
             showSettings.EndingSlide = total;
             startedWindow = showSettings.Run();
             var path = SafeString(() => (string)deck.FullName);
+            MarkManagedPresentationClean(deck, path);
             var foreground = ActivateSlideShowWindow(app, path, startedWindow);
             var prefix = fromCurrent ? $"已从第 {start} 页开始放映" : "已从头开始放映";
             return prefix + activation.Message + foreground.Message;
         }
         finally { Release(startedWindow, showWindows, slide, view, window, slides, settings, presentation, appObject); }
+    }
+
+    private void MarkManagedPresentationClean(dynamic presentation, string path)
+    {
+        if (!_managedPresentations.ContainsKey(NormalizePath(path))) return;
+        try
+        {
+            // Starting a show requires transient SlideShowSettings values. PowerPoint may
+            // mark even a read-only deck dirty after those COM assignments. The document
+            // content is never saved; marking our managed read-only deck clean prevents a
+            // misleading save prompt when the user closes it directly on the PC.
+            presentation.Saved = true;
+        }
+        catch (Exception ex) { _log.Warn($"Unable to clear managed presentation dirty flag: {ex.Message}"); }
     }
 
     private object? ResolvePresentationForShow(dynamic app, string? presentationId)
@@ -325,6 +340,7 @@ public sealed class PowerPointControlService : IDisposable
             presentations = app.Presentations;
             presentation = FindOpenPresentation(presentations, path);
             if (presentation is not null) return presentation;
+            using var firstFrameMaximizer = new WpsFirstFrameMaximizer(_log);
             presentation = ((dynamic)presentations).Open(path, true, false, true);
             _managedPresentations[NormalizePath(path)] = new ManagedPresentation(NormalizePath(path), DateTime.Now, true);
             return presentation;
@@ -379,10 +395,14 @@ public sealed class PowerPointControlService : IDisposable
             dynamic deck = presentation;
             windows = deck.Windows;
             var path = SafeString(() => (string)deck.FullName);
-            if ((int)((dynamic)windows).Count <= 0) return WindowActivationResult.Failed("未找到目标文稿窗口", path, IntPtr.Zero);
+            if ((int)((dynamic)windows).Count <= 0) return ActivatePresentationProcessWindow(path);
             window = ((dynamic)windows)[1];
             try { ((dynamic)window).Activate(); }
-            catch (Exception ex) { return WindowActivationResult.Failed("文稿已打开但 COM 激活失败", path, IntPtr.Zero, ex); }
+            catch (Exception ex)
+            {
+                _log.Warn($"Presentation COM activation failed; trying native process window: path={path}; {ex.Message}");
+                return ActivatePresentationProcessWindow(path, ex);
+            }
             var maximized = true;
             try { ((dynamic)window).WindowState = NativeMethods.SwMaximize; }
             catch (Exception ex) { maximized = false; _log.Warn($"PowerPoint maximize via COM failed: path={path}; {ex.Message}"); }
@@ -393,9 +413,120 @@ public sealed class PowerPointControlService : IDisposable
                 var foreground = ActivateNativeWindow(hwnd, path, "文稿窗口", maximized);
                 return foreground;
             }
-            catch (Exception ex) { return WindowActivationResult.Failed("文稿已打开但无法读取窗口句柄", path, IntPtr.Zero, ex); }
+            catch (Exception ex)
+            {
+                _log.Warn($"Presentation HWND lookup failed; trying native process window: path={path}; {ex.Message}");
+                return ActivatePresentationProcessWindow(path, ex);
+            }
         }
         finally { Release(appObject, window, windows); }
+    }
+
+    private WindowActivationResult ActivatePresentationProcessWindow(string path, Exception? originalError = null)
+    {
+        var titleToken = Path.GetFileNameWithoutExtension(path);
+        foreach (var processName in new[] { "POWERPNT", "wps", "wpp" })
+        {
+            foreach (var process in Process.GetProcessesByName(processName))
+            {
+                try
+                {
+                    if (process.MainWindowHandle == IntPtr.Zero
+                        || (!string.IsNullOrWhiteSpace(titleToken)
+                            && !process.MainWindowTitle.Contains(titleToken, StringComparison.CurrentCultureIgnoreCase)))
+                        continue;
+                    var result = ActivateNativeWindow(process.MainWindowHandle, path, "文稿窗口", true);
+                    if (result.Success) return result;
+                }
+                catch (Exception ex)
+                {
+                    _log.Warn($"Presentation native window activation failed: process={processName}; path={path}; {ex.Message}");
+                }
+                finally { process.Dispose(); }
+            }
+        }
+        var wpsWindow = FindWpsPresentationFrame();
+        if (wpsWindow != IntPtr.Zero)
+        {
+            var result = ActivateNativeWindow(wpsWindow, path, "WPS 演示主窗口", true);
+            if (result.Success) return result;
+        }
+        return WindowActivationResult.Failed("文稿已打开但无法定位可最大化的窗口", path, IntPtr.Zero, originalError);
+    }
+
+    private static IntPtr FindWpsPresentationFrame()
+    {
+        var foreground = NativeMethods.GetForegroundWindow();
+        var candidates = new List<(IntPtr Hwnd, DateTime Started)>();
+        NativeMethods.EnumWindows((hwnd, _) =>
+        {
+            if (!NativeMethods.IsWindowVisible(hwnd) || !IsWpsPresentationFrame(hwnd)) return true;
+            NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+            try
+            {
+                using var process = Process.GetProcessById((int)pid);
+                if (!process.ProcessName.Equals("wps", StringComparison.OrdinalIgnoreCase)
+                    && !process.ProcessName.Equals("wpp", StringComparison.OrdinalIgnoreCase)) return true;
+                candidates.Add((hwnd, process.StartTime));
+            }
+            catch { }
+            return true;
+        }, IntPtr.Zero);
+        return candidates.Any(x => x.Hwnd == foreground)
+            ? foreground
+            : candidates.OrderByDescending(x => x.Started).Select(x => x.Hwnd).FirstOrDefault();
+    }
+
+    private static bool IsWpsPresentationFrame(IntPtr hwnd)
+    {
+        var className = new StringBuilder(128);
+        NativeMethods.GetClassName(hwnd, className, className.Capacity);
+        return className.ToString().Equals("PP12FrameClass", StringComparison.Ordinal);
+    }
+
+    private sealed class WpsFirstFrameMaximizer : IDisposable
+    {
+        private readonly LogService _log;
+        private readonly NativeMethods.WinEventDelegate _callback;
+        private readonly IntPtr _hook;
+
+        public WpsFirstFrameMaximizer(LogService log)
+        {
+            _log = log;
+            _callback = OnWindowShown;
+            _hook = NativeMethods.SetWinEventHook(
+                NativeMethods.EventObjectShow,
+                NativeMethods.EventObjectShow,
+                IntPtr.Zero,
+                _callback,
+                0,
+                0,
+                NativeMethods.WineventOutofcontext);
+        }
+
+        private void OnWindowShown(IntPtr hook, uint eventType, IntPtr hwnd, int objectId, int childId, uint eventThread, uint eventTime)
+        {
+            if (hwnd == IntPtr.Zero || objectId != NativeMethods.ObjidWindow || childId != 0 || !IsWpsPresentationFrame(hwnd)) return;
+            NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+            try
+            {
+                using var process = Process.GetProcessById((int)pid);
+                if (!process.ProcessName.Equals("wps", StringComparison.OrdinalIgnoreCase)
+                    && !process.ProcessName.Equals("wpp", StringComparison.OrdinalIgnoreCase)) return;
+                NativeMethods.ShowWindow(hwnd, NativeMethods.SwMaximize);
+                _log.Info($"WPS presentation frame maximized on first show: HWND=0x{hwnd.ToInt64():X}");
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"WPS first-frame maximize failed: {ex.Message}");
+            }
+        }
+
+        public void Dispose()
+        {
+            if (_hook != IntPtr.Zero) NativeMethods.UnhookWinEvent(_hook);
+            GC.KeepAlive(_callback);
+        }
     }
 
     private WindowActivationResult ActivateSlideShowWindow(object app, string presentationPath, object? startedWindow)
@@ -459,7 +590,12 @@ public sealed class PowerPointControlService : IDisposable
             foregroundResult = NativeMethods.SetForegroundWindow(hwnd);
             foregroundError = Marshal.GetLastWin32Error();
         }
-        if (bringResult && foregroundResult && maximized) return WindowActivationResult.Succeeded("；已最大化并置前", path, hwnd);
+        var actuallyMaximized = NativeMethods.IsZoomed(hwnd);
+        if (actuallyMaximized)
+        {
+            var message = bringResult && foregroundResult ? "；已最大化并置前" : "；已最大化（Windows 未允许强制置前）";
+            return WindowActivationResult.Succeeded(message, path, hwnd);
+        }
         var detail = $"{label} HWND=0x{hwnd.ToInt64():X}; ShowWindow={showResult}/错误{showError}; BringWindowToTop={bringResult}/错误{bringError}; SetForegroundWindow={foregroundResult}/错误{foregroundError}";
         _log.Warn($"PowerPoint window activation incomplete: path={path}; {detail}");
         return WindowActivationResult.Failed(failurePrefix + $"（{detail}）", path, hwnd);
@@ -523,21 +659,51 @@ public sealed class PowerPointControlService : IDisposable
             var path = allowed.FirstOrDefault(x => IdForPath(x) == id);
             if (path is null) throw new InvalidOperationException("所选文件不在允许的演示文稿列表中。") ;
             if (!File.Exists(path)) throw new FileNotFoundException("演示文稿文件不存在。", path);
+            var startingNewApplication = appObject is null;
             appObject ??= GetOrCreateApplication();
             dynamic app = appObject;
-            app.Visible = true;
+            // Establish the maximized state before the first visible frame. This
+            // avoids the normal-window -> maximize jump that is especially visible
+            // with WPS. Never hide an application that was already running.
+            try { app.WindowState = NativeMethods.SwMaximize; }
+            catch (Exception ex) { _log.Warn($"Application pre-maximize failed: {ex.Message}"); }
+            if (startingNewApplication)
+            {
+                try { app.Visible = false; }
+                catch (Exception ex) { _log.Warn($"Application hidden-start preparation failed: {ex.Message}"); }
+            }
             presentations = app.Presentations;
             presentation = FindOpenPresentation(presentations, path);
             if (presentation is null)
             {
                 // FlyPPTTimer-owned files are always opened read-only. Existing user documents are never changed.
+                using var firstFrameMaximizer = new WpsFirstFrameMaximizer(_log);
                 presentation = ((dynamic)presentations).Open(path, true, false, true);
                 _managedPresentations[NormalizePath(path)] = new ManagedPresentation(NormalizePath(path), DateTime.Now, true);
             }
+            PreparePresentationWindowForFirstDisplay(presentation);
+            app.Visible = true;
             var activation = ActivatePresentationWindow(presentation);
             return $"已打开 {Path.GetFileName(path)}" + activation.Message;
         }
         finally { Release(window, windows, presentation, presentations, appObject); }
+    }
+
+    private void PreparePresentationWindowForFirstDisplay(object presentation)
+    {
+        object? windows = null, window = null;
+        try
+        {
+            windows = ((dynamic)presentation).Windows;
+            if ((int)((dynamic)windows).Count <= 0) return;
+            window = ((dynamic)windows)[1];
+            ((dynamic)window).WindowState = NativeMethods.SwMaximize;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"Presentation pre-display maximize failed: {ex.Message}");
+        }
+        finally { Release(window, windows); }
     }
 
     private string CloseCurrentPresentation()

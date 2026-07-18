@@ -13,6 +13,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly ConfigService _configService;
     private readonly TimerService _timer;
     private readonly AlertService _alerts;
+    private readonly SystemAudioService _systemAudio;
     private readonly FullscreenDetector _fullscreen;
     private readonly HotkeyService _hotkeys;
     private readonly NetworkAddressService _networkAddresses = new();
@@ -24,6 +25,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly ContextMenuStrip _overlayMenu;
     private readonly ContextMenuStrip _trayMenu;
     private readonly List<TimerOverlayForm> _overlays = [];
+    private readonly Dictionary<string, PointF> _overlayCenters = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<TimeUpBlackoutForm> _timeUpScreens = [];
     private readonly System.Windows.Forms.Timer _screenTimer = new() { Interval = 1500 };
     private readonly System.Windows.Forms.Timer _menuCloseTimer = new() { Interval = 40 };
     private readonly Form _menuOwner = new()
@@ -40,6 +43,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private RemoteControlForm? _remoteControlWindow;
     private AppConfig _config;
     private string _screenSignature = "";
+    private bool _preserveTimeUpScreens;
 
     public FlyPPTTimerContext()
     {
@@ -49,6 +53,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _powerPoint = new PowerPointControlService(() => _config, _log);
         _timer = new TimerService(_log);
         _alerts = new AlertService(_log);
+        _systemAudio = new SystemAudioService(_log);
         _fullscreen = new FullscreenDetector(() => _powerPoint.GetState(), _log);
         _hotkeys = new HotkeyService(_log);
         _overlayMenu = BuildCommandMenu();
@@ -64,10 +69,13 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             () => _overlays.Any(x => x.Visible),
             FlashOverlay,
             ShowSettings,
-            _log);
+            _log,
+            _systemAudio,
+            () => _preserveTimeUpScreens || _timeUpScreens.Count > 0,
+            DismissTimeUpBlackout);
         _presentationLifecycle = new PresentationLifecycleController(
             () => _config,
-            ApplyPresentationRuleDuration,
+            ApplyPresentationRuleSettings,
             _alerts.ResetTriggers,
             _commands.StopReset,
             _commands.Start,
@@ -87,13 +95,26 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
         _timer.Updated += (_, snapshot) =>
         {
+            if (_preserveTimeUpScreens && snapshot.State == TimerState.Running)
+            {
+                _preserveTimeUpScreens = false;
+                HideTimeUpScreens();
+            }
+            else if (!_preserveTimeUpScreens && (snapshot.State == TimerState.Stopped || (!_timer.FinishRaised && snapshot.Elapsed < TimeSpan.FromSeconds(1))))
+            {
+                HideTimeUpScreens();
+            }
             foreach (var overlay in _overlays) overlay.UpdateTime(snapshot);
             _alerts.CheckPrompts(_config, snapshot);
         };
-        _timer.Finished += (_, snapshot) => _alerts.TriggerEnd(_config, snapshot);
+        _timer.Finished += (_, snapshot) =>
+        {
+            _alerts.TriggerEnd(_config, snapshot);
+            HandleTimeReached();
+        };
         _alerts.PromptVisualRequested += (_, prompt) =>
         {
-            foreach (var overlay in _overlays) overlay.Flash(prompt, prompt is EndPromptSettings end ? end.FlashSeconds : 3);
+            foreach (var overlay in _overlays) overlay.Flash(prompt, prompt.FlashSeconds);
         };
         _fullscreen.Configure(_config);
         _fullscreen.StateChanged += OnFullscreenChanged;
@@ -142,6 +163,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         menu.Items.Add("开始/暂停", null, (_, _) => _commands.StartOrPause());
         menu.Items.Add("停止/重置", null, (_, _) => _commands.StopReset());
         menu.Items.Add("显示/隐藏计时窗口", null, (_, _) => _commands.ToggleOverlay());
+        menu.Items.Add("重置计时窗口位置", null, (_, _) => ResetOverlayPosition());
         menu.Items.Add("触发闪烁", null, (_, _) => _commands.FlashOverlay());
         menu.Items.Add("静音/取消静音", null, (_, _) => _commands.ToggleMute());
         menu.Items.Add("远程控制", null, (_, _) => ShowRemoteControl());
@@ -217,8 +239,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             ["preset5"] = () => _commands.SetPresetDuration(TimeSpan.FromMinutes(5)),
             ["preset8"] = () => _commands.SetPresetDuration(TimeSpan.FromMinutes(8)),
             ["preset10"] = () => _commands.SetPresetDuration(TimeSpan.FromMinutes(10)),
-            ["preset15"] = () => _commands.SetPresetDuration(TimeSpan.FromMinutes(15)),
-            ["openSettings"] = _commands.OpenSettings
+            ["preset15"] = () => _commands.SetPresetDuration(TimeSpan.FromMinutes(15))
         };
         _hotkeys.RegisterAll(_config.Controls.Hotkeys, actions);
     }
@@ -261,6 +282,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _settings.ImportRequested += (_, _) => ImportConfig();
             _settings.OpenConfigRequested += (_, _) => OpenPath(Path.GetDirectoryName(AppPaths.ConfigPath)!);
             _settings.OpenLogRequested += (_, _) => OpenPath(AppPaths.LogDirectory);
+            _settings.ResetOverlayPositionRequested += (_, _) => ResetOverlayPosition();
         }
         _settings.Show();
         _settings.Activate();
@@ -282,9 +304,15 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void ApplyConfig(AppConfig config)
     {
-        _config = config;
+        var nextConfig = ConfigService.Clone(config);
+        var samePlacement = SamePlacement(_config.Placement, nextConfig.Placement);
+        var preserveCenters = samePlacement
+            ? new Dictionary<string, PointF>(_overlayCenters, StringComparer.OrdinalIgnoreCase)
+            : null;
+        if (!samePlacement) _overlayCenters.Clear();
+        _config = nextConfig;
         _timer.Configure(_config);
-        RebuildOverlays();
+        RebuildOverlays(preserveCenters);
         _fullscreen.Configure(_config);
         _configService.Save(_config);
         if (_config.RemoteControl.Enabled)
@@ -302,10 +330,70 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void SaveConfigOnly(AppConfig config)
     {
-        _config = config;
+        _config = ConfigService.Clone(config);
         _configService.Save(_config);
         _remoteControl.NotifyStateChanged();
         _remoteControlWindow?.ReloadConfig(_config);
+        _settings?.SyncRules(_config.Rules);
+        _settings?.SyncTimerSettings(_config.Timer);
+    }
+
+    private void HandleTimeReached()
+    {
+        switch (_config.Timer.EndAction)
+        {
+            case TimerEndAction.BlackScreen:
+                _preserveTimeUpScreens = true;
+                EndSlideShowAtTimeUp();
+                _timer.Stop(true);
+                ShowTimeUpScreens();
+                break;
+            case TimerEndAction.ExitSlideShow:
+                _preserveTimeUpScreens = false;
+                EndSlideShowAtTimeUp();
+                _timer.Stop(true);
+                HideTimeUpScreens();
+                break;
+            default:
+                _preserveTimeUpScreens = false;
+                break;
+        }
+    }
+
+    private void EndSlideShowAtTimeUp()
+    {
+        var result = _powerPoint.Queue(new RemoteCommand { Command = "ppt.endShow" });
+        if (!result.Success) _log.Warn($"Time-up slideshow exit was not accepted: {result.Message}");
+    }
+
+    private void ShowTimeUpScreens()
+    {
+        HideTimeUpScreens();
+        foreach (var screen in Screen.AllScreens)
+        {
+            var blackout = new TimeUpBlackoutForm(screen);
+            blackout.FormClosed += (_, _) => _timeUpScreens.Remove(blackout);
+            _timeUpScreens.Add(blackout);
+            blackout.Show();
+        }
+        _remoteControl?.NotifyStateChanged();
+    }
+
+    private void DismissTimeUpBlackout()
+    {
+        _preserveTimeUpScreens = false;
+        HideTimeUpScreens();
+        _remoteControl?.NotifyStateChanged();
+    }
+
+    private void HideTimeUpScreens()
+    {
+        foreach (var blackout in _timeUpScreens.ToArray())
+        {
+            blackout.Close();
+            blackout.Dispose();
+        }
+        _timeUpScreens.Clear();
     }
 
     private void ExportConfig()
@@ -359,11 +447,13 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         else _uiContext.Send(_ => action(), null);
     }
 
-    private void RebuildOverlays()
+    private void RebuildOverlays(IReadOnlyDictionary<string, PointF>? preservedCenters = null)
     {
+        _overlayCenters.Clear();
         foreach (var overlay in _overlays)
         {
             overlay.PositionChangedByUser -= OverlayMoved;
+            overlay.SizeExpansionRequested -= OverlaySizeExpansionRequested;
             overlay.Close();
             overlay.Dispose();
         }
@@ -374,11 +464,57 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         {
             var overlay = new TimerOverlayForm(_overlayMenu, ShowCommandMenuAtCursor);
             overlay.PositionChangedByUser += OverlayMoved;
-            overlay.ApplyConfig(_config, screen);
-            overlay.UpdateTime(_timer.CreateSnapshot());
+            overlay.SizeExpansionRequested += OverlaySizeExpansionRequested;
+            // Create the Per-Monitor V2 HWND before assigning physical bounds.
+            // Otherwise WinForms applies a second creation-time DPI scale while
+            // keeping the left/top fixed, which moves the center right/down.
+            overlay.CreateControl();
+            _ = overlay.Handle;
+            PointF? preservedCenter = null;
+            if (preservedCenters is not null && preservedCenters.TryGetValue(screen.DeviceName, out var center))
+                preservedCenter = center;
+            overlay.ApplyConfig(_config, screen, preservedCenter);
+            _overlayCenters[screen.DeviceName] = preservedCenter ?? overlay.CenterPoint;
             _overlays.Add(overlay);
+            overlay.UpdateTime(_timer.CreateSnapshot());
             if (_config.Placement.Visible) overlay.Show();
         }
+    }
+
+    private void OverlaySizeExpansionRequested(object? sender, OverlaySizeExpansionEventArgs e)
+    {
+        if (sender is not TimerOverlayForm source) return;
+        var dpi = RemoteScreenDpiProvider.FromScreen(source.TargetScreen).Dpi;
+        var requiredWidthDip = RemoteWindowLayoutService.PhysicalToDip(e.RequiredWidth, dpi);
+        var requiredHeightDip = RemoteWindowLayoutService.PhysicalToDip(e.RequiredHeight, dpi);
+        if (requiredWidthDip <= _config.Appearance.Width && requiredHeightDip <= _config.Appearance.Height) return;
+        _config.Appearance.Width = Math.Min(2000, Math.Max(_config.Appearance.Width, requiredWidthDip));
+        _config.Appearance.Height = Math.Min(1000, Math.Max(_config.Appearance.Height, requiredHeightDip));
+        _configService.Save(_config);
+        foreach (var overlay in _overlays)
+        {
+            var center = _overlayCenters.TryGetValue(overlay.TargetScreen.DeviceName, out var savedCenter)
+                ? savedCenter
+                : overlay.CenterPoint;
+            overlay.ApplyConfig(_config, overlay.TargetScreen, center);
+            overlay.UpdateTime(_timer.CreateSnapshot());
+        }
+        MessageBox.Show($"当前时间文字需要更大的显示区域，窗口已自动调整为 {_config.Appearance.Width} × {_config.Appearance.Height}。", "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private void ResetOverlayPosition()
+    {
+        // The configured screen/anchor/offset combination is the immutable origin.
+        // Reset only discards a user's drag displacement; it must not replace the
+        // selected origin with the historical primary-screen/top-center default.
+        _config.Placement.HasCustomPlacement = true;
+        _config.Placement.ScreenDeviceName = _config.Placement.TargetScreenDeviceName;
+        _config.Placement.X = 0;
+        _config.Placement.Y = 0;
+        _overlayCenters.Clear();
+        _configService.Save(_config);
+        RebuildOverlays();
+        _remoteControl.NotifyStateChanged();
     }
 
     private IEnumerable<Screen> GetTargetScreens()
@@ -394,32 +530,48 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void OverlayMoved(object? sender, OverlayMovedEventArgs e)
     {
-        var basePoint = TimerOverlayForm.CalculateLocation(e.Screen, ((TimerOverlayForm)sender!).Size, _config.Placement.Anchor, 0, 0);
+        var baseOrigin = TimerOverlayForm.CalculateOrigin(e.Screen, _config.Placement.Anchor, 0, 0);
         var area = e.Screen.WorkingArea;
-        _config.Placement.OffsetXPercent = Math.Round((decimal)(e.Location.X - basePoint.X) * 100m / Math.Max(1, area.Width), 2);
-        _config.Placement.OffsetYPercent = Math.Round((decimal)(e.Location.Y - basePoint.Y) * 100m / Math.Max(1, area.Height), 2);
+        var overlay = (TimerOverlayForm)sender!;
+        var movedCenter = new PointF(e.Location.X + overlay.Width / 2f, e.Location.Y + overlay.Height / 2f);
+        _config.Placement.OffsetXPercent = Math.Round((decimal)(movedCenter.X - baseOrigin.X) * 100m / Math.Max(1, area.Width), 2);
+        _config.Placement.OffsetYPercent = Math.Round((decimal)(movedCenter.Y - baseOrigin.Y) * 100m / Math.Max(1, area.Height), 2);
         _config.Placement.TargetScreenDeviceName = e.Screen.DeviceName;
         _config.Placement.ScreenDeviceName = e.Screen.DeviceName;
         _config.Placement.X = e.Location.X;
         _config.Placement.Y = e.Location.Y;
         _config.Placement.HasCustomPlacement = true;
+        _overlayCenters[e.Screen.DeviceName] = movedCenter;
     }
 
-    private void ApplyPresentationRuleDuration(string presentationPath)
+    private static bool SamePlacement(WindowPlacement left, WindowPlacement right) =>
+        left.ShowOnAllScreens == right.ShowOnAllScreens
+        && string.Equals(left.TargetScreenDeviceName, right.TargetScreenDeviceName, StringComparison.OrdinalIgnoreCase)
+        && left.Anchor == right.Anchor
+        && left.OffsetXPercent == right.OffsetXPercent
+        && left.OffsetYPercent == right.OffsetYPercent;
+
+    private void ApplyPresentationRuleSettings(string presentationPath)
     {
         var durationText = _config.Timer.DefaultDuration;
+        var mode = _config.Timer.Mode;
         if (!string.IsNullOrWhiteSpace(presentationPath))
         {
             var matched = _config.Rules.FirstOrDefault(rule =>
                 rule.Enabled
                 && !string.IsNullOrWhiteSpace(rule.FilePath)
                 && SameFilePath(rule.FilePath, presentationPath));
-            if (matched is not null) durationText = matched.Duration;
+            if (matched is not null)
+            {
+                durationText = matched.Duration;
+                mode = matched.Mode;
+            }
         }
 
         if (TimeSpan.TryParse(durationText, out var duration))
         {
             _timer.SetDuration(duration);
+            _timer.SetMode(mode);
         }
     }
 
@@ -478,9 +630,11 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _fullscreen.Dispose();
         _remoteControl.Dispose();
         _powerPoint.Dispose();
+        _alerts.Dispose();
         _screenTimer.Dispose();
         _menuCloseTimer.Dispose();
         foreach (var timerWindow in _overlays) timerWindow.Dispose();
+        HideTimeUpScreens();
         _settings?.Dispose();
         ExitThread();
     }
@@ -495,9 +649,11 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _hotkeys.Dispose();
             _fullscreen.Dispose();
             _powerPoint.Dispose();
+            _alerts.Dispose();
             _screenTimer.Dispose();
             _menuCloseTimer.Dispose();
             foreach (var overlay in _overlays) overlay.Dispose();
+            HideTimeUpScreens();
             _settings?.Dispose();
         }
         base.Dispose(disposing);

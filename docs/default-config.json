@@ -1,10 +1,11 @@
 {
-  "Version": "0.16.1",
+  "Version": "0.18.9",
   "Timer": {
     "DefaultDuration": "00:08:00",
     "Mode": 0,
     "EnablePerSlideTimer": false,
-    "ContinueOvertime": true
+    "ContinueOvertime": true,
+    "EndAction": 0
   },
   "Behavior": {
     "AutoStartOnFullscreen": true,
@@ -15,36 +16,47 @@
     "Prompt1": {
       "Enabled": true,
       "TriggerBeforeEndSeconds": 120,
-      "Text": "\u8FD8\u5269 {remaining}",
-      "Speak": false,
-      "Beep": true,
-      "FlashText": true,
-      "FlashBackground": false,
+      "Text": "\u65F6\u95F4\u5373\u5C06\u7ED3\u675F",
+      "Speak": true,
+      "Beep": false,
+      "FlashText": false,
+      "FlashBackground": true,
       "PlaySound": false,
-      "SoundFile": ""
+      "SoundFile": "",
+      "FlashStyle": "\u95EA\u70C1\u80CC\u666F",
+      "FlashOnMs": 350,
+      "FlashOffMs": 350,
+      "FlashSeconds": 3
     },
     "Prompt2": {
       "Enabled": false,
       "TriggerBeforeEndSeconds": 30,
-      "Text": "\u5373\u5C06\u7ED3\u675F {remaining}",
-      "Speak": false,
-      "Beep": true,
+      "Text": "\u65F6\u95F4\u5373\u5C06\u7ED3\u675F",
+      "Speak": true,
+      "Beep": false,
       "FlashText": false,
       "FlashBackground": true,
       "PlaySound": false,
-      "SoundFile": ""
+      "SoundFile": "",
+      "FlashStyle": "\u95EA\u70C1\u80CC\u666F",
+      "FlashOnMs": 350,
+      "FlashOffMs": 350,
+      "FlashSeconds": 3
     },
     "EndPrompt": {
       "FlashSeconds": 8,
       "Enabled": true,
       "TriggerBeforeEndSeconds": 0,
-      "Text": "\u8BA1\u65F6\u7ED3\u675F",
+      "Text": "\u9884\u8BBE\u65F6\u95F4\u5230",
       "Speak": true,
-      "Beep": true,
+      "Beep": false,
       "FlashText": false,
       "FlashBackground": true,
       "PlaySound": false,
-      "SoundFile": ""
+      "SoundFile": "",
+      "FlashStyle": "\u95EA\u70C1\u80CC\u666F",
+      "FlashOnMs": 350,
+      "FlashOffMs": 350
     },
     "FullscreenProcessWhitelist": [
       "POWERPNT.EXE",
@@ -57,17 +69,17 @@
     ]
   },
   "Appearance": {
-    "ColorScheme": "\u9ED8\u8BA4",
+    "ColorScheme": "\u533B\u7597\u536B\u751F\uFF08\u84DD\u767D\uFF09",
     "FontFamily": "Microsoft YaHei UI",
-    "FontSize": 20,
+    "FontSize": 18,
     "FontStyle": "Bold",
-    "TextColor": "#FFFFFF",
-    "BackgroundColor": "#202733",
+    "TextColor": "#0B3A66",
+    "BackgroundColor": "#F3F8FC",
     "TimeoutTextColor": "#FFFFFF",
     "TimeoutBackgroundColor": "#B00020",
-    "FlashBackgroundColor": "#FFC107",
-    "Width": 200,
-    "Height": 60,
+    "FlashBackgroundColor": "#4EA3D8",
+    "Width": 140,
+    "Height": 50,
     "BackgroundOpacity": 88,
     "TextOpacity": 100,
     "Shape": "\u5706\u89D2\u77E9\u5F62\uFF08\u5C0F\uFF09",
@@ -82,7 +94,6 @@
     "StartPauseHotkey": "F3",
     "StopResetHotkey": "F4",
     "ToggleWindowHotkey": "F5",
-    "OpenSettingsHotkey": "F6",
     "Hotkeys": {
       "startPause": "F3",
       "start": "",
@@ -103,8 +114,7 @@
       "preset5": "Ctrl\u002BAlt\u002B2",
       "preset8": "Ctrl\u002BAlt\u002B3",
       "preset10": "Ctrl\u002BAlt\u002B4",
-      "preset15": "Ctrl\u002BAlt\u002B5",
-      "openSettings": "F6"
+      "preset15": "Ctrl\u002BAlt\u002B5"
     },
     "ClickThrough": false,
     "LockPosition": false,
@@ -115,7 +125,16 @@
     "Enabled": true,
     "UseRandomPort": true,
     "Port": 0,
-    "Token": ""
+    "Token": "",
+    "Window": {
+      "HasValue": false,
+      "ScreenDeviceName": "",
+      "LeftRatio": 0,
+      "TopRatio": 0,
+      "WidthDip": 1180,
+      "HeightDip": 760,
+      "Maximized": false
+    }
   },
   "Placement": {
     "Visible": true,

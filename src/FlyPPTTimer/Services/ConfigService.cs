@@ -142,7 +142,38 @@ public sealed class ConfigService
 
     internal static void Normalize(AppConfig config)
     {
+        var previousVersion = config.Version;
         config.Version = AppVersion.Current;
+        if (!string.Equals(previousVersion, AppVersion.Current, StringComparison.Ordinal)
+            && config.Appearance.ColorScheme is "默认" or "医疗与卫生-手术室蓝")
+        {
+            AppearancePresetService.Apply("医疗卫生（蓝白）", config.Appearance);
+            if (config.Appearance.Width == 200) config.Appearance.Width = 160;
+            if (Math.Abs(config.Appearance.FontSize - 20F) < 0.01F) config.Appearance.FontSize = 18F;
+        }
+        if (!string.Equals(previousVersion, AppVersion.Current, StringComparison.Ordinal))
+        {
+            MigratePromptFlash(config.Behavior.Prompt1, config.Appearance, 3);
+            MigratePromptFlash(config.Behavior.Prompt2, config.Appearance, 3);
+            MigratePromptFlash(config.Behavior.EndPrompt, config.Appearance, Math.Max(1, config.Behavior.EndPrompt.FlashSeconds));
+            if (config.Appearance.Width == 160 && config.Appearance.Height == 60)
+            {
+                config.Appearance.Width = 140;
+                config.Appearance.Height = 50;
+            }
+        }
+        config.Behavior.Prompt1.Text = "时间即将结束";
+        config.Appearance.FontFamily = "Microsoft YaHei UI";
+        config.Timer.EnablePerSlideTimer = false;
+        config.Behavior.Prompt2.Text = "时间即将结束";
+        config.Behavior.EndPrompt.Text = "预设时间到";
+        config.Behavior.Prompt1.Beep = false;
+        config.Behavior.Prompt2.Beep = false;
+        config.Behavior.EndPrompt.Beep = false;
+        NormalizeSelectedSound(config.Behavior.Prompt1);
+        NormalizeSelectedSound(config.Behavior.Prompt2);
+        NormalizeSelectedSound(config.Behavior.EndPrompt);
+        config.RemoteControl.Window ??= new RemoteWindowPlacement();
         if (!config.Placement.HasCustomPlacement)
         {
             config.Placement.Anchor = OverlayAnchor.TopCenter;
@@ -167,15 +198,27 @@ public sealed class ConfigService
         if (string.IsNullOrWhiteSpace(config.Controls.StartPauseHotkey) || config.Controls.StartPauseHotkey.Contains('+')) config.Controls.StartPauseHotkey = "F3";
         if (string.IsNullOrWhiteSpace(config.Controls.StopResetHotkey) || config.Controls.StopResetHotkey.Contains('+')) config.Controls.StopResetHotkey = "F4";
         if (string.IsNullOrWhiteSpace(config.Controls.ToggleWindowHotkey) || config.Controls.ToggleWindowHotkey.Contains('+')) config.Controls.ToggleWindowHotkey = "F5";
-        if (string.IsNullOrWhiteSpace(config.Controls.OpenSettingsHotkey) || config.Controls.OpenSettingsHotkey.Contains('+')) config.Controls.OpenSettingsHotkey = "F6";
         config.Controls.Hotkeys ??= ControlSettings.DefaultHotkeys();
         foreach (var pair in ControlSettings.DefaultHotkeys()) if (!config.Controls.Hotkeys.ContainsKey(pair.Key)) config.Controls.Hotkeys[pair.Key] = pair.Value;
         config.Controls.Hotkeys["startPause"] = config.Controls.StartPauseHotkey;
         config.Controls.Hotkeys["stopReset"] = config.Controls.StopResetHotkey;
         config.Controls.Hotkeys["toggleWindow"] = config.Controls.ToggleWindowHotkey;
-        config.Controls.Hotkeys["openSettings"] = config.Controls.OpenSettingsHotkey;
+        config.Controls.Hotkeys.Remove("openSettings");
         if (string.IsNullOrWhiteSpace(config.RemoteControl.Token)) config.RemoteControl.Token = GenerateToken();
     }
+
+    private static void MigratePromptFlash(PromptSettings prompt, AppearanceSettings appearance, int seconds)
+    {
+        prompt.FlashStyle = appearance.FlashStyle;
+        prompt.FlashOnMs = appearance.FlashOnMs;
+        prompt.FlashOffMs = appearance.FlashOffMs;
+        prompt.FlashSeconds = seconds;
+        prompt.FlashText = prompt.FlashStyle.Contains("文字");
+        prompt.FlashBackground = prompt.FlashStyle is not "无";
+    }
+
+    private static void NormalizeSelectedSound(PromptSettings prompt) =>
+        prompt.PlaySound = !string.IsNullOrWhiteSpace(prompt.SoundFile);
 
     public static string GenerateToken()
     {
