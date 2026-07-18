@@ -1,89 +1,188 @@
 # FlyPPTTimer
 
-Windows 便携版 PPT/演讲计时器。当前版本 v0.18.9 使用 C#、.NET 8 和 Windows Forms；手机端可以调整计时时长、切换正计时/倒计时、控制电脑主音量静音，并可退出“时间到”黑屏。文件规则支持勾选后批量修改时长和计时方式。悬浮窗使用固定的微软雅黑字体，宽高均可继续缩小；“默认点位 + 微调”是固定原点，所有尺寸变化都保持窗口中心对齐该点。时间采用与形状内文字相同的单行水平居中和垂直居中。配置和日志默认写入 exe 同目录。
+<p align="center">
+  <img src="src/FlyPPTTimer/Assets/app.png" width="88" alt="FlyPPTTimer 图标">
+</p>
 
-适合 PPT 汇报、会议发言、课堂演示、护理/医疗科室例会等场景。
+<p align="center">
+  <strong>为演讲、教学、会议和医疗汇报准备的 Windows 演示计时器</strong><br>
+  PowerPoint / WPS 联动 · 手机局域网遥控 · 正计时与倒计时 · 多显示器悬浮显示
+</p>
+
+<p align="center">
+  <a href="https://github.com/Hona-Cao/FlyPPTTimer/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Hona-Cao/FlyPPTTimer?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/Hona-Cao/FlyPPTTimer/actions/workflows/windows-ci.yml"><img alt="Windows CI" src="https://github.com/Hona-Cao/FlyPPTTimer/actions/workflows/windows-ci.yml/badge.svg"></a>
+  <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows">
+  <img alt=".NET 8" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
+</p>
+
+FlyPPTTimer 是一款开源、免费、无需云端账户的 Windows 演示计时工具。它把清晰的悬浮时间、演示文稿规则、到时提醒和手机遥控集中在一个应用中，适合 PPT 汇报、培训授课、课堂演示、会议发言以及护理和医疗科室例会等场景。
+
+当前正式版本为 **v0.18.9**。
 
 ## 下载
 
-发布页会提供两个版本：
+| 版本 | 适合人群 | 下载 |
+|---|---|---|
+| 安装版 | 希望通过安装程序完成部署的普通用户 | [下载 v0.18.9 安装版](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v0.18.9/FlyPPTTimer-v0.18.9-setup-win-x64.exe) |
+| 便携版 | 希望解压即用、配置随程序保存的用户 | [下载 v0.18.9 便携版](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v0.18.9/FlyPPTTimer-v0.18.9-portable-win-x64.zip) |
 
-- `FlyPPTTimer_Setup_v*.exe`：安装版，适合普通用户。
-- `FlyPPTTimer_Portable_v*.zip`：绿色版，解压后直接运行。
+校验文件：[安装版 SHA-256](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v0.18.9/FlyPPTTimer-v0.18.9-setup-win-x64.exe.sha256) · [便携版 SHA-256](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v0.18.9/FlyPPTTimer-v0.18.9-portable-win-x64.zip.sha256) · [查看全部 Release](https://github.com/Hona-Cao/FlyPPTTimer/releases)
 
-## 运行
+> 目前提供 Windows x64 版本。Windows 首次运行或启用远程控制时，可能询问是否允许访问网络；如需手机遥控，请仅允许“专用网络”并确保手机和电脑连接同一局域网。
 
-绿色版解压后双击 `FlyPPTTimer.exe`。
+## 界面预览
 
-首次启动会自动生成：
-- `FlyPPTTimer.config.json`
-- `logs/app-日期.log`
+| 计时与文件规则 | 外观与显示 |
+|---|---|
+| <img src="docs/media/settings-duration.png" alt="计时与文件规则设置" width="100%"> | <img src="docs/media/settings-appearance.png" alt="外观与显示设置" width="100%"> |
 
-## 主要功能
+| 电脑端远程连接 | 电脑端演示控制 |
+|---|---|
+| <img src="docs/media/remote-connect.png" alt="电脑端远程连接与二维码" width="100%"> | <img src="docs/media/remote-presentations.png" alt="电脑端演示文稿控制" width="100%"> |
 
-- 悬浮置顶计时窗口，默认 200×60，字号 20。
-- 默认显示分秒，例如 `08:00`；计时超过或设置到 1 小时后显示 `00:00:00`。
-- 倒计时/正计时，支持开始、暂停、继续、停止、重置。
-- PowerPoint 放映自动识别并开始计时；WPS 演示和其他白名单全屏窗口使用顶层窗口扫描识别。
-- 支持为不同 PPT 文件设置独立计时时长；PowerPoint 放映开始时优先匹配文件规则，否则使用默认时长。
-- 托盘菜单、计时器右键菜单、全中文设置界面。
-- 设置窗口、按钮、输入框、下拉框、分组条和右键菜单采用小圆角外观。
-- 设置窗口使用自绘圆角外框，圆角更克制，避免外缘残留方形边框或矩形阴影。
-- 设置窗口顶部导航为自绘色块导航，不使用原生 TabControl，避免黑色竖线、硬边框和残留阴影。
-- v0.13.2 统一为青绿色主色、白色卡片和浅灰输入色块；选中页签使用高对比主色，原 Logo 进入设置标题栏。
-- 设置下拉框使用完整色块和内置箭头绘制，右键菜单统一字体、行高、留白及浅色选中状态。
-- 手机遥控窗口强化服务状态、二维码区和主次操作层级；所有文字、按钮及原操作位置保持不变。
-- 桌面界面不包含淡入淡出、缩放、滑动、渐变或基于 Timer 的悬停动画。
-- 多屏同时显示，支持九宫格默认点位和百分比微调；默认位置为上中，垂直微调 0.5%。
-- 投影/屏幕布局变化后自动重新校准悬浮窗位置。
-- 外观、显示位置、闪烁与超时合并到“外观与显示”页。
-- 设置窗口支持拖拽调整大小，底部按钮固定显示。
-- 退出 PowerPoint/WPS 放映后自动停止并重置，准备下一次放映。
-- 默认单键快捷键：F3 开始/暂停，F4 停止/重置，F5 显示/隐藏，F6 打开设置。
-- 本地网页遥控默认开启，启用后监听 `0.0.0.0` 指定或随机端口。
-- 远程控制运行中端口保持固定，端口修改需重启远程服务或下次启动后生效。
-- 远程控制 token 保护，支持手机浏览器竖屏遥控。
-- 手机端显示连接状态和最后同步时间，断线时会禁用控制按钮并提示重连。
-- 手机端开始、暂停、继续、停止并重置、触发闪烁都通过 UI 线程同步驱动电脑端计时器窗口。
-- 可选“暂停时闪烁当前时间”，默认关闭。
-- 计时器和托盘右键菜单可打开远程控制二维码窗口，手机扫码后直接进入遥控页面。
-- 同一远控链接、端口、token 和二维码内提供“计时”“演示”双页签，每秒同步一次状态。
-- Microsoft PowerPoint 遥控支持从头/当前页放映、上一页、下一页、跳页、黑屏、白屏和结束放映。
-- 手机端明确区分“结束放映”“关闭当前受控文稿”“退出 PowerPoint”和“强制退出全部 PowerPoint/WPS/演示软件”。仅 FlyPPTTimer 以只读方式打开的文稿可以静默关闭；强制退出必须再次确认，可能丢失未保存内容。
-- PowerPoint COM 命令使用单一 STA 队列异步执行；网页立即显示操作进度并通过状态版本号同步结果，首次启动 PowerPoint 可能需要 1–3 秒。
-- 设置窗口的文件规则为草稿：点击“应用”或“确定”后才会同步到手机端，取消会放弃未应用的规则更改。
-- 远程控制窗口的“演示文稿”页可以直接维护文件规则，保存后立即同步手机端；地址下拉菜单可反复打开/关闭，不会在关闭流程中提前释放。
-- 手机端的危险演示操作使用页面内确认面板，退出电脑端 PowerPoint 后手机网页保持打开、页签和滚动位置不变。
-- 手机端可选择当前已打开的演示文稿，或“文件规则”中已启用的文件；服务端只接受白名单 ID，不接受任意本地路径。
-- PowerPoint COM 操作统一在独立 STA 线程串行执行，错误会返回中文原因并写入日志。
-- 手机启动放映与电脑全屏检测共用同一计时联动入口，避免重复重置或重复启动。
-- PowerPoint 状态由专用 STA 线程缓存，手机状态轮询不会因 Office 忙碌而断开计时遥控。
-- Clash/TUN 虚拟网卡会被标为手机不可用，二维码优先选择真实 Wi-Fi 或 RFC1918 局域网地址。
-- 演示文稿在手机端直接完整列出，长列表可滚动，不再使用下拉选择。
-- PowerPoint 事件和全屏检测共用同一放映状态机；关闭自动开始后，本地或手机启动放映都不会改动计时器。
-- 手机演示列表区分“切换”和“打开”，同名文件显示目录；命令结束和断线恢复后按钮状态会立即校准。
-- 远控 token 使用固定时间比较，“断开所有设备”会生成新 token 并使旧二维码和旧链接失效。
-- 配置使用原子写入和备份恢复；安装升级不会覆盖现有用户配置。
-- 单实例运行，日志按日期及大小轮转，并捕获 UI、后台任务和未处理异常。
-- 仓库包含 Windows 自动化测试与 GitHub Actions；PowerPoint COM 操作保留为本机集成测试。
+<p align="center">
+  <img src="docs/media/mobile-timer.jpg" width="310" alt="手机端计时控制">
+  &nbsp;&nbsp;
+  <img src="docs/media/mobile-presentation.jpg" width="310" alt="手机端演示控制">
+</p>
 
-> v0.14.0 的可靠远程文稿控制仅保证 Microsoft PowerPoint。WPS 会显示实际检测能力；当前不伪装支持 WPS 文稿静默关闭或安全退出。
+<details>
+<summary>查看更多：提示与行为设置</summary>
 
-## 重新构建
+<p align="center">
+  <img src="docs/media/settings-alerts.png" width="760" alt="提示与行为设置">
+</p>
+
+</details>
+
+## 能做什么
+
+### 计时与到时处理
+
+- 支持倒计时和正计时，以及开始、暂停、继续、停止和重置。
+- 默认计时窗口为 140×50、微软雅黑 18 号粗体；文字始终在窗口中水平、垂直居中。
+- 窗口尺寸或文字宽度变化时，以“默认点位 + 微调”为固定中心原点向四周调整，避免时间显示不全。
+- 倒计时到零后可选择停止，或继续以另一种颜色显示已超出的时间。
+- 到时后可仅提示、全屏黑屏显示“时间到”，或退出当前放映。
+- 提示 1、提示 2 和计时结束可分别配置语音/提示音与闪烁；自选音频会复制到应用自己的存储目录。
+
+### PowerPoint、WPS 与文件规则
+
+- 可为不同演示文稿保存独立时长、计时方式和启用状态。
+- 支持勾选多条文件规则后批量修改时长和正/倒计时方式。
+- FlyPPTTimer 打开的受控文稿使用只读方式，避免关闭时要求保存。
+- 支持从头放映、从当前页放映、上一页、下一页、跳页、黑屏、白屏和结束放映。
+- 放映结束、黑屏到时动作和计时状态之间保持同步。
+- 针对 WPS 外层演示窗口进行识别和首次显示最大化处理。
+
+### 手机或浏览器遥控
+
+- 手机无需安装 App，在浏览器中扫描二维码即可使用。
+- 手机端可以调整计时时长、切换正计时/倒计时，并同步保存到电脑。
+- 支持显示/隐藏计时窗口、触发闪烁、控制电脑主音量静音。
+- “计时”和“演示”页面都可以退出“时间到”黑屏。
+- 手机端实时显示连接、计时、静音、演示和命令执行状态。
+- 远程链接使用随机 token；“断开所有设备”后旧链接和旧二维码立即失效。
+
+### 显示、配色与可靠性
+
+- 使用 Per-Monitor V2 DPI，适配 100%、125%、150% 等缩放比例。
+- 支持多显示器、九宫格默认点位、百分比微调和计时窗口位置重置。
+- 远程控制窗口支持标准/紧凑响应式布局，并记忆显示器、位置、大小和最大化状态。
+- 默认采用医疗卫生蓝白配色，同时提供教育、商务、科技和高对比预设。
+- 配置采用原子写入和备份恢复；日志按日期及大小轮转。
+- 单实例运行，并捕获 UI、后台任务和未处理异常。
+
+## 三步开始使用
+
+1. 下载并安装，或解压便携版后运行 `FlyPPTTimer.exe`。
+2. 右键计时窗口或托盘图标打开“设置”，按需要调整时长、提示、配色和显示位置。
+3. 需要手机遥控时打开“远程控制”，让手机与电脑连接同一网络，然后扫码访问。
+
+首次启动会在程序目录生成：
+
+- `FlyPPTTimer.config.json`：设置与文件规则。
+- `logs/app-日期.log`：运行与错误日志。
+
+升级安装版不会主动覆盖现有用户配置。重要活动前仍建议提前打开演示文稿、扫码连接并进行一次完整彩排。
+
+## 兼容性说明
+
+| 能力 | Microsoft PowerPoint | WPS 演示 | 其他全屏程序 |
+|---|---:|---:|---:|
+| 全屏时自动联动计时 | 支持 | 支持顶层窗口识别 | 可通过白名单识别 |
+| 打开演示文稿 | 支持 | 支持 | 不适用 |
+| 从头/当前页放映 | 支持 | 取决于 WPS 兼容接口 | 不适用 |
+| 翻页、跳页、黑白屏 | 支持 | 取决于 WPS 兼容接口 | 不适用 |
+| 只读受控与静默关闭 | 支持 FlyPPTTimer 打开的文稿 | 按实际检测能力提供 | 不适用 |
+
+WPS 不同版本暴露的兼容接口可能不同，程序会显示实际检测到的能力，不会把未确认的操作伪装为可用。
+
+## 局域网与隐私
+
+- FlyPPTTimer 不依赖云端账户，不会主动上传演示文稿内容。
+- 配置、文件规则、自选提示音和日志默认保存在本机。
+- 远程控制仅用于同一局域网；请勿将端口转发到公网，也不要公开仍然有效的二维码或完整 token。
+- Clash、TUN、代理和常见虚拟网卡地址不会作为推荐扫码地址；优先选择真实 Wi-Fi 或以太网局域网地址。
+- 日志、截图和 Issue 中可能包含演示文稿路径，公开前请先检查并移除敏感信息。
+
+## 快捷键
+
+默认快捷键包括：
+
+- `F3`：开始/暂停。
+- `F4`：停止/重置。
+- `F5`：显示/隐藏计时窗口。
+
+其余控制可在设置窗口中查看和调整。设置窗口本身通过鼠标从计时窗口或托盘菜单打开。
+
+## 从源码构建
+
+环境要求：Windows 10/11、.NET 8 SDK、PowerShell。
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-## 当前预留
+也可以直接使用仓库本地 SDK：
 
-- 单页计时。
-- 提示音和提示样式的更细粒度 GUI。
+```powershell
+.\.dotnet\dotnet.exe restore
+.\.dotnet\dotnet.exe build src\FlyPPTTimer\FlyPPTTimer.csproj -c Release
+.\.dotnet\dotnet.exe test tests\FlyPPTTimer.Tests\FlyPPTTimer.Tests.csproj -c Release
+```
 
-## 参与维护
+## 项目故事
 
-欢迎提交 issue 和 PR。开发说明见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+FlyPPTTimer 由 **曹虎男** 发起并从零开发。作者毕业于南京大学医学院护理专业，在工作实践中发现了演讲计时、演示控制和台下远程调整的实际需求，因此逐步将这个想法实现为本项目。
+
+希望它能让大家的演讲、教学、会议和医疗汇报更加从容，也欢迎有兴趣的朋友参与测试、提出建议或共同开发。祝大家使用愉快！
+
+- 联系邮箱：[`caohunan@smail.nju.edu.cn`](mailto:caohunan@smail.nju.edu.cn)
+- 问题与建议：[GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues)
+- 参与开发：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 完整版本记录：[CHANGELOG.md](CHANGELOG.md)
+
+## 赞赏与支持
+
+如果 FlyPPTTimer 帮你节省了准备和控场时间，欢迎在**完全自愿、量力而行**的前提下请我喝杯咖啡。你的支持将用于持续测试、适配和维护；无论是否赞赏，软件的免费使用和开源功能都不会受到影响。
+
+<p align="center">
+  <img src="docs/media/donate-alipay.jpg" width="260" alt="支付宝赞赏码">
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/media/donate-wechat.png" width="260" alt="微信赞赏码">
+</p>
+
+<p align="center">支付宝 · 微信</p>
+
+## 参与贡献
+
+欢迎提交 Issue 和 Pull Request。UI 问题请附上系统版本、屏幕分辨率、缩放比例和脱敏截图；PowerPoint/WPS 问题请同时说明软件版本及复现步骤。完整指南见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## License
 
-MIT License
+FlyPPTTimer 使用 [MIT License](LICENSE) 开源。你可以在保留版权和许可证声明的前提下使用、修改和分发本项目。
+
+Copyright © 2026 Cao Hunan（曹虎男）
