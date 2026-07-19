@@ -110,20 +110,34 @@ jobs:
             '{tag_name:$tag,name:$name,body:$body,target_commitish:"main",prerelease:$prerelease}')
 
           if [[ "$status" == "404" ]]; then
-            curl --fail-with-body --silent --show-error \
+            create_status=$(curl --silent --show-error \
               "${auth[@]}" \
               --header 'Content-Type: application/json' \
               --request POST \
               --data "$payload" \
-              "${api}/releases" > gitee-release.json
+              --output gitee-release.json \
+              --write-out '%{http_code}' \
+              "${api}/releases")
+            if [[ "$create_status" != "200" && "$create_status" != "201" ]]; then
+              echo "Unable to create Gitee Release ${tag}; HTTP ${create_status}." >&2
+              cat gitee-release.json >&2
+              exit 1
+            fi
           elif [[ "$status" == "200" ]]; then
             release_id=$(jq -r '.id' gitee-release.json)
-            curl --fail-with-body --silent --show-error \
+            update_status=$(curl --silent --show-error \
               "${auth[@]}" \
               --header 'Content-Type: application/json' \
               --request PATCH \
               --data "$payload" \
-              "${api}/releases/${release_id}" > gitee-release.json
+              --output gitee-release.json \
+              --write-out '%{http_code}' \
+              "${api}/releases/${release_id}")
+            if [[ "$update_status" != "200" ]]; then
+              echo "Unable to update Gitee Release ${tag}; HTTP ${update_status}." >&2
+              cat gitee-release.json >&2
+              exit 1
+            fi
           else
             echo "Unable to query Gitee Release ${tag}; HTTP ${status}." >&2
             cat gitee-release.json >&2
