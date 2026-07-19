@@ -109,7 +109,16 @@ jobs:
             --argjson prerelease "$prerelease" \
             '{tag_name:$tag,name:$name,body:$body,target_commitish:"main",prerelease:$prerelease}')
 
-          if [[ "$status" == "404" ]]; then
+          release_exists=false
+          if [[ "$status" == "200" ]] && jq -e 'type == "object" and .id != null' gitee-release.json >/dev/null; then
+            release_exists=true
+          elif [[ "$status" != "200" && "$status" != "404" ]]; then
+            echo "Unable to query Gitee Release ${tag}; HTTP ${status}." >&2
+            cat gitee-release.json >&2
+            exit 1
+          fi
+
+          if [[ "$release_exists" == "false" ]]; then
             create_status=$(curl --silent --show-error \
               "${auth[@]}" \
               --header 'Content-Type: application/json' \
@@ -123,7 +132,7 @@ jobs:
               cat gitee-release.json >&2
               exit 1
             fi
-          elif [[ "$status" == "200" ]]; then
+          else
             release_id=$(jq -r '.id' gitee-release.json)
             update_status=$(curl --silent --show-error \
               "${auth[@]}" \
@@ -138,10 +147,6 @@ jobs:
               cat gitee-release.json >&2
               exit 1
             fi
-          else
-            echo "Unable to query Gitee Release ${tag}; HTTP ${status}." >&2
-            cat gitee-release.json >&2
-            exit 1
           fi
 
           release_id=$(jq -r '.id' gitee-release.json)
