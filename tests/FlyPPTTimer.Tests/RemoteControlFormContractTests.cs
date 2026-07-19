@@ -3,6 +3,19 @@ namespace FlyPPTTimer.Tests;
 public sealed class RemoteControlFormContractTests
 {
     [Fact]
+    public void V019_ShellKeepsSidebarAndWorkspaceInTwoColumns()
+    {
+        var source = ReadRemoteForm();
+        var shellStart = source.IndexOf("var shell = _shell = new TableLayoutPanel", StringComparison.Ordinal);
+        var shellEnd = source.IndexOf("private Control BuildSidebar", shellStart, StringComparison.Ordinal);
+        var shell = source[shellStart..shellEnd];
+
+        Assert.Contains("ColumnCount = 2", shell);
+        Assert.Contains("shell.Controls.Add(BuildSidebar(), 0, 0)", shell);
+        Assert.Contains("shell.Controls.Add(BuildWorkspace(), 1, 0)", shell);
+    }
+
+    [Fact]
     public void RemoteTextButton_UsesOneManualClickPath()
     {
         using var button = new FlyPPTTimer.Forms.RemoteTextButton();
@@ -58,7 +71,7 @@ public sealed class RemoteControlFormContractTests
             "\"从头放映\"",
             "\"当前页放映\"",
             "\"结束放映\"",
-            "\"强制退出\""
+            "\"退出演示软件\""
         })
         {
             Assert.Contains(text, source);
@@ -132,7 +145,6 @@ public sealed class RemoteControlFormContractTests
             "ppt.startFromCurrent",
             "ppt.endShow",
             "ppt.closeCurrentPresentation",
-            "ppt.exitApplication",
             "ppt.forceQuitAll"
         })
         {
@@ -193,7 +205,7 @@ public sealed class RemoteControlFormContractTests
         var theme = ReadRemoteTheme();
         var button = ReadRemoteButton();
 
-        Assert.Equal("0.18.9", FlyPPTTimer.AppVersion.Current);
+        Assert.Equal("0.20.0", FlyPPTTimer.AppVersion.Current);
         Assert.Contains("ColumnCount = 5", source);
         Assert.Contains("RowCount = 1", source);
         Assert.DoesNotContain("_stateDescription", source);

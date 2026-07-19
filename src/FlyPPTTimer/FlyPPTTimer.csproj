@@ -12,10 +12,10 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>FlyPPTTimer</AssemblyName>
     <RootNamespace>FlyPPTTimer</RootNamespace>
-    <Version>0.18.9</Version>
-    <AssemblyVersion>0.18.9.0</AssemblyVersion>
-    <FileVersion>0.18.9.0</FileVersion>
-    <InformationalVersion>0.18.9</InformationalVersion>
+    <Version>0.20.0</Version>
+    <AssemblyVersion>0.20.0.0</AssemblyVersion>
+    <FileVersion>0.20.0.0</FileVersion>
+    <InformationalVersion>0.20.0</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>

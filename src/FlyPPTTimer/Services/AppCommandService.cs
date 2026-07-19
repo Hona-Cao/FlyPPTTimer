@@ -81,14 +81,21 @@ public sealed class AppCommandService
         _timer.Stop(true);
     }
 
-    public void SetDuration(TimeSpan duration, string? presentationId = null)
+    public void SetDuration(TimeSpan duration, string? presentationId = null, bool syncAllRules = false)
     {
         var wholeSeconds = Math.Clamp((long)Math.Round(duration.TotalSeconds), 1, (long)TimeSpan.FromHours(24).TotalSeconds - 1);
         duration = TimeSpan.FromSeconds(wholeSeconds);
         var config = _getConfig();
         config.Timer.DefaultDuration = duration.ToString(@"hh\:mm\:ss");
-        var rule = FindRule(config, presentationId);
-        if (rule is not null) rule.Duration = config.Timer.DefaultDuration;
+        if (syncAllRules)
+        {
+            foreach (var item in config.Rules) item.Duration = config.Timer.DefaultDuration;
+        }
+        else
+        {
+            var rule = FindRule(config, presentationId);
+            if (rule is not null) rule.Duration = config.Timer.DefaultDuration;
+        }
         _timer.SetDuration(duration);
         _saveConfig(config);
     }
@@ -167,6 +174,7 @@ public sealed class AppCommandService
             WindowVisible = _isOverlayVisible(),
             Muted = _systemAudio.IsMuted,
             TimeUpBlackoutActive = _isTimeUpBlackoutActive()
+            ,RuleCount = config.Rules.Count
         };
         return new RemoteState
         {
@@ -182,6 +190,7 @@ public sealed class AppCommandService
             WindowVisible = timerState.WindowVisible,
             Muted = timerState.Muted,
             TimeUpBlackoutActive = timerState.TimeUpBlackoutActive,
+            RuleCount = timerState.RuleCount,
             Version = AppVersion.Current
         };
     }
@@ -215,8 +224,8 @@ public sealed class AppCommandService
             case "timer.stop": StopReset(); return true;
             case "timer.reset": Reset(); return true;
             case "timer.setDuration":
-                if (command.DurationMs is > 0) SetDuration(TimeSpan.FromMilliseconds(command.DurationMs.Value), command.PresentationId);
-                else if (TimeSpan.TryParse(command.Duration, out var duration)) SetDuration(duration, command.PresentationId);
+                if (command.DurationMs is > 0) SetDuration(TimeSpan.FromMilliseconds(command.DurationMs.Value), command.PresentationId, command.SyncAllRules == true);
+                else if (TimeSpan.TryParse(command.Duration, out var duration)) SetDuration(duration, command.PresentationId, command.SyncAllRules == true);
                 else return false;
                 return true;
             case "timer.setMode":

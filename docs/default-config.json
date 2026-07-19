@@ -1,5 +1,8 @@
 {
-  "Version": "0.18.9",
+  "Version": "0.20.0",
+  "Update": {
+    "CheckOnStartup": false
+  },
   "Timer": {
     "DefaultDuration": "00:08:00",
     "Mode": 0,
@@ -78,8 +81,8 @@
     "TimeoutTextColor": "#FFFFFF",
     "TimeoutBackgroundColor": "#B00020",
     "FlashBackgroundColor": "#4EA3D8",
-    "Width": 140,
-    "Height": 50,
+    "Width": 100,
+    "Height": 35,
     "BackgroundOpacity": 88,
     "TextOpacity": 100,
     "Shape": "\u5706\u89D2\u77E9\u5F62\uFF08\u5C0F\uFF09",

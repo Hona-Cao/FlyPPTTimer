@@ -21,6 +21,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly PowerPointControlService _powerPoint;
     private readonly PresentationLifecycleController _presentationLifecycle;
     private readonly RemoteControlService _remoteControl;
+    private readonly GiteeUpdateService _updateService;
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _overlayMenu;
     private readonly ContextMenuStrip _trayMenu;
@@ -29,6 +30,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly List<TimeUpBlackoutForm> _timeUpScreens = [];
     private readonly System.Windows.Forms.Timer _screenTimer = new() { Interval = 1500 };
     private readonly System.Windows.Forms.Timer _menuCloseTimer = new() { Interval = 40 };
+    private readonly System.Windows.Forms.Timer _startupUpdateTimer = new() { Interval = 1500 };
     private readonly Form _menuOwner = new()
     {
         ShowInTaskbar = false,
@@ -44,12 +46,14 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private AppConfig _config;
     private string _screenSignature = "";
     private bool _preserveTimeUpScreens;
+    private bool _checkingForUpdates;
 
     public FlyPPTTimerContext()
     {
         _log.Info("Application started.");
         _configService = new ConfigService(_log);
         _config = _configService.Load();
+        _updateService = new GiteeUpdateService(_log);
         _powerPoint = new PowerPointControlService(() => _config, _log);
         _timer = new TimerService(_log);
         _alerts = new AlertService(_log);
@@ -57,7 +61,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _fullscreen = new FullscreenDetector(() => _powerPoint.GetState(), _log);
         _hotkeys = new HotkeyService(_log);
         _overlayMenu = BuildCommandMenu();
-        _trayMenu = BuildCommandMenu();
+        _trayMenu = BuildCommandMenu(includeUpdateCheck: true);
         _commands = new AppCommandService(
             _timer,
             _alerts,
@@ -137,11 +141,18 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             if (e.Button == MouseButtons.Right) ShowCommandMenuAtCursor(_trayMenu);
         };
 
+        _startupUpdateTimer.Tick += (_, _) =>
+        {
+            _startupUpdateTimer.Stop();
+            CheckForUpdates(false);
+        };
+        if (_config.Update.CheckOnStartup) _startupUpdateTimer.Start();
+
         RegisterHotkeys();
         foreach (var overlay in _overlays.Where(x => _config.Placement.Visible)) overlay.Show();
     }
 
-    private ContextMenuStrip BuildCommandMenu()
+    private ContextMenuStrip BuildCommandMenu(bool includeUpdateCheck = false)
     {
         var menu = new ContextMenuStrip
         {
@@ -160,14 +171,11 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _activeMenu = menu;
             _menuCloseTimer.Start();
         };
-        menu.Items.Add("开始/暂停", null, (_, _) => _commands.StartOrPause());
-        menu.Items.Add("停止/重置", null, (_, _) => _commands.StopReset());
-        menu.Items.Add("显示/隐藏计时窗口", null, (_, _) => _commands.ToggleOverlay());
         menu.Items.Add("重置计时窗口位置", null, (_, _) => ResetOverlayPosition());
-        menu.Items.Add("触发闪烁", null, (_, _) => _commands.FlashOverlay());
         menu.Items.Add("静音/取消静音", null, (_, _) => _commands.ToggleMute());
         menu.Items.Add("远程控制", null, (_, _) => ShowRemoteControl());
         menu.Items.Add("设置", null, (_, _) => _commands.OpenSettings());
+        if (includeUpdateCheck) menu.Items.Add("检测新版本", null, (_, _) => CheckForUpdates(true));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Exit());
         foreach (ToolStripItem item in menu.Items)
@@ -283,6 +291,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _settings.OpenConfigRequested += (_, _) => OpenPath(Path.GetDirectoryName(AppPaths.ConfigPath)!);
             _settings.OpenLogRequested += (_, _) => OpenPath(AppPaths.LogDirectory);
             _settings.ResetOverlayPositionRequested += (_, _) => ResetOverlayPosition();
+            _settings.CheckUpdateRequested += (_, _) => CheckForUpdates(true);
         }
         _settings.Show();
         _settings.Activate();
@@ -481,6 +490,97 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         }
     }
 
+    private async void CheckForUpdates(bool userInitiated)
+    {
+        if (_checkingForUpdates)
+        {
+            if (userInitiated) ShowUpdateMessage("正在检测新版本，请稍候。", MessageBoxIcon.Information);
+            return;
+        }
+
+        _checkingForUpdates = true;
+        try
+        {
+            if (userInitiated) _tray.ShowBalloonTip(2000, "FlyPPTTimer", "正在从 Gitee 检测新版本…", ToolTipIcon.Info);
+            var result = await _updateService.CheckAsync();
+            if (result.Status == UpdateCheckStatus.NoRelease)
+            {
+                if (userInitiated) ShowUpdateMessage("Gitee 项目目前还没有发布 Release。", MessageBoxIcon.Information);
+                return;
+            }
+            if (result.Status == UpdateCheckStatus.UpToDate)
+            {
+                if (userInitiated) ShowUpdateMessage($"当前已是最新版本：v{AppVersion.Current}", MessageBoxIcon.Information);
+                return;
+            }
+
+            var release = result.Release!;
+            if (!GiteeUpdateService.IsInstalledEdition)
+            {
+                var choice = MessageBox.Show(
+                    GetUpdatePrompt(release, "当前使用的是绿色便携版，程序不会自动覆盖文件。是否打开 Gitee Release 页面自行选择下载？"),
+                    "发现新版本",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+                if (choice == DialogResult.Yes) OpenWebUrl(release.ReleaseUrl);
+                return;
+            }
+
+            var installer = GiteeUpdateService.FindInstaller(release);
+            if (installer is null)
+            {
+                var choice = MessageBox.Show(
+                    GetUpdatePrompt(release, "此 Release 暂未找到 Windows x64 安装包。是否打开 Gitee Release 页面？"),
+                    "发现新版本",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (choice == DialogResult.Yes) OpenWebUrl(release.ReleaseUrl);
+                return;
+            }
+
+            if (MessageBox.Show(
+                    GetUpdatePrompt(release, "是否立即下载安装？安装时会保留当前配置，新功能仍使用默认设置，之后可自行选择。"),
+                    "发现新版本",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+            _tray.ShowBalloonTip(3000, "FlyPPTTimer", "正在下载更新，完成前请勿退出程序…", ToolTipIcon.Info);
+            var setupPath = await _updateService.DownloadInstallerAsync(release);
+            GiteeUpdateService.LaunchInstallerAfterExit(setupPath, Environment.ProcessId);
+            _log.Info($"Update installer scheduled; exiting current version. Target={release.Version}");
+            Exit();
+        }
+        catch (Exception ex)
+        {
+            _log.Error("Update check or download failed.", ex);
+            if (userInitiated || ex is not HttpRequestException)
+                ShowUpdateMessage($"检测或下载新版本失败：\r\n{ex.Message}\r\n\r\n可稍后重试，或前往 Gitee Release 页面手动下载。", MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _checkingForUpdates = false;
+        }
+    }
+
+    private static string GetUpdatePrompt(GiteeReleaseInfo release, string action)
+    {
+        var notes = string.IsNullOrWhiteSpace(release.Body)
+            ? ""
+            : "\r\n\r\n更新说明：\r\n" + release.Body.Trim()[..Math.Min(600, release.Body.Trim().Length)];
+        return $"发现新版本 v{release.Version}（当前 v{AppVersion.Current}）。{notes}\r\n\r\n{action}";
+    }
+
+    private static void OpenWebUrl(string url)
+    {
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    }
+
+    private void ShowUpdateMessage(string message, MessageBoxIcon icon)
+    {
+        if (_settings is { Visible: true }) MessageBox.Show(_settings, message, "FlyPPTTimer 更新", MessageBoxButtons.OK, icon);
+        else MessageBox.Show(message, "FlyPPTTimer 更新", MessageBoxButtons.OK, icon);
+    }
+
     private void OverlaySizeExpansionRequested(object? sender, OverlaySizeExpansionEventArgs e)
     {
         if (sender is not TimerOverlayForm source) return;
@@ -633,6 +733,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _alerts.Dispose();
         _screenTimer.Dispose();
         _menuCloseTimer.Dispose();
+        _startupUpdateTimer.Dispose();
+        _updateService.Dispose();
         foreach (var timerWindow in _overlays) timerWindow.Dispose();
         HideTimeUpScreens();
         _settings?.Dispose();
@@ -652,6 +754,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _alerts.Dispose();
             _screenTimer.Dispose();
             _menuCloseTimer.Dispose();
+            _startupUpdateTimer.Dispose();
+            _updateService.Dispose();
             foreach (var overlay in _overlays) overlay.Dispose();
             HideTimeUpScreens();
             _settings?.Dispose();

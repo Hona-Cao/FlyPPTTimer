@@ -1395,31 +1395,22 @@ public sealed class RemoteControlForm : Form
         var actions = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
+            ColumnCount = 1,
             RowCount = 1,
             BackColor = Color.Transparent,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-
-        var exit = CreateActionButton(
-            "退出 PowerPoint",
-            (_, _) => SendPresentationCommand("ppt.exitApplication"),
-            RemoteButtonKind.DangerOutline);
-        exit.Dock = DockStyle.Fill;
-        exit.Margin = new Padding(0, 4, 5, 4);
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         var force = CreateActionButton(
-            "强制退出",
+            "退出演示软件",
             (_, _) => ConfirmForceQuit(),
             RemoteButtonKind.DangerOutline);
         force.Dock = DockStyle.Fill;
-        force.Margin = new Padding(5, 4, 0, 4);
+        force.Margin = new Padding(0, 4, 0, 4);
 
-        actions.Controls.Add(exit, 0, 0);
-        actions.Controls.Add(force, 1, 0);
+        actions.Controls.Add(force, 0, 0);
         layout.Controls.Add(actions, 0, 1);
         card.Controls.Add(layout);
         return card;
@@ -1802,7 +1793,7 @@ public sealed class RemoteControlForm : Form
         menu.Items.Add(_showPathMenuItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(
-            "关闭受控文稿",
+            "关闭最后打开的文稿",
             null,
             (_, _) => SendPresentationCommand("ppt.closeCurrentPresentation"));
 
@@ -2232,7 +2223,7 @@ internal sealed class RemoteConfirmDialog : Form
 
         root.Controls.Add(new Label
         {
-            Text = "确认强制退出",
+            Text = "确认退出演示软件",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = RemoteDashboardTheme.CreateFont(12.5F, FontStyle.Bold),
@@ -2242,7 +2233,7 @@ internal sealed class RemoteConfirmDialog : Form
 
         root.Controls.Add(new Label
         {
-            Text = "将关闭全部 PowerPoint/WPS，未保存内容会丢失。",
+            Text = "将强制关闭全部 PowerPoint/WPS 演示进程，未保存内容会丢失。",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = RemoteDashboardTheme.CreateFont(9.5F),
@@ -2261,9 +2252,9 @@ internal sealed class RemoteConfirmDialog : Form
 
         var confirm = new RemoteTextButton
         {
-            Text = "强制退出",
+            Text = "退出演示软件",
             DialogResult = DialogResult.OK,
-            Width = 104,
+            Width = 132,
             Kind = RemoteButtonKind.Danger,
             Margin = new Padding(8, 4, 0, 4)
         };

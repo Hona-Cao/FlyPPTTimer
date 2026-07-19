@@ -221,7 +221,6 @@ public sealed class PowerPointControlService : IDisposable
             "ppt.whiteScreenToggle" => ToggleScreen(SlideShowWhiteScreen, "白屏"),
             "ppt.openPresentation" => OpenPresentation(command.PresentationId),
             "ppt.closeCurrentPresentation" => CloseCurrentPresentation(),
-            "ppt.exitApplication" => ExitApplication(),
             "ppt.forceQuitAll" => ForceQuitAll(),
             _ => throw new InvalidOperationException("命令不在 PowerPoint 控制白名单中。")
         };
@@ -230,7 +229,7 @@ public sealed class PowerPointControlService : IDisposable
     private static bool IsKnownCommand(string command) => command is
         "ppt.refresh" or "ppt.startFromBeginning" or "ppt.startFromCurrent" or "ppt.previous" or "ppt.next" or
         "ppt.gotoSlide" or "ppt.endShow" or "ppt.blackScreenToggle" or "ppt.whiteScreenToggle" or
-        "ppt.openPresentation" or "ppt.closeCurrentPresentation" or "ppt.exitApplication" or "ppt.forceQuitAll";
+        "ppt.openPresentation" or "ppt.closeCurrentPresentation" or "ppt.forceQuitAll";
 
     private PresentationOperationInfo CreateOperation(string command)
     {
@@ -239,8 +238,7 @@ public sealed class PowerPointControlService : IDisposable
             "ppt.openPresentation" => ("OpeningPresentation", "正在打开演示文稿"),
             "ppt.startFromBeginning" or "ppt.startFromCurrent" => ("StartingSlideshow", "正在启动放映"),
             "ppt.endShow" => ("StoppingSlideshow", "正在结束放映"),
-            "ppt.closeCurrentPresentation" => ("ClosingPresentation", "正在关闭当前受控文稿"),
-            "ppt.exitApplication" => ("ExitingApplication", "正在退出演示程序"),
+            "ppt.closeCurrentPresentation" => ("ClosingPresentation", "正在关闭最后打开的文稿"),
             "ppt.forceQuitAll" => ("ForceExitingApplication", "正在强制退出演示程序"),
             _ => ("Idle", "正在执行演示命令")
         };
@@ -296,12 +294,43 @@ public sealed class PowerPointControlService : IDisposable
             }
             settings = deck.SlideShowSettings;
             dynamic showSettings = settings;
-            showSettings.RangeType = fromCurrent ? 2 : 1;
-            showSettings.StartingSlide = start;
-            showSettings.EndingSlide = total;
-            startedWindow = showSettings.Run();
+            var originalRangeType = 0;
+            var originalStartingSlide = 1;
+            var originalEndingSlide = total;
+            var originalSettingsKnown = false;
+            var wasSaved = false;
+            var savedStateKnown = false;
+            try
+            {
+                originalRangeType = (int)showSettings.RangeType;
+                originalStartingSlide = (int)showSettings.StartingSlide;
+                originalEndingSlide = (int)showSettings.EndingSlide;
+                originalSettingsKnown = true;
+            }
+            catch (Exception ex) { _log.Warn($"Unable to snapshot slideshow settings: {ex.Message}"); }
+            try
+            {
+                wasSaved = (int)deck.Saved != 0;
+                savedStateKnown = true;
+            }
+            catch (Exception ex) { _log.Warn($"Unable to snapshot presentation saved state: {ex.Message}"); }
+            try
+            {
+                if (originalSettingsKnown)
+                {
+                    showSettings.RangeType = fromCurrent ? 2 : 1;
+                    showSettings.StartingSlide = start;
+                    showSettings.EndingSlide = total;
+                }
+                startedWindow = showSettings.Run();
+            }
+            finally
+            {
+                RestoreSlideShowSettings(deck, showSettings, originalSettingsKnown,
+                    originalRangeType, originalStartingSlide, originalEndingSlide,
+                    savedStateKnown, wasSaved);
+            }
             var path = SafeString(() => (string)deck.FullName);
-            MarkManagedPresentationClean(deck, path);
             var foreground = ActivateSlideShowWindow(app, path, startedWindow);
             var prefix = fromCurrent ? $"已从第 {start} 页开始放映" : "已从头开始放映";
             return prefix + activation.Message + foreground.Message;
@@ -309,18 +338,42 @@ public sealed class PowerPointControlService : IDisposable
         finally { Release(startedWindow, showWindows, slide, view, window, slides, settings, presentation, appObject); }
     }
 
-    private void MarkManagedPresentationClean(dynamic presentation, string path)
+    private void RestoreSlideShowSettings(
+        dynamic presentation,
+        dynamic settings,
+        bool originalSettingsKnown,
+        int originalRangeType,
+        int originalStartingSlide,
+        int originalEndingSlide,
+        bool savedStateKnown,
+        bool wasSaved)
     {
-        if (!_managedPresentations.ContainsKey(NormalizePath(path))) return;
-        try
+        if (!originalSettingsKnown) return;
+        var restored = true;
+        try { settings.StartingSlide = originalStartingSlide; }
+        catch (Exception ex)
         {
-            // Starting a show requires transient SlideShowSettings values. PowerPoint may
-            // mark even a read-only deck dirty after those COM assignments. The document
-            // content is never saved; marking our managed read-only deck clean prevents a
-            // misleading save prompt when the user closes it directly on the PC.
-            presentation.Saved = true;
+            restored = false;
+            _log.Warn($"Unable to restore StartingSlide: {ex.Message}");
         }
-        catch (Exception ex) { _log.Warn($"Unable to clear managed presentation dirty flag: {ex.Message}"); }
+        try { settings.EndingSlide = originalEndingSlide; }
+        catch (Exception ex)
+        {
+            restored = false;
+            _log.Warn($"Unable to restore EndingSlide: {ex.Message}");
+        }
+        try { settings.RangeType = originalRangeType; }
+        catch (Exception ex)
+        {
+            restored = false;
+            _log.Warn($"Unable to restore RangeType: {ex.Message}");
+        }
+        // RangeType/StartingSlide/EndingSlide are persisted presentation properties.
+        // Clear the dirty flag only after all original values were restored and only if
+        // the document was already clean; genuine user edits still receive a save prompt.
+        if (!restored || !savedStateKnown || !wasSaved) return;
+        try { presentation.Saved = true; }
+        catch (Exception ex) { _log.Warn($"Unable to restore presentation saved state: {ex.Message}"); }
     }
 
     private object? ResolvePresentationForShow(dynamic app, string? presentationId)
@@ -713,61 +766,25 @@ public sealed class PowerPointControlService : IDisposable
         {
             appObject = GetRunningApplication();
             dynamic app = appObject;
-            presentation = app.ActivePresentation;
-            if (presentation is null) throw new InvalidOperationException("当前没有可关闭的演示文稿。");
+            presentations = app.Presentations;
+            var count = (int)((dynamic)presentations).Count;
+            if (count <= 0) throw new InvalidOperationException("当前没有可关闭的演示文稿。");
+            // PowerPoint's Presentations collection follows open order. Closing
+            // the last item makes repeated remote clicks deterministic, including
+            // documents opened outside FlyPPTTimer.
+            presentation = ((dynamic)presentations)[count];
             var path = SafeString(() => (string)((dynamic)presentation).FullName);
             var key = NormalizePath(path);
-            if (!_managedPresentations.ContainsKey(key))
-                throw new InvalidOperationException("当前文稿不是由 FlyPPTTimer 打开的，不能通过远程控制静默关闭。");
             EndShowIfShowing(app, path);
+            // The controller never edits a presentation. Marking the COM document
+            // as saved suppresses the spurious save prompt seen after slideshow
+            // control; Close() then discards no application-authored changes.
             try { ((dynamic)presentation).Saved = true; } catch { }
             ((dynamic)presentation).Close();
             _managedPresentations.Remove(key);
-            return "已关闭当前 FlyPPTTimer 打开的只读文稿。";
+            return $"已关闭最后打开的文稿：{Path.GetFileName(path)}。";
         }
         finally { Release(presentation, presentations, appObject); }
-    }
-
-    private string ExitApplication()
-    {
-        object? appObject = null, presentations = null;
-        try
-        {
-            appObject = GetRunningApplication();
-            dynamic app = appObject;
-            presentations = app.Presentations;
-            var unmanaged = new List<string>();
-            for (var i = 1; i <= (int)((dynamic)presentations).Count; i++)
-            {
-                object? item = null;
-                try
-                {
-                    item = ((dynamic)presentations)[i];
-                    var path = SafeString(() => (string)((dynamic)item).FullName);
-                    if (!_managedPresentations.ContainsKey(NormalizePath(path))) unmanaged.Add(path);
-                }
-                finally { Release(item); }
-            }
-            if (unmanaged.Count > 0)
-                throw new InvalidOperationException("仍有用户自行打开的文稿，已拒绝退出 PowerPoint；请先在电脑端处理这些文稿。");
-
-            EndShowIfShowing(app, "");
-            for (var i = (int)((dynamic)presentations).Count; i >= 1; i--)
-            {
-                object? item = null;
-                try
-                {
-                    item = ((dynamic)presentations)[i];
-                    try { ((dynamic)item).Saved = true; } catch { }
-                    ((dynamic)item).Close();
-                }
-                finally { Release(item); }
-            }
-            _managedPresentations.Clear();
-            app.Quit();
-            return "已退出 PowerPoint。";
-        }
-        finally { Release(presentations, appObject); }
     }
 
     private string ForceQuitAll()
@@ -782,7 +799,7 @@ public sealed class PowerPointControlService : IDisposable
             finally { process.Dispose(); }
         }
         _managedPresentations.Clear();
-        return "已请求强制退出全部 PowerPoint/WPS/演示软件。未保存内容不会恢复。";
+        return "已请求退出演示软件。未保存内容不会恢复。";
     }
 
     private static void EndShowIfShowing(dynamic app, string path)
@@ -826,6 +843,7 @@ public sealed class PowerPointControlService : IDisposable
 
             dynamic app = appObject;
             presentations = app.Presentations;
+            state.OpenPresentationCount = (int)((dynamic)presentations).Count;
             var openPaths = new List<string>();
             for (var i = 1; i <= (int)((dynamic)presentations).Count; i++)
             {
@@ -1001,6 +1019,7 @@ public sealed class PowerPointControlService : IDisposable
         OperationId = state.OperationId,
         IsOperationBusy = state.IsOperationBusy,
         IsCurrentPresentationManaged = state.IsCurrentPresentationManaged,
+        OpenPresentationCount = state.OpenPresentationCount,
         WpsDetected = state.WpsDetected,
         WpsCapabilities = new WpsCapabilities
         {

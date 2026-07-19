@@ -19,6 +19,8 @@
       <button class="tab" data-page="pptPage">演示</button>
     </nav>
 
+    <div id="pagesViewport" class="pages-viewport">
+    <div id="pagesTrack" class="pages-track">
     <section id="timerPage" class="page active">
       <article class="card timer-card">
         <div id="timerText" class="timer-text">--:--</div>
@@ -79,11 +81,12 @@
         <button id="whiteScreenButton" data-command="ppt.whiteScreenToggle">白屏 / 恢复</button>
         <button id="pptDismissTimeUp" data-command="timeup.dismiss" class="warning">当前无“时间到”黑屏</button>
         <button data-command="ppt.endShow" class="danger">结束放映</button>
-        <button data-command="ppt.closeCurrentPresentation" class="danger-secondary">关闭当前受控文稿</button>
-        <button data-command="ppt.exitApplication" class="danger-secondary">退出 PowerPoint</button>
-        <button data-command="ppt.forceQuitAll" class="danger">强制退出全部 PowerPoint/WPS/演示软件</button>
+        <button data-command="ppt.closeCurrentPresentation" class="danger-secondary">关闭最后打开的文稿</button>
+        <button data-command="ppt.forceQuitAll" class="danger">退出演示软件</button>
       </article>
     </section>
+    </div>
+    </div>
 
     <div id="confirmPanel" class="confirm-panel" hidden role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
       <div class="confirm-card">

@@ -11,8 +11,8 @@ public sealed class V018FeatureTests
     {
         var appearance = new AppearanceSettings();
         Assert.Equal("医疗卫生（蓝白）", appearance.ColorScheme);
-        Assert.Equal(140, appearance.Width);
-        Assert.Equal(50, appearance.Height);
+        Assert.Equal(100, appearance.Width);
+        Assert.Equal(35, appearance.Height);
         Assert.Equal(18F, appearance.FontSize);
         Assert.Equal("#0B3A66", appearance.TextColor);
         Assert.Equal("#F3F8FC", appearance.BackgroundColor);

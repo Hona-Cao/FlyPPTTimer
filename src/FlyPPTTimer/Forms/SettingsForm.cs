@@ -164,6 +164,7 @@ public sealed class SettingsForm : Form
     public event EventHandler? OpenConfigRequested;
     public event EventHandler? OpenLogRequested;
     public event EventHandler? ResetOverlayPositionRequested;
+    public event EventHandler? CheckUpdateRequested;
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
@@ -1058,6 +1059,13 @@ public sealed class SettingsForm : Form
     private void AddOtherTab()
     {
         var grid = NewGrid();
+        Section(grid, "软件更新");
+        Row(grid, "启动时检测新版本", new CheckBox
+        {
+            Checked = _config.Update.CheckOnStartup,
+            Text = "启用"
+        }, "checkUpdateOnStartup");
+        Row(grid, "手动检测", Button("立即检测新版本", (_, _) => CheckUpdateRequested?.Invoke(this, EventArgs.Empty)), "otherCheckUpdate");
         Section(grid, "配置管理");
         Row(grid, "配置导入", Button("配置导入", (_, _) => ImportRequested?.Invoke(this, EventArgs.Empty)), "otherImport");
         Row(grid, "配置导出", Button("配置导出", (_, _) => ExportRequested?.Invoke(this, EventArgs.Empty)), "otherExport");
@@ -1082,10 +1090,11 @@ public sealed class SettingsForm : Form
             Multiline = true,
             Height = 210,
             ScrollBars = ScrollBars.Vertical,
-            Text = "FlyPPTTimer 由曹虎男发起并从零开发。作者毕业于南京大学医学院护理专业，在工作实践中发现了演讲计时、演示控制和台下远程调整的实际需求，因此将这个想法逐步实现为本项目。希望它能让大家的演讲、教学和会议更加从容，也欢迎有兴趣的朋友参与测试、提出建议或共同开发。祝大家使用愉快！"
+            Text = "FlyPPTTimer 由曹虎男发起并从零开发。作者毕业于南京大学医学院护理专业，目前就职于江苏省人民医院宿迁医院。在工作实践中发现了演讲计时、演示控制和台下远程调整的实际需求，因此将这个想法逐步实现为本项目。希望它能让大家的演讲、教学和会议更加从容，也欢迎有兴趣的朋友参与测试、提出建议或共同开发。祝大家使用愉快！"
         }, "otherAuthorStory");
         Row(grid, "联系邮箱", new Label { Text = "caohunan@smail.nju.edu.cn", TextAlign = ContentAlignment.MiddleLeft }, "otherEmail");
-        Row(grid, "项目主页", Button("打开 GitHub 项目主页", (_, _) => OpenUrl("https://github.com/Hona-Cao/FlyPPTTimer")), "otherGitHub");
+        Row(grid, "GitHub 项目主页", Button("打开 GitHub（可能需要网络工具）", (_, _) => OpenUrl("https://github.com/Hona-Cao/FlyPPTTimer")), "otherGitHub");
+        Row(grid, "Gitee 项目主页", Button("打开 Gitee（中国大陆可直接访问）", (_, _) => OpenUrl("https://gitee.com/hona-cao/fly-ppttimer")), "otherGitee");
         Row(grid, "联系作者", Button("发送邮件", (_, _) => OpenUrl("mailto:caohunan@smail.nju.edu.cn")), "otherContact");
         AddTab("其他设置", grid);
     }
@@ -1260,12 +1269,28 @@ public sealed class SettingsForm : Form
             MessageBox.Show(validationError, "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
-        _config.Timer.DefaultDuration = Get<TextBox>("duration").Text;
+        var newDefaultDuration = Get<TextBox>("duration").Text;
+        var rules = CurrentRules().Select(CloneRule).ToList();
+        var syncRuleDurations = false;
+        if (!string.Equals(_config.Timer.DefaultDuration, newDefaultDuration, StringComparison.Ordinal)
+            && rules.Count > 0)
+        {
+            syncRuleDurations = MessageBox.Show(
+                $"全局默认时长将改为 {newDefaultDuration}。\n\n是否同步应用到全部 {rules.Count} 个待控演示文稿？\n\n选择“否”将保留各文件规则原来的时长。",
+                "同步文件规则时长",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes;
+        }
+        if (syncRuleDurations)
+        {
+            foreach (var rule in rules) rule.Duration = newDefaultDuration;
+        }
+        _config.Timer.DefaultDuration = newDefaultDuration;
         _config.Timer.Mode = (string)Get<ComboBox>("mode").SelectedItem! == "倒计时" ? TimerMode.Countdown : TimerMode.CountUp;
         _config.Timer.ContinueOvertime = (string)Get<ComboBox>("continueOvertime").SelectedItem! == "继续显示超时";
         _config.Timer.EndAction = TextToEndAction((string)Get<ComboBox>("endAction").SelectedItem!);
         _config.Timer.EnablePerSlideTimer = false;
-        _config.Rules = CurrentRules().Select(CloneRule).ToList();
+        _config.Rules = rules;
         _config.Behavior.AutoStartOnFullscreen = Get<CheckBox>("autoFullscreen").Checked;
         _config.Behavior.StopWhenLeavingFullscreen = Get<CheckBox>("stopFullscreen").Checked;
         _config.Behavior.ResetWhenLeavingFullscreen = Get<CheckBox>("resetFullscreen").Checked;
@@ -1339,6 +1364,7 @@ public sealed class SettingsForm : Form
         _config.Controls.LockPosition = Get<CheckBox>("lock").Checked;
         _config.Controls.MinimizeToTray = Get<CheckBox>("minTray").Checked;
         _config.Controls.CloseButtonBehavior = (string)Get<ComboBox>("closeBehavior").SelectedItem! == "退出程序" ? CloseButtonBehavior.Exit : CloseButtonBehavior.MinimizeToTray;
+        _config.Update.CheckOnStartup = Get<CheckBox>("checkUpdateOnStartup").Checked;
         ConfigApplied?.Invoke(this, _config);
         if (_resetOverlayPositionPending)
         {

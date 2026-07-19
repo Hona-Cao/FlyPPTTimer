@@ -33,8 +33,8 @@ public sealed class V0181FeatureTests
         var settings = File.ReadAllText(Path.Combine(root, "src", "FlyPPTTimer", "Forms", "SettingsForm.cs"));
         Assert.Contains("BlockingCollection<AlertPlaybackRequest>", alerts);
         Assert.Contains("Speak(text, 0)", alerts);
-        Assert.Contains("MarkManagedPresentationClean(deck, path)", ppt);
-        Assert.Contains("presentation.Saved = true", ppt);
+        Assert.Contains("RestoreSlideShowSettings(deck, showSettings", ppt);
+        Assert.Contains("!restored || !savedStateKnown || !wasSaved", ppt);
         Assert.DoesNotContain("打开设置快捷键", settings);
         Assert.DoesNotContain("选择并复制 MP3", settings);
         Assert.Contains("黑屏并显示“时间到”", settings);

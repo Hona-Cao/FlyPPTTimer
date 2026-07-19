@@ -161,8 +161,14 @@ public sealed class ConfigService
                 config.Appearance.Width = 140;
                 config.Appearance.Height = 50;
             }
+            if (config.Appearance.Width == 140 && config.Appearance.Height == 50)
+            {
+                config.Appearance.Width = 100;
+                config.Appearance.Height = 35;
+            }
         }
         config.Behavior.Prompt1.Text = "时间即将结束";
+        config.Update ??= new UpdateSettings();
         config.Appearance.FontFamily = "Microsoft YaHei UI";
         config.Timer.EnablePerSlideTimer = false;
         config.Behavior.Prompt2.Text = "时间即将结束";

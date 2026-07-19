@@ -1,5 +1,56 @@
 # FlyPPTTimer 测试报告
 
+## v0.20.0 当前验证
+
+- SDK：`J:\codex2\FlyPPTTimer_GUI\.dotnet\dotnet.exe`，.NET SDK 8.0.422。
+- Release 编译：0 个警告，0 个错误。
+- 自动化测试：136 总数，136 通过，0 失败，0 跳过；TRX：`C:\Temp\FlyPPTTimer_v0200_tests\v0.20.0.trx`。
+- 新增更新专项覆盖：默认关闭、版本标签解析、Gitee 最新 Release 与附件读取、无 Release 正常分支、安装包筛选、SHA-256 下载校验、设置项和托盘菜单接入，以及安装器保留既有配置的契约检查。
+- 真实 Gitee API 联网验证：仓库当前尚未创建 Release，`releases/latest` 返回 HTTP 404；程序将其识别为“目前还没有发布 Release”，不会误报网络故障。
+- 设置文案专项验证：“启动时检测新版本”仅保留“启用”勾选框，不再显示“（默认关闭）”或独立的“更新来源”说明行。
+- EXE 文件版本：0.20.0.0。启动交互冒烟未强制执行，因为本机仍在运行用户测试中的 v0.19.2 单实例进程；未中断该进程。
+- EXE：`J:\codex2\FlyPPTTimer_GUI\dist\v0.20.0\FlyPPTTimer.exe`；SHA-256：`5A7307C6662817F84A0E7C28A7D760A54280A8B76971498F05F982227FD3E7FF`。
+- 便携 ZIP：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.20.0-portable-win-x64.zip`；SHA-256：`74217E57F64934619343CBE2F68A78990122E9813D1DE4C676A6FE1E45283566`。
+- 安装版：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.20.0-setup-win-x64.exe`；SHA-256：`D85955EDF1E8ED6B369310AA3558133CE44DDA7412B08DDAE17A3ECAF0F15C08`。
+
+## v0.19.2 当前验证
+
+- SDK：`J:\codex2\FlyPPTTimer_GUI\.dotnet\dotnet.exe`，.NET SDK 8.0.422。
+- Release 编译：0 个警告，0 个错误。
+- 自动化测试：131 总数，131 通过，0 失败，0 跳过；TRX：`C:\Temp\FlyPPTTimer_v0192_tests\v0.19.2.trx`。
+- 新增手势专项覆盖：任意内容区域起手、取消角度限制、6 像素跟手阈值、18 像素/速度提交阈值、拖动后误点击抑制，以及从浏览器当前渲染位移抢占未完成动画。
+- Microsoft Edge 无界面模式已真实加载并执行手机端页面脚本；页面轨道获得运行时 `translate3d` 状态且“计时”页正确激活，未出现 JavaScript 语法错误。
+- EXE 文件版本：0.19.2.0。启动冒烟未强制执行，因为本机仍在运行用户测试中的 v0.19.1 单实例进程；未中断该进程。
+- EXE：`J:\codex2\FlyPPTTimer_GUI\dist\v0.19.2\FlyPPTTimer.exe`；SHA-256：`83784A9E68DB38749F849BC07C6362AFD0E8E842682E5C96B39F872AF3659281`。
+- 便携 ZIP：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.19.2-portable-win-x64.zip`；SHA-256：`089B3834A923D88EB8EB9F0E52FD4CB14C7B1325DC2FE099AE692C5CE531C202`。
+- 安装版：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.19.2-setup-win-x64.exe`；SHA-256：`5C43437E948B9D947C9508163E7A4611CB6219358238B2016C1CA6978F0C33A2`。
+- 仍需手机真机验收：不同浏览器对极陡斜向手势、连续快速反向抢占和输入控件起手的实际触控体验。
+
+## v0.19.1 当前验证
+
+- SDK：`J:\codex2\FlyPPTTimer_GUI\.dotnet\dotnet.exe`，.NET SDK 8.0.422。
+- Release 编译：0 个警告，0 个错误。
+- 自动化测试：129 总数，129 通过，0 失败，0 跳过；TRX：`C:\Temp\FlyPPTTimer_v0191_tests\v0.19.1.trx`。
+- 新增专项覆盖：手机跟手拖动及平滑吸附、放映范围设置恢复与真实未保存状态保护、计时窗口和托盘菜单精简为指定五项。
+- PowerPoint 临时副本 COM 验证：启动放映前后 `Saved=-1`；`RangeType`、`StartingSlide`、`EndingSlide` 均恢复为原值，确认 FlyPPTTimer 不再把原本干净的外部文稿遗留为已修改状态。
+- 自包含 EXE 隔离启动：进程持续运行且正常响应，文件版本 0.19.1.0，成功生成日志。
+- EXE：`J:\codex2\FlyPPTTimer_GUI\dist\v0.19.1\FlyPPTTimer.exe`；SHA-256：`474DA8F832E210A3FD8C85A11B803A803E24029900A4C5C5430F8A995869DC63`。
+- 便携 ZIP：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.19.1-portable-win-x64.zip`；SHA-256：`2663B4F46B4167C3C18B2C1A5F25D81BDD4B1A6E046AA9CDAFED4B11E4342633`。
+- 安装版：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.19.1-setup-win-x64.exe`；SHA-256：`5D4558AAD5D8B521C010633D79F70636EB380BEEA1DA0E5FAFBDECBF7223029F`。
+- 仍需人工验收：手机真实触控手感；用户当前 WPS 版本的外部关闭行为；文稿原本已有真实未保存修改时仍应正常提示保存。
+
+## v0.19.0 当前验证
+
+- SDK：`J:\codex2\FlyPPTTimer_GUI\.dotnet\dotnet.exe`，.NET SDK 8.0.422。
+- Release 编译：0 个警告，0 个错误。
+- 自动化测试：126 总数，126 通过，0 失败，0 跳过；新增 PC 远程控制外层布局回归测试，固定为“侧栏 + 工作区”两列。
+- 自包含 EXE 隔离启动冒烟：进程持续运行且响应正常，文件版本为 0.19.0.0，成功生成日志并启动局域网远程服务；冒烟配置位于独立临时目录，没有读取或修改日常配置。
+- EXE：`J:\codex2\FlyPPTTimer_GUI\dist\v0.19.0\FlyPPTTimer.exe`；SHA-256：`99E7B6FE99B6D075E75AE2C96EB3B2063D039AFDBE7492FD29F3C8F47C532DCD`。
+- 便携 ZIP：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.19.0-portable-win-x64.zip`；SHA-256：`8441B250C419B4E36364454485D7F48514EBB5AB8A907E6DB53F91CA8E4DAC6D`。
+- 安装版：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.19.0-setup-win-x64.exe`；SHA-256：`40BEDBA11CE95224C3D4B457B7D6287521DAC746C72CCB78EBA8A943FB2D1014`。
+- 自动化覆盖：100×35 默认值和旧默认迁移、手机左右滑动、全局时长同步/保留规则分支、外部文稿按集合末尾逐个静默关闭、删除重复退出命令、GitHub/Gitee 与作者单位信息。
+- 仍需真机人工验收：不同 PowerPoint/WPS 版本对外部文稿集合顺序和 `Saved` 兼容属性的实际支持；手机真实触控手势；PC/手机同步时长确认窗口的视觉与措辞；100×35 在办公室不同 DPI 显示器上的最终观感。
+
 ## v0.18.9 当前验证
 
 - 根因确认：100×30 在句柄创建前先被换算为 125×38，WinForms 创建 Per-Monitor V2 句柄时又把窗口放大到 170×47，并保持左上角不变，导致中心从默认位置原点向右偏移 23 像素。

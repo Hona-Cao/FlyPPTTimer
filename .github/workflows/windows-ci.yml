@@ -37,6 +37,6 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FlyPPTTimer-v0.18.9-windows-x64
+          name: FlyPPTTimer-v0.20.0-windows-x64
           path: artifacts
           if-no-files-found: error

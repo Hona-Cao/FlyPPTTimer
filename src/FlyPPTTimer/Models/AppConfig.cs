@@ -5,6 +5,7 @@ namespace FlyPPTTimer.Models;
 public sealed class AppConfig
 {
     public string Version { get; set; } = AppVersion.Current;
+    public UpdateSettings Update { get; set; } = new();
     public TimerSettings Timer { get; set; } = new();
     public BehaviorSettings Behavior { get; set; } = new();
     public AppearanceSettings Appearance { get; set; } = new();
@@ -21,6 +22,11 @@ public sealed class TimerSettings
     public bool EnablePerSlideTimer { get; set; }
     public bool ContinueOvertime { get; set; } = true;
     public TimerEndAction EndAction { get; set; } = TimerEndAction.None;
+}
+
+public sealed class UpdateSettings
+{
+    public bool CheckOnStartup { get; set; }
 }
 
 public enum TimerEndAction
@@ -99,8 +105,8 @@ public sealed class AppearanceSettings
     public string TimeoutTextColor { get; set; } = "#FFFFFF";
     public string TimeoutBackgroundColor { get; set; } = "#B00020";
     public string FlashBackgroundColor { get; set; } = "#4EA3D8";
-    public int Width { get; set; } = 140;
-    public int Height { get; set; } = 50;
+    public int Width { get; set; } = 100;
+    public int Height { get; set; } = 35;
     public int BackgroundOpacity { get; set; } = 88;
     public int TextOpacity { get; set; } = 100;
     public string Shape { get; set; } = "圆角矩形（小）";
@@ -221,6 +227,7 @@ public sealed class RemoteCommand
     public int? SlideNumber { get; set; }
     public string? PresentationId { get; set; }
     public bool? Confirmed { get; set; }
+    public bool? SyncAllRules { get; set; }
     public string? OperationId { get; set; }
 }
 
@@ -242,6 +249,7 @@ public sealed class RemoteState
     public bool WindowVisible { get; set; }
     public bool Muted { get; set; }
     public bool TimeUpBlackoutActive { get; set; }
+    public int RuleCount { get; set; }
     public int ConnectedClients { get; set; }
     public string Version { get; set; } = AppVersion.Current;
     public long Revision { get; set; }
@@ -261,6 +269,7 @@ public sealed class TimerRemoteState
     public bool WindowVisible { get; set; }
     public bool Muted { get; set; }
     public bool TimeUpBlackoutActive { get; set; }
+    public int RuleCount { get; set; }
 }
 
 public sealed class PresentationState
@@ -283,6 +292,7 @@ public sealed class PresentationState
     public string OperationId { get; set; } = "";
     public bool IsOperationBusy { get; set; }
     public bool IsCurrentPresentationManaged { get; set; }
+    public int OpenPresentationCount { get; set; }
     public bool WpsDetected { get; set; }
     public WpsCapabilities WpsCapabilities { get; set; } = new();
 }

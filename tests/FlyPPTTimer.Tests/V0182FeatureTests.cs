@@ -17,7 +17,7 @@ public sealed class V0182FeatureTests
         ConfigService.Normalize(config);
 
         Assert.True(config.Behavior.Prompt1.PlaySound);
-        Assert.Equal("0.18.9", config.Version);
+        Assert.Equal("0.20.0", config.Version);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class V0182FeatureTests
     }
 
     [Fact]
-    public void PreviousDefaultOverlaySize_MigratesTo140By50()
+    public void PreviousDefaultOverlaySize_MigratesToCurrentDefault()
     {
         var config = new AppConfig { Version = "0.18.1" };
         config.Appearance.Width = 160;
@@ -41,8 +41,8 @@ public sealed class V0182FeatureTests
 
         ConfigService.Normalize(config);
 
-        Assert.Equal(140, config.Appearance.Width);
-        Assert.Equal(50, config.Appearance.Height);
+        Assert.Equal(100, config.Appearance.Width);
+        Assert.Equal(35, config.Appearance.Height);
     }
 
     [Fact]
