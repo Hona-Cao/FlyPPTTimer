@@ -1,8 +1,6 @@
 name: Sync Release to Gitee
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -31,11 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            tag="${{ github.event.release.tag_name }}"
-          else
-            tag="${{ inputs.tag }}"
-          fi
+          tag="${{ inputs.tag }}"
           if [[ -z "$tag" ]]; then
             echo "Release tag is required." >&2
             exit 1
