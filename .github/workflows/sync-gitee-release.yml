@@ -160,7 +160,11 @@ jobs:
             "${api}/releases/${release_id}/attach_files" > gitee-assets.json
 
           shopt -s nullglob
-          files=(release-assets/*)
+          mapfile -t files < <(
+            find release-assets -maxdepth 1 -type f -printf '%s\t%p\n' \
+              | sort --numeric-sort \
+              | cut --fields=2-
+          )
           if (( ${#files[@]} == 0 )); then
             echo "No GitHub Release assets were downloaded." >&2
             exit 1
@@ -186,6 +190,10 @@ jobs:
               --retry 3 \
               --retry-delay 10 \
               --retry-all-errors \
+              --form-string "access_token=${GITEE_TOKEN}" \
+              --form-string "owner=${GITEE_OWNER}" \
+              --form-string "repo=${GITEE_REPO}" \
+              --form-string "release_id=${release_id}" \
               --form "file=@${file}" \
               "${api}/releases/${release_id}/attach_files" >/dev/null
           done
