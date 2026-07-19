@@ -46,6 +46,13 @@ Bug 报告建议包含：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
+正式安装包使用 Inno Setup 6 的 LZMA2 压缩生成。需要打包时先安装编译器：
+
+```powershell
+winget install --id JRSoftware.InnoSetup --exact
+powershell -NoProfile -ExecutionPolicy Bypass -File .\package_release.ps1
+```
+
 ## 开发原则
 
 - 一个 Pull Request 尽量只解决一个明确主题。

@@ -102,7 +102,8 @@ public sealed class V0193FeatureTests
         Assert.Contains("检测新版本", context);
         Assert.Contains("includeUpdateCheck: true", context);
         Assert.Contains("GiteeUpdateService.IsInstalledEdition", context);
-        Assert.Contains("if (-not (Test-Path -LiteralPath $configPath))", packaging);
+        Assert.Contains("onlyifdoesntexist uninsneveruninstall", packaging);
+        Assert.Contains("FileCopy(ConfigPath, BackupPath, False)", packaging);
     }
 
     private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)

@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.20.1
+
+- 应用自包含单文件开启程序集压缩，在仍然无需用户预装 .NET 8 Desktop Runtime 的前提下显著缩小程序体积。
+- 安装包从重复携带一套 .NET Runtime 的备用安装器改为 Inno Setup 6，使用 LZMA2/Ultra64 固实压缩，不再重复打包运行库。
+- 安装器继续备份并保留既有 `FlyPPTTimer.config.json`，支持关闭旧进程、覆盖升级、开始菜单/桌面快捷方式和安装后可选启动。
+- GitHub Actions 同步启用压缩单文件发布，并更新 v0.20.1 的测试、校验文件和 Artifact 名称。
+
 ## 0.20.0
 
 - “其他设置”新增“启动时检测新版本”，默认关闭；用户启用并保存后，下次启动会从 Gitee Release 检测稳定更新。

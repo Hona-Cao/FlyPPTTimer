@@ -8,28 +8,26 @@ $projectPath = Join-Path $root "src\FlyPPTTimer\FlyPPTTimer.csproj"
 $fullVersion = [string]$project.Project.PropertyGroup.Version
 if ([string]::IsNullOrWhiteSpace($fullVersion)) { throw "Project version is missing: $projectPath" }
 $version = $fullVersion.Trim()
-$dist = Join-Path $root "dist\v$fullVersion"
+$dist = Join-Path $root "dist\v$version"
 $releaseRoot = Join-Path $root "releases\v$version"
 if (Test-Path -LiteralPath $releaseRoot) { throw "Release directory already exists and will not be overwritten: $releaseRoot" }
+
 $assets = Join-Path $releaseRoot "assets"
 $portable = Join-Path $assets "portable"
 $installerSource = Join-Path $assets "installer-source"
-$setupExe = Join-Path $assets "FlyPPTTimer_Setup_v$version.exe"
+$innoOutput = Join-Path $assets "inno-output"
+$issPath = Join-Path $assets "FlyPPTTimer-v$version.iss"
 $portableZip = Join-Path $assets "FlyPPTTimer_Portable_v$version.zip"
 $distPortableZip = Join-Path $root "dist\FlyPPTTimer-v$version-portable-win-x64.zip"
 $distPortableHash = "$distPortableZip.sha256"
 $distSetupExe = Join-Path $root "dist\FlyPPTTimer-v$version-setup-win-x64.exe"
 $distSetupHash = "$distSetupExe.sha256"
-$iexpressWork = "C:\Temp\FlyPPTTimerPackage_v$version"
-$iexpressSource = Join-Path $iexpressWork "source"
-$iexpressSetup = Join-Path $iexpressWork "FlyPPTTimer_Setup_v$version.exe"
 
 if (-not (Test-Path -LiteralPath $dist)) {
     & (Join-Path $root "build.ps1")
 }
 
-Remove-Item -LiteralPath $iexpressWork -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $portable, $installerSource, $iexpressSource | Out-Null
+New-Item -ItemType Directory -Path $portable, $installerSource, $innoOutput | Out-Null
 
 $runtimeFiles = [ordered]@{
     "FlyPPTTimer.exe" = Join-Path $dist "FlyPPTTimer.exe"
@@ -44,7 +42,6 @@ foreach ($file in $runtimeFiles.GetEnumerator()) {
     }
     Copy-Item -LiteralPath $file.Value -Destination (Join-Path $portable $file.Key) -Force
     Copy-Item -LiteralPath $file.Value -Destination (Join-Path $installerSource $file.Key) -Force
-    Copy-Item -LiteralPath $file.Value -Destination (Join-Path $iexpressSource $file.Key) -Force
 }
 
 Compress-Archive -Path (Join-Path $portable "*") -DestinationPath $portableZip -Force
@@ -53,215 +50,106 @@ $portableHash = (Get-FileHash -LiteralPath $distPortableZip -Algorithm SHA256).H
 "$portableHash  $([IO.Path]::GetFileName($distPortableZip))" |
     Set-Content -LiteralPath $distPortableHash -Encoding ASCII
 
-$installScript = @'
-$ErrorActionPreference = "Stop"
-$installDir = Join-Path $env:LOCALAPPDATA "FlyPPTTimer"
-New-Item -ItemType Directory -Path $installDir -Force | Out-Null
-$configPath = Join-Path $installDir "FlyPPTTimer.config.json"
-if (Test-Path -LiteralPath $configPath) {
-    Copy-Item -LiteralPath $configPath -Destination ($configPath + ".upgrade." + (Get-Date -Format "yyyyMMddHHmmss") + ".backup.json") -Force
-}
-Copy-Item -LiteralPath ".\FlyPPTTimer.exe", ".\app.ico", ".\README.md" -Destination $installDir -Force
-if (-not (Test-Path -LiteralPath $configPath)) {
-    Copy-Item -LiteralPath ".\FlyPPTTimer.config.json" -Destination $configPath
+function ConvertTo-InnoPath([string]$path) {
+    return $path.Replace('"', '""')
 }
 
-$shell = New-Object -ComObject WScript.Shell
-$startMenuDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\FlyPPTTimer"
-New-Item -ItemType Directory -Path $startMenuDir -Force | Out-Null
+$source = ConvertTo-InnoPath $installerSource
+$output = ConvertTo-InnoPath $innoOutput
+$icon = ConvertTo-InnoPath (Join-Path $root "src\FlyPPTTimer\Assets\app.ico")
+$iss = @"
+[Setup]
+AppId={{8B4B0C52-DA7E-4B71-976E-F4A24177EA6C}
+AppName=FlyPPTTimer
+AppVersion=$version
+AppVerName=FlyPPTTimer $version
+AppPublisher=曹虎男
+AppPublisherURL=https://github.com/Hona-Cao/FlyPPTTimer
+AppSupportURL=https://github.com/Hona-Cao/FlyPPTTimer/issues
+AppUpdatesURL=https://github.com/Hona-Cao/FlyPPTTimer/releases
+VersionInfoVersion=$version.0
+VersionInfoCompany=FlyPPTTimer
+VersionInfoDescription=FlyPPTTimer 演讲计时器安装程序
+VersionInfoProductName=FlyPPTTimer
+VersionInfoProductVersion=$version
+DefaultDirName={localappdata}\FlyPPTTimer
+DefaultGroupName=FlyPPTTimer
+DisableProgramGroupPage=yes
+PrivilegesRequired=lowest
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+WizardStyle=modern
+SetupIconFile=$icon
+UninstallDisplayIcon={app}\app.ico
+OutputDir=$output
+OutputBaseFilename=FlyPPTTimer-v$version-setup-win-x64
+Compression=lzma2/ultra64
+SolidCompression=yes
+LZMAUseSeparateProcess=yes
+CloseApplications=yes
+RestartApplications=no
+UsePreviousAppDir=yes
+UsePreviousGroup=yes
+AllowNoIcons=yes
+MinVersion=10.0
 
-$shortcut = $shell.CreateShortcut((Join-Path $startMenuDir "FlyPPTTimer.lnk"))
-$shortcut.TargetPath = Join-Path $installDir "FlyPPTTimer.exe"
-$shortcut.WorkingDirectory = $installDir
-$shortcut.IconLocation = Join-Path $installDir "app.ico"
-$shortcut.Save()
+[Files]
+Source: "$source\FlyPPTTimer.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "$source\FlyPPTTimer.config.json"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "$source\app.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "$source\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
-$desktopShortcut = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "FlyPPTTimer.lnk"))
-$desktopShortcut.TargetPath = Join-Path $installDir "FlyPPTTimer.exe"
-$desktopShortcut.WorkingDirectory = $installDir
-$desktopShortcut.IconLocation = Join-Path $installDir "app.ico"
-$desktopShortcut.Save()
+[Tasks]
+Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加快捷方式："; Flags: checkedonce
 
-Add-Type -AssemblyName System.Windows.Forms
-[System.Windows.Forms.MessageBox]::Show("FlyPPTTimer 已安装到：" + [Environment]::NewLine + $installDir, "FlyPPTTimer", "OK", "Information") | Out-Null
-'@
-$installScriptPath = Join-Path $installerSource "install.ps1"
-Set-Content -LiteralPath $installScriptPath -Value $installScript -Encoding UTF8
-Set-Content -LiteralPath (Join-Path $iexpressSource "install.ps1") -Value $installScript -Encoding UTF8
+[Icons]
+Name: "{group}\FlyPPTTimer"; Filename: "{app}\FlyPPTTimer.exe"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"
+Name: "{autodesktop}\FlyPPTTimer"; Filename: "{app}\FlyPPTTimer.exe"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; Tasks: desktopicon
 
-$sedPath = Join-Path $iexpressWork "FlyPPTTimer_Setup.sed"
-$sourceEscaped = $iexpressSource
-$targetEscaped = $iexpressSetup
-$sed = @"
-[Version]
-Class=IEXPRESS
-SEDVersion=3
-[Options]
-PackagePurpose=InstallApp
-ShowInstallProgramWindow=0
-HideExtractAnimation=1
-UseLongFileName=1
-InsideCompressed=0
-CAB_FixedSize=0
-CAB_ResvCodeSigning=0
-RebootMode=N
-InstallPrompt=%InstallPrompt%
-DisplayLicense=%DisplayLicense%
-FinishMessage=%FinishMessage%
-TargetName=%TargetName%
-FriendlyName=%FriendlyName%
-AppLaunched=%AppLaunched%
-PostInstallCmd=%PostInstallCmd%
-AdminQuietInstCmd=%AdminQuietInstCmd%
-UserQuietInstCmd=%UserQuietInstCmd%
-SourceFiles=SourceFiles
-[Strings]
-InstallPrompt=Install FlyPPTTimer.
-DisplayLicense=
-FinishMessage=FlyPPTTimer installation completed.
-TargetName=$targetEscaped
-FriendlyName=FlyPPTTimer
-AppLaunched=powershell.exe -NoProfile -ExecutionPolicy Bypass -File install.ps1
-PostInstallCmd=<None>
-AdminQuietInstCmd=
-UserQuietInstCmd=
-FILE0=FlyPPTTimer.exe
-FILE1=FlyPPTTimer.config.json
-FILE2=app.ico
-FILE3=README.md
-FILE4=install.ps1
-[SourceFiles]
-SourceFiles0=$sourceEscaped
-[SourceFiles0]
-%FILE0%=
-%FILE1%=
-%FILE2%=
-%FILE3%=
-%FILE4%=
+[Run]
+Filename: "{app}\FlyPPTTimer.exe"; Description: "启动 FlyPPTTimer"; Flags: nowait postinstall skipifsilent
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ConfigPath: String;
+  BackupPath: String;
+begin
+  if CurStep <> ssInstall then
+    Exit;
+  ConfigPath := ExpandConstant('{app}\FlyPPTTimer.config.json');
+  if not FileExists(ConfigPath) then
+    Exit;
+  BackupPath := ConfigPath + '.upgrade.' + GetDateTimeString('yyyymmddhhnnss', #0, #0) + '.backup.json';
+  if not FileCopy(ConfigPath, BackupPath, False) then
+    Log('Warning: unable to create config upgrade backup: ' + BackupPath);
+end;
 "@
-Set-Content -LiteralPath $sedPath -Value $sed -Encoding ASCII
+Set-Content -LiteralPath $issPath -Value $iss -Encoding UTF8
 
-$iexpress = Join-Path $env:WINDIR "System32\iexpress.exe"
-if (-not (Test-Path $iexpress)) {
-    throw "iexpress.exe not found."
+$isccCandidates = @(
+    (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+    (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+    (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+)
+$iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $iscc) {
+    $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+    if ($command) { $iscc = $command.Source }
 }
-& $iexpress /N /Q $sedPath
-if (-not (Test-Path $iexpressSetup)) {
-    Write-Host "IExpress did not create setup; building .NET fallback installer..."
-    $installerProject = Join-Path $iexpressWork "dotnet-installer"
-    $payloadZip = Join-Path $installerProject "payload.zip"
-    New-Item -ItemType Directory -Path $installerProject | Out-Null
-    Compress-Archive -Path (Join-Path $iexpressSource "*") -DestinationPath $payloadZip -Force
-
-    $csproj = @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
-    <Nullable>enable</Nullable>
-    <AssemblyName>FlyPPTTimer_Setup</AssemblyName>
-    <Version>$fullVersion</Version>
-    <AssemblyVersion>$fullVersion.0</AssemblyVersion>
-    <FileVersion>$fullVersion.0</FileVersion>
-    <InformationalVersion>$fullVersion</InformationalVersion>
-    <ApplicationIcon>app.ico</ApplicationIcon>
-  </PropertyGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="payload.zip" />
-  </ItemGroup>
-</Project>
-"@
-    Set-Content -LiteralPath (Join-Path $installerProject "FlyPPTTimer_Setup.csproj") -Value $csproj -Encoding UTF8
-    Copy-Item -LiteralPath (Join-Path $root "src\FlyPPTTimer\Assets\app.ico") -Destination (Join-Path $installerProject "app.ico") -Force
-
-    $program = @'
-using System;
-using System.Diagnostics;
-using System.IO;
-using System.IO.Compression;
-using System.Reflection;
-using System.Windows.Forms;
-
-namespace FlyPPTTimerSetup;
-
-internal static class Program
-{
-    [STAThread]
-    private static void Main()
-    {
-        ApplicationConfiguration.Initialize();
-        try
-        {
-            var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlyPPTTimer");
-            Directory.CreateDirectory(installDir);
-            using var resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("FlyPPTTimer_Setup.payload.zip")
-                ?? throw new InvalidOperationException("Installer payload is missing.");
-            var tempZip = Path.Combine(Path.GetTempPath(), "FlyPPTTimer_payload.zip");
-            using (var file = File.Create(tempZip))
-            {
-                resource.CopyTo(file);
-            }
-            var extractDir = Path.Combine(Path.GetTempPath(), "FlyPPTTimer_install_" + Guid.NewGuid().ToString("N"));
-            ZipFile.ExtractToDirectory(tempZip, extractDir, true);
-            var configPath = Path.Combine(installDir, "FlyPPTTimer.config.json");
-            if (File.Exists(configPath))
-            {
-                File.Copy(configPath, configPath + ".upgrade." + DateTime.Now.ToString("yyyyMMddHHmmss") + ".backup.json", true);
-            }
-            foreach (var file in Directory.GetFiles(extractDir))
-            {
-                var target = Path.Combine(installDir, Path.GetFileName(file));
-                if (Path.GetFileName(file).Equals("FlyPPTTimer.config.json", StringComparison.OrdinalIgnoreCase) && File.Exists(target)) continue;
-                File.Copy(file, target, true);
-            }
-            Directory.Delete(extractDir, true);
-            TryCreateShortcut(
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "FlyPPTTimer.lnk"),
-                installDir);
-            var startMenu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "Windows", "Start Menu", "Programs", "FlyPPTTimer");
-            Directory.CreateDirectory(startMenu);
-            TryCreateShortcut(Path.Combine(startMenu, "FlyPPTTimer.lnk"), installDir);
-            MessageBox.Show("FlyPPTTimer has been installed to:\r\n" + installDir, "FlyPPTTimer", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show("Installation failed:\r\n" + ex.Message, "FlyPPTTimer", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            Environment.ExitCode = 1;
-        }
-    }
-
-    private static void TryCreateShortcut(string shortcutPath, string installDir)
-    {
-        try
-        {
-            var shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType is null) return;
-            dynamic shell = Activator.CreateInstance(shellType)!;
-            dynamic shortcut = shell.CreateShortcut(shortcutPath);
-            shortcut.TargetPath = Path.Combine(installDir, "FlyPPTTimer.exe");
-            shortcut.WorkingDirectory = installDir;
-            shortcut.IconLocation = Path.Combine(installDir, "app.ico");
-            shortcut.Save();
-        }
-        catch { }
-    }
+if (-not $iscc) {
+    throw "Inno Setup 6 compiler was not found. Install it with: winget install --id JRSoftware.InnoSetup --exact"
 }
-'@
-    Set-Content -LiteralPath (Join-Path $installerProject "Program.cs") -Value $program -Encoding UTF8
-    $dotnet = Join-Path $root ".dotnet\dotnet.exe"
-    if (-not (Test-Path $dotnet)) { $dotnet = "dotnet" }
-    & $dotnet publish (Join-Path $installerProject "FlyPPTTimer_Setup.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=false -o (Join-Path $installerProject "publish")
-    if ($LASTEXITCODE -ne 0) { throw "Fallback installer publish failed." }
-    $fallbackSetup = Join-Path $installerProject "publish\FlyPPTTimer_Setup.exe"
-    if (-not (Test-Path $fallbackSetup)) { throw "Fallback installer was not created." }
-    Copy-Item -LiteralPath $fallbackSetup -Destination $iexpressSetup -Force
-}
-Copy-Item -LiteralPath $iexpressSetup -Destination $setupExe -Force
-Copy-Item -LiteralPath $iexpressSetup -Destination $distSetupExe -Force
+
+& $iscc /Qp $issPath
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE" }
+$innoSetup = Join-Path $innoOutput "FlyPPTTimer-v$version-setup-win-x64.exe"
+if (-not (Test-Path -LiteralPath $innoSetup)) { throw "Inno Setup did not create the expected installer: $innoSetup" }
+Copy-Item -LiteralPath $innoSetup -Destination $distSetupExe -Force
 
 $setupHash = (Get-FileHash -LiteralPath $distSetupExe -Algorithm SHA256).Hash
 "$setupHash  $([IO.Path]::GetFileName($distSetupExe))" |
     Set-Content -LiteralPath $distSetupHash -Encoding ASCII
 
-Get-Item $setupExe, $distSetupExe, $distSetupHash, $portableZip, $distPortableZip, $distPortableHash | Select-Object FullName, Length
+Get-Item $distSetupExe, $distSetupHash, $portableZip, $distPortableZip, $distPortableHash |
+    Select-Object FullName, Length

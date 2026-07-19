@@ -1,5 +1,19 @@
 # FlyPPTTimer 测试报告
 
+## v0.20.1 当前验证
+
+- SDK：`J:\codex2\FlyPPTTimer_GUI\.dotnet\dotnet.exe`，.NET SDK 8.0.422；Inno Setup 6.7.3。
+- Release 编译：0 个警告，0 个错误。
+- 自动化测试：137 总数，137 通过，0 失败，0 跳过；TRX：`C:\Temp\FlyPPTTimer_v0201_tests\v0.20.1.trx`。
+- 压缩发布验证：自包含 EXE 为 68.48 MiB，文件版本和产品版本均为 0.20.1，不依赖目标电脑预装 .NET。
+- Inno 安装验证：临时目录静默安装退出码 0；预置配置原文保留；生成 1 份时间戳升级备份且内容一致；安装后程序版本 0.20.1.0。
+- Inno 卸载验证：临时安装卸载退出码 0；测试卸载注册项和测试开始菜单目录均已清理。本机原有正式安装快捷方式已恢复并指向 `%LOCALAPPDATA%\FlyPPTTimer\FlyPPTTimer.exe`。
+- v0.20.0 安装包 218.80 MiB；v0.20.1 安装包 63.62 MiB，减少约 71%。
+- EXE：`J:\codex2\FlyPPTTimer_GUI\dist\v0.20.1\FlyPPTTimer.exe`；SHA-256：`B28E248C6E5F18328B4DED2065CECCD8C3D402B22BDFDC09603B59C636C3700F`。
+- 便携 ZIP：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.20.1-portable-win-x64.zip`；SHA-256：`2D9C70DC29714629683F5D0A4FEE5812EFBBF3F6C0E67963C718961F912AB419`。
+- 安装版：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.20.1-setup-win-x64.exe`；SHA-256：`51EAC62CEC2E3AC96E72439F86C0BB4A318AF7ED3BD683A4586D2C3A03146C04`。
+- 代码签名：当前安装包未进行 Authenticode 签名，Windows SmartScreen 仍可能显示未知发布者提示。
+
 ## v0.20.0 当前验证
 
 - SDK：`J:\codex2\FlyPPTTimer_GUI\.dotnet\dotnet.exe`，.NET SDK 8.0.422。
