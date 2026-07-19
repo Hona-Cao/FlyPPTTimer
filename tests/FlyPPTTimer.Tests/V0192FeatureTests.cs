@@ -13,8 +13,10 @@ public sealed class V0192FeatureTests
         Assert.Contains("getComputedStyle(pagesTrack).transform", script);
         Assert.Contains("baseX:freezeTrack()", script);
         Assert.DoesNotContain("event.target.closest('input,button", script);
-        Assert.DoesNotContain("Math.abs(dx)<=Math.abs(dy)", script);
-        Assert.Contains("Math.abs(dx)<6", script);
+        Assert.Contains("SWIPE_DIRECTION_DISTANCE=10", script);
+        Assert.Contains("SWIPE_MAX_ANGLE_DEGREES=35", script);
+        Assert.Contains("Math.atan2(Math.abs(dy),Math.abs(dx))*180/Math.PI", script);
+        Assert.Contains("if(angle>SWIPE_MAX_ANGLE_DEGREES){swipeStart=null", script);
         Assert.Contains("Math.abs(dx)>=18||Math.abs(velocity)>=.12", script);
         Assert.Contains("suppressSwipeClick", script);
     }

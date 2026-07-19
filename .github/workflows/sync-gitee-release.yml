@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: GitHub Release tag to sync, for example v0.20.1
+        description: GitHub Release tag to sync, for example v0.20.2
         required: true
         type: string
 

@@ -63,13 +63,13 @@ AppId={{8B4B0C52-DA7E-4B71-976E-F4A24177EA6C}
 AppName=FlyPPTTimer
 AppVersion=$version
 AppVerName=FlyPPTTimer $version
-AppPublisher=曹虎男
+AppPublisher=Cao Hunan
 AppPublisherURL=https://github.com/Hona-Cao/FlyPPTTimer
 AppSupportURL=https://github.com/Hona-Cao/FlyPPTTimer/issues
 AppUpdatesURL=https://github.com/Hona-Cao/FlyPPTTimer/releases
 VersionInfoVersion=$version.0
 VersionInfoCompany=FlyPPTTimer
-VersionInfoDescription=FlyPPTTimer 演讲计时器安装程序
+VersionInfoDescription=FlyPPTTimer presentation timer installer
 VersionInfoProductName=FlyPPTTimer
 VersionInfoProductVersion=$version
 DefaultDirName={localappdata}\FlyPPTTimer
@@ -100,14 +100,14 @@ Source: "$source\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "$source\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加快捷方式："; Flags: checkedonce
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: checkedonce
 
 [Icons]
 Name: "{group}\FlyPPTTimer"; Filename: "{app}\FlyPPTTimer.exe"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"
 Name: "{autodesktop}\FlyPPTTimer"; Filename: "{app}\FlyPPTTimer.exe"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\FlyPPTTimer.exe"; Description: "启动 FlyPPTTimer"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\FlyPPTTimer.exe"; Description: "Launch FlyPPTTimer"; Flags: nowait postinstall skipifsilent
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -125,7 +125,7 @@ begin
     Log('Warning: unable to create config upgrade backup: ' + BackupPath);
 end;
 "@
-Set-Content -LiteralPath $issPath -Value $iss -Encoding UTF8
+[IO.File]::WriteAllText($issPath, $iss, [Text.UTF8Encoding]::new($true))
 
 $isccCandidates = @(
     (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
