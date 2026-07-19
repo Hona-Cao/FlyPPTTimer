@@ -9,7 +9,7 @@
 - 压缩发布验证：自包含 EXE 为 68.48 MiB，文件版本 0.20.2.0、产品版本 0.20.2，不依赖目标电脑预装 .NET。
 - Inno 安装验证：临时目录静默安装退出码 0；预置配置原文保留；生成 1 份时间戳升级备份且内容一致；安装后程序版本 0.20.2.0。
 - Inno 卸载验证：临时安装卸载退出码 0，测试开始菜单目录已清理。
-- 更新功能静态与模拟验证：Gitee 最新 Release 读取、版本比较、附件筛选、安装版下载、SHA-256 校验、安装/便携分流均通过；真实 Gitee v0.20.2 下载将在发行附件上传后复验。
+- 更新功能真实联网验证：Gitee `releases/latest` 返回 v0.20.2，四个正式附件均可读取；从公开 Gitee 地址重新下载 66,709,583 字节安装包，下载文件、本地原件与发布的 SHA-256 三者完全一致。版本比较、安装包筛选、安装/便携分流的自动化测试同时通过。
 - EXE：`J:\codex2\FlyPPTTimer_GUI\dist\v0.20.2\FlyPPTTimer.exe`；SHA-256：`978617C3C7547810DE4418F24B4E2A70E6C8D5BF6A2905339C741506DD4498E1`。
 - 便携 ZIP：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.20.2-portable-win-x64.zip`；SHA-256：`D51395EC07D47E7A0F4072255359C2D3B637BE4BF59A8CD7960DC19F73D51820`。
 - 安装版：`J:\codex2\FlyPPTTimer_GUI\dist\FlyPPTTimer-v0.20.2-setup-win-x64.exe`；SHA-256：`A67BB53D6C0D8ACB296789485ACE3F9A7E0B7D2169A657C4552C815D85F96FC0`。
