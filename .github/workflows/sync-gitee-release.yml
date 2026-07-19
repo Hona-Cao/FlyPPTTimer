@@ -1,0 +1,168 @@
+name: Sync Release to Gitee
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: GitHub Release tag to sync, for example v0.20.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-gitee-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  sync-release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GITEE_OWNER: hona-cao
+      GITEE_REPO: fly-ppttimer
+    steps:
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            tag="${{ github.event.release.tag_name }}"
+          else
+            tag="${{ inputs.tag }}"
+          fi
+          if [[ -z "$tag" ]]; then
+            echo "Release tag is required." >&2
+            exit 1
+          fi
+          if [[ -z "$GITEE_TOKEN" ]]; then
+            echo "GitHub Actions secret GITEE_TOKEN is not configured." >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for mirrored tag on Gitee
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          for attempt in {1..30}; do
+            if git ls-remote --exit-code \
+              "https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}.git" \
+              "refs/tags/${tag}" >/dev/null 2>&1; then
+              echo "Gitee tag ${tag} is available."
+              exit 0
+            fi
+            echo "Waiting for Gitee mirror to receive ${tag} (${attempt}/30)..."
+            sleep 20
+          done
+          echo "Gitee mirror did not receive ${tag} within 10 minutes." >&2
+          exit 1
+
+      - name: Download and verify GitHub release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          mkdir -p release-assets
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
+            --json name,body,isPrerelease,targetCommitish > github-release.json
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+            --dir release-assets
+          shopt -s nullglob
+          checksums=(release-assets/*.sha256)
+          if (( ${#checksums[@]} == 0 )); then
+            echo "No SHA-256 files were found in the GitHub Release." >&2
+            exit 1
+          fi
+          for checksum in "${checksums[@]}"; do
+            (cd release-assets && sha256sum --check "$(basename "$checksum")")
+          done
+
+      - name: Create or update Gitee release and upload assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ steps.release.outputs.tag }}"
+          api="https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}"
+          auth=(--header "Authorization: Bearer ${GITEE_TOKEN}")
+
+          status=$(curl --silent --show-error \
+            "${auth[@]}" \
+            --output gitee-release.json \
+            --write-out '%{http_code}' \
+            "${api}/releases/tags/${tag}")
+
+          release_name=$(jq -r '.name // empty' github-release.json)
+          release_body=$(jq -r '.body // empty' github-release.json)
+          prerelease=$(jq -r '.isPrerelease' github-release.json)
+          [[ -n "$release_name" ]] || release_name="$tag"
+          payload=$(jq -n \
+            --arg tag "$tag" \
+            --arg name "$release_name" \
+            --arg body "$release_body" \
+            --argjson prerelease "$prerelease" \
+            '{tag_name:$tag,name:$name,body:$body,target_commitish:"main",prerelease:$prerelease}')
+
+          if [[ "$status" == "404" ]]; then
+            curl --fail-with-body --silent --show-error \
+              "${auth[@]}" \
+              --header 'Content-Type: application/json' \
+              --request POST \
+              --data "$payload" \
+              "${api}/releases" > gitee-release.json
+          elif [[ "$status" == "200" ]]; then
+            release_id=$(jq -r '.id' gitee-release.json)
+            curl --fail-with-body --silent --show-error \
+              "${auth[@]}" \
+              --header 'Content-Type: application/json' \
+              --request PATCH \
+              --data "$payload" \
+              "${api}/releases/${release_id}" > gitee-release.json
+          else
+            echo "Unable to query Gitee Release ${tag}; HTTP ${status}." >&2
+            cat gitee-release.json >&2
+            exit 1
+          fi
+
+          release_id=$(jq -r '.id' gitee-release.json)
+          if [[ -z "$release_id" || "$release_id" == "null" ]]; then
+            echo "Gitee did not return a valid Release ID." >&2
+            exit 1
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            "${auth[@]}" \
+            "${api}/releases/${release_id}/attach_files" > gitee-assets.json
+
+          shopt -s nullglob
+          files=(release-assets/*)
+          if (( ${#files[@]} == 0 )); then
+            echo "No GitHub Release assets were downloaded." >&2
+            exit 1
+          fi
+
+          for file in "${files[@]}"; do
+            name=$(basename "$file")
+            mapfile -t duplicate_ids < <(
+              jq -r --arg name "$name" '.[] | select(.name == $name) | .id' gitee-assets.json
+            )
+            for attachment_id in "${duplicate_ids[@]}"; do
+              curl --fail-with-body --silent --show-error \
+                "${auth[@]}" \
+                --request DELETE \
+                "${api}/releases/${release_id}/attach_files/${attachment_id}" >/dev/null
+            done
+            echo "Uploading ${name} to Gitee Release ${tag}..."
+            curl --fail-with-body --silent --show-error \
+              "${auth[@]}" \
+              --form "file=@${file}" \
+              "${api}/releases/${release_id}/attach_files" >/dev/null
+          done
+
+          echo "Gitee Release: https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/tag/${tag}"
