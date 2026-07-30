@@ -69,6 +69,7 @@ internal sealed class PresentationRuleRow : UserControl
         _layout.Controls.Add(_path, 1, 1);
         _layout.SetColumnSpan(_path, 2);
         Controls.Add(_layout);
+        Services.Localization.Attach(this);
 
         Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
         foreach (Control child in _layout.Controls)
@@ -116,6 +117,8 @@ internal sealed class PresentationRuleRow : UserControl
         _path.Text = rule?.FilePath ?? Path.Combine(option?.Directory ?? string.Empty, option?.Name ?? string.Empty);
         _enabled.Visible = rule is not null;
         _enabled.Text = rule?.Enabled == true ? "已启用" : "已禁用";
+        if (Services.Localization.IsEnglish)
+            _layout.ColumnStyles[2].Width = Math.Clamp(TextRenderer.MeasureText(_enabled.Text, _enabled.Font).Width + 28, 78, 150);
         _enabled.BackColor = rule?.Enabled == true ? ModernTheme.SuccessSoft : ModernTheme.ControlFill;
         _enabled.ForeColor = rule?.Enabled == true ? ModernTheme.Success : ModernTheme.MutedText;
         _updating = false;

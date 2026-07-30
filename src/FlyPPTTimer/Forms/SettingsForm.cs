@@ -31,7 +31,7 @@ public sealed class SettingsForm : Form
     {
         Dock = DockStyle.Fill,
         FlowDirection = FlowDirection.LeftToRight,
-        WrapContents = true,
+        WrapContents = false,
         Padding = new Padding(8, 8, 8, 8),
         Margin = new Padding(0, 0, 0, 12),
         BackColor = ModernTheme.Surface
@@ -53,6 +53,8 @@ public sealed class SettingsForm : Form
     private bool _syncingTimer;
     private bool _isDirty;
     private bool _resetOverlayPositionPending;
+    private bool _adjustingNavigationWidth;
+    private bool _interactiveResize;
     private readonly Label _dirtyLabel = new() { AutoSize = true, ForeColor = ModernTheme.AccentStrong, Text = "有未应用的更改", Visible = false, Margin = new Padding(10, 16, 12, 0) };
 
     public SettingsForm(AppConfig config, RemoteControlService remoteControl, NetworkAddressService networkAddressService)
@@ -71,14 +73,14 @@ public sealed class SettingsForm : Form
         DoubleBuffered = true;
         ClientSize = new Size(980, 760);
         MinimumSize = new Size(780, 560);
-        ResizeRedraw = true;
-        Resize += (_, _) => LayoutNavigation();
+        ResizeRedraw = false;
         HandleCreated += (_, _) => ApplyWindowChromeRegion();
-        SizeChanged += (_, _) => ApplyWindowChromeRegion();
         Shown += (_, _) => EnsureVisibleOnPrimaryScreen();
         BuildWindowChrome();
         BuildTabs();
         BuildBottomButtons();
+        Localization.Attach(this);
+        ApplyLocalizedLayout();
         TrackDraftChanges();
         LayoutNavigation();
     }
@@ -165,6 +167,7 @@ public sealed class SettingsForm : Form
     public event EventHandler? OpenLogRequested;
     public event EventHandler? ResetOverlayPositionRequested;
     public event EventHandler? CheckUpdateRequested;
+    public event EventHandler? RestartRequested;
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
@@ -188,7 +191,8 @@ public sealed class SettingsForm : Form
 
     private void TrackControl(Control control)
     {
-        control.TextChanged += (_, _) => MarkDirty();
+        if (control is TextBox { ReadOnly: false })
+            control.TextChanged += (_, _) => MarkDirty();
         if (control is CheckBox checkBox) checkBox.CheckedChanged += (_, _) => MarkDirty();
         if (control is ComboBox comboBox) comboBox.SelectedIndexChanged += (_, _) => MarkDirty();
         foreach (Control child in control.Controls) TrackControl(child);
@@ -204,7 +208,7 @@ public sealed class SettingsForm : Form
     private bool TryHide()
     {
         if (!_isDirty) { Hide(); return true; }
-        var choice = MessageBox.Show("设置中有未应用的更改。是：应用并关闭；否：放弃更改；取消：继续编辑。", "演讲计时器", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+        var choice = LocalizedMessageDialog.Show(this, Localization.T("设置中有未应用的更改。是：应用并关闭；否：放弃更改；取消：继续编辑。"), Localization.T("演讲计时器"), MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
         if (choice == DialogResult.Cancel) return false;
         if (choice == DialogResult.Yes && !Apply()) return false;
         _isDirty = false;
@@ -217,7 +221,7 @@ public sealed class SettingsForm : Form
     {
         _root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-        _settingsArea.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        _settingsArea.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
         _settingsArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         _settingsArea.Controls.Add(_navBar, 0, 0);
         _settingsArea.Controls.Add(_contentHost, 0, 1);
@@ -234,11 +238,29 @@ public sealed class SettingsForm : Form
 
     private void LayoutNavigation()
     {
-        if (_settingsArea.RowStyles.Count == 0) return;
-        var available = Math.Max(1, _navBar.ClientSize.Width - _navBar.Padding.Horizontal);
+        if (_settingsArea.RowStyles.Count == 0 || _adjustingNavigationWidth) return;
+        _settingsArea.RowStyles[0].Height = 64;
         var total = _navBar.Controls.Cast<Control>().Sum(control => control.Width + control.Margin.Horizontal);
-        var rows = total > available ? 2 : 1;
-        _settingsArea.RowStyles[0].Height = rows == 1 ? 58 : 108;
+        var requiredClientWidth =
+            total
+            + _navBar.Padding.Horizontal
+            + _root.Padding.Horizontal
+            + Padding.Horizontal;
+        var requiredWindowWidth = requiredClientWidth + Width - ClientSize.Width;
+        MinimumSize = new Size(Math.Max(780, requiredWindowWidth), MinimumSize.Height);
+        if (WindowState != FormWindowState.Normal || Width >= requiredWindowWidth) return;
+
+        _adjustingNavigationWidth = true;
+        try
+        {
+            Width = requiredWindowWidth;
+            var workingArea = Screen.FromControl(this).WorkingArea;
+            if (Right > workingArea.Right) Left = Math.Max(workingArea.Left, workingArea.Right - Width);
+        }
+        finally
+        {
+            _adjustingNavigationWidth = false;
+        }
     }
 
     private void BuildWindowChrome()
@@ -316,13 +338,30 @@ public sealed class SettingsForm : Form
 
     private void ApplyWindowChromeRegion()
     {
-        if (WindowState == FormWindowState.Maximized)
+        if (_interactiveResize || WindowState == FormWindowState.Maximized)
         {
             Region = null;
             return;
         }
 
         ModernTheme.ApplyRoundedRegion(this, ModernTheme.WindowRadius);
+    }
+
+    protected override void OnResizeBegin(EventArgs e)
+    {
+        _interactiveResize = true;
+        Region?.Dispose();
+        Region = null;
+        base.OnResizeBegin(e);
+    }
+
+    protected override void OnResizeEnd(EventArgs e)
+    {
+        base.OnResizeEnd(e);
+        _interactiveResize = false;
+        LayoutNavigation();
+        ApplyWindowChromeRegion();
+        Invalidate();
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -394,7 +433,7 @@ public sealed class SettingsForm : Form
             Margin = new Padding(0, 0, 0, 12),
             BackColor = ModernTheme.Card
         };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Localization.IsEnglish ? 310 : 270));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         ModernTheme.StyleRounded(grid, ModernTheme.CardRadius);
         return grid;
@@ -416,12 +455,13 @@ public sealed class SettingsForm : Form
         _contentHost.Controls.Add(page);
 
         var index = _pages.Count;
+        var displayTitle = Localization.T(title);
         var button = new SettingsNavButton
         {
-            Text = title,
-            Width = 132,
-            Height = 38,
-            Margin = new Padding(0, 0, 12, 0),
+            Text = displayTitle,
+            Width = Math.Clamp(TextRenderer.MeasureText(displayTitle, Font).Width + 60, 132, 280),
+            Height = 44,
+            Margin = new Padding(0, 2, 12, 2),
             TabStop = false
         };
         button.Click += (_, _) => SelectSettingsPage(index);
@@ -444,6 +484,7 @@ public sealed class SettingsForm : Form
 
     private void WireMouseWheelToPage(Control root, ScrollableControl page)
     {
+        if (root is ComboBox) return;
         root.MouseWheel += (_, e) => ScrollPageByWheel(page, e);
         foreach (Control child in root.Controls)
         {
@@ -465,6 +506,7 @@ public sealed class SettingsForm : Form
 
     private void Section(TableLayoutPanel grid, string title)
     {
+        title = Localization.T(title);
         var row = grid.RowCount++;
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         var label = new Label
@@ -485,19 +527,107 @@ public sealed class SettingsForm : Form
 
     private void Row(TableLayoutPanel grid, string label, Control control, string key)
     {
+        label = Localization.T(label);
+        LocalizeControlBeforeMeasure(control);
+        ExpandLabelColumn(grid, label);
         var row = grid.RowCount++;
         NormalizeControl(control);
+        var labelWidth = Math.Max(120, (int)grid.ColumnStyles[0].Width - 30);
+        var labelHeight = TextRenderer.MeasureText(
+            label,
+            Font,
+            new Size(labelWidth, 0),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height + 20;
+        var controlHeight = MeasureControlHeight(control, Math.Max(160, ClientSize.Width - (int)grid.ColumnStyles[0].Width - 100));
         var height = control is DataGridView ? 246
             : control is TextBox { Multiline: true } ? Math.Max(86, control.Height + 18)
-            : control is Label labelControl && labelControl.Text.Length > 42 ? 86
-            : 64;
+            : Math.Max(64, Math.Max(labelHeight, controlHeight));
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        grid.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(6, 0, 18, 0), AutoEllipsis = true, ForeColor = ModernTheme.Text }, 0, row);
+        grid.Controls.Add(new Label
+        {
+            Text = label,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(6, 0, 18, 0),
+            AutoEllipsis = false,
+            UseCompatibleTextRendering = true,
+            ForeColor = ModernTheme.Text
+        }, 0, row);
         var displayControl = DecorateControl(control);
         displayControl.Dock = DockStyle.Fill;
         displayControl.Margin = new Padding(3, 9, 3, 9);
         grid.Controls.Add(displayControl, 1, row);
         _fields[key] = control;
+    }
+
+    private void ExpandLabelColumn(TableLayoutPanel grid, string text)
+    {
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        var cjkCharacters = text.Count(character => character is >= '\u4e00' and <= '\u9fff');
+        var shortText = cjkCharacters > 0 ? cjkCharacters <= 6 : words <= 2;
+        var preferred = TextRenderer.MeasureText(text, Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width + 44;
+        var maximum = Localization.IsEnglish ? 380 : 320;
+        var target = shortText ? preferred : Math.Min(preferred, maximum);
+        grid.ColumnStyles[0].Width = Math.Clamp(Math.Max(grid.ColumnStyles[0].Width, target), 220, maximum);
+    }
+
+    private static int MeasureControlHeight(Control control, int availableWidth)
+    {
+        if (control is Button button)
+        {
+            var preferred = TextRenderer.MeasureText(
+                button.Text,
+                button.Font,
+                new Size(Math.Max(120, availableWidth - 30), 0),
+                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+            return Math.Max(46, preferred.Height + 24);
+        }
+        if (control is Label label)
+        {
+            var preferred = TextRenderer.MeasureText(
+                label.Text,
+                label.Font,
+                new Size(Math.Max(120, availableWidth - 30), 0),
+                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+            return Math.Max(46, preferred.Height + 20);
+        }
+        return Math.Max(46, control.MinimumSize.Height);
+    }
+
+    private static void LocalizeControlBeforeMeasure(Control control)
+    {
+        if (control is not ComboBox && (control is not TextBox textBox || textBox.ReadOnly))
+            control.Text = Localization.T(control.Text);
+        if (control is Button button)
+        {
+            var preferred = TextRenderer.MeasureText(
+                button.Text,
+                button.Font,
+                Size.Empty,
+                TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+            button.MinimumSize = new Size(Math.Min(520, preferred.Width + 38), Math.Max(42, button.MinimumSize.Height));
+            button.AutoEllipsis = false;
+        }
+    }
+
+    private void ApplyLocalizedLayout()
+    {
+        if (!Localization.IsEnglish) return;
+        foreach (var page in _pages.Select(x => x.Page))
+        {
+            foreach (var grid in Descendants(page).OfType<TableLayoutPanel>())
+                grid.PerformLayout();
+        }
+        MinimumSize = new Size(900, 620);
+    }
+
+    private static IEnumerable<Control> Descendants(Control root)
+    {
+        foreach (Control child in root.Controls)
+        {
+            yield return child;
+            foreach (var nested in Descendants(child)) yield return nested;
+        }
     }
 
     private Control DecorateControl(Control control)
@@ -508,10 +638,15 @@ public sealed class SettingsForm : Form
             return control;
         }
 
+        var readOnlyValue = control is TextBox { ReadOnly: true } or Label;
+        var controlFill = readOnlyValue ? ModernTheme.ReadOnlyFill : ModernTheme.ControlFill;
+        var controlText = readOnlyValue ? ModernTheme.ReadOnlyText : ModernTheme.Text;
+
         if (control is TextBox textBox)
         {
             textBox.BorderStyle = BorderStyle.None;
-            textBox.BackColor = ModernTheme.ControlFill;
+            textBox.BackColor = controlFill;
+            textBox.ForeColor = controlText;
             if (textBox.ReadOnly && textBox.Multiline && textBox.Text.TrimStart().StartsWith("netsh", StringComparison.OrdinalIgnoreCase))
             {
                 textBox.Font = new Font("Consolas", Font.Size, FontStyle.Regular, GraphicsUnit.Point);
@@ -521,6 +656,9 @@ public sealed class SettingsForm : Form
         {
             combo.FlatStyle = FlatStyle.Flat;
             combo.BackColor = ModernTheme.ControlFill;
+            combo.Dock = DockStyle.Fill;
+            combo.Margin = Padding.Empty;
+            return combo;
         }
         else if (control is CheckBox checkBox)
         {
@@ -529,17 +667,18 @@ public sealed class SettingsForm : Form
         }
         else if (control is Label label)
         {
-            label.BackColor = ModernTheme.ControlFill;
+            label.BackColor = controlFill;
+            label.ForeColor = controlText;
             label.Padding = new Padding(10, 0, 10, 0);
         }
 
         var host = new RoundedHostPanel
         {
-            FillColor = ModernTheme.ControlFill,
+            FillColor = controlFill,
             Padding = control switch
             {
                 DataGridView => new Padding(1),
-                ComboBox => new Padding(12, 6, 10, 6),
+                ComboBox => Padding.Empty,
                 TextBox => new Padding(10, 8, 10, 6),
                 CheckBox => new Padding(4, 7, 8, 7),
                 Label => new Padding(0),
@@ -549,6 +688,15 @@ public sealed class SettingsForm : Form
         control.Dock = DockStyle.Fill;
         control.Margin = Padding.Empty;
         host.Controls.Add(control);
+        void UpdateEnabledSurface()
+        {
+            var fill = control.Enabled ? controlFill : ModernTheme.ReadOnlyFill;
+            host.FillColor = fill;
+            control.BackColor = fill;
+            control.ForeColor = control.Enabled ? controlText : ModernTheme.ReadOnlyText;
+        }
+        control.EnabledChanged += (_, _) => UpdateEnabledSurface();
+        UpdateEnabledSurface();
         return host;
     }
 
@@ -564,7 +712,6 @@ public sealed class SettingsForm : Form
                 combo.ItemHeight = Math.Max(combo.ItemHeight, 32);
                 combo.FlatStyle = FlatStyle.Flat;
                 combo.BackColor = ModernTheme.ControlFill;
-                combo.MouseWheel += BlockMouseWheel;
                 break;
             case CheckBox checkBox:
                 checkBox.AutoSize = false;
@@ -670,9 +817,9 @@ public sealed class SettingsForm : Form
             Margin = Padding.Empty,
             BackColor = Color.White
         };
-        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
+        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Localization.IsEnglish ? 90 : 70));
         editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
+        editor.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Localization.IsEnglish ? 90 : 70));
         editor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
         editor.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         editor.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -687,12 +834,12 @@ public sealed class SettingsForm : Form
 
         AddEditorCell(editor, "文件", _ruleNameBox, 0);
         AddEditorCell(editor, "路径", _rulePathBox, 1);
-        editor.Controls.Add(new Label { Text = "时长", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0) }, 2, 0);
+        editor.Controls.Add(new Label { Text = Localization.T("时长"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0) }, 2, 0);
         var duration = DecorateControl(_ruleDurationBox);
         duration.Dock = DockStyle.Fill;
         duration.Margin = new Padding(0, 3, 0, 3);
         editor.Controls.Add(duration, 3, 0);
-        editor.Controls.Add(new Label { Text = "状态", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0) }, 2, 1);
+        editor.Controls.Add(new Label { Text = Localization.T("状态"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(10, 0, 0, 0) }, 2, 1);
         var enabled = DecorateControl(_ruleEnabledButton);
         enabled.Dock = DockStyle.Fill;
         enabled.Margin = new Padding(0, 3, 0, 3);
@@ -702,7 +849,7 @@ public sealed class SettingsForm : Form
 
     private void AddEditorCell(TableLayoutPanel editor, string label, Control control, int row)
     {
-        editor.Controls.Add(new Label { Text = label, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(2, 0, 0, 0) }, 0, row);
+        editor.Controls.Add(new Label { Text = Localization.T(label), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(2, 0, 0, 0) }, 0, row);
         var decorated = DecorateControl(control);
         decorated.Dock = DockStyle.Fill;
         decorated.Margin = new Padding(0, 3, 8, 3);
@@ -711,10 +858,13 @@ public sealed class SettingsForm : Form
 
     private Button SmallButton(string text, Action action)
     {
+        text = Localization.T(text);
+        var measured = TextRenderer.MeasureText(text, Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         var button = new Button
         {
             Text = text,
-            Width = 112,
+            Width = Math.Clamp(measured.Width + 34, 112, 240),
+            MinimumSize = new Size(Math.Clamp(measured.Width + 34, 112, 240), 42),
             Height = 42,
             Margin = new Padding(0, 0, 10, 0),
             BackColor = ModernTheme.ControlFill,
@@ -763,7 +913,7 @@ public sealed class SettingsForm : Form
     private void ClearRules()
     {
         if (_rulesSource.Count == 0) return;
-        if (MessageBox.Show("确定清空所有文件计时规则？", "演讲计时器", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
+        if (LocalizedMessageDialog.Show(this, Localization.T("确定清空所有文件计时规则？"), Localization.T("演讲计时器"), MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
         _rulesSource.Clear();
         _checkedRulePaths.Clear();
         RefreshRuleEditor();
@@ -831,7 +981,7 @@ public sealed class SettingsForm : Form
             .ToList();
         if (selected.Count == 0)
         {
-            MessageBox.Show("请先勾选要批量修改的文件规则。", "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            LocalizedMessageDialog.Show(this, Localization.T("请先勾选要批量修改的文件规则。"), Localization.T("演讲计时器"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
@@ -989,6 +1139,8 @@ public sealed class SettingsForm : Form
     private void AddAppearanceTab()
     {
         var grid = NewGrid();
+        Section(grid, "计时器窗口");
+        Row(grid, "显示计时器窗口", new CheckBox { Checked = _config.Placement.Visible, Text = "启用" }, "timerWindowVisible");
         Section(grid, "配色");
         var scheme = Combo(AppearancePresetService.Names, _config.Appearance.ColorScheme);
         Row(grid, "配色方案", scheme, "scheme");
@@ -1002,8 +1154,36 @@ public sealed class SettingsForm : Form
         Row(grid, "外观形状", Combo(["直角矩形", "圆角矩形（小）", "圆角矩形（大）"], _config.Appearance.Shape), "shape");
         Row(grid, "背景不透明度", NumberText(_config.Appearance.BackgroundOpacity), "bgOpacity");
         Section(grid, "多屏显示");
-        Row(grid, "所有屏幕同时显示", new CheckBox { Checked = _config.Placement.ShowOnAllScreens, Text = "启用" }, "showAllScreens");
-        Row(grid, "指定屏幕", Combo(GetScreenItems(), string.IsNullOrWhiteSpace(_config.Placement.TargetScreenDeviceName) ? "主屏幕" : _config.Placement.TargetScreenDeviceName), "targetScreen");
+        var showOnAllScreens = new CheckBox { Checked = _config.Placement.ShowOnAllScreens, Text = "启用" };
+        var singleScreenTarget = Combo(GetScreenItems(), string.IsNullOrWhiteSpace(_config.Placement.TargetScreenDeviceName) ? "主屏幕" : _config.Placement.TargetScreenDeviceName);
+        Row(grid, "所有屏幕同时显示", showOnAllScreens, "showAllScreens");
+        Row(grid, "单屏显示屏幕", singleScreenTarget, "targetScreen");
+        void UpdateSingleScreenState() => singleScreenTarget.Enabled = !showOnAllScreens.Checked;
+        showOnAllScreens.CheckedChanged += (_, _) => UpdateSingleScreenState();
+        UpdateSingleScreenState();
+        Section(grid, "大屏计时模式");
+        var extendedScreens = GetExtendedScreenItems();
+        var hasExtendedScreen = extendedScreens.Length > 0;
+        var bigScreenEnabled = new CheckBox
+        {
+            Checked = hasExtendedScreen && _config.Placement.BigScreenEnabled,
+            Enabled = hasExtendedScreen,
+            Text = hasExtendedScreen ? "启用" : "需要扩展屏"
+        };
+        Row(grid, "启用大屏计时器", bigScreenEnabled, "bigScreenEnabled");
+        if (hasExtendedScreen)
+        {
+            var configuredBigScreen = extendedScreens.Contains(
+                _config.Placement.BigScreenDeviceName,
+                StringComparer.OrdinalIgnoreCase)
+                ? _config.Placement.BigScreenDeviceName
+                : extendedScreens[0];
+            var bigScreenTarget = Combo(extendedScreens, configuredBigScreen);
+            Row(grid, "大屏显示屏幕", bigScreenTarget, "bigScreenTarget");
+            void UpdateBigScreenTargetState() => bigScreenTarget.Enabled = bigScreenEnabled.Checked;
+            bigScreenEnabled.CheckedChanged += (_, _) => UpdateBigScreenTargetState();
+            UpdateBigScreenTargetState();
+        }
         Section(grid, "默认位置");
         Row(grid, "默认点位", Combo(GetAnchorItems(), AnchorToText(_config.Placement.Anchor)), "anchor");
         Row(grid, "水平微调百分比", NumberText(ClampDecimal(_config.Placement.OffsetXPercent, -50, 50)), "offsetX");
@@ -1059,6 +1239,20 @@ public sealed class SettingsForm : Form
     private void AddOtherTab()
     {
         var grid = NewGrid();
+        Section(grid, "语言");
+        Row(grid, "界面语言", Combo(
+            ["跟随系统", "English", "简体中文"],
+            _config.Language switch
+            {
+                Localization.English => "English",
+                Localization.SimplifiedChinese => "简体中文",
+                _ => "跟随系统"
+            }), "language");
+        Row(grid, "下次启动生效", new Label
+        {
+            Text = "更改界面语言后，请退出并重新启动 FlyPPTTimer。安装版和便携版均会记住此选项。",
+            TextAlign = ContentAlignment.MiddleLeft
+        }, "languageRestart");
         Section(grid, "软件更新");
         Row(grid, "启动时检测新版本", new CheckBox
         {
@@ -1101,7 +1295,17 @@ public sealed class SettingsForm : Form
 
     private Button Button(string text, EventHandler handler)
     {
-        var b = new Button { Text = text, Height = 50, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentSoft };
+        var displayText = Localization.T(text);
+        var measured = TextRenderer.MeasureText(displayText, Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        var b = new Button
+        {
+            Text = displayText,
+            Height = 50,
+            MinimumSize = new Size(Math.Min(520, measured.Width + 40), 42),
+            AutoEllipsis = false,
+            UseCompatibleTextRendering = true,
+            BackColor = ModernTheme.AccentSoft
+        };
         b.Click += handler;
         NormalizeControl(b);
         return b;
@@ -1122,7 +1326,7 @@ public sealed class SettingsForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            LocalizedMessageDialog.Show(this, Localization.T(ex.Message), Localization.T("演讲计时器"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -1163,15 +1367,15 @@ public sealed class SettingsForm : Form
     {
         _resetOverlayPositionPending = true;
         MarkDirty();
-        MessageBox.Show("应用设置后，计时窗口中心将还原到当前选择的默认点位。", "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        LocalizedMessageDialog.Show(this, Localization.T("应用设置后，计时窗口中心将还原到当前选择的默认点位。"), Localization.T("演讲计时器"), MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void BuildBottomButtons()
     {
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(8, 8, 8, 4), WrapContents = false, BackColor = ModernTheme.Surface };
-        var ok = new Button { Text = "确定", Width = 124, Height = 42, MinimumSize = new Size(124, 42), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentStrong, ForeColor = Color.White };
-        var cancel = new Button { Text = "取消", Width = 124, Height = 42, MinimumSize = new Size(124, 42), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.Card };
-        var apply = new Button { Text = "应用", Width = 124, Height = 42, MinimumSize = new Size(124, 42), AutoSize = false, UseCompatibleTextRendering = true, BackColor = ModernTheme.AccentSoft };
+        var ok = BottomButton("确定", ModernTheme.AccentStrong, Color.White);
+        var cancel = BottomButton("取消", ModernTheme.Card, ModernTheme.Text);
+        var apply = BottomButton("应用", ModernTheme.AccentSoft, ModernTheme.Text);
         ok.Click += (_, _) => { if (Apply()) { DialogResult = DialogResult.OK; Hide(); } };
         apply.Click += (_, _) => Apply();
         cancel.Click += (_, _) => TryHide();
@@ -1187,6 +1391,25 @@ public sealed class SettingsForm : Form
         ok.FlatAppearance.MouseOverBackColor = ModernTheme.Accent;
         ok.FlatAppearance.MouseDownBackColor = Color.FromArgb(13, 72, 66);
         _root.Controls.Add(bottom, 0, 1);
+    }
+
+    private Button BottomButton(string text, Color backColor, Color foreColor)
+    {
+        text = Localization.T(text);
+        var measured = TextRenderer.MeasureText(text, Font, Size.Empty, TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+        var width = Math.Clamp(measured.Width + 46, 124, 220);
+        return new Button
+        {
+            Text = text,
+            Width = width,
+            Height = 42,
+            MinimumSize = new Size(width, 42),
+            AutoSize = false,
+            AutoEllipsis = false,
+            UseCompatibleTextRendering = true,
+            BackColor = backColor,
+            ForeColor = foreColor
+        };
     }
 
     private ComboBox Combo(string[] items, string selected)
@@ -1221,11 +1444,6 @@ public sealed class SettingsForm : Form
             return new Bitmap(source, new Size(30, 30));
         }
         catch { return null; }
-    }
-
-    private static void BlockMouseWheel(object? sender, MouseEventArgs e)
-    {
-        if (e is HandledMouseEventArgs handled) handled.Handled = true;
     }
 
     private T Get<T>(string key) where T : Control => (T)_fields[key];
@@ -1266,7 +1484,7 @@ public sealed class SettingsForm : Form
     {
         if (!ValidateDraft(out var validationError))
         {
-            MessageBox.Show(validationError, "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            LocalizedMessageDialog.Show(this, Localization.T(validationError), Localization.T("演讲计时器"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
         var newDefaultDuration = Get<TextBox>("duration").Text;
@@ -1275,9 +1493,13 @@ public sealed class SettingsForm : Form
         if (!string.Equals(_config.Timer.DefaultDuration, newDefaultDuration, StringComparison.Ordinal)
             && rules.Count > 0)
         {
-            syncRuleDurations = MessageBox.Show(
-                $"全局默认时长将改为 {newDefaultDuration}。\n\n是否同步应用到全部 {rules.Count} 个待控演示文稿？\n\n选择“否”将保留各文件规则原来的时长。",
-                "同步文件规则时长",
+            var syncMessage = Localization.IsEnglish
+                ? $"The global default duration will change to {newDefaultDuration}.\n\nApply it to all {rules.Count} managed presentations?\n\nChoose No to keep each rule's current duration."
+                : $"全局默认时长将改为 {newDefaultDuration}。\n\n是否同步应用到全部 {rules.Count} 个待控演示文稿？\n\n选择“否”将保留各文件规则原来的时长。";
+            syncRuleDurations = LocalizedMessageDialog.Show(
+                this,
+                syncMessage,
+                Localization.T("同步文件规则时长"),
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question) == DialogResult.Yes;
         }
@@ -1331,9 +1553,18 @@ public sealed class SettingsForm : Form
         _config.Appearance.Shape = (string)Get<ComboBox>("shape").SelectedItem!;
         _config.Appearance.BackgroundOpacity = ReadInt("bgOpacity", 0, 100, _config.Appearance.BackgroundOpacity);
         _config.Appearance.OvertimePrefix = Get<TextBox>("overtimePrefix").Text;
+        _config.Placement.Visible = Get<CheckBox>("timerWindowVisible").Checked;
         _config.Placement.ShowOnAllScreens = Get<CheckBox>("showAllScreens").Checked;
         var screenText = (string)Get<ComboBox>("targetScreen").SelectedItem!;
         _config.Placement.TargetScreenDeviceName = screenText == "主屏幕" ? "" : screenText;
+        _config.Placement.BigScreenEnabled =
+            Get<CheckBox>("bigScreenEnabled").Checked &&
+            Screen.AllScreens.Any(screen => !screen.Primary);
+        if (_fields.TryGetValue("bigScreenTarget", out var bigScreenControl) &&
+            bigScreenControl is ComboBox { SelectedItem: string bigScreenText })
+            _config.Placement.BigScreenDeviceName = bigScreenText;
+        else if (!_config.Placement.BigScreenEnabled)
+            _config.Placement.BigScreenDeviceName = "";
         _config.Placement.Anchor = TextToAnchor((string)Get<ComboBox>("anchor").SelectedItem!);
         _config.Placement.OffsetXPercent = ReadDecimal("offsetX", -50, 50, _config.Placement.OffsetXPercent);
         _config.Placement.OffsetYPercent = ReadDecimal("offsetY", -50, 50, _config.Placement.OffsetYPercent);
@@ -1357,13 +1588,20 @@ public sealed class SettingsForm : Form
         _config.Controls.Hotkeys.Remove("openSettings");
         if (HasDuplicateHotkeys(_config.Controls.Hotkeys, out var duplicate))
         {
-            MessageBox.Show($"快捷键重复：{duplicate}", "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            LocalizedMessageDialog.Show(this, Localization.T($"快捷键重复：{duplicate}"), Localization.T("演讲计时器"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return false;
         }
         _config.Controls.ClickThrough = Get<CheckBox>("clickThrough").Checked;
         _config.Controls.LockPosition = Get<CheckBox>("lock").Checked;
         _config.Controls.MinimizeToTray = Get<CheckBox>("minTray").Checked;
         _config.Controls.CloseButtonBehavior = (string)Get<ComboBox>("closeBehavior").SelectedItem! == "退出程序" ? CloseButtonBehavior.Exit : CloseButtonBehavior.MinimizeToTray;
+        var previousLanguage = _config.Language;
+        _config.Language = ((string)Get<ComboBox>("language").SelectedItem!) switch
+        {
+            "English" => Localization.English,
+            "简体中文" => Localization.SimplifiedChinese,
+            _ => Localization.Auto
+        };
         _config.Update.CheckOnStartup = Get<CheckBox>("checkUpdateOnStartup").Checked;
         ConfigApplied?.Invoke(this, _config);
         if (_resetOverlayPositionPending)
@@ -1373,12 +1611,32 @@ public sealed class SettingsForm : Form
         }
         _isDirty = false;
         _dirtyLabel.Visible = false;
+        if (!string.Equals(previousLanguage, _config.Language, StringComparison.Ordinal))
+        {
+            var restart = LocalizedMessageDialog.Show(
+                this,
+                Localization.T("界面语言已更改。是否立即重启 FlyPPTTimer 以应用更改？\r\n\r\n选择“否”将在下次启动时应用。"),
+                Localization.T("需要重启"),
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+            if (restart == DialogResult.Yes)
+                BeginInvoke((MethodInvoker)(() => RestartRequested?.Invoke(this, EventArgs.Empty)));
+        }
         return true;
     }
 
     private static string[] GetScreenItems()
     {
         return new[] { "主屏幕" }.Concat(Screen.AllScreens.Select(x => x.DeviceName)).Distinct().ToArray();
+    }
+
+    private static string[] GetExtendedScreenItems()
+    {
+        return Screen.AllScreens
+            .Where(screen => !screen.Primary)
+            .Select(screen => screen.DeviceName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static string[] GetAnchorItems() =>
@@ -1468,7 +1726,7 @@ public sealed class SettingsForm : Form
         var addresses = _networkAddressService.GetRemoteAccessAddresses();
         return addresses.Count == 0
             ? "请让手机与电脑连接同一 Wi-Fi 或局域网后重试。"
-            : string.Join(Environment.NewLine, addresses.Select(x => $"{x.Type} - {x.Name}: http://{x.Address}:{port}/?token={_config.RemoteControl.Token}"));
+            : string.Join(Environment.NewLine, addresses.Select(x => $"{Localization.T(x.Type)} - {x.Name}: http://{x.Address}:{port}/?token={_config.RemoteControl.Token}"));
     }
 
     private void CopyRecommendedUrl()
@@ -1476,7 +1734,7 @@ public sealed class SettingsForm : Form
         var url = BuildRecommendedUrl();
         if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
         {
-            MessageBox.Show("未检测到手机可访问的局域网地址。请先让手机和电脑连接同一 Wi-Fi 或局域网。", "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            LocalizedMessageDialog.Show(this, Localization.T("未检测到手机可访问的局域网地址。请先让手机和电脑连接同一 Wi-Fi 或局域网。"), Localization.T("演讲计时器"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         Clipboard.SetText(url);
@@ -1590,8 +1848,9 @@ internal sealed class SettingsNavButton : Button
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
         e.Graphics.Clear(Parent?.BackColor ?? ModernTheme.Surface);
-        var rect = new Rectangle(1, 1, Width - 2, Height - 2);
+        var rect = new Rectangle(2, 2, Math.Max(1, Width - 4), Math.Max(1, Height - 4));
         var fillColor = Selected ? ModernTheme.AccentStrong : ModernTheme.Card;
         using (var path = ModernTheme.RoundedRect(rect, ModernTheme.ButtonRadius))
         using (var fill = new SolidBrush(fillColor))
@@ -1605,6 +1864,6 @@ internal sealed class SettingsNavButton : Button
             Font,
             rect,
             Selected ? Color.White : ModernTheme.Text,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
     }
 }

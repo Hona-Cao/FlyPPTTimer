@@ -314,7 +314,9 @@ public sealed class RemoteControlService : IDisposable
                 response = ToJson(new { ok = false, error = "命令不被允许" });
                 return false;
             }
-            else message = command.Command == "mute.toggle" ? _commands.LastCommandMessage : "命令已执行";
+            else message = command.Command is "mute.toggle" or "timer.restart"
+                ? _commands.LastCommandMessage
+                : "命令已执行";
 
             response = ToJson(StateWithClientCount(true, message));
             return true;

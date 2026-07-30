@@ -27,12 +27,12 @@ internal readonly record struct RemoteWindowRestorePlan(
 /// </summary>
 internal static class RemoteWindowLayoutService
 {
-    public const int DesignClientWidthDip = 1180;
-    public const int DesignClientHeightDip = 760;
-    public const int MinimumClientWidthDip = 1000;
-    public const int MinimumClientHeightDip = 660;
-    public const int StandardMinimumWidthDip = 1120;
-    public const int StandardMinimumHeightDip = 720;
+    public const int DesignClientWidthDip = 700;
+    public const int DesignClientHeightDip = 510;
+    public const int MinimumClientWidthDip = 700;
+    public const int MinimumClientHeightDip = 510;
+    public const int StandardMinimumWidthDip = 700;
+    public const int StandardMinimumHeightDip = 510;
     public const int WorkingAreaSafetyMarginPhysical = 32;
 
     public static int DipToPhysical(int dip, int dpi) =>
@@ -63,7 +63,7 @@ internal static class RemoteWindowLayoutService
     public static float GetBodyFontSize(RemoteLayoutMode mode) => 9.5F;
 
     public static float GetPageTitleFontSize(RemoteLayoutMode mode) =>
-        mode == RemoteLayoutMode.Standard ? 19F : 17F;
+        mode == RemoteLayoutMode.Standard ? 16F : 15F;
 
     public static Size GetClientSizePhysical(RemoteWindowPlacement placement, RemoteScreenMetrics screen)
     {

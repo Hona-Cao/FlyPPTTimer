@@ -5,12 +5,13 @@ namespace FlyPPTTimer.Forms;
 /// <summary>Fully owner-drawn text button; native WinForms button chrome never participates.</summary>
 internal sealed class RemoteTextButton : Control, IButtonControl
 {
-    public const int DefaultButtonHeight = 40;
+    public const int DefaultButtonHeight = 30;
     private bool _hovered;
     private bool _pressed;
     private bool _isDefault;
     private RemoteButtonKind _kind = RemoteButtonKind.Secondary;
     private bool _selected;
+    private int _cornerRadius = RemoteDashboardTheme.ControlRadius;
 
     public RemoteButtonKind Kind
     {
@@ -22,6 +23,12 @@ internal sealed class RemoteTextButton : Control, IButtonControl
     {
         get => _selected;
         set { _selected = value; Invalidate(); }
+    }
+
+    public int CornerRadius
+    {
+        get => _cornerRadius;
+        set { _cornerRadius = Math.Max(1, value); Invalidate(); }
     }
 
     public ContentAlignment TextAlign { get; set; } = ContentAlignment.MiddleCenter;
@@ -95,7 +102,7 @@ internal sealed class RemoteTextButton : Control, IButtonControl
         base.OnKeyUp(e);
     }
 
-    protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseEnter(EventArgs e) { _hovered = Enabled; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { _hovered = false; _pressed = false; Invalidate(); base.OnMouseLeave(e); }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -156,7 +163,7 @@ internal sealed class RemoteTextButton : Control, IButtonControl
             0.5F,
             Math.Max(1F, Width - 1.0F),
             Math.Max(1F, Height - 1.0F));
-        using var path = RemoteDashboardTheme.RoundedPath(bounds, RemoteDashboardTheme.Scale(this, RemoteDashboardTheme.ControlRadius));
+        using var path = RemoteDashboardTheme.RoundedPath(bounds, RemoteDashboardTheme.Scale(this, CornerRadius));
         var palette = ResolvePalette();
         using var fill = new SolidBrush(palette.Fill);
         using var border = new Pen(palette.Border, 1F) { Alignment = PenAlignment.Inset };
@@ -166,7 +173,7 @@ internal sealed class RemoteTextButton : Control, IButtonControl
         if ((Focused && ShowFocusCues) || _isDefault)
         {
             var focusBounds = RectangleF.Inflate(bounds, -3F, -3F);
-            using var focusPath = RemoteDashboardTheme.RoundedPath(focusBounds, Math.Max(2, RemoteDashboardTheme.Scale(this, RemoteDashboardTheme.ControlRadius) - 2));
+            using var focusPath = RemoteDashboardTheme.RoundedPath(focusBounds, Math.Max(2, RemoteDashboardTheme.Scale(this, CornerRadius) - 2));
             using var focusPen = new Pen(Color.FromArgb(147, 197, 253), 1F) { Alignment = PenAlignment.Inset };
             e.Graphics.DrawPath(focusPen, focusPath);
         }
@@ -178,12 +185,20 @@ internal sealed class RemoteTextButton : Control, IButtonControl
             safeInset,
             Math.Max(1, ClientSize.Width - horizontalInset - Math.Max(safeInset, Padding.Right)),
             Math.Max(1, ClientSize.Height - safeInset * 2));
-        var flags = TextFormatFlags.SingleLine |
-                    TextFormatFlags.VerticalCenter |
+        var cjkCharacters = Text.Count(character => character is >= '\u4e00' and <= '\u9fff');
+        var words = Text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        var preferredTextWidth = TextRenderer.MeasureText(
+            Text,
+            Font,
+            Size.Empty,
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix).Width;
+        var wrapEligible = cjkCharacters > 6 || (cjkCharacters == 0 && words > 2);
+        var wrap = wrapEligible && preferredTextWidth > textBounds.Width;
+        var flags = TextFormatFlags.VerticalCenter |
                     TextFormatFlags.HorizontalCenter |
-                    TextFormatFlags.EndEllipsis |
                     TextFormatFlags.NoPrefix |
                     TextFormatFlags.GlyphOverhangPadding;
+        flags |= wrap ? TextFormatFlags.WordBreak : TextFormatFlags.SingleLine;
         if (TextAlign == ContentAlignment.MiddleLeft)
             flags = (flags & ~TextFormatFlags.HorizontalCenter) | TextFormatFlags.Left;
         else if (TextAlign == ContentAlignment.MiddleRight)

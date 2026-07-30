@@ -36,23 +36,23 @@ internal sealed class BatchRuleSettingsDialog : Form
             RowCount = 4,
             BackColor = ModernTheme.Card
         };
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Localization.IsEnglish ? 160 : 110));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var summary = new Label { Text = $"已选择 {count} 条规则", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = ModernTheme.AccentStrong };
+        var summary = new Label { Text = Localization.T($"已选择 {count} 条规则"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = ModernTheme.AccentStrong };
         root.Controls.Add(summary, 0, 0);
         root.SetColumnSpan(summary, 2);
-        root.Controls.Add(new Label { Text = "统一时长", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
+        root.Controls.Add(new Label { Text = Localization.T("统一时长"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
         root.Controls.Add(_duration, 1, 1);
-        root.Controls.Add(new Label { Text = "统一计时方式", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
+        root.Controls.Add(new Label { Text = Localization.T("统一计时方式"), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 2);
         root.Controls.Add(_mode, 1, 2);
 
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
-        var ok = new Button { Text = "确定", Width = 94, Height = 38, BackColor = ModernTheme.AccentStrong, ForeColor = Color.White };
-        var cancel = new Button { Text = "取消", Width = 94, Height = 38, DialogResult = DialogResult.Cancel };
+        var ok = new Button { Text = Localization.T("确定"), Width = 110, Height = 38, BackColor = ModernTheme.AccentStrong, ForeColor = Color.White };
+        var cancel = new Button { Text = Localization.T("取消"), Width = 110, Height = 38, DialogResult = DialogResult.Cancel };
         ok.Click += (_, _) => AcceptChanges();
         buttons.Controls.Add(ok);
         buttons.Controls.Add(cancel);
@@ -61,13 +61,14 @@ internal sealed class BatchRuleSettingsDialog : Form
         Controls.Add(root);
         AcceptButton = ok;
         CancelButton = cancel;
+        Localization.Attach(this);
     }
 
     private void AcceptChanges()
     {
         if (!PresentationRuleValidator.TryNormalizeDuration(_duration.Text, out var normalized, out var error))
         {
-            MessageBox.Show(error, "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            LocalizedMessageDialog.Show(Localization.T(error), Localization.T("演讲计时器"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _duration.Focus();
             return;
         }

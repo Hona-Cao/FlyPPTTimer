@@ -22,12 +22,12 @@ public sealed class V0193FeatureTests
     public async Task GiteeLatestReleaseAndAttachmentsProduceAnAvailableInstallerUpdate()
     {
         const string releaseJson = """
-            {"id":123,"tag_name":"v0.21.0","name":"FlyPPTTimer v0.21.0","body":"更新说明","html_url":"https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v0.21.0"}
+            {"id":123,"tag_name":"v0.31.0","name":"FlyPPTTimer v0.31.0","body":"更新说明","html_url":"https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v0.31.0"}
             """;
         const string assetsJson = """
             [
-              {"id":456,"name":"FlyPPTTimer-v0.21.0-setup-win-x64.exe","browser_download_url":"https://gitee.com/hona-cao/fly-ppttimer/attach_files/456/download/setup.exe"},
-              {"id":457,"name":"FlyPPTTimer-v0.21.0-portable-win-x64.zip","browser_download_url":"https://gitee.com/hona-cao/fly-ppttimer/attach_files/457/download/portable.zip"}
+              {"id":456,"name":"FlyPPTTimer-v0.31.0-setup-win-x64.exe","browser_download_url":"https://gitee.com/hona-cao/fly-ppttimer/attach_files/456/download/setup.exe"},
+              {"id":457,"name":"FlyPPTTimer-v0.31.0-portable-win-x64.zip","browser_download_url":"https://gitee.com/hona-cao/fly-ppttimer/attach_files/457/download/portable.zip"}
             ]
             """;
         using var client = new HttpClient(new StubHttpHandler(request =>
@@ -39,8 +39,8 @@ public sealed class V0193FeatureTests
         var result = await service.CheckAsync();
 
         Assert.Equal(UpdateCheckStatus.UpdateAvailable, result.Status);
-        Assert.Equal("0.21.0", result.Release!.Version);
-        Assert.Equal("FlyPPTTimer-v0.21.0-setup-win-x64.exe", GiteeUpdateService.FindInstaller(result.Release)!.Name);
+        Assert.Equal("0.31.0", result.Release!.Version);
+        Assert.Equal("FlyPPTTimer-v0.31.0-setup-win-x64.exe", GiteeUpdateService.FindInstaller(result.Release)!.Name);
     }
 
     [Fact]

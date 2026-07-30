@@ -1,3 +1,86 @@
+const effectiveLanguage=navigator.language.toLowerCase().startsWith('zh')?'zh-CN':'en';
+document.documentElement.lang=effectiveLanguage;
+const webEnglish={
+  'FlyPPTTimer 遥控':'FlyPPTTimer Remote','演讲遥控':'Presentation Remote','正在连接电脑...':'Connecting to computer...',
+  '连接中':'Connecting','遥控页面':'Remote pages','计时':'Timer','演示':'Presentation','等待同步':'Waiting for sync',
+  '倒计时':'Countdown','正计时':'Count up','计时设置（同步到电脑）':'Timer settings (sync to computer)',
+  '计时时长':'Timer duration','时':'Hours','分':'Minutes','秒':'Seconds','应用时长':'Apply duration','计时模式':'Timer mode',
+  '修改后会立即保存到电脑端设置。':'Changes are saved to the computer immediately.','开始':'Start','暂停':'Pause','继续':'Resume',
+  '停止并重置':'Stop & reset','重新计时':'Restart timer','显示 / 隐藏':'Show / Hide','触发闪烁':'Flash','电脑声音正常（点击静音）':'Computer audio on (tap to mute)',
+  '电脑已静音（点击恢复声音）':'Computer muted (tap to unmute)','当前无“时间到”黑屏':'No “Time\'s up” screen',
+  '退出“时间到”黑屏':'Dismiss “Time\'s up” screen','当前演示':'Current presentation','未检测到 PowerPoint':'PowerPoint not detected',
+  '请先打开演示文稿':'Open a presentation first','未放映':'Not presenting','正常':'Normal','演示文稿列表':'Presentations',
+  '上一页':'Previous','下一页':'Next','从头放映':'Start from beginning','从当前页放映':'Start from current slide','页码':'Slide',
+  '跳转':'Go','黑屏 / 恢复':'Black screen / Restore','白屏 / 恢复':'White screen / Restore','结束放映':'End slide show',
+  '关闭当前文稿':'Close current presentation','关闭最后打开的文稿':'Close last-opened presentation','退出演示软件':'Quit presentation software','确认操作':'Confirm action',
+  '取消':'Cancel','确认':'Confirm','正在建立连接...':'Connecting...','已连接':'Connected','已断开':'Disconnected',
+  '已超时':'Overtime','停止':'Stopped','正在放映':'Presenting','黑屏':'Black screen','白屏':'White screen',
+  '未打开演示文稿':'No presentation is open','没有已打开或文件规则中已启用的演示文稿':'No open presentations or enabled presentation rules',
+  '当前活动':'Active','已打开':'Open','文件规则':'Rule','当前':'Current','切换':'Switch','打开':'Open',
+  '本机未安装 Microsoft PowerPoint':'Microsoft PowerPoint is not installed','请先打开或从上方列表选择演示文稿':'Open or select a presentation above',
+  'PowerPoint 状态可能已过期，计时控制仍可使用':'PowerPoint status may be stale; timer controls are still available',
+  '仅结束电脑端当前放映，不关闭文稿或 PowerPoint。':'Ends the current slide show without closing the presentation or PowerPoint.',
+  '关闭当前活动文稿且不保存；其他已打开文稿保持不变。':'Closes the active presentation without saving. Other open presentations remain open.',
+  '将按打开顺序关闭最后打开的文稿且不保存；每次只关闭一个。':'Closes the last-opened presentation without saving, one at a time.',
+  '将强制退出电脑端全部 PowerPoint/WPS/演示软件，未保存内容可能丢失。':'Force-quits all PowerPoint/WPS presentation apps. Unsaved work may be lost.',
+  '同步文件规则时长？':'Sync presentation-rule durations?','仅修改全局':'Global only','同步全部':'Sync all',
+  '当前已断开，命令未发送':'Disconnected; command was not sent','请输入有效的时、分、秒':'Enter valid hours, minutes, and seconds',
+  '计时时长必须大于 0 秒':'Timer duration must be greater than 0 seconds','计时时长已同步到电脑':'Timer duration synced to computer'
+  ,'操作失败':'Operation failed','简体中文':'Simplified Chinese',
+  '连接失败；使用 Clash 时请将局域网地址设为 DIRECT':'Connection failed. If you use Clash, route the LAN address directly.',
+  '已同步修改全部文件规则时长':'All presentation-rule durations updated',
+  '已修改全局时长，文件规则保持不变':'Global duration changed; presentation rules unchanged',
+  '运行中':'Running','已结束':'Finished','电脑已静音':'Computer muted','电脑声音已恢复':'Computer audio restored',
+  '已退出“时间到”黑屏':'Dismissed the “Time\'s up” screen','白屏':'White screen','黑屏':'Black screen',
+  '演示控制服务当前不可用。':'Presentation control is unavailable.','演示控制服务已关闭。':'Presentation control is disabled.',
+  '命令不在演示控制白名单中。':'Command is not in the presentation-control allowlist.',
+  '强制退出会丢失所有未保存内容，请再次确认。':'Force quit discards all unsaved work. Confirm again.',
+  '演示操作正在进行，请等待当前操作完成。':'A presentation operation is in progress. Wait for it to finish.',
+  '演示命令队列繁忙，请稍后重试。':'The presentation command queue is busy. Try again shortly.',
+  'PowerPoint 响应超时，计时遥控仍可继续使用。':'PowerPoint timed out. Timer remote control is still available.',
+  '请输入有效页码。':'Enter a valid slide number.','请先选择演示文稿。':'Select a presentation first.',
+  '演示文稿文件不存在。':'The presentation file does not exist.','未安装 Microsoft PowerPoint。':'Microsoft PowerPoint is not installed.',
+  '当前没有正在运行的 PowerPoint 放映。':'No PowerPoint slide show is running.',
+  '当前没有可关闭的演示文稿。':'There is no presentation to close.',
+  '正在打开演示文稿':'Opening presentation','正在启动 PowerPoint':'Starting PowerPoint',
+  '正在启动放映':'Starting slide show','正在结束放映':'Ending slide show',
+  '正在关闭最后打开的文稿':'Closing the last-opened presentation','正在强制退出演示程序':'Force-quitting presentation software',
+  '正在关闭当前文稿':'Closing the current presentation',
+  '已从头开始放映':'Slide show started from the beginning','已结束放映':'Slide show ended',
+  '已切换到上一页':'Moved to the previous slide','已切换到下一页':'Moved to the next slide',
+  '状态已刷新':'Status refreshed'
+};
+function wt(text){
+  if(effectiveLanguage!=='en'||!text)return text;
+  if(webEnglish[text])return webEnglish[text];
+  return text
+    .replace(/^最后同步 /,'Last synced ')
+    .replace(/^连接失败：/,'Connection failed: ')
+    .replace(/^请输入 1 到 (\d+) 之间的页码$/,'Enter a slide number from 1 to $1')
+    .replace(/^当前已有 (\d+) 个待控演示文稿。是否把新时长同步应用到全部文件规则？$/,'There are $1 managed presentations. Apply the new duration to every rule?')
+    .replace(/^已切换为/,'Changed to ')
+    .replace(/^已从第 (\d+) 页开始放映$/,'Slide show started from slide $1')
+    .replace(/^已跳转到第 (\d+) 页$/,'Moved to slide $1')
+    .replace(/^已打开 (.+)$/,'Opened $1')
+    .replace(/^已关闭最后打开的文稿：(.+)。$/,'Closed the last-opened presentation: $1.')
+    .replace(/^已关闭当前文稿：(.+)。$/,'Closed the current presentation: $1.')
+    .replace(/^已修改全局时长，文件规则保持不变$/,'Global duration changed; presentation rules unchanged')
+    .replace(/^已同步修改全部文件规则时长$/,'All presentation-rule durations updated');
+}
+function translateWeb(root=document){
+  if(effectiveLanguage!=='en')return;
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
+  while((node=walker.nextNode())){const value=node.nodeValue,trim=value.trim();if(trim&&wt(trim)!==trim)node.nodeValue=value.replace(trim,wt(trim))}
+  root.querySelectorAll?.('[title],[placeholder],[aria-label]').forEach(el=>{
+    ['title','placeholder','aria-label'].forEach(name=>{if(el.hasAttribute(name))el.setAttribute(name,wt(el.getAttribute(name)))});
+  });
+  document.title=wt(document.title);
+}
+translateWeb();
+new MutationObserver(records=>records.forEach(record=>{
+  if(record.type==='characterData'){const next=wt(record.target.nodeValue);if(next!==record.target.nodeValue)record.target.nodeValue=next}
+  record.addedNodes.forEach(node=>{if(node.nodeType===Node.ELEMENT_NODE)translateWeb(node);else if(node.nodeType===Node.TEXT_NODE){const next=wt(node.nodeValue);if(next!==node.nodeValue)node.nodeValue=next}});
+})).observe(document.body,{subtree:true,childList:true,characterData:true});
 const token=window.FLYPPT_TOKEN||'';
 const $=id=>document.getElementById(id);
 const commandButtons=[...document.querySelectorAll('[data-command]')];
@@ -15,7 +98,7 @@ async function api(path,options={}){
   }finally{clearTimeout(timeout)}
 }
 function notify(text,error=false){const el=$('message');el.textContent=text;el.className='message show'+(error?' error':'');clearTimeout(messageTimer);messageTimer=setTimeout(()=>el.className='message',3200)}
-function connection(ok){connected=ok;const el=$('connection');el.textContent=ok?'已连接':'已断开';el.className='status '+(ok?'connected':'disconnected');$('syncText').textContent=ok?'最后同步 '+new Date().toLocaleTimeString('zh-CN',{hour12:false}):'连接失败；使用 Clash 时请将局域网地址设为 DIRECT'}
+function connection(ok){connected=ok;const el=$('connection');el.textContent=ok?'已连接':'已断开';el.className='status '+(ok?'connected':'disconnected');$('syncText').textContent=ok?'最后同步 '+new Date().toLocaleTimeString(effectiveLanguage==='en'?'en-US':'zh-CN',{hour12:false}):'连接失败；使用 Clash 时请将局域网地址设为 DIRECT'}
 function timerState(s){return s.timerState||s}
 function setDurationEditor(durationMs){
   const total=Math.max(1,Math.round((Number(durationMs)||0)/1000));
@@ -73,7 +156,7 @@ function setAvailability(t,p){
     else if(cmd.startsWith('ppt.')){
       if(['ppt.previous','ppt.next','ppt.gotoSlide','ppt.endShow','ppt.blackScreenToggle','ppt.whiteScreenToggle'].includes(cmd))disabled||=!show;
       if(['ppt.startFromBeginning','ppt.startFromCurrent'].includes(cmd))disabled||=!has;
-      if(cmd==='ppt.closeCurrentPresentation')disabled||=!(Number(p.openPresentationCount)>0||(p.presentations||[]).some(x=>x.isOpen));
+      if(['ppt.closeActivePresentation','ppt.closeCurrentPresentation'].includes(cmd))disabled||=!(Number(p.openPresentationCount)>0||(p.presentations||[]).some(x=>x.isOpen));
     }
     button.disabled=disabled;
   });
@@ -94,6 +177,7 @@ async function poll(){
 function requestConfirmation(name,extra){
   const details={
     'ppt.endShow':['结束放映','仅结束电脑端当前放映，不关闭文稿或 PowerPoint。'],
+    'ppt.closeActivePresentation':['关闭当前文稿','关闭当前活动文稿且不保存；其他已打开文稿保持不变。'],
     'ppt.closeCurrentPresentation':['关闭最后打开的文稿','将按打开顺序关闭最后打开的文稿且不保存；每次只关闭一个。'],
     'ppt.forceQuitAll':['退出演示软件','将强制退出电脑端全部 PowerPoint/WPS/演示软件，未保存内容可能丢失。']
   }[name];
@@ -137,7 +221,10 @@ window.addEventListener('resize',()=>{renderPage(pageIndex,false);requestAnimati
 renderPage(0,false);
 $('confirmCancel').addEventListener('click',()=>{const pending=pendingConfirmation;if(pending?.durationChoice){closeConfirmation();command(pending.name,{...pending.extra,syncAllRules:false,confirmed:true}).then(ok=>{if(ok){timerEditorDirty=false;notify('已修改全局时长，文件规则保持不变')}})}else closeConfirmation()});
 $('confirmAccept').addEventListener('click',()=>{const pending=pendingConfirmation;closeConfirmation();if(pending)command(pending.name,{...pending.extra,...(pending.durationChoice?{syncAllRules:true}:{}),confirmed:true}).then(ok=>{if(ok&&pending.durationChoice){timerEditorDirty=false;notify('已同步修改全部文件规则时长')}})});
-commandButtons.forEach(button=>button.addEventListener('click',()=>command(button.dataset.command)));
+commandButtons.forEach(button=>button.addEventListener('click',()=>{
+  const name=button.dataset.command;
+  command(name,name==='timer.restart'?{presentationId:selectedPresentationId}:{});
+}));
 $('durationHours').addEventListener('input',()=>timerEditorDirty=true);
 $('durationMinutes').addEventListener('input',()=>timerEditorDirty=true);
 $('durationSeconds').addEventListener('input',()=>timerEditorDirty=true);

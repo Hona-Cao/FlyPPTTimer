@@ -17,7 +17,7 @@ public sealed class V0182FeatureTests
         ConfigService.Normalize(config);
 
         Assert.True(config.Behavior.Prompt1.PlaySound);
-        Assert.Equal("0.20.2", config.Version);
+        Assert.Equal("0.30.2", config.Version);
     }
 
     [Fact]

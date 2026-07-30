@@ -26,6 +26,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly ContextMenuStrip _overlayMenu;
     private readonly ContextMenuStrip _trayMenu;
     private readonly List<TimerOverlayForm> _overlays = [];
+    private BigScreenTimerForm? _bigScreenTimer;
     private readonly Dictionary<string, PointF> _overlayCenters = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<TimeUpBlackoutForm> _timeUpScreens = [];
     private readonly System.Windows.Forms.Timer _screenTimer = new() { Interval = 1500 };
@@ -48,11 +49,13 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private bool _preserveTimeUpScreens;
     private bool _checkingForUpdates;
 
-    public FlyPPTTimerContext()
+    public FlyPPTTimerContext(bool showSettingsOnStartup = false, bool showRemoteControlOnStartup = false)
     {
         _log.Info("Application started.");
         _configService = new ConfigService(_log);
         _config = _configService.Load();
+        ApplyInstallerLanguage();
+        Localization.Initialize(_config.Language);
         _updateService = new GiteeUpdateService(_log);
         _powerPoint = new PowerPointControlService(() => _config, _log);
         _timer = new TimerService(_log);
@@ -96,6 +99,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
         _timer.Configure(_config);
         RebuildOverlays();
+        RebuildBigScreenTimer();
 
         _timer.Updated += (_, snapshot) =>
         {
@@ -109,6 +113,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
                 HideTimeUpScreens();
             }
             foreach (var overlay in _overlays) overlay.UpdateTime(snapshot);
+            if (_bigScreenTimer is { IsDisposed: false })
+                _bigScreenTimer.UpdateTime(snapshot);
             _alerts.CheckPrompts(_config, snapshot);
         };
         _timer.Finished += (_, snapshot) =>
@@ -131,7 +137,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
         _tray = new NotifyIcon
         {
-            Text = "演讲计时器",
+            Text = Localization.T("演讲计时器"),
             Icon = LoadAppIcon(),
             Visible = true
         };
@@ -150,6 +156,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
         RegisterHotkeys();
         foreach (var overlay in _overlays.Where(x => _config.Placement.Visible)) overlay.Show();
+        if (showSettingsOnStartup) ShowSettings();
+        if (showRemoteControlOnStartup) ShowRemoteControl();
     }
 
     private ContextMenuStrip BuildCommandMenu(bool includeUpdateCheck = false)
@@ -181,11 +189,28 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         foreach (ToolStripItem item in menu.Items)
         {
             if (item is ToolStripSeparator) continue;
+            item.Text = Localization.T(item.Text);
             item.AutoSize = false;
             item.Size = new Size(224, 38);
             item.Padding = new Padding(12, 0, 12, 0);
         }
         return menu;
+    }
+
+    private void ApplyInstallerLanguage()
+    {
+        var marker = Path.Combine(AppContext.BaseDirectory, "install-language.txt");
+        if (!File.Exists(marker)) return;
+        try
+        {
+            _config.Language = Localization.Normalize(File.ReadAllText(marker));
+            _configService.Save(_config);
+            File.Delete(marker);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"Unable to apply installer language: {ex.Message}");
+        }
     }
 
     private void ShowCommandMenuAtCursor(ContextMenuStrip menu)
@@ -292,6 +317,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _settings.OpenLogRequested += (_, _) => OpenPath(AppPaths.LogDirectory);
             _settings.ResetOverlayPositionRequested += (_, _) => ResetOverlayPosition();
             _settings.CheckUpdateRequested += (_, _) => CheckForUpdates(true);
+            _settings.RestartRequested += (_, _) => Restart();
         }
         _settings.Show();
         _settings.Activate();
@@ -322,6 +348,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _config = nextConfig;
         _timer.Configure(_config);
         RebuildOverlays(preserveCenters);
+        RebuildBigScreenTimer();
         _fullscreen.Configure(_config);
         _configService.Save(_config);
         if (_config.RemoteControl.Enabled)
@@ -490,6 +517,36 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         }
     }
 
+    private void RebuildBigScreenTimer()
+    {
+        if (_bigScreenTimer is not null)
+        {
+            _bigScreenTimer.Close();
+            _bigScreenTimer.Dispose();
+            _bigScreenTimer = null;
+        }
+
+        if (!_config.Placement.BigScreenEnabled) return;
+
+        var extendedScreens = Screen.AllScreens.Where(candidate => !candidate.Primary).ToArray();
+        if (extendedScreens.Length == 0)
+        {
+            _log.Warn("Big-screen timer is enabled, but no extended display is available.");
+            return;
+        }
+
+        var screen = extendedScreens.FirstOrDefault(candidate =>
+            string.Equals(
+                candidate.DeviceName,
+                _config.Placement.BigScreenDeviceName,
+                StringComparison.OrdinalIgnoreCase)) ?? extendedScreens[0];
+        _config.Placement.BigScreenDeviceName = screen.DeviceName;
+        _bigScreenTimer = new BigScreenTimerForm();
+        _bigScreenTimer.ApplyConfig(_config, screen);
+        _bigScreenTimer.UpdateTime(_timer.CreateSnapshot());
+        _bigScreenTimer.Show();
+    }
+
     private async void CheckForUpdates(bool userInitiated)
     {
         if (_checkingForUpdates)
@@ -517,9 +574,9 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             var release = result.Release!;
             if (!GiteeUpdateService.IsInstalledEdition)
             {
-                var choice = MessageBox.Show(
+                var choice = LocalizedMessageDialog.Show(
                     GetUpdatePrompt(release, "当前使用的是绿色便携版，程序不会自动覆盖文件。是否打开 Gitee Release 页面自行选择下载？"),
-                    "发现新版本",
+                    Localization.T("发现新版本"),
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Information);
                 if (choice == DialogResult.Yes) OpenWebUrl(release.ReleaseUrl);
@@ -529,18 +586,18 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             var installer = GiteeUpdateService.FindInstaller(release);
             if (installer is null)
             {
-                var choice = MessageBox.Show(
+                var choice = LocalizedMessageDialog.Show(
                     GetUpdatePrompt(release, "此 Release 暂未找到 Windows x64 安装包。是否打开 Gitee Release 页面？"),
-                    "发现新版本",
+                    Localization.T("发现新版本"),
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
                 if (choice == DialogResult.Yes) OpenWebUrl(release.ReleaseUrl);
                 return;
             }
 
-            if (MessageBox.Show(
+            if (LocalizedMessageDialog.Show(
                     GetUpdatePrompt(release, "是否立即下载安装？安装时会保留当前配置，新功能仍使用默认设置，之后可自行选择。"),
-                    "发现新版本",
+                    Localization.T("发现新版本"),
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question) != DialogResult.Yes) return;
 
@@ -564,6 +621,13 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private static string GetUpdatePrompt(GiteeReleaseInfo release, string action)
     {
+        if (Localization.IsEnglish)
+        {
+            var englishNotes = string.IsNullOrWhiteSpace(release.Body)
+                ? ""
+                : "\r\n\r\nRelease notes:\r\n" + release.Body.Trim()[..Math.Min(600, release.Body.Trim().Length)];
+            return $"FlyPPTTimer v{release.Version} is available (current: v{AppVersion.Current}).{englishNotes}\r\n\r\n{Localization.T(action)}";
+        }
         var notes = string.IsNullOrWhiteSpace(release.Body)
             ? ""
             : "\r\n\r\n更新说明：\r\n" + release.Body.Trim()[..Math.Min(600, release.Body.Trim().Length)];
@@ -577,8 +641,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void ShowUpdateMessage(string message, MessageBoxIcon icon)
     {
-        if (_settings is { Visible: true }) MessageBox.Show(_settings, message, "FlyPPTTimer 更新", MessageBoxButtons.OK, icon);
-        else MessageBox.Show(message, "FlyPPTTimer 更新", MessageBoxButtons.OK, icon);
+        if (_settings is { Visible: true }) LocalizedMessageDialog.Show(_settings, Localization.T(message), Localization.T("FlyPPTTimer 更新"), MessageBoxButtons.OK, icon);
+        else LocalizedMessageDialog.Show(Localization.T(message), Localization.T("FlyPPTTimer 更新"), MessageBoxButtons.OK, icon);
     }
 
     private void OverlaySizeExpansionRequested(object? sender, OverlaySizeExpansionEventArgs e)
@@ -599,7 +663,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             overlay.ApplyConfig(_config, overlay.TargetScreen, center);
             overlay.UpdateTime(_timer.CreateSnapshot());
         }
-        MessageBox.Show($"当前时间文字需要更大的显示区域，窗口已自动调整为 {_config.Appearance.Width} × {_config.Appearance.Height}。", "演讲计时器", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        LocalizedMessageDialog.Show(Localization.T($"当前时间文字需要更大的显示区域，窗口已自动调整为 {_config.Appearance.Width} × {_config.Appearance.Height}。"), Localization.T("演讲计时器"), MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void ResetOverlayPosition()
@@ -694,6 +758,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _screenSignature = signature;
         _log.Info($"Screen layout changed: {signature}");
         RebuildOverlays();
+        RebuildBigScreenTimer();
     }
 
     private static string GetScreenSignature()
@@ -736,9 +801,35 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _startupUpdateTimer.Dispose();
         _updateService.Dispose();
         foreach (var timerWindow in _overlays) timerWindow.Dispose();
+        _bigScreenTimer?.Dispose();
         HideTimeUpScreens();
         _settings?.Dispose();
         ExitThread();
+    }
+
+    private void Restart()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Application.ExecutablePath,
+                Arguments = $"--restart-after {Environment.ProcessId}",
+                UseShellExecute = true,
+                WorkingDirectory = AppContext.BaseDirectory
+            });
+        }
+        catch (Exception ex)
+        {
+            _log.Error("Failed to start replacement process.", ex);
+            LocalizedMessageDialog.Show(
+                Localization.T("无法自动重启 FlyPPTTimer。请手动退出并重新打开软件。"),
+                Localization.T("需要重启"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+        Exit();
     }
 
     protected override void Dispose(bool disposing)
@@ -757,6 +848,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _startupUpdateTimer.Dispose();
             _updateService.Dispose();
             foreach (var overlay in _overlays) overlay.Dispose();
+            _bigScreenTimer?.Dispose();
             HideTimeUpScreens();
             _settings?.Dispose();
         }

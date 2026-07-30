@@ -1,4 +1,6 @@
 .dotnet/
+.dotnet-home/
+.nuget/
 .packages/
 bin/
 obj/

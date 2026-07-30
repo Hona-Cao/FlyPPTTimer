@@ -11,7 +11,9 @@
   <main class="app-shell">
     <header class="topbar">
       <div><h1>演讲遥控</h1><p id="syncText">正在连接电脑...</p></div>
-      <span id="connection" class="status connecting">连接中</span>
+      <div class="topbar-actions">
+        <span id="connection" class="status connecting">连接中</span>
+      </div>
     </header>
 
     <nav class="tabs" aria-label="遥控页面">
@@ -47,6 +49,7 @@
         <button data-command="timer.pause">暂停</button>
         <button data-command="timer.resume">继续</button>
         <button data-command="timer.stop" class="warning">停止并重置</button>
+        <button data-command="timer.restart" class="primary">重新计时</button>
         <button data-command="window.toggle">显示 / 隐藏</button>
         <button data-command="window.flash">触发闪烁</button>
         <button id="muteButton" data-command="mute.toggle" title="控制电脑的主音量静音状态">电脑声音正常（点击静音）</button>
@@ -81,6 +84,7 @@
         <button id="whiteScreenButton" data-command="ppt.whiteScreenToggle">白屏 / 恢复</button>
         <button id="pptDismissTimeUp" data-command="timeup.dismiss" class="warning">当前无“时间到”黑屏</button>
         <button data-command="ppt.endShow" class="danger">结束放映</button>
+        <button data-command="ppt.closeActivePresentation" class="danger-secondary">关闭当前文稿</button>
         <button data-command="ppt.closeCurrentPresentation" class="danger-secondary">关闭最后打开的文稿</button>
         <button data-command="ppt.forceQuitAll" class="danger">退出演示软件</button>
       </article>

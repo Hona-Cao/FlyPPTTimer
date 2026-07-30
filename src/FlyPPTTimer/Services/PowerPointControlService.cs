@@ -220,6 +220,7 @@ public sealed class PowerPointControlService : IDisposable
             "ppt.blackScreenToggle" => ToggleScreen(SlideShowBlackScreen, "黑屏"),
             "ppt.whiteScreenToggle" => ToggleScreen(SlideShowWhiteScreen, "白屏"),
             "ppt.openPresentation" => OpenPresentation(command.PresentationId),
+            "ppt.closeActivePresentation" => CloseActivePresentation(),
             "ppt.closeCurrentPresentation" => CloseCurrentPresentation(),
             "ppt.forceQuitAll" => ForceQuitAll(),
             _ => throw new InvalidOperationException("命令不在 PowerPoint 控制白名单中。")
@@ -229,7 +230,7 @@ public sealed class PowerPointControlService : IDisposable
     private static bool IsKnownCommand(string command) => command is
         "ppt.refresh" or "ppt.startFromBeginning" or "ppt.startFromCurrent" or "ppt.previous" or "ppt.next" or
         "ppt.gotoSlide" or "ppt.endShow" or "ppt.blackScreenToggle" or "ppt.whiteScreenToggle" or
-        "ppt.openPresentation" or "ppt.closeCurrentPresentation" or "ppt.forceQuitAll";
+        "ppt.openPresentation" or "ppt.closeActivePresentation" or "ppt.closeCurrentPresentation" or "ppt.forceQuitAll";
 
     private PresentationOperationInfo CreateOperation(string command)
     {
@@ -238,6 +239,7 @@ public sealed class PowerPointControlService : IDisposable
             "ppt.openPresentation" => ("OpeningPresentation", "正在打开演示文稿"),
             "ppt.startFromBeginning" or "ppt.startFromCurrent" => ("StartingSlideshow", "正在启动放映"),
             "ppt.endShow" => ("StoppingSlideshow", "正在结束放映"),
+            "ppt.closeActivePresentation" => ("ClosingPresentation", "正在关闭当前文稿"),
             "ppt.closeCurrentPresentation" => ("ClosingPresentation", "正在关闭最后打开的文稿"),
             "ppt.forceQuitAll" => ("ForceExitingApplication", "正在强制退出演示程序"),
             _ => ("Idle", "正在执行演示命令")
@@ -785,6 +787,29 @@ public sealed class PowerPointControlService : IDisposable
             return $"已关闭最后打开的文稿：{Path.GetFileName(path)}。";
         }
         finally { Release(presentation, presentations, appObject); }
+    }
+
+    private string CloseActivePresentation()
+    {
+        object? appObject = null, presentation = null;
+        try
+        {
+            appObject = GetRunningApplication();
+            dynamic app = appObject;
+            try { presentation = app.ActivePresentation; }
+            catch { presentation = null; }
+            if (presentation is null)
+                throw new InvalidOperationException("当前没有活动演示文稿。");
+
+            var path = SafeString(() => (string)((dynamic)presentation).FullName);
+            var key = NormalizePath(path);
+            EndShowIfShowing(app, path);
+            try { ((dynamic)presentation).Saved = true; } catch { }
+            ((dynamic)presentation).Close();
+            _managedPresentations.Remove(key);
+            return $"已关闭当前文稿：{Path.GetFileName(path)}。";
+        }
+        finally { Release(presentation, appObject); }
     }
 
     private string ForceQuitAll()

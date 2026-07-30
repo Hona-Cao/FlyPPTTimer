@@ -8,11 +8,11 @@ namespace FlyPPTTimer.Tests;
 public sealed class RemoteWindowLayoutServiceTests
 {
     [Theory]
-    [InlineData(96, 1180, 760)]
-    [InlineData(120, 1475, 950)]
-    [InlineData(144, 1770, 1140)]
-    [InlineData(168, 2065, 1330)]
-    [InlineData(192, 2360, 1520)]
+    [InlineData(96, 700, 510)]
+    [InlineData(120, 875, 638)]
+    [InlineData(144, 1050, 765)]
+    [InlineData(168, 1225, 893)]
+    [InlineData(192, 1400, 1020)]
     public void DesignClientSizeConvertsAcrossSupportedDpis(int dpi, int width, int height)
     {
         var physical = RemoteWindowLayoutService.DipToPhysical(
@@ -20,7 +20,7 @@ public sealed class RemoteWindowLayoutServiceTests
             dpi);
 
         Assert.Equal(new Size(width, height), physical);
-        Assert.Equal(new Size(1180, 760), RemoteWindowLayoutService.PhysicalToDip(physical, dpi));
+        Assert.Equal(new Size(700, 510), RemoteWindowLayoutService.PhysicalToDip(physical, dpi));
     }
 
     [Theory]
@@ -31,7 +31,7 @@ public sealed class RemoteWindowLayoutServiceTests
     [InlineData(192)]
     public void DipRoundTripIsStable(int dpi)
     {
-        foreach (var dip in new[] { 8, 10, 14, 40, 158, 174, 660, 1000, 1180 })
+        foreach (var dip in new[] { 4, 8, 10, 14, 30, 32, 510, 700 })
             Assert.Equal(dip, RemoteWindowLayoutService.PhysicalToDip(
                 RemoteWindowLayoutService.DipToPhysical(dip, dpi), dpi));
     }
@@ -40,11 +40,11 @@ public sealed class RemoteWindowLayoutServiceTests
     public void ResponsiveModeUsesLogicalClientSizeOnly()
     {
         Assert.Equal(RemoteLayoutMode.Standard,
-            RemoteWindowLayoutService.GetLayoutMode(new Size(1400, 900), 120));
+            RemoteWindowLayoutService.GetLayoutMode(new Size(875, 638), 120));
         Assert.Equal(RemoteLayoutMode.Compact,
-            RemoteWindowLayoutService.GetLayoutMode(new Size(1399, 900), 120));
+            RemoteWindowLayoutService.GetLayoutMode(new Size(874, 638), 120));
         Assert.Equal(RemoteLayoutMode.Compact,
-            RemoteWindowLayoutService.GetLayoutMode(new Size(1400, 899), 120));
+            RemoteWindowLayoutService.GetLayoutMode(new Size(875, 636), 120));
     }
 
     [Fact]
@@ -155,8 +155,8 @@ public sealed class RemoteWindowLayoutServiceTests
         ConfigService.Normalize(config!);
         Assert.NotNull(config!.RemoteControl.Window);
         Assert.False(config.RemoteControl.Window.HasValue);
-        Assert.Equal(1180, config.RemoteControl.Window.WidthDip);
-        Assert.Equal(760, config.RemoteControl.Window.HeightDip);
+        Assert.Equal(700, config.RemoteControl.Window.WidthDip);
+        Assert.Equal(510, config.RemoteControl.Window.HeightDip);
         Assert.Equal("kept", config.RemoteControl.Token);
     }
 

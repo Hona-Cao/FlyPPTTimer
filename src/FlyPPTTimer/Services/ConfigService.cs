@@ -144,6 +144,8 @@ public sealed class ConfigService
     {
         var previousVersion = config.Version;
         config.Version = AppVersion.Current;
+        config.Language = Localization.Normalize(config.Language);
+        config.RemoteControl.Window ??= new RemoteWindowPlacement();
         if (!string.Equals(previousVersion, AppVersion.Current, StringComparison.Ordinal)
             && config.Appearance.ColorScheme is "默认" or "医疗与卫生-手术室蓝")
         {
@@ -153,6 +155,17 @@ public sealed class ConfigService
         }
         if (!string.Equals(previousVersion, AppVersion.Current, StringComparison.Ordinal))
         {
+            if (config.RemoteControl.Window.WidthDip > 800 || config.RemoteControl.Window.HeightDip > 600)
+            {
+                config.RemoteControl.Window.WidthDip = 700;
+                config.RemoteControl.Window.HeightDip = 510;
+                config.RemoteControl.Window.Maximized = false;
+            }
+            if (config.RemoteControl.UseRandomPort)
+            {
+                config.RemoteControl.UseRandomPort = false;
+                config.RemoteControl.Port = 4080;
+            }
             MigratePromptFlash(config.Behavior.Prompt1, config.Appearance, 3);
             MigratePromptFlash(config.Behavior.Prompt2, config.Appearance, 3);
             MigratePromptFlash(config.Behavior.EndPrompt, config.Appearance, Math.Max(1, config.Behavior.EndPrompt.FlashSeconds));
@@ -179,7 +192,6 @@ public sealed class ConfigService
         NormalizeSelectedSound(config.Behavior.Prompt1);
         NormalizeSelectedSound(config.Behavior.Prompt2);
         NormalizeSelectedSound(config.Behavior.EndPrompt);
-        config.RemoteControl.Window ??= new RemoteWindowPlacement();
         if (!config.Placement.HasCustomPlacement)
         {
             config.Placement.Anchor = OverlayAnchor.TopCenter;

@@ -3,16 +3,17 @@ namespace FlyPPTTimer.Tests;
 public sealed class RemoteControlFormContractTests
 {
     [Fact]
-    public void V019_ShellKeepsSidebarAndWorkspaceInTwoColumns()
+    public void V0205_ShellUsesOneColumnAndTopNavigation()
     {
         var source = ReadRemoteForm();
         var shellStart = source.IndexOf("var shell = _shell = new TableLayoutPanel", StringComparison.Ordinal);
-        var shellEnd = source.IndexOf("private Control BuildSidebar", shellStart, StringComparison.Ordinal);
+        var shellEnd = source.IndexOf("private static RemoteTextButton CreateNavigationButton", shellStart, StringComparison.Ordinal);
         var shell = source[shellStart..shellEnd];
 
-        Assert.Contains("ColumnCount = 2", shell);
-        Assert.Contains("shell.Controls.Add(BuildSidebar(), 0, 0)", shell);
-        Assert.Contains("shell.Controls.Add(BuildWorkspace(), 1, 0)", shell);
+        Assert.Contains("ColumnCount = 1", shell);
+        Assert.Contains("shell.Controls.Add(BuildWorkspace(), 0, 0)", shell);
+        Assert.DoesNotContain("BuildSidebar", source);
+        Assert.Contains("BuildTopNavigation", source);
     }
 
     [Fact]
@@ -39,7 +40,7 @@ public sealed class RemoteControlFormContractTests
         var button = ReadRemoteButton();
 
         Assert.Contains("v0.16 text-first remote-control workspace", source);
-        Assert.Contains("BuildSidebar", source);
+        Assert.Contains("BuildTopNavigation", source);
         Assert.Contains("BuildConnectionPage", source);
         Assert.Contains("BuildPresentationWorkspace", source);
         Assert.Contains("TextFormatFlags.SingleLine", button);
@@ -60,18 +61,18 @@ public sealed class RemoteControlFormContractTests
             "\"远程连接\"",
             "\"演示文稿\"",
             "\"重启\"",
-            "\"关闭\"",
+            "\"停止服务\"",
             "\"复制链接\"",
-            "\"浏览器打开\"",
-            "\"放行命令\"",
+            "\"在浏览器中打开\"",
+            "\"允许远程控制\"",
             "\"添加\"",
             "\"删除\"",
             "\"刷新\"",
-            "\"打开\"",
+            "\"打开演示文稿\"",
             "\"从头放映\"",
             "\"当前页放映\"",
             "\"结束放映\"",
-            "\"退出演示软件\""
+            "\"退出软件\""
         })
         {
             Assert.Contains(text, source);
@@ -90,7 +91,7 @@ public sealed class RemoteControlFormContractTests
         Assert.Contains("BuildPresentationList", source);
         Assert.Contains("BuildPresentationDetails", source);
         Assert.Contains("RemotePresentationRow", source);
-        Assert.Contains("private readonly FlowLayoutPanel _ruleList", source);
+        Assert.Contains("private readonly VerticalFlowLayoutPanel _ruleList", source);
         Assert.Contains("AutoScroll = true", source);
         Assert.DoesNotContain("BuildPresentationDetails()\n    {\n        var scroll", source);
         Assert.DoesNotContain("CollapsibleHeader", source);
@@ -194,7 +195,8 @@ public sealed class RemoteControlFormContractTests
         Assert.DoesNotContain("ComboBox", source);
         Assert.DoesNotContain("ComboBox", selector);
         Assert.Contains("RemoteAddressSelector", source);
-        Assert.Contains("ContextMenuStrip", selector);
+        Assert.DoesNotContain("ContextMenuStrip", selector);
+        Assert.DoesNotContain("RemoteTextButton", selector);
         Assert.DoesNotContain("Region =", theme);
     }
 
@@ -205,12 +207,12 @@ public sealed class RemoteControlFormContractTests
         var theme = ReadRemoteTheme();
         var button = ReadRemoteButton();
 
-        Assert.Equal("0.20.2", FlyPPTTimer.AppVersion.Current);
-        Assert.Contains("ColumnCount = 5", source);
+        Assert.Equal("0.30.2", FlyPPTTimer.AppVersion.Current);
+        Assert.Contains("ColumnCount = 3", source);
         Assert.Contains("RowCount = 1", source);
         Assert.DoesNotContain("_stateDescription", source);
         Assert.DoesNotContain("GetSafeTextHeight", theme);
-        Assert.Contains("DefaultButtonHeight = 40", button);
+        Assert.Contains("DefaultButtonHeight = 30", button);
         Assert.Contains("MinimumSize = new Size(MinimumSize.Width, DefaultButtonHeight)", button);
         Assert.Contains("TextFormatFlags.GlyphOverhangPadding", button);
         Assert.DoesNotContain("TextFormatFlags.NoPadding", button);
@@ -225,12 +227,12 @@ public sealed class RemoteControlFormContractTests
         Assert.Contains("private FlowLayoutPanel? _presentationDetailsFlow", source);
         Assert.Contains("_presentationDetailsViewport.AutoScroll = compact", source);
         Assert.Contains("ConfigurePresentationActions(compact", source);
-        Assert.Contains("actions.RowCount = 3", source);
+        Assert.Contains("actions.RowCount = 5", source);
         Assert.True(source.Split("actions.RowStyles.Add(new RowStyle(SizeType.Percent, 50))").Length - 1 >= 2);
         Assert.Contains("SetPlaybackPosition(_startFromCurrentButton, 0, 2", source);
-        Assert.Contains("public const int CardGap = 14", theme);
-        Assert.Contains("public const int SectionGap = 12", theme);
-        Assert.Contains("public const int ControlGap = 10", theme);
+        Assert.Contains("public const int CardGap = 10", theme);
+        Assert.Contains("public const int SectionGap = 8", theme);
+        Assert.Contains("public const int ControlGap = 8", theme);
     }
 
     [Fact]
@@ -271,7 +273,7 @@ public sealed class RemoteControlFormContractTests
         Assert.Contains("_placementLoaded", source);
         Assert.DoesNotContain("RemoteDashboardTheme.Scale(", source);
         Assert.Contains("RemoteDashboardTheme.Scale(this, CornerRadius)", theme);
-        Assert.Contains("RemoteDashboardTheme.Scale(this, RemoteDashboardTheme.ControlRadius)", button);
+        Assert.Contains("RemoteDashboardTheme.Scale(this, CornerRadius)", button);
     }
 
     [Fact]
@@ -281,12 +283,12 @@ public sealed class RemoteControlFormContractTests
         var selector = ReadAddressSelector();
 
         Assert.Contains("Padding = new Padding(1)", selector);
-        Assert.Contains("ColumnCount = 2", selector);
-        Assert.Contains("ColumnStyle(SizeType.Absolute, 76)", selector);
+        Assert.Contains("ColumnCount = 1", selector);
+        Assert.DoesNotContain("ColumnStyle(SizeType.Absolute, 76)", selector);
         Assert.Contains("UpdateQrFrameSize", source);
         Assert.Contains("_qrCenter.ClientSize.Width", source);
         Assert.Contains("_qrCenter.ClientSize.Height", source);
-        Assert.Contains("LogicalToDeviceUnits(320)", source);
+        Assert.Contains("LogicalToDeviceUnits(214)", source);
     }
 
     [Fact]
@@ -300,8 +302,8 @@ public sealed class RemoteControlFormContractTests
         Assert.Contains("\"禁用规则\"", source);
         Assert.Contains("\"启用规则\"", source);
         Assert.Contains("规则已禁用", source);
-        Assert.Contains("\"禁用规则\"", row);
-        Assert.Contains("\"启用规则\"", row);
+        Assert.DoesNotContain("\"禁用规则\"", row);
+        Assert.DoesNotContain("\"启用规则\"", row);
     }
 
     [Fact]

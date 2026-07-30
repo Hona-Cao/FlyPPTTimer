@@ -57,6 +57,10 @@ function ConvertTo-InnoPath([string]$path) {
 $source = ConvertTo-InnoPath $installerSource
 $output = ConvertTo-InnoPath $innoOutput
 $icon = ConvertTo-InnoPath (Join-Path $root "src\FlyPPTTimer\Assets\app.ico")
+$chineseLanguage = ConvertTo-InnoPath (Join-Path $root "installer\ChineseSimplified.isl")
+if (-not (Test-Path -LiteralPath $chineseLanguage)) {
+    throw "Bundled Simplified Chinese Inno Setup language file is missing: $chineseLanguage"
+}
 $iss = @"
 [Setup]
 AppId={{8B4B0C52-DA7E-4B71-976E-F4A24177EA6C}
@@ -92,6 +96,11 @@ UsePreviousAppDir=yes
 UsePreviousGroup=yes
 AllowNoIcons=yes
 MinVersion=10.0
+ShowLanguageDialog=auto
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimp"; MessagesFile: "$chineseLanguage"
 
 [Files]
 Source: "$source\FlyPPTTimer.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -100,29 +109,40 @@ Source: "$source\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "$source\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: checkedonce
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 
 [Icons]
 Name: "{group}\FlyPPTTimer"; Filename: "{app}\FlyPPTTimer.exe"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"
 Name: "{autodesktop}\FlyPPTTimer"; Filename: "{app}\FlyPPTTimer.exe"; WorkingDir: "{app}"; IconFilename: "{app}\app.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\FlyPPTTimer.exe"; Description: "Launch FlyPPTTimer"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\FlyPPTTimer.exe"; Description: "{cm:LaunchProgram,FlyPPTTimer}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigPath: String;
   BackupPath: String;
+  LanguagePath: String;
 begin
-  if CurStep <> ssInstall then
-    Exit;
-  ConfigPath := ExpandConstant('{app}\FlyPPTTimer.config.json');
-  if not FileExists(ConfigPath) then
-    Exit;
-  BackupPath := ConfigPath + '.upgrade.' + GetDateTimeString('yyyymmddhhnnss', #0, #0) + '.backup.json';
-  if not FileCopy(ConfigPath, BackupPath, False) then
-    Log('Warning: unable to create config upgrade backup: ' + BackupPath);
+  if CurStep = ssInstall then
+  begin
+    ConfigPath := ExpandConstant('{app}\FlyPPTTimer.config.json');
+    if FileExists(ConfigPath) then
+    begin
+      BackupPath := ConfigPath + '.upgrade.' + GetDateTimeString('yyyymmddhhnnss', #0, #0) + '.backup.json';
+      if not FileCopy(ConfigPath, BackupPath, False) then
+        Log('Warning: unable to create config upgrade backup: ' + BackupPath);
+    end;
+  end;
+  if CurStep = ssPostInstall then
+  begin
+    LanguagePath := ExpandConstant('{app}\install-language.txt');
+    if ActiveLanguage = 'chinesesimp' then
+      SaveStringToFile(LanguagePath, 'zh-CN', False)
+    else
+      SaveStringToFile(LanguagePath, 'en', False);
+  end;
 end;
 "@
 [IO.File]::WriteAllText($issPath, $iss, [Text.UTF8Encoding]::new($true))

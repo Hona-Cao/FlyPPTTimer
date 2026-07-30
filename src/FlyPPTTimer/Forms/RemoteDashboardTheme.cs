@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace FlyPPTTimer.Forms;
 
@@ -8,29 +9,34 @@ namespace FlyPPTTimer.Forms;
 /// </summary>
 internal static class RemoteDashboardTheme
 {
-    public const int SidebarWidth = 174;
-    public const int PagePadding = 22;
-    public const int CardRadius = 8;
-    public const int ControlRadius = 6;
-    public const int InputHeight = 42;
-    public const int ButtonHeight = 40;
-    public const int NavigationHeight = 44;
-    public const int PresentationRowHeight = 92;
-    public const int PageGap = 14;
-    public const int CardGap = 14;
-    public const int SectionGap = 12;
-    public const int ControlGap = 10;
-    public const int CompactSidebarWidth = 158;
-    public const int CompactPagePadding = 16;
-    public const int CompactCardGap = 10;
-    public const int CompactSectionGap = 8;
-    public const int CompactControlGap = 8;
+    public const int WindowRadius = 8;
+    public const int PagePadding = 14;
+    public const int CardRadius = 6;
+    public const int ControlRadius = 4;
+    public const int NavigationRadius = 5;
+    public const int NavigationButtonHeight = 32;
+    public const int NavigationButtonGap = 12;
+    public const int InputHeight = 30;
+    public const int ButtonHeight = 30;
+    public const int NavigationHeight = 40;
+    public const int PresentationRowHeight = 70;
+    public const int PageGap = 10;
+    public const int CardGap = 10;
+    public const int SectionGap = 8;
+    public const int ControlGap = 8;
+    public const int CompactPagePadding = 10;
+    public const int CompactCardGap = 8;
+    public const int CompactSectionGap = 6;
+    public const int CompactControlGap = 6;
 
     public static readonly Color Window = Color.FromArgb(246, 248, 251);
     public static readonly Color Sidebar = Color.FromArgb(252, 253, 255);
     public static readonly Color Card = Color.White;
-    public static readonly Color Field = Color.FromArgb(248, 250, 252);
+    public static readonly Color Field = Color.FromArgb(241, 248, 255);
+    public static readonly Color ReadOnlyField = Color.FromArgb(237, 241, 245);
+    public static readonly Color DisabledField = Color.FromArgb(244, 246, 249);
     public static readonly Color Border = Color.FromArgb(218, 224, 232);
+    public static readonly Color DisabledBorder = Color.FromArgb(225, 229, 235);
     public static readonly Color BorderStrong = Color.FromArgb(194, 204, 218);
     public static readonly Color Text = Color.FromArgb(23, 31, 45);
     public static readonly Color MutedText = Color.FromArgb(91, 103, 123);
@@ -93,6 +99,39 @@ internal static class RemoteDashboardTheme
         }
         return fallback;
     }
+}
+
+/// <summary>
+/// A vertical-only presentation list. WinForms can expose a horizontal scroll bar
+/// when its vertical bar appears, even when every row is intended to fit.
+/// </summary>
+internal sealed class VerticalFlowLayoutPanel : FlowLayoutPanel
+{
+    private const int HorizontalScrollBar = 0;
+
+    public VerticalFlowLayoutPanel()
+    {
+        HorizontalScroll.Enabled = false;
+        HorizontalScroll.Visible = false;
+    }
+
+    public void HideHorizontalScrollBar()
+    {
+        if (!IsHandleCreated) return;
+        HorizontalScroll.Enabled = false;
+        HorizontalScroll.Visible = false;
+        ShowScrollBar(Handle, HorizontalScrollBar, false);
+    }
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        base.OnLayout(levent);
+        HideHorizontalScrollBar();
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowScrollBar(IntPtr hWnd, int wBar, bool bShow);
 }
 
 internal enum RemoteButtonKind

@@ -123,6 +123,54 @@ public sealed class AppCommandServiceTests
         Assert.False(commands.GetRemoteState().TimeUpBlackoutActive);
     }
 
+    [Fact]
+    public void MobileRestartTimer_UsesSelectedRuleThenFallsBackToGlobalDuration()
+    {
+        var log = TestLog.Create();
+        var path = Path.Combine(Path.GetTempPath(), "restart-rule.pptx");
+        var config = new AppConfig
+        {
+            Timer = new TimerSettings
+            {
+                DefaultDuration = "00:08:00",
+                Mode = TimerMode.Countdown
+            },
+            Rules =
+            [
+                new FileRule
+                {
+                    FileName = "restart-rule.pptx",
+                    FilePath = path,
+                    Duration = "00:03:30",
+                    Mode = TimerMode.CountUp
+                }
+            ]
+        };
+        var timer = new TimerService(log);
+        timer.Configure(config);
+        var commands = new AppCommandService(
+            timer, new AlertService(log, new FakePlaybackEngine()), () => config, _ => { },
+            () => { }, () => { }, () => { }, () => true, _ => { }, () => { }, log);
+
+        Assert.True(commands.ExecuteRemoteCommand(new RemoteCommand
+        {
+            Command = "timer.restart",
+            PresentationId = PresentationRuleValidator.IdForPath(path)
+        }));
+        Assert.Equal(TimeSpan.FromMinutes(3.5), timer.Duration);
+        Assert.Equal(TimerMode.CountUp, timer.Mode);
+        Assert.Equal(TimerState.Running, timer.State);
+
+        Assert.True(commands.ExecuteRemoteCommand(new RemoteCommand
+        {
+            Command = "timer.restart",
+            PresentationId = "missing"
+        }));
+        Assert.Equal(TimeSpan.FromMinutes(8), timer.Duration);
+        Assert.Equal(TimerMode.Countdown, timer.Mode);
+        Assert.Equal(TimerState.Running, timer.State);
+    }
+
     private sealed class FakeSystemAudioService : ISystemAudioService
     {
         public bool IsMuted { get; private set; }

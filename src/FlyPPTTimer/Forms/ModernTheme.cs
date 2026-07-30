@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 
 namespace FlyPPTTimer.Forms;
 
@@ -16,7 +17,9 @@ internal static class ModernTheme
     public static readonly Color AccentSoft = Color.FromArgb(224, 241, 237);
     public static readonly Color Accent = Color.FromArgb(16, 112, 99);
     public static readonly Color AccentStrong = Color.FromArgb(12, 87, 78);
-    public static readonly Color ControlFill = Color.FromArgb(239, 244, 246);
+    public static readonly Color ControlFill = Color.FromArgb(241, 248, 252);
+    public static readonly Color ReadOnlyFill = Color.FromArgb(229, 236, 240);
+    public static readonly Color ReadOnlyText = Color.FromArgb(82, 98, 106);
     public static readonly Color ControlHover = Color.FromArgb(228, 237, 240);
     public static readonly Color MutedText = Color.FromArgb(82, 98, 106);
     public static readonly Color Border = Color.FromArgb(215, 225, 229);
@@ -129,22 +132,42 @@ internal static class ModernTheme
 internal sealed class RoundedHostPanel : Panel
 {
     public int CornerRadius { get; set; } = ModernTheme.ControlRadius;
-    public Color FillColor { get; set; } = Color.White;
+    private Color _fillColor = Color.White;
+    public Color FillColor
+    {
+        get => _fillColor;
+        set
+        {
+            if (_fillColor == value) return;
+            _fillColor = value;
+            Invalidate();
+        }
+    }
 
     public RoundedHostPanel()
     {
-        DoubleBuffered = true;
-        BackColor = Color.Transparent;
+        SetStyle(
+            ControlStyles.UserPaint |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer,
+            true);
+        BackColor = ModernTheme.Card;
         Padding = new Padding(10, 7, 10, 7);
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        e.Graphics.Clear(Parent?.BackColor ?? ModernTheme.Card);
     }
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e);
+        if (Width <= 0 || Height <= 0) return;
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        using var path = ModernTheme.RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), CornerRadius);
+        using var path = ModernTheme.RoundedRect(new Rectangle(0, 0, Width, Height), CornerRadius);
         using var fill = new SolidBrush(FillColor);
         e.Graphics.FillPath(fill, path);
+        base.OnPaint(e);
     }
 }
 
@@ -186,6 +209,17 @@ internal sealed class ModernContextMenuRenderer : ToolStripProfessionalRenderer
 internal sealed class ModernComboBox : ComboBox
 {
     private const int WmPaint = 0x000F;
+    private const int WmNcPaint = 0x0085;
+    private const int GwlStyle = -16;
+    private const int GwlExStyle = -20;
+    private const int WsBorder = 0x00800000;
+    private const int WsExClientEdge = 0x00000200;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint SwpFrameChanged = 0x0020;
+    private const int ComboRadius = 4;
 
     public ModernComboBox()
     {
@@ -197,37 +231,133 @@ internal sealed class ModernComboBox : ComboBox
         ItemHeight = 30;
     }
 
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var parameters = base.CreateParams;
+            parameters.Style &= ~WsBorder;
+            parameters.ExStyle &= ~WsExClientEdge;
+            return parameters;
+        }
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        ApplyComboRegion();
+    }
+
+    protected override void OnSizeChanged(EventArgs e)
+    {
+        base.OnSizeChanged(e);
+        ApplyComboRegion();
+    }
+
+    private void ApplyComboRegion() =>
+        ModernTheme.ApplyRoundedRegion(this, Math.Max(3, ComboRadius * Math.Max(96, DeviceDpi) / 96));
+
+    protected override void OnEnabledChanged(EventArgs e)
+    {
+        base.OnEnabledChanged(e);
+        BackColor = Enabled ? ModernTheme.ControlFill : ModernTheme.ReadOnlyFill;
+        Invalidate();
+    }
+
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
         if (e.Index < 0) return;
         var selected = (e.State & DrawItemState.Selected) != 0;
-        using var fill = new SolidBrush(selected ? ModernTheme.AccentSoft : Color.White);
+        using var fill = new SolidBrush(selected ? ModernTheme.AccentSoft : ModernTheme.ControlFill);
         e.Graphics.FillRectangle(fill, e.Bounds);
         TextRenderer.DrawText(
             e.Graphics,
-            GetItemText(Items[e.Index]),
+            Services.Localization.T(GetItemText(Items[e.Index])),
             Font,
-            Rectangle.Inflate(e.Bounds, -10, 0),
+            Rectangle.Inflate(e.Bounds, -12, 0),
             ModernTheme.Text,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
+
+    protected override void OnDropDown(EventArgs e)
+    {
+        base.OnDropDown(e);
+        ApplyDropDownWindowStyle();
+    }
+
+    private void ApplyDropDownWindowStyle()
+    {
+        var info = new ComboBoxInfo { Size = Marshal.SizeOf<ComboBoxInfo>() };
+        if (!GetComboBoxInfo(Handle, ref info) || info.ListHandle == IntPtr.Zero) return;
+
+        var style = GetWindowLong(info.ListHandle, GwlStyle) & ~WsBorder;
+        var exStyle = GetWindowLong(info.ListHandle, GwlExStyle) & ~WsExClientEdge;
+        SetWindowLong(info.ListHandle, GwlStyle, style);
+        SetWindowLong(info.ListHandle, GwlExStyle, exStyle);
+        SetWindowPos(
+            info.ListHandle,
+            IntPtr.Zero,
+            0,
+            0,
+            0,
+            0,
+            SwpNoSize | SwpNoMove | SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
+
+        if (!GetWindowRect(info.ListHandle, out var bounds)) return;
+        var radius = Math.Max(4, ComboRadius * Math.Max(96, DeviceDpi) / 96);
+        var region = CreateRoundRectRgn(
+            0,
+            0,
+            Math.Max(1, bounds.Right - bounds.Left) + 1,
+            Math.Max(1, bounds.Bottom - bounds.Top) + 1,
+            radius * 2,
+            radius * 2);
+        if (region == IntPtr.Zero) return;
+        if (SetWindowRgn(info.ListHandle, region, true) == 0)
+            DeleteObject(region);
     }
 
     protected override void WndProc(ref Message m)
     {
-        base.WndProc(ref m);
-        if (m.Msg != WmPaint || Width <= 0 || Height <= 0) return;
+        if (m.Msg == WmNcPaint) return;
+        if (m.Msg != WmPaint || Width <= 0 || Height <= 0)
+        {
+            base.WndProc(ref m);
+            return;
+        }
 
-        using var graphics = Graphics.FromHwnd(Handle);
-        using var fill = new SolidBrush(ModernTheme.ControlFill);
+        var paint = new PaintStruct { Reserved = new byte[32] };
+        var deviceContext = BeginPaint(Handle, ref paint);
+        if (deviceContext == IntPtr.Zero)
+        {
+            base.WndProc(ref m);
+            return;
+        }
+        try
+        {
+            using var graphics = Graphics.FromHdc(deviceContext);
+            PaintCollapsedControl(graphics);
+        }
+        finally
+        {
+            EndPaint(Handle, ref paint);
+        }
+        m.Result = IntPtr.Zero;
+    }
+
+    private void PaintCollapsedControl(Graphics graphics)
+    {
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        using var fill = new SolidBrush(Enabled ? ModernTheme.ControlFill : ModernTheme.ReadOnlyFill);
         graphics.FillRectangle(fill, ClientRectangle);
-        var textRect = new Rectangle(2, 0, Math.Max(0, Width - 36), Height);
+        var textRect = new Rectangle(12, 0, Math.Max(0, Width - 48), Height);
         TextRenderer.DrawText(
             graphics,
-            Text,
+            Services.Localization.T(Text),
             Font,
             textRect,
-            ModernTheme.Text,
-            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            Enabled ? ModernTheme.Text : ModernTheme.ReadOnlyText,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         var centerX = Width - 17;
         var centerY = Height / 2 + 1;
         using var arrow = new SolidBrush(ModernTheme.MutedText);
@@ -236,4 +366,83 @@ internal sealed class ModernComboBox : ComboBox
             new Point(centerX + 4, centerY - 2),
             new Point(centerX, centerY + 3) });
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PaintStruct
+    {
+        public IntPtr DeviceContext;
+        [MarshalAs(UnmanagedType.Bool)] public bool Erase;
+        public NativeRect Paint;
+        [MarshalAs(UnmanagedType.Bool)] public bool Restore;
+        [MarshalAs(UnmanagedType.Bool)] public bool IncUpdate;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] Reserved;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ComboBoxInfo
+    {
+        public int Size;
+        public NativeRect ItemRect;
+        public NativeRect ButtonRect;
+        public int ButtonState;
+        public IntPtr ComboHandle;
+        public IntPtr EditHandle;
+        public IntPtr ListHandle;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetComboBoxInfo(IntPtr comboHandle, ref ComboBoxInfo info);
+
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr windowHandle, int index);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowLong(IntPtr windowHandle, int index, int value);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr windowHandle, out NativeRect bounds);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(
+        IntPtr windowHandle,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateRoundRectRgn(
+        int left,
+        int top,
+        int right,
+        int bottom,
+        int ellipseWidth,
+        int ellipseHeight);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowRgn(IntPtr windowHandle, IntPtr region, bool redraw);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr BeginPaint(IntPtr windowHandle, ref PaintStruct paint);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EndPaint(IntPtr windowHandle, ref PaintStruct paint);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr handle);
 }

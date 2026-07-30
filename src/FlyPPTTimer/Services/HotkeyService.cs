@@ -1,4 +1,5 @@
 using System.Windows.Forms;
+using FlyPPTTimer.Forms;
 using FlyPPTTimer.Native;
 
 namespace FlyPPTTimer.Services;
@@ -57,7 +58,7 @@ public sealed class HotkeyService : NativeWindow, IDisposable
         else
         {
             _log.Warn($"Hotkey registration failed: {hotkey}");
-            MessageBox.Show($"快捷键注册失败：{hotkey}", "FlyPPTTimer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            LocalizedMessageDialog.Show(Localization.T($"快捷键注册失败：{hotkey}"), "FlyPPTTimer", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 

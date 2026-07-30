@@ -81,6 +81,23 @@ public sealed class AppCommandService
         _timer.Stop(true);
     }
 
+    public void Restart(string? presentationId = null)
+    {
+        var config = _getConfig();
+        var rule = FindRule(config, presentationId);
+        var durationText = !string.IsNullOrWhiteSpace(rule?.Duration)
+            ? rule.Duration
+            : config.Timer.DefaultDuration;
+        var duration = TimerService.ParseDuration(durationText);
+        _alerts.ResetTriggers();
+        _timer.SetMode(rule?.Mode ?? config.Timer.Mode);
+        _timer.SetDuration(duration);
+        _timer.Start();
+        LastCommandMessage = rule is null
+            ? "已按全局时长重新计时"
+            : $"已按 {rule.FileName} 的规则时长重新计时";
+    }
+
     public void SetDuration(TimeSpan duration, string? presentationId = null, bool syncAllRules = false)
     {
         var wholeSeconds = Math.Clamp((long)Math.Round(duration.TotalSeconds), 1, (long)TimeSpan.FromHours(24).TotalSeconds - 1);
@@ -223,6 +240,7 @@ public sealed class AppCommandService
             case "timer.resume": Resume(); return true;
             case "timer.stop": StopReset(); return true;
             case "timer.reset": Reset(); return true;
+            case "timer.restart": Restart(command.PresentationId); return true;
             case "timer.setDuration":
                 if (command.DurationMs is > 0) SetDuration(TimeSpan.FromMilliseconds(command.DurationMs.Value), command.PresentationId, command.SyncAllRules == true);
                 else if (TimeSpan.TryParse(command.Duration, out var duration)) SetDuration(duration, command.PresentationId, command.SyncAllRules == true);

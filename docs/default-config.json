@@ -1,5 +1,6 @@
 {
-  "Version": "0.20.2",
+  "Version": "0.30.2",
+  "Language": "auto",
   "Update": {
     "CheckOnStartup": false
   },
@@ -126,21 +127,23 @@
   },
   "RemoteControl": {
     "Enabled": true,
-    "UseRandomPort": true,
-    "Port": 0,
+    "UseRandomPort": false,
+    "Port": 4080,
     "Token": "",
     "Window": {
       "HasValue": false,
       "ScreenDeviceName": "",
       "LeftRatio": 0,
       "TopRatio": 0,
-      "WidthDip": 1180,
-      "HeightDip": 760,
+      "WidthDip": 700,
+      "HeightDip": 510,
       "Maximized": false
     }
   },
   "Placement": {
     "Visible": true,
+    "BigScreenEnabled": false,
+    "BigScreenDeviceName": "",
     "ShowOnAllScreens": true,
     "TargetScreenDeviceName": "",
     "Anchor": 1,

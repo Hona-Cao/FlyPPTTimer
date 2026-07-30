@@ -5,6 +5,7 @@ namespace FlyPPTTimer.Models;
 public sealed class AppConfig
 {
     public string Version { get; set; } = AppVersion.Current;
+    public string Language { get; set; } = Services.Localization.Auto;
     public UpdateSettings Update { get; set; } = new();
     public TimerSettings Timer { get; set; } = new();
     public BehaviorSettings Behavior { get; set; } = new();
@@ -163,6 +164,8 @@ public enum CloseButtonBehavior
 public sealed class WindowPlacement
 {
     public bool Visible { get; set; } = true;
+    public bool BigScreenEnabled { get; set; }
+    public string BigScreenDeviceName { get; set; } = "";
     public bool ShowOnAllScreens { get; set; } = true;
     public string TargetScreenDeviceName { get; set; } = "";
     public OverlayAnchor Anchor { get; set; } = OverlayAnchor.TopCenter;
@@ -201,8 +204,8 @@ public sealed class FileRule
 public sealed class RemoteControlSettings
 {
     public bool Enabled { get; set; } = true;
-    public bool UseRandomPort { get; set; } = true;
-    public int Port { get; set; }
+    public bool UseRandomPort { get; set; }
+    public int Port { get; set; } = 4080;
     public string Token { get; set; } = "";
     public RemoteWindowPlacement Window { get; set; } = new();
 }
@@ -213,8 +216,8 @@ public sealed class RemoteWindowPlacement
     public string ScreenDeviceName { get; set; } = "";
     public double LeftRatio { get; set; }
     public double TopRatio { get; set; }
-    public int WidthDip { get; set; } = 1180;
-    public int HeightDip { get; set; } = 760;
+    public int WidthDip { get; set; } = 700;
+    public int HeightDip { get; set; } = 510;
     public bool Maximized { get; set; }
 }
 
