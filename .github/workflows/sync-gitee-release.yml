@@ -58,7 +58,7 @@ jobs:
           echo "Gitee mirror did not receive ${tag} within 10 minutes." >&2
           exit 1
 
-      - name: Download and verify GitHub release assets
+      - name: Download GitHub installer and portable assets
         shell: bash
         run: |
           set -euo pipefail
@@ -67,16 +67,21 @@ jobs:
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" \
             --json name,body,isPrerelease,targetCommitish > github-release.json
           gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
-            --dir release-assets
+            --dir release-assets \
+            --pattern 'FlyPPTTimer-*-setup-win-x64.exe' \
+            --pattern 'FlyPPTTimer-*-portable-win-x64.zip'
           shopt -s nullglob
-          checksums=(release-assets/*.sha256)
-          if (( ${#checksums[@]} == 0 )); then
-            echo "No SHA-256 files were found in the GitHub Release." >&2
+          assets=(release-assets/*)
+          if (( ${#assets[@]} != 2 )); then
+            echo "Expected exactly the installer and portable archive; found ${#assets[@]} assets." >&2
             exit 1
           fi
-          for checksum in "${checksums[@]}"; do
-            (cd release-assets && sha256sum --check "$(basename "$checksum")")
-          done
+          installers=(release-assets/FlyPPTTimer-*-setup-win-x64.exe)
+          portables=(release-assets/FlyPPTTimer-*-portable-win-x64.zip)
+          if (( ${#installers[@]} != 1 || ${#portables[@]} != 1 )); then
+            echo "Release must contain one installer and one portable archive." >&2
+            exit 1
+          fi
 
       - name: Create or update Gitee release and upload assets
         shell: bash
