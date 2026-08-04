@@ -50,6 +50,7 @@ public sealed class V0206ReferenceLayoutTests
         var config = new AppConfig
         {
             Version = "0.20.5",
+            SchemaVersion = 0,
             RemoteControl = new RemoteControlSettings
             {
                 Window = new RemoteWindowPlacement
@@ -65,6 +66,7 @@ public sealed class V0206ReferenceLayoutTests
         ConfigService.Normalize(config);
 
         Assert.Equal(FlyPPTTimer.AppVersion.Current, config.Version);
+        Assert.Equal(ConfigSchema.Current, config.SchemaVersion);
         Assert.Equal(700, config.RemoteControl.Window.WidthDip);
         Assert.Equal(510, config.RemoteControl.Window.HeightDip);
         Assert.False(config.RemoteControl.Window.Maximized);
