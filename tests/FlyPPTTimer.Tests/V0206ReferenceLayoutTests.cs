@@ -64,7 +64,7 @@ public sealed class V0206ReferenceLayoutTests
 
         ConfigService.Normalize(config);
 
-        Assert.Equal("0.30.2", config.Version);
+        Assert.Equal(FlyPPTTimer.AppVersion.Current, config.Version);
         Assert.Equal(700, config.RemoteControl.Window.WidthDip);
         Assert.Equal(510, config.RemoteControl.Window.HeightDip);
         Assert.False(config.RemoteControl.Window.Maximized);
