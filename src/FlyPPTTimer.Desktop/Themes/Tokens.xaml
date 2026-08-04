@@ -1,0 +1,45 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Color x:Key="Color.Window">#F4F7FA</Color>
+    <Color x:Key="Color.Surface">#FFFFFF</Color>
+    <Color x:Key="Color.SurfaceMuted">#EAF1F6</Color>
+    <Color x:Key="Color.Border">#D4E0E8</Color>
+    <Color x:Key="Color.TextPrimary">#17324A</Color>
+    <Color x:Key="Color.TextSecondary">#5E7181</Color>
+    <Color x:Key="Color.Accent">#1677A6</Color>
+    <Color x:Key="Color.AccentHover">#12658E</Color>
+    <Color x:Key="Color.Success">#197A55</Color>
+    <Color x:Key="Color.Warning">#A65C00</Color>
+    <Color x:Key="Color.Danger">#B42318</Color>
+
+    <SolidColorBrush x:Key="Brush.Window" Color="{StaticResource Color.Window}" />
+    <SolidColorBrush x:Key="Brush.Surface" Color="{StaticResource Color.Surface}" />
+    <SolidColorBrush x:Key="Brush.SurfaceMuted" Color="{StaticResource Color.SurfaceMuted}" />
+    <SolidColorBrush x:Key="Brush.Border" Color="{StaticResource Color.Border}" />
+    <SolidColorBrush x:Key="Brush.TextPrimary" Color="{StaticResource Color.TextPrimary}" />
+    <SolidColorBrush x:Key="Brush.TextSecondary" Color="{StaticResource Color.TextSecondary}" />
+    <SolidColorBrush x:Key="Brush.Accent" Color="{StaticResource Color.Accent}" />
+    <SolidColorBrush x:Key="Brush.AccentHover" Color="{StaticResource Color.AccentHover}" />
+    <SolidColorBrush x:Key="Brush.Success" Color="{StaticResource Color.Success}" />
+    <SolidColorBrush x:Key="Brush.Warning" Color="{StaticResource Color.Warning}" />
+    <SolidColorBrush x:Key="Brush.Danger" Color="{StaticResource Color.Danger}" />
+
+    <FontFamily x:Key="Font.Ui">Microsoft YaHei UI, Segoe UI</FontFamily>
+
+    <sys:Double x:Key="Size.Text.Caption"
+                xmlns:sys="clr-namespace:System;assembly=System.Runtime">12</sys:Double>
+    <sys:Double x:Key="Size.Text.Body"
+                xmlns:sys="clr-namespace:System;assembly=System.Runtime">14</sys:Double>
+    <sys:Double x:Key="Size.Text.Title"
+                xmlns:sys="clr-namespace:System;assembly=System.Runtime">22</sys:Double>
+    <sys:Double x:Key="Size.Text.Timer"
+                xmlns:sys="clr-namespace:System;assembly=System.Runtime">40</sys:Double>
+
+    <Thickness x:Key="Spacing.Page">28</Thickness>
+    <Thickness x:Key="Spacing.Card">20</Thickness>
+    <Thickness x:Key="Spacing.Control">14,8</Thickness>
+    <CornerRadius x:Key="Radius.Card">12</CornerRadius>
+    <CornerRadius x:Key="Radius.Control">8</CornerRadius>
+
+</ResourceDictionary>
