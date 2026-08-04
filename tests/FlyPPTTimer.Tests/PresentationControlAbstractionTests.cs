@@ -81,6 +81,21 @@ public sealed class PresentationControlAbstractionTests
         Assert.DoesNotContain("PowerPointControlService? _powerPoint", source);
     }
 
+    [Fact]
+    public void PowerPointControlServiceUsesPresentationStaDispatcher()
+    {
+        var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "Services", "PowerPointControlService.cs"));
+
+        Assert.Contains("PresentationStaDispatcher _dispatcher", source);
+        Assert.Contains("_dispatcher.TryEnqueue", source);
+        Assert.Contains("_dispatcher.Invoke", source);
+        Assert.Contains("_dispatcher.ExecuteWithBusyRetry", source);
+        Assert.DoesNotContain("BlockingCollection<Action> _queue", source);
+        Assert.DoesNotContain("new Thread(Run)", source);
+        Assert.DoesNotContain("private T Invoke<T>", source);
+        Assert.DoesNotContain("private T RetryComBusy<T>", source);
+    }
+
     private static string SourcePath(params string[] segments)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);

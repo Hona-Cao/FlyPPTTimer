@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -13,8 +12,7 @@ public sealed class PowerPointControlService : IDisposable
     private const int SlideShowRunning = 1;
     private const int SlideShowBlackScreen = 3;
     private const int SlideShowWhiteScreen = 4;
-    private readonly BlockingCollection<Action> _queue = new(32);
-    private readonly Thread _thread;
+    private readonly PresentationStaDispatcher _dispatcher;
     private readonly Func<AppConfig> _getConfig;
     private readonly LogService _log;
     private readonly System.Threading.Timer _refreshTimer;
@@ -34,9 +32,9 @@ public sealed class PowerPointControlService : IDisposable
     {
         _getConfig = getConfig;
         _log = log;
-        _thread = new Thread(Run) { IsBackground = true, Name = "FlyPPTTimer PowerPoint STA" };
-        _thread.SetApartmentState(ApartmentState.STA);
-        _thread.Start();
+        _dispatcher = new PresentationStaDispatcher(
+            "FlyPPTTimer PowerPoint STA",
+            warn: _log.Warn);
         _refreshTimer = new System.Threading.Timer(_ => QueueRefresh(), null, 0, 500);
     }
 
@@ -70,7 +68,7 @@ public sealed class PowerPointControlService : IDisposable
         }
         NotifyStateChanged();
 
-        if (!_queue.TryAdd(() => RunQueuedOperation(command, operation), 200))
+        if (!_dispatcher.TryEnqueue(() => RunQueuedOperation(command, operation)))
         {
             SetOperation(PresentationOperationInfo.Failed(operation, "演示命令队列繁忙，请稍后重试。"));
             return new PresentationCommandResult(false, "演示命令队列繁忙，请稍后重试。", GetState());
@@ -85,7 +83,7 @@ public sealed class PowerPointControlService : IDisposable
         try
         {
             SetOperation(operation with { Message = "正在" + operation.Message });
-            var message = RetryComBusy(() => ExecuteCore(command));
+            var message = _dispatcher.ExecuteWithBusyRetry(() => ExecuteCore(command));
             UpdateCachedState();
             SetOperation(PresentationOperationInfo.Idle with { Message = message });
         }
@@ -102,7 +100,7 @@ public sealed class PowerPointControlService : IDisposable
     {
         var timeout = command.Command is "ppt.openPresentation" or "ppt.startFromBeginning" or "ppt.startFromCurrent"
             ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(5);
-        try { return Invoke(() =>
+        try { return _dispatcher.Invoke(() =>
         {
             try
             {
@@ -129,46 +127,13 @@ public sealed class PowerPointControlService : IDisposable
         }
     }
 
-    private void Run()
-    {
-        foreach (var action in _queue.GetConsumingEnumerable()) action();
-    }
-
-    private T Invoke<T>(Func<T> operation, TimeSpan timeout)
-    {
-        if (_disposed) throw new ObjectDisposedException(nameof(PowerPointControlService));
-        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var cancellation = new CancellationTokenSource();
-        var cancellationToken = cancellation.Token;
-        if (!_queue.TryAdd(() =>
-        {
-            if (cancellationToken.IsCancellationRequested) return;
-            try { completion.TrySetResult(RetryComBusy(operation)); }
-            catch (Exception ex) { completion.SetException(ex); }
-        }, 200)) throw new InvalidOperationException("PowerPoint 命令队列繁忙，请稍后重试。");
-        if (!completion.Task.Wait(timeout)) { cancellation.Cancel(); throw new TimeoutException(); }
-        return completion.Task.GetAwaiter().GetResult();
-    }
-
-    private T RetryComBusy<T>(Func<T> operation)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try { return operation(); }
-            catch (COMException ex) when (attempt < 3 && (ex.HResult == unchecked((int)0x80010001) || ex.HResult == unchecked((int)0x8001010A)))
-            {
-                Thread.Sleep(100 * (attempt + 1));
-            }
-        }
-    }
-
     private void QueueRefresh()
     {
         if (_disposed) return;
         if (Interlocked.Exchange(ref _refreshQueued, 1) != 0) return;
-        if (!_queue.TryAdd(() =>
+        if (!_dispatcher.TryEnqueue(() =>
         {
-            try { RetryComBusy(UpdateCachedState); }
+            try { _dispatcher.ExecuteWithBusyRetry(UpdateCachedState); }
             catch (Exception ex)
             {
                 if (DateTime.UtcNow - _lastRefreshFailureLog >= TimeSpan.FromSeconds(30))
@@ -1095,12 +1060,6 @@ public sealed class PowerPointControlService : IDisposable
         if (_disposed) return;
         _disposed = true;
         _refreshTimer.Dispose();
-        _queue.CompleteAdding();
-        if (!_thread.Join(TimeSpan.FromSeconds(2)))
-        {
-            _log.Warn("PowerPoint STA thread did not stop within two seconds; queue disposal deferred until process exit.");
-            return;
-        }
-        _queue.Dispose();
+        _dispatcher.Dispose();
     }
 }
