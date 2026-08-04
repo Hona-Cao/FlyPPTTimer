@@ -66,6 +66,34 @@ public sealed class TimerEngineTests
         Assert.True(engine.FinishRaised);
     }
 
+    [Fact]
+    public void ConfigureCanPreserveFinishRaisedForLegacyHostCompatibility()
+    {
+        var clock = new ManualClock();
+        var engine = new TimerEngine(clock, new TimerConfiguration(
+            TimeSpan.FromSeconds(3),
+            TimerDirection.Countdown,
+            ContinueOvertime: true));
+        var finishedCount = 0;
+        engine.Finished += (_, _) => finishedCount++;
+
+        engine.Start();
+        clock.Advance(TimeSpan.FromSeconds(4));
+        engine.Update();
+
+        engine.Configure(new TimerConfiguration(
+            TimeSpan.FromSeconds(2),
+            TimerDirection.CountUp,
+            ContinueOvertime: true),
+            resetFinishRaised: false);
+        engine.Update();
+
+        Assert.True(engine.FinishRaised);
+        Assert.Equal(1, finishedCount);
+        Assert.Equal(TimerDirection.CountUp, engine.Configuration.Direction);
+        Assert.Equal(TimeSpan.FromSeconds(2), engine.Configuration.Duration);
+    }
+
     private sealed class ManualClock : IMonotonicClock
     {
         public long Frequency => TimeSpan.TicksPerSecond;
