@@ -96,6 +96,29 @@ public sealed class PresentationControlAbstractionTests
         Assert.DoesNotContain("private T RetryComBusy<T>", source);
     }
 
+    [Fact]
+    public void PowerPointControlServiceUsesPresentationStateMonitor()
+    {
+        var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "Services", "PowerPointControlService.cs"));
+
+        Assert.Contains("PresentationStateMonitor _stateMonitor", source);
+        Assert.Contains("new PresentationStateMonitor(", source);
+        Assert.Contains("GetState() => _stateMonitor.GetState()", source);
+        Assert.Contains("UpdateCachedState() => _stateMonitor.RefreshNow()", source);
+        Assert.Contains("_stateMonitor.MutateCurrent(ApplyOperation)", source);
+        Assert.Contains("notify: false", source);
+        Assert.True(source.IndexOf("_stateMonitor.Dispose()", StringComparison.Ordinal) <
+                    source.IndexOf("_dispatcher.Dispose()", StringComparison.Ordinal));
+        Assert.DoesNotContain("_refreshTimer", source);
+        Assert.DoesNotContain("_stateSync", source);
+        Assert.DoesNotContain("_cachedState", source);
+        Assert.DoesNotContain("_lastShowRunning", source);
+        Assert.DoesNotContain("_lastShowPath", source);
+        Assert.DoesNotContain("_refreshQueued", source);
+        Assert.DoesNotContain("_lastRefreshFailureLog", source);
+        Assert.DoesNotContain("CloneState(PresentationState", source);
+    }
+
     private static string SourcePath(params string[] segments)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);

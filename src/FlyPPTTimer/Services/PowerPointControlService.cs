@@ -13,18 +13,12 @@ public sealed class PowerPointControlService : IDisposable
     private const int SlideShowBlackScreen = 3;
     private const int SlideShowWhiteScreen = 4;
     private readonly PresentationStaDispatcher _dispatcher;
+    private readonly PresentationStateMonitor _stateMonitor;
     private readonly Func<AppConfig> _getConfig;
     private readonly LogService _log;
-    private readonly System.Threading.Timer _refreshTimer;
-    private readonly object _stateSync = new();
     private readonly object _operationSync = new();
     private readonly Dictionary<string, ManagedPresentation> _managedPresentations = new(StringComparer.OrdinalIgnoreCase);
-    private PresentationState _cachedState = new();
-    private bool _lastShowRunning;
-    private string _lastShowPath = "";
     private long _lastNavigationTick;
-    private int _refreshQueued;
-    private DateTime _lastRefreshFailureLog = DateTime.MinValue;
     private bool _disposed;
     private PresentationOperationInfo _operation = PresentationOperationInfo.Idle;
 
@@ -35,7 +29,15 @@ public sealed class PowerPointControlService : IDisposable
         _dispatcher = new PresentationStaDispatcher(
             "FlyPPTTimer PowerPoint STA",
             warn: _log.Warn);
-        _refreshTimer = new System.Threading.Timer(_ => QueueRefresh(), null, 0, 500);
+        _stateMonitor = new PresentationStateMonitor(
+            _dispatcher,
+            ReadState,
+            ApplyOperation,
+            FriendlyError,
+            _log.Warn);
+        _stateMonitor.SlideShowStarted += (_, path) => SlideShowStarted?.Invoke(this, path);
+        _stateMonitor.SlideShowEnded += (_, _) => SlideShowEnded?.Invoke(this, EventArgs.Empty);
+        _stateMonitor.StateChanged += (_, _) => StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public event EventHandler<string>? SlideShowStarted;
@@ -43,10 +45,7 @@ public sealed class PowerPointControlService : IDisposable
     public event EventHandler? SlideShowWindowActivated;
     public event EventHandler? StateChanged;
 
-    public PresentationState GetState()
-    {
-        lock (_stateSync) return CloneState(_cachedState);
-    }
+    public PresentationState GetState() => _stateMonitor.GetState();
 
     /// <summary>
     /// Accepts a whitelisted presentation command without making the HTTP request wait for COM.
@@ -91,7 +90,7 @@ public sealed class PowerPointControlService : IDisposable
         {
             _log.Error($"PowerPoint command failed: {command.Command}", ex);
             var error = FriendlyError(ex);
-            lock (_stateSync) _cachedState.Error = error;
+            _stateMonitor.MutateCurrent(state => state.Error = error, notify: false);
             SetOperation(PresentationOperationInfo.Failed(operation, error));
         }
     }
@@ -127,49 +126,7 @@ public sealed class PowerPointControlService : IDisposable
         }
     }
 
-    private void QueueRefresh()
-    {
-        if (_disposed) return;
-        if (Interlocked.Exchange(ref _refreshQueued, 1) != 0) return;
-        if (!_dispatcher.TryEnqueue(() =>
-        {
-            try { _dispatcher.ExecuteWithBusyRetry(UpdateCachedState); }
-            catch (Exception ex)
-            {
-                if (DateTime.UtcNow - _lastRefreshFailureLog >= TimeSpan.FromSeconds(30))
-                {
-                    _lastRefreshFailureLog = DateTime.UtcNow;
-                    _log.Warn($"PowerPoint background refresh failed: {FriendlyError(ex)}");
-                }
-            }
-            finally { Interlocked.Exchange(ref _refreshQueued, 0); }
-        })) Interlocked.Exchange(ref _refreshQueued, 0);
-    }
-
-    private PresentationState UpdateCachedState()
-    {
-        var state = ReadState();
-        if (!string.IsNullOrWhiteSpace(state.Error))
-        {
-            lock (_stateSync)
-            {
-                var stale = CloneState(_cachedState);
-                stale.Error = state.Error;
-                _cachedState = stale;
-                return CloneState(stale);
-            }
-        }
-        state.UpdatedAt = DateTime.Now;
-        ApplyOperation(state);
-        lock (_stateSync) _cachedState = CloneState(state);
-        if (state.IsSlideShowRunning && (!_lastShowRunning || !SamePath(_lastShowPath, state.PresentationPath)))
-            SlideShowStarted?.Invoke(this, state.PresentationPath);
-        else if (!state.IsSlideShowRunning && _lastShowRunning) SlideShowEnded?.Invoke(this, EventArgs.Empty);
-        _lastShowRunning = state.IsSlideShowRunning;
-        _lastShowPath = state.PresentationPath;
-        NotifyStateChanged();
-        return state;
-    }
+    private PresentationState UpdateCachedState() => _stateMonitor.RefreshNow();
 
     private string ExecuteCore(RemoteCommand command)
     {
@@ -215,8 +172,7 @@ public sealed class PowerPointControlService : IDisposable
     private void SetOperation(PresentationOperationInfo operation)
     {
         lock (_operationSync) _operation = operation;
-        lock (_stateSync) ApplyOperation(_cachedState);
-        NotifyStateChanged();
+        _stateMonitor.MutateCurrent(ApplyOperation);
     }
 
     private void ApplyOperation(PresentationState state)
@@ -989,37 +945,6 @@ public sealed class PowerPointControlService : IDisposable
         _ => "PowerPoint 操作失败，请查看程序日志。"
     };
     private static bool IsComBusy(COMException ex) => ex.HResult == unchecked((int)0x80010001) || ex.HResult == unchecked((int)0x8001010A);
-    private static PresentationState CloneState(PresentationState state) => new()
-    {
-        PowerPointInstalled = state.PowerPointInstalled,
-        PowerPointRunning = state.PowerPointRunning,
-        HasPresentation = state.HasPresentation,
-        IsSlideShowRunning = state.IsSlideShowRunning,
-        PresentationName = state.PresentationName,
-        PresentationPath = state.PresentationPath,
-        CurrentSlide = state.CurrentSlide,
-        TotalSlides = state.TotalSlides,
-        ScreenMode = state.ScreenMode,
-        UpdatedAt = state.UpdatedAt,
-        Error = state.Error,
-        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, Directory = x.Directory, IsOpen = x.IsOpen, IsActive = x.IsActive, IsSlideShowRunning = x.IsSlideShowRunning, IsManaged = x.IsManaged }).ToList(),
-        Operation = state.Operation,
-        OperationMessage = state.OperationMessage,
-        OperationStartedAt = state.OperationStartedAt,
-        OperationId = state.OperationId,
-        IsOperationBusy = state.IsOperationBusy,
-        IsCurrentPresentationManaged = state.IsCurrentPresentationManaged,
-        OpenPresentationCount = state.OpenPresentationCount,
-        WpsDetected = state.WpsDetected,
-        WpsCapabilities = new WpsCapabilities
-        {
-            CanEndSlideShow = state.WpsCapabilities.CanEndSlideShow,
-            CanClosePresentation = state.WpsCapabilities.CanClosePresentation,
-            CanExitApplication = state.WpsCapabilities.CanExitApplication,
-            CanForceExit = state.WpsCapabilities.CanForceExit,
-            Message = state.WpsCapabilities.Message
-        }
-    };
 
     private sealed record ManagedPresentation(string Path, DateTime OpenedAt, bool ReadOnlyRequested);
     private sealed record WindowActivationResult(bool Success, string Message, string Path, IntPtr Hwnd)
@@ -1059,7 +984,7 @@ public sealed class PowerPointControlService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _refreshTimer.Dispose();
+        _stateMonitor.Dispose();
         _dispatcher.Dispose();
     }
 }
