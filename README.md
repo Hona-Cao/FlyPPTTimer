@@ -49,13 +49,28 @@ The current packages support Windows 10/11 x64 and include the required .NET run
 
 ## Screenshots
 
-| Timer and presentation rules | Appearance and display |
-|---|---|
-| <img src="docs/media/settings-duration.png" alt="Timer and presentation-rule settings" width="100%"> | <img src="docs/media/settings-appearance.png" alt="Appearance and display settings" width="100%"> |
+<p align="center">
+  <img src="docs/media/presentation-timer-overlay.webp" alt="Timer overlay during a presentation" width="100%">
+</p>
 
-| Remote connection | Presentation control |
+The timer remains visible over the presentation so the speaker and event staff can track the allotted time without interrupting the slide show.
+
+<p align="center">
+  <img src="docs/media/interface-overview.webp" alt="FlyPPTTimer interface overview" width="100%">
+</p>
+
+The overview contains all six Settings pages and both desktop remote-control pages. Sensitive file paths, access tokens, QR codes, presentation names, and organization details have been removed or blurred.
+
+| Page | What it configures |
 |---|---|
-| <img src="docs/media/remote-connect.png" alt="Desktop remote connection and QR code" width="100%"> | <img src="docs/media/remote-presentations.png" alt="Desktop presentation control" width="100%"> |
+| **Duration Settings** | Default duration, count-up or countdown mode, behavior after zero, and independent rules for multiple PowerPoint or WPS files. |
+| **Behavior Settings** | Automatic start, stop, and reset around full-screen presentations, plus two advance alerts and the final time-up alert. |
+| **Appearance & Display** | Timer visibility, colors, size, opacity, shape, multi-display position, and large-screen timing. |
+| **Remote Control Settings** | Local browser remote service, port and LAN address, access token, and connected-device management. |
+| **Control Settings** | Global hotkeys, mouse click-through, window locking, tray behavior, and closing behavior. |
+| **Other Settings** | Language, update checks, configuration import/export, reset, local paths, version information, and diagnostics. |
+| **Remote Connection** | Service state, QR code, and browser address. A phone can connect over the same LAN or a phone hotspot without installing an app. |
+| **Presentation Control** | Multiple presentation files and their timer rules, plus open, start, end, and close operations from off stage. |
 
 <p align="center">
   <img src="docs/media/mobile-timer.jpg" width="310" alt="Mobile timer controls">
