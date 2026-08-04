@@ -38,6 +38,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\FlyPPTTimer.Core\FlyPPTTimer.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 
