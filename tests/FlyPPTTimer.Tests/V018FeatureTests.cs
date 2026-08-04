@@ -93,7 +93,7 @@ public sealed class V018FeatureTests
     [Fact]
     public void OldDefaultAppearanceMigratesToV018DefaultsWithoutOverwritingCustomScheme()
     {
-        var old = new AppConfig { Version = "0.17.0" };
+        var old = new AppConfig { Version = "0.17.0", SchemaVersion = 0 };
         old.Appearance.ColorScheme = "默认";
         old.Appearance.Width = 200;
         old.Appearance.FontSize = 20;
@@ -102,7 +102,7 @@ public sealed class V018FeatureTests
         Assert.Equal(160, old.Appearance.Width);
         Assert.Equal(18F, old.Appearance.FontSize);
 
-        var custom = new AppConfig { Version = "0.17.0" };
+        var custom = new AppConfig { Version = "0.17.0", SchemaVersion = 0 };
         custom.Appearance.ColorScheme = "自定义";
         custom.Appearance.TextColor = "#123456";
         ConfigService.Normalize(custom);
