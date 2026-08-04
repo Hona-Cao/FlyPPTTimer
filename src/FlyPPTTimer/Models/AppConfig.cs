@@ -1,11 +1,23 @@
 using System.Drawing;
+using System.Text.Json.Serialization;
 
 namespace FlyPPTTimer.Models;
 
 public sealed class AppConfig
 {
+    public AppConfig()
+    {
+        SchemaVersion = ConfigSchema.Current;
+    }
+
+    [JsonConstructor]
+    public AppConfig(int schemaVersion)
+    {
+        SchemaVersion = schemaVersion;
+    }
+
     public string Version { get; set; } = AppVersion.Current;
-    public int SchemaVersion { get; set; } = ConfigSchema.Current;
+    public int SchemaVersion { get; set; }
     public string Language { get; set; } = Services.Localization.Auto;
     public UpdateSettings Update { get; set; } = new();
     public TimerSettings Timer { get; set; } = new();
