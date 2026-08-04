@@ -83,10 +83,13 @@ public sealed class TimerEngine
     public TimerConfiguration Configuration => _configuration;
     public bool FinishRaised => _finishRaised;
 
-    public void Configure(TimerConfiguration configuration)
+    public void Configure(
+        TimerConfiguration configuration,
+        bool resetFinishRaised = true)
     {
         _configuration = Validate(configuration);
-        _finishRaised = false;
+        if (resetFinishRaised)
+            _finishRaised = false;
         RaiseUpdated();
     }
 
