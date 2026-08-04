@@ -53,11 +53,11 @@ internal sealed class PresentationStaDispatcher : IDisposable
         {
             return _queue.TryAdd(operation, millisecondsTimeout);
         }
-        catch (InvalidOperationException)
+        catch (ObjectDisposedException)
         {
             return false;
         }
-        catch (ObjectDisposedException)
+        catch (InvalidOperationException)
         {
             return false;
         }
