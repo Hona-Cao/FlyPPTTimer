@@ -23,9 +23,9 @@ public sealed class PresentationWindowActivatorTests
         var native = new FakeNativeApi
         {
             Maximized = true,
-            ShowResults = QueueOf(new(true, 0)),
-            BringResults = QueueOf(new(true, 0)),
-            ForegroundResults = QueueOf(new(true, 0))
+            ShowResults = QueueOf(new NativeWindowCallResult(true, 0)),
+            BringResults = QueueOf(new NativeWindowCallResult(true, 0)),
+            ForegroundResults = QueueOf(new NativeWindowCallResult(true, 0))
         };
         var activator = new PresentationWindowActivator(native);
 
@@ -44,9 +44,13 @@ public sealed class PresentationWindowActivatorTests
         var native = new FakeNativeApi
         {
             Maximized = true,
-            ShowResults = QueueOf(new(true, 0)),
-            BringResults = QueueOf(new(false, 5), new(true, 0)),
-            ForegroundResults = QueueOf(new(false, 5), new(true, 0))
+            ShowResults = QueueOf(new NativeWindowCallResult(true, 0)),
+            BringResults = QueueOf(
+                new NativeWindowCallResult(false, 5),
+                new NativeWindowCallResult(true, 0)),
+            ForegroundResults = QueueOf(
+                new NativeWindowCallResult(false, 5),
+                new NativeWindowCallResult(true, 0))
         };
         var activator = new PresentationWindowActivator(native);
 
@@ -65,9 +69,13 @@ public sealed class PresentationWindowActivatorTests
         var native = new FakeNativeApi
         {
             Maximized = true,
-            ShowResults = QueueOf(new(true, 0)),
-            BringResults = QueueOf(new(true, 0), new(true, 0)),
-            ForegroundResults = QueueOf(new(false, 5), new(false, 5))
+            ShowResults = QueueOf(new NativeWindowCallResult(true, 0)),
+            BringResults = QueueOf(
+                new NativeWindowCallResult(true, 0),
+                new NativeWindowCallResult(true, 0)),
+            ForegroundResults = QueueOf(
+                new NativeWindowCallResult(false, 5),
+                new NativeWindowCallResult(false, 5))
         };
         var activator = new PresentationWindowActivator(native);
 
@@ -85,9 +93,9 @@ public sealed class PresentationWindowActivatorTests
         var native = new FakeNativeApi
         {
             Maximized = false,
-            ShowResults = QueueOf(new(false, 87)),
-            BringResults = QueueOf(new(true, 0)),
-            ForegroundResults = QueueOf(new(true, 0))
+            ShowResults = QueueOf(new NativeWindowCallResult(false, 87)),
+            BringResults = QueueOf(new NativeWindowCallResult(true, 0)),
+            ForegroundResults = QueueOf(new NativeWindowCallResult(true, 0))
         };
         var activator = new PresentationWindowActivator(native, warnings.Add);
 
@@ -105,9 +113,12 @@ public sealed class PresentationWindowActivatorTests
 
     private sealed class FakeNativeApi : IPresentationWindowNativeApi
     {
-        public Queue<NativeWindowCallResult> ShowResults { get; init; } = QueueOf(new(true, 0));
-        public Queue<NativeWindowCallResult> BringResults { get; init; } = QueueOf(new(true, 0));
-        public Queue<NativeWindowCallResult> ForegroundResults { get; init; } = QueueOf(new(true, 0));
+        public Queue<NativeWindowCallResult> ShowResults { get; init; } =
+            QueueOf(new NativeWindowCallResult(true, 0));
+        public Queue<NativeWindowCallResult> BringResults { get; init; } =
+            QueueOf(new NativeWindowCallResult(true, 0));
+        public Queue<NativeWindowCallResult> ForegroundResults { get; init; } =
+            QueueOf(new NativeWindowCallResult(true, 0));
         public bool Maximized { get; init; }
         public int ShowCount { get; private set; }
         public int BringCount { get; private set; }
