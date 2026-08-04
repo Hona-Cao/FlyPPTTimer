@@ -1,6 +1,7 @@
-using FlyPPTTimer.Core.Timing;
 using FlyPPTTimer.Models;
 using FlyPPTTimer.Services;
+using IMonotonicClock = FlyPPTTimer.Core.Timing.IMonotonicClock;
+using DesktopTimerSnapshot = FlyPPTTimer.Services.TimerSnapshot;
 
 namespace FlyPPTTimer.Tests;
 
@@ -11,7 +12,7 @@ public sealed class TimerServiceTests
     {
         var clock = new ManualClock();
         var timer = CreateTimer(clock, duration: TimeSpan.FromSeconds(3));
-        TimerSnapshot? updated = null, finished = null;
+        DesktopTimerSnapshot? updated = null, finished = null;
         timer.Updated += (_, value) => updated = value;
         timer.Finished += (_, value) => finished = value;
 
