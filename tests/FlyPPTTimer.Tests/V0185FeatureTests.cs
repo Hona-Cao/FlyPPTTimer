@@ -7,14 +7,19 @@ namespace FlyPPTTimer.Tests;
 public sealed class V0185FeatureTests
 {
     [Fact]
-    public void Normalize_FixesTimerFontAndDisablesPerSlidePlaceholder()
+    public void LegacySchema_FixesTimerFontAndDisablesPerSlidePlaceholder()
     {
-        var config = new AppConfig();
+        var config = new AppConfig
+        {
+            Version = "0.18.4",
+            SchemaVersion = 0
+        };
         config.Appearance.FontFamily = "Arial";
         config.Timer.EnablePerSlideTimer = true;
 
         ConfigService.Normalize(config);
 
+        Assert.Equal(ConfigSchema.Current, config.SchemaVersion);
         Assert.Equal("Microsoft YaHei UI", config.Appearance.FontFamily);
         Assert.False(config.Timer.EnablePerSlideTimer);
     }
