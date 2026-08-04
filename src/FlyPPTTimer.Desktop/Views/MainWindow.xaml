@@ -1,0 +1,114 @@
+<Window x:Class="FlyPPTTimer.Desktop.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="FlyPPTTimer 4.0"
+        Width="1040"
+        Height="720"
+        MinWidth="860"
+        MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"
+                Background="{DynamicResource Brush.Surface}"
+                BorderBrush="{DynamicResource Brush.Border}"
+                BorderThickness="0,0,1,0"
+                Padding="22,28">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Top">
+                    <TextBlock Text="{Binding ProductName}"
+                               FontSize="20"
+                               FontWeight="Bold" />
+                    <TextBlock Margin="0,4,0,28"
+                               Style="{StaticResource SecondaryText}"
+                               Text="{Binding VersionText}" />
+
+                    <Button Margin="0,0,0,10"
+                            Content="计时控制"
+                            IsEnabled="False"
+                            ToolTip="后续阶段接入" />
+                    <Button Margin="0,0,0,10"
+                            Content="显示设置"
+                            IsEnabled="False"
+                            ToolTip="后续阶段接入" />
+                    <Button Margin="0,0,0,10"
+                            Content="远程控制"
+                            IsEnabled="False"
+                            ToolTip="后续阶段接入" />
+                    <Button Content="演示软件"
+                            IsEnabled="False"
+                            ToolTip="后续阶段接入" />
+                </StackPanel>
+
+                <TextBlock DockPanel.Dock="Bottom"
+                           VerticalAlignment="Bottom"
+                           Style="{StaticResource SecondaryText}"
+                           Text="当前窗口仅用于验证 WPF 构建、主题和缩放基础，不替代现有正式入口。" />
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer Grid.Column="1"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="{DynamicResource Spacing.Page}">
+                <TextBlock Style="{StaticResource SectionTitle}"
+                           Text="FlyPPTTimer 4.0 桌面框架" />
+                <TextBlock Margin="0,8,0,24"
+                           Style="{StaticResource SecondaryText}"
+                           Text="先验证稳定的窗口缩放、主题资源和 MVVM 边界，再逐页迁移旧界面。" />
+
+                <Border Style="{StaticResource CardBorder}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Text="计时核心" />
+                            <TextBlock Margin="0,6,0,0"
+                                       Style="{StaticResource SecondaryText}"
+                                       Text="新的平台无关计时引擎已经接入现有桌面服务。" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1"
+                                   Margin="24,0,0,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="{DynamicResource Size.Text.Timer}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource Brush.Accent}"
+                                   Text="{Binding TimerText}" />
+                    </Grid>
+                </Border>
+
+                <Border Margin="0,16,0,0"
+                        Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock FontSize="15"
+                                   FontWeight="SemiBold"
+                                   Text="当前状态" />
+                        <TextBlock Margin="0,8,0,0"
+                                   Style="{StaticResource SecondaryText}"
+                                   Text="{Binding StatusText}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,16,0,0"
+                        Style="{StaticResource CardBorder}">
+                    <StackPanel>
+                        <TextBlock FontSize="15"
+                                   FontWeight="SemiBold"
+                                   Text="迁移原则" />
+                        <TextBlock Margin="0,8,0,0"
+                                   Style="{StaticResource SecondaryText}"
+                                   Text="保留稳定版可用；一次迁移一个窗口；每批经过自动化测试和真实环境测试；不在 WPF 中复制旧版手工 DPI 计算。" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>
