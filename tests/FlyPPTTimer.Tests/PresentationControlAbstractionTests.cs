@@ -22,6 +22,7 @@ public sealed class PresentationControlAbstractionTests
         var contract = typeof(IPresentationControlService);
         var methods = contract.GetMethods().Where(method => !method.IsSpecialName).ToList();
 
+        Assert.Equal(3, methods.Count);
         Assert.Contains(methods, method =>
             method.Name == nameof(IPresentationControlService.GetState)
             && method.ReturnType == typeof(PresentationState)
@@ -34,11 +35,6 @@ public sealed class PresentationControlAbstractionTests
             method.Name == nameof(IPresentationControlService.Execute)
             && method.ReturnType == typeof(PresentationCommandResult)
             && method.GetParameters().Single().ParameterType == typeof(RemoteCommand));
-
-        Assert.DoesNotContain(methods, method =>
-            method.GetParameters().Any(parameter =>
-                parameter.ParameterType == typeof(object)
-                || parameter.ParameterType.FullName?.Contains("COM", StringComparison.OrdinalIgnoreCase) == true));
     }
 
     [Theory]
