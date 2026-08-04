@@ -2,7 +2,7 @@ name: Windows CI
 
 on:
   push:
-    branches: [main, feature/v0.12-stability-ui, feature/v0.13.2-winforms-ui-polish]
+    branches: [main, "agent/**"]
   pull_request:
     branches: [main]
 
@@ -11,32 +11,62 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
-      - name: Restore
+          dotnet-version: 10.0.x
+
+      - name: Read application version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/FlyPPTTimer/FlyPPTTimer.csproj -nologo -getProperty:Version).Trim()
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Application version is empty." }
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Restore desktop tests
         run: dotnet restore tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj
+
+      - name: Restore core tests
+        run: dotnet restore tests/FlyPPTTimer.Core.Tests/FlyPPTTimer.Core.Tests.csproj
+
       - name: Restore publish runtime
         run: dotnet restore src/FlyPPTTimer/FlyPPTTimer.csproj -r win-x64
+
       - name: Build release
-        run: dotnet build src/FlyPPTTimer/FlyPPTTimer.csproj -c Release --no-restore | Tee-Object -FilePath build.log
-      - name: Test
-        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=v0.20.2.trx" --results-directory artifacts/test-results
+        shell: pwsh
+        run: |
+          dotnet build src/FlyPPTTimer/FlyPPTTimer.csproj -c Release --no-restore | Tee-Object -FilePath build-desktop.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/FlyPPTTimer.Core/FlyPPTTimer.Core.csproj -c Release --no-restore | Tee-Object -FilePath build-core.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test desktop behavior
+        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=desktop-$env:APP_VERSION.trx" --results-directory artifacts/test-results
+
+      - name: Test core behavior
+        run: dotnet test tests/FlyPPTTimer.Core.Tests/FlyPPTTimer.Core.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=core-$env:APP_VERSION.trx" --results-directory artifacts/test-results
+
       - name: Publish single file
         run: dotnet publish src/FlyPPTTimer/FlyPPTTimer.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o artifacts/publish
+
       - name: Create checksum and collect audit material
         shell: pwsh
         run: |
           $hash = (Get-FileHash artifacts/publish/FlyPPTTimer.exe -Algorithm SHA256).Hash
-          "$hash  FlyPPTTimer.exe" | Set-Content artifacts/FlyPPTTimer-v0.20.2.sha256 -Encoding ascii
-          $writtenHash = (Get-Content artifacts/FlyPPTTimer-v0.20.2.sha256 -Raw).Trim().Split(' ')[0]
-          if ($hash -ne $writtenHash) { throw "CI Artifact EXE hash verification failed." }
+          $checksumPath = "artifacts/FlyPPTTimer-v$env:APP_VERSION.sha256"
+          "$hash  FlyPPTTimer.exe" | Set-Content $checksumPath -Encoding ascii
+          $writtenHash = (Get-Content $checksumPath -Raw).Trim().Split(' ')[0]
+          if ($hash -ne $writtenHash) { throw "CI artifact EXE hash verification failed." }
           "CI Artifact EXE SHA-256: $hash" | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
-          Copy-Item build.log artifacts/build.log
+          Copy-Item build-desktop.log artifacts/build-desktop.log
+          Copy-Item build-core.log artifacts/build-core.log
           Copy-Item TEST_REPORT.md artifacts/TEST_REPORT.md
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FlyPPTTimer-v0.20.2-windows-x64
+          name: FlyPPTTimer-v${{ steps.version.outputs.value }}-windows-x64
           path: artifacts
           if-no-files-found: error
