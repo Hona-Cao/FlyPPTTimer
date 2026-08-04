@@ -74,7 +74,7 @@ public sealed class PresentationStaDispatcherTests
         }
 
         Assert.True(completed.Wait(TimeSpan.FromSeconds(2)));
-        Assert.Equal([1, 2, 3], values.ToArray());
+        Assert.Equal(new[] { 1, 2, 3 }, values.ToArray());
     }
 
     [Fact]
