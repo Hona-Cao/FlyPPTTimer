@@ -89,13 +89,15 @@ internal sealed class PresentationStaDispatcher : IDisposable
             throw new InvalidOperationException("演示命令队列繁忙，请稍后重试。");
         }
 
-        if (!completion.Task.Wait(timeout))
+        try
+        {
+            return completion.Task.WaitAsync(timeout).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
         {
             cancellation.Cancel();
-            throw new TimeoutException();
+            throw;
         }
-
-        return completion.Task.GetAwaiter().GetResult();
     }
 
     internal T ExecuteWithBusyRetry<T>(Func<T> operation)
