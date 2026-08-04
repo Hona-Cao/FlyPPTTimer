@@ -10,20 +10,20 @@ public sealed class V0182FeatureTests
     [Fact]
     public void SelectedSound_IsAutomaticallyEnabledDuringUpgrade()
     {
-        var config = new AppConfig { Version = "0.18.1" };
+        var config = new AppConfig { Version = "0.18.1", SchemaVersion = 0 };
         config.Behavior.Prompt1.SoundFile = @"C:\alerts\prompt1.wav";
         config.Behavior.Prompt1.PlaySound = false;
 
         ConfigService.Normalize(config);
 
         Assert.True(config.Behavior.Prompt1.PlaySound);
-        Assert.Equal(FlyPPTTimer.AppVersion.Current, config.Version);
+        Assert.Equal(AppVersion.Current, config.Version);
     }
 
     [Fact]
     public void EmptySelectedSound_IsDisabledDuringUpgrade()
     {
-        var config = new AppConfig { Version = "0.18.1" };
+        var config = new AppConfig { Version = "0.18.1", SchemaVersion = 0 };
         config.Behavior.EndPrompt.SoundFile = "";
         config.Behavior.EndPrompt.PlaySound = true;
 
@@ -35,7 +35,7 @@ public sealed class V0182FeatureTests
     [Fact]
     public void PreviousDefaultOverlaySize_MigratesToCurrentDefault()
     {
-        var config = new AppConfig { Version = "0.18.1" };
+        var config = new AppConfig { Version = "0.18.1", SchemaVersion = 0 };
         config.Appearance.Width = 160;
         config.Appearance.Height = 60;
 
