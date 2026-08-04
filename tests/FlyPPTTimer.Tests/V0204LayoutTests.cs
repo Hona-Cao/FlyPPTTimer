@@ -56,6 +56,7 @@ public sealed class V0204LayoutTests
         var oldRandom = new AppConfig
         {
             Version = "0.20.3",
+            SchemaVersion = 0,
             RemoteControl = new RemoteControlSettings { UseRandomPort = true, Port = 52143 }
         };
         ConfigService.Normalize(oldRandom);
@@ -65,6 +66,7 @@ public sealed class V0204LayoutTests
         var oldFixed = new AppConfig
         {
             Version = "0.20.3",
+            SchemaVersion = 0,
             RemoteControl = new RemoteControlSettings { UseRandomPort = false, Port = 5090 }
         };
         ConfigService.Normalize(oldFixed);
