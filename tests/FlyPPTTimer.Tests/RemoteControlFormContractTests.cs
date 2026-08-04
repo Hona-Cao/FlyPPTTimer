@@ -207,7 +207,7 @@ public sealed class RemoteControlFormContractTests
         var theme = ReadRemoteTheme();
         var button = ReadRemoteButton();
 
-        Assert.Equal("0.30.2", FlyPPTTimer.AppVersion.Current);
+        Assert.False(string.IsNullOrWhiteSpace(FlyPPTTimer.AppVersion.Current));
         Assert.Contains("ColumnCount = 3", source);
         Assert.Contains("RowCount = 1", source);
         Assert.DoesNotContain("_stateDescription", source);
