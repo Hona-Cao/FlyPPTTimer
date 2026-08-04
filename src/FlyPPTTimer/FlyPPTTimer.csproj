@@ -18,6 +18,9 @@
     <InformationalVersion>4.0.0-alpha.1</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Legacy WinForms custom controls are runtime-created rather than designer-serialized.
+         Remove this suppression when the desktop surface is migrated to WPF. -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
