@@ -78,6 +78,32 @@ public sealed class PresentationStaDispatcherTests
     }
 
     [Fact]
+    public void TimedOutQueuedInvocationIsCancelledBeforeExecution()
+    {
+        using var dispatcher = new PresentationStaDispatcher();
+        using var blockerStarted = new ManualResetEventSlim();
+        using var releaseBlocker = new ManualResetEventSlim();
+        var invocationCount = 0;
+
+        Assert.True(dispatcher.TryEnqueue(() =>
+        {
+            blockerStarted.Set();
+            releaseBlocker.Wait(TimeSpan.FromSeconds(2));
+        }));
+        Assert.True(blockerStarted.Wait(TimeSpan.FromSeconds(2)));
+
+        Assert.Throws<TimeoutException>(() => dispatcher.Invoke(() =>
+        {
+            Interlocked.Increment(ref invocationCount);
+            return true;
+        }, TimeSpan.FromMilliseconds(50)));
+
+        releaseBlocker.Set();
+        Assert.True(dispatcher.Invoke(() => true, TimeSpan.FromSeconds(2)));
+        Assert.Equal(0, Volatile.Read(ref invocationCount));
+    }
+
+    [Fact]
     public void DisposedDispatcherRejectsNewWork()
     {
         var dispatcher = new PresentationStaDispatcher();
