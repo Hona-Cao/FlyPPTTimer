@@ -18,7 +18,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly HotkeyService _hotkeys;
     private readonly NetworkAddressService _networkAddresses = new();
     private readonly AppCommandService _commands;
-    private readonly PowerPointControlService _powerPoint;
+    private readonly IPresentationControlService _powerPoint;
     private readonly PresentationLifecycleController _presentationLifecycle;
     private readonly RemoteControlService _remoteControl;
     private readonly GiteeUpdateService _updateService;
@@ -57,7 +57,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         ApplyInstallerLanguage();
         Localization.Initialize(_config.Language);
         _updateService = new GiteeUpdateService(_log);
-        _powerPoint = new PowerPointControlService(() => _config, _log);
+        _powerPoint = new PowerPointPresentationAdapter(
+            new PowerPointControlService(() => _config, _log));
         _timer = new TimerService(_log);
         _alerts = new AlertService(_log);
         _systemAudio = new SystemAudioService(_log);

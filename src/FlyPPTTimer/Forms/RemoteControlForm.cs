@@ -13,7 +13,7 @@ public sealed class RemoteControlForm : Form
 {
     private AppConfig _config;
     private readonly RemoteControlService _remoteControl;
-    private readonly PowerPointControlService? _powerPoint;
+    private readonly IPresentationControlService? _powerPoint;
     private readonly NetworkAddressService _networkAddressService;
     private readonly Action<AppConfig> _saveConfig;
 

@@ -19,7 +19,7 @@ public sealed class RemoteControlService : IDisposable
     private readonly Func<AppConfig> _getConfig;
     private readonly Action<AppConfig> _saveConfig;
     private readonly AppCommandService _commands;
-    private readonly PowerPointControlService? _powerPoint;
+    private readonly IPresentationControlService? _powerPoint;
     private readonly LogService _log;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
@@ -29,7 +29,7 @@ public sealed class RemoteControlService : IDisposable
     internal const int MaxHeaderBytes = 16 * 1024;
     internal const int MaxBodyBytes = 64 * 1024;
 
-    public RemoteControlService(Func<AppConfig> getConfig, Action<AppConfig> saveConfig, AppCommandService commands, PowerPointControlService? powerPoint, LogService log)
+    public RemoteControlService(Func<AppConfig> getConfig, Action<AppConfig> saveConfig, AppCommandService commands, IPresentationControlService? powerPoint, LogService log)
     {
         _getConfig = getConfig;
         _saveConfig = saveConfig;
@@ -40,7 +40,7 @@ public sealed class RemoteControlService : IDisposable
     }
 
     public bool IsRunning { get; private set; }
-    public PowerPointControlService? PresentationController => _powerPoint;
+    public IPresentationControlService? PresentationController => _powerPoint;
     public string StatusText { get; private set; } = "未启动";
     public int CurrentPort { get; private set; }
     public int ConnectedClients
