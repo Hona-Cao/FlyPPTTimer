@@ -35,6 +35,9 @@ jobs:
       - name: Restore core tests
         run: dotnet restore tests/FlyPPTTimer.Core.Tests/FlyPPTTimer.Core.Tests.csproj
 
+      - name: Restore WPF desktop
+        run: dotnet restore src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj
+
       - name: Restore publish runtime
         run: dotnet restore src/FlyPPTTimer/FlyPPTTimer.csproj -r win-x64
 
@@ -44,6 +47,8 @@ jobs:
           dotnet build src/FlyPPTTimer/FlyPPTTimer.csproj -c Release --no-restore | Tee-Object -FilePath build-desktop.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build src/FlyPPTTimer.Core/FlyPPTTimer.Core.csproj -c Release --no-restore | Tee-Object -FilePath build-core.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj -c Release --no-restore | Tee-Object -FilePath build-wpf.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test desktop behavior
@@ -66,6 +71,7 @@ jobs:
           "CI Artifact EXE SHA-256: $hash" | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
           Copy-Item build-desktop.log artifacts/build-desktop.log
           Copy-Item build-core.log artifacts/build-core.log
+          Copy-Item build-wpf.log artifacts/build-wpf.log
           Copy-Item TEST_REPORT.md artifacts/TEST_REPORT.md
 
       - name: Upload build artifact
