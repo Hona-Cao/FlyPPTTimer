@@ -1,64 +1,72 @@
-using System.Diagnostics;
+using FlyPPTTimer.Core.Timing;
 using FlyPPTTimer.Models;
+using CoreTimerSnapshot = FlyPPTTimer.Core.Timing.TimerSnapshot;
 
 namespace FlyPPTTimer.Services;
 
 public sealed class TimerService
 {
-    private readonly Stopwatch _stopwatch = new();
+    private readonly TimerEngine _engine;
     private readonly System.Windows.Forms.Timer _uiTimer = new() { Interval = 100 };
-    private TimeSpan _duration;
-    private TimerMode _mode;
-    private bool _continueOvertime;
+    private readonly bool _useUiTicker;
 
     public TimerService(LogService log)
+        : this(log, SystemMonotonicClock.Instance, useUiTicker: true)
+    {
+    }
+
+    internal TimerService(
+        LogService log,
+        IMonotonicClock clock,
+        bool useUiTicker = false)
     {
         Log = log;
+        _engine = new TimerEngine(clock);
+        _useUiTicker = useUiTicker;
         _uiTimer.Tick += (_, _) => Tick();
     }
 
     public event EventHandler<TimerSnapshot>? Updated;
     public event EventHandler<TimerSnapshot>? Finished;
     public LogService Log { get; }
-    public TimerState State { get; private set; } = TimerState.Stopped;
-    public bool FinishRaised { get; private set; }
-    public TimeSpan Duration => _duration;
-    public TimerMode Mode => _mode;
+    public TimerState State => MapState(_engine.State);
+    public bool FinishRaised => _engine.FinishRaised;
+    public TimeSpan Duration => _engine.Configuration.Duration;
+    public TimerMode Mode => MapMode(_engine.Configuration.Direction);
 
     public void Configure(AppConfig config)
     {
-        _mode = config.Timer.Mode;
-        _duration = ParseDuration(config.Timer.DefaultDuration);
-        _continueOvertime = config.Timer.EndAction == TimerEndAction.None && config.Timer.ContinueOvertime;
+        var configuration = new TimerConfiguration(
+            ParseDuration(config.Timer.DefaultDuration),
+            MapMode(config.Timer.Mode),
+            config.Timer.EndAction == TimerEndAction.None && config.Timer.ContinueOvertime);
+
+        _engine.Configure(configuration, resetFinishRaised: false);
         if (State == TimerState.Stopped)
-        {
             RaiseUpdate();
-        }
     }
 
     public void SetDuration(TimeSpan duration)
     {
         if (duration <= TimeSpan.Zero) return;
-        _duration = duration;
-        FinishRaised = false;
+
+        _engine.Configure(_engine.Configuration with { Duration = duration });
         Log.Info($"Timer duration set: {duration}");
         RaiseUpdate();
     }
 
     public void SetMode(TimerMode mode)
     {
-        _mode = mode;
-        FinishRaised = false;
+        _engine.Configure(_engine.Configuration with { Direction = MapMode(mode) });
         Log.Info($"Timer mode set: {mode}");
         RaiseUpdate();
     }
 
     public void Start()
     {
-        FinishRaised = false;
-        _stopwatch.Restart();
-        _uiTimer.Start();
-        State = TimerState.Running;
+        _engine.Start();
+        if (_useUiTicker)
+            _uiTimer.Start();
         Log.Info("Timer started.");
         RaiseUpdate();
     }
@@ -66,8 +74,8 @@ public sealed class TimerService
     public void Pause()
     {
         if (State != TimerState.Running) return;
-        _stopwatch.Stop();
-        State = TimerState.Paused;
+
+        _engine.Pause();
         Log.Info("Timer paused.");
         RaiseUpdate();
     }
@@ -75,8 +83,8 @@ public sealed class TimerService
     public void Resume()
     {
         if (State != TimerState.Paused) return;
-        _stopwatch.Start();
-        State = TimerState.Running;
+
+        _engine.Resume();
         Log.Info("Timer resumed.");
         RaiseUpdate();
     }
@@ -90,23 +98,15 @@ public sealed class TimerService
 
     public void Stop(bool reset)
     {
-        _stopwatch.Stop();
+        _engine.Stop(reset);
         _uiTimer.Stop();
-        if (reset)
-        {
-            _stopwatch.Reset();
-            FinishRaised = false;
-        }
-        State = TimerState.Stopped;
         Log.Info(reset ? "Timer stopped and reset." : "Timer stopped.");
         RaiseUpdate();
     }
 
     public void Reset()
     {
-        _stopwatch.Reset();
-        FinishRaised = false;
-        State = TimerState.Stopped;
+        _engine.Reset();
         _uiTimer.Stop();
         Log.Info("Timer reset.");
         RaiseUpdate();
@@ -114,22 +114,21 @@ public sealed class TimerService
 
     private void Tick()
     {
-        var snapshot = CreateSnapshot();
-        if (!FinishRaised && snapshot.Elapsed >= snapshot.Duration)
+        var finishWasRaised = _engine.FinishRaised;
+        var coreSnapshot = _engine.Update();
+        var snapshot = MapSnapshot(coreSnapshot);
+
+        if (!finishWasRaised && _engine.FinishRaised)
         {
-            FinishRaised = true;
-            if (!_continueOvertime)
-            {
-                State = TimerState.Finished;
-                _stopwatch.Stop();
+            if (_engine.State == TimerRunState.Finished)
                 _uiTimer.Stop();
-            }
+
             Log.Info("Timer finished.");
-            var finalSnapshot = CreateSnapshot();
-            Updated?.Invoke(this, finalSnapshot);
-            Finished?.Invoke(this, finalSnapshot);
+            Updated?.Invoke(this, snapshot);
+            Finished?.Invoke(this, snapshot);
             return;
         }
+
         Updated?.Invoke(this, snapshot);
     }
 
@@ -137,27 +136,37 @@ public sealed class TimerService
 
     internal void ProcessTickForTest() => Tick();
 
-    public TimerSnapshot CreateSnapshot()
-    {
-        var elapsed = _stopwatch.Elapsed;
-        var remaining = _duration - elapsed;
-        var display = _mode == TimerMode.Countdown ? remaining : elapsed;
-        if (remaining < TimeSpan.Zero)
-        {
-            if (_mode == TimerMode.Countdown)
-                display = _continueOvertime ? elapsed - _duration : TimeSpan.Zero;
-            else if (!_continueOvertime)
-                display = _duration;
-            remaining = TimeSpan.Zero;
-        }
-        var isOvertime = _continueOvertime && elapsed > _duration;
-        return new TimerSnapshot(State, _mode, elapsed, remaining, display, _duration, isOvertime);
-    }
+    public TimerSnapshot CreateSnapshot() => MapSnapshot(_engine.CreateSnapshot());
 
     public static TimeSpan ParseDuration(string value)
     {
-        return TimeSpan.TryParse(value, out var parsed) && parsed > TimeSpan.Zero ? parsed : TimeSpan.FromMinutes(8);
+        return TimeSpan.TryParse(value, out var parsed) && parsed > TimeSpan.Zero
+            ? parsed
+            : TimeSpan.FromMinutes(8);
     }
+
+    private static TimerState MapState(TimerRunState state) => state switch
+    {
+        TimerRunState.Running => TimerState.Running,
+        TimerRunState.Paused => TimerState.Paused,
+        TimerRunState.Finished => TimerState.Finished,
+        _ => TimerState.Stopped
+    };
+
+    private static TimerMode MapMode(TimerDirection direction) =>
+        direction == TimerDirection.CountUp ? TimerMode.CountUp : TimerMode.Countdown;
+
+    private static TimerDirection MapMode(TimerMode mode) =>
+        mode == TimerMode.CountUp ? TimerDirection.CountUp : TimerDirection.Countdown;
+
+    private static TimerSnapshot MapSnapshot(CoreTimerSnapshot snapshot) => new(
+        MapState(snapshot.State),
+        MapMode(snapshot.Direction),
+        snapshot.Elapsed,
+        snapshot.Remaining,
+        snapshot.Display,
+        snapshot.Duration,
+        snapshot.IsOvertime);
 }
 
 public enum TimerState
@@ -168,4 +177,11 @@ public enum TimerState
     Finished
 }
 
-public sealed record TimerSnapshot(TimerState State, TimerMode Mode, TimeSpan Elapsed, TimeSpan Remaining, TimeSpan Display, TimeSpan Duration, bool IsOvertime);
+public sealed record TimerSnapshot(
+    TimerState State,
+    TimerMode Mode,
+    TimeSpan Elapsed,
+    TimeSpan Remaining,
+    TimeSpan Display,
+    TimeSpan Duration,
+    bool IsOvertime);
