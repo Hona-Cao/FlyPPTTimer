@@ -144,9 +144,23 @@ public sealed class PresentationControlAbstractionTests
         Assert.Contains("var snapshot = _processDetector.Detect();", source);
         Assert.Contains("state.WpsDetected = snapshot.WpsDetected;", source);
         Assert.Contains("PresentationProcessDetector.CreateWpsCapabilities(snapshot.WpsDetected)", source);
+    }
+
+    [Fact]
+    public void PowerPointControlServiceDelegatesPresentationProcessTermination()
+    {
+        var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "Services", "PowerPointControlService.cs"));
+
+        Assert.Contains("PresentationProcessTerminator _processTerminator", source);
+        Assert.Equal(
+            1,
+            source.Split("_processTerminator = new PresentationProcessTerminator(warn: _log.Warn);", StringSplitOptions.None).Length - 1);
         Assert.Contains("private string ForceQuitAll()", source);
-        Assert.Contains("var processes = Process.GetProcesses().Where(", source);
-        Assert.Contains("process.Kill(true)", source);
+        Assert.Contains("var result = _processTerminator.TerminateAll();", source);
+        Assert.Contains("if (!result.AnyDetected) return result.Message;", source);
+        Assert.Contains("_managedPresentations.Clear();", source);
+        Assert.Contains("return result.Message;", source);
+        Assert.DoesNotContain("process.Kill(true)", source);
     }
 
     private static string SourcePath(params string[] segments)

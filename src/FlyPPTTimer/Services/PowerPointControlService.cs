@@ -18,6 +18,7 @@ public sealed class PowerPointControlService : IDisposable
     private readonly LogService _log;
     private readonly PresentationWindowActivator _windowActivator;
     private readonly PresentationProcessDetector _processDetector;
+    private readonly PresentationProcessTerminator _processTerminator;
     private readonly object _operationSync = new();
     private readonly Dictionary<string, ManagedPresentation> _managedPresentations = new(StringComparer.OrdinalIgnoreCase);
     private long _lastNavigationTick;
@@ -30,6 +31,7 @@ public sealed class PowerPointControlService : IDisposable
         _log = log;
         _windowActivator = new PresentationWindowActivator(warn: _log.Warn);
         _processDetector = new PresentationProcessDetector();
+        _processTerminator = new PresentationProcessTerminator(warn: _log.Warn);
         _dispatcher = new PresentationStaDispatcher(
             "FlyPPTTimer PowerPoint STA",
             warn: _log.Warn);
@@ -720,17 +722,10 @@ public sealed class PowerPointControlService : IDisposable
 
     private string ForceQuitAll()
     {
-        var names = new[] { "POWERPNT", "WPSOffice", "wpp", "wps" };
-        var processes = Process.GetProcesses().Where(process => names.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase)).ToArray();
-        if (processes.Length == 0) return "未发现正在运行的 PowerPoint 或 WPS 演示进程。";
-        foreach (var process in processes)
-        {
-            try { process.Kill(true); }
-            catch (Exception ex) { _log.Warn($"Failed to force quit {process.ProcessName}: {ex.Message}"); }
-            finally { process.Dispose(); }
-        }
+        var result = _processTerminator.TerminateAll();
+        if (!result.AnyDetected) return result.Message;
         _managedPresentations.Clear();
-        return "已请求退出演示软件。未保存内容不会恢复。";
+        return result.Message;
     }
 
     private static void EndShowIfShowing(dynamic app, string path)
