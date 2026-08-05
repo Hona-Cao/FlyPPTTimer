@@ -17,6 +17,7 @@ public sealed class PowerPointControlService : IDisposable
     private readonly Func<AppConfig> _getConfig;
     private readonly LogService _log;
     private readonly PresentationWindowActivator _windowActivator;
+    private readonly PresentationProcessDetector _processDetector;
     private readonly object _operationSync = new();
     private readonly Dictionary<string, ManagedPresentation> _managedPresentations = new(StringComparer.OrdinalIgnoreCase);
     private long _lastNavigationTick;
@@ -28,6 +29,7 @@ public sealed class PowerPointControlService : IDisposable
         _getConfig = getConfig;
         _log = log;
         _windowActivator = new PresentationWindowActivator(warn: _log.Warn);
+        _processDetector = new PresentationProcessDetector();
         _dispatcher = new PresentationStaDispatcher(
             "FlyPPTTimer PowerPoint STA",
             warn: _log.Warn);
@@ -843,17 +845,11 @@ public sealed class PowerPointControlService : IDisposable
         return state;
     }
 
-    private static void PopulateWpsCapabilities(PresentationState state)
+    private void PopulateWpsCapabilities(PresentationState state)
     {
-        var detected = Process.GetProcesses().Any(process =>
-        {
-            try { return process.ProcessName.Equals("WPSOffice", StringComparison.OrdinalIgnoreCase) || process.ProcessName.Equals("wpp", StringComparison.OrdinalIgnoreCase) || process.ProcessName.Equals("wps", StringComparison.OrdinalIgnoreCase); }
-            finally { process.Dispose(); }
-        });
-        state.WpsDetected = detected;
-        state.WpsCapabilities = detected
-            ? new WpsCapabilities { CanEndSlideShow = false, CanClosePresentation = false, CanExitApplication = false, CanForceExit = true, Message = "检测到 WPS 演示；当前版本未声明可靠的 WPS 文稿 COM 关闭能力，只允许明确确认后的强制退出。" }
-            : new WpsCapabilities();
+        var snapshot = _processDetector.Detect();
+        state.WpsDetected = snapshot.WpsDetected;
+        state.WpsCapabilities = PresentationProcessDetector.CreateWpsCapabilities(snapshot.WpsDetected);
     }
 
     private void AddRuleOptions(PresentationState state, IReadOnlyCollection<string> openPaths)

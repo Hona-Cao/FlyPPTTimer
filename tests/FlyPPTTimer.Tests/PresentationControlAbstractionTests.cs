@@ -131,6 +131,24 @@ public sealed class PresentationControlAbstractionTests
         Assert.DoesNotContain("PowerPoint window activation incomplete", source);
     }
 
+    [Fact]
+    public void PowerPointControlServiceDelegatesWpsProcessDetection()
+    {
+        var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "Services", "PowerPointControlService.cs"));
+
+        Assert.Contains("PresentationProcessDetector _processDetector", source);
+        Assert.Equal(
+            1,
+            source.Split("_processDetector = new PresentationProcessDetector();", StringSplitOptions.None).Length - 1);
+        Assert.Contains("private void PopulateWpsCapabilities(PresentationState state)", source);
+        Assert.Contains("var snapshot = _processDetector.Detect();", source);
+        Assert.Contains("state.WpsDetected = snapshot.WpsDetected;", source);
+        Assert.Contains("PresentationProcessDetector.CreateWpsCapabilities(snapshot.WpsDetected)", source);
+        Assert.Contains("private string ForceQuitAll()", source);
+        Assert.Contains("var processes = Process.GetProcesses().Where(", source);
+        Assert.Contains("process.Kill(true)", source);
+    }
+
     private static string SourcePath(params string[] segments)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
