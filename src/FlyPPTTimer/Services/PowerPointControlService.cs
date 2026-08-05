@@ -16,6 +16,7 @@ public sealed class PowerPointControlService : IDisposable
     private readonly PresentationStateMonitor _stateMonitor;
     private readonly Func<AppConfig> _getConfig;
     private readonly LogService _log;
+    private readonly PresentationWindowActivator _windowActivator;
     private readonly object _operationSync = new();
     private readonly Dictionary<string, ManagedPresentation> _managedPresentations = new(StringComparer.OrdinalIgnoreCase);
     private long _lastNavigationTick;
@@ -26,6 +27,7 @@ public sealed class PowerPointControlService : IDisposable
     {
         _getConfig = getConfig;
         _log = log;
+        _windowActivator = new PresentationWindowActivator(warn: _log.Warn);
         _dispatcher = new PresentationStaDispatcher(
             "FlyPPTTimer PowerPoint STA",
             warn: _log.Warn);
@@ -550,31 +552,12 @@ public sealed class PowerPointControlService : IDisposable
 
     private WindowActivationResult ActivateNativeWindow(IntPtr hwnd, string path, string label, bool maximized, string failurePrefix = "；文稿已打开但最大化或置前失败")
     {
-        if (hwnd == IntPtr.Zero) return WindowActivationResult.Failed($"未找到目标{label}", path, hwnd);
-        var showResult = NativeMethods.ShowWindow(hwnd, NativeMethods.SwMaximize);
-        var showError = Marshal.GetLastWin32Error();
-        var bringResult = NativeMethods.BringWindowToTop(hwnd);
-        var bringError = Marshal.GetLastWin32Error();
-        var foregroundResult = NativeMethods.SetForegroundWindow(hwnd);
-        var foregroundError = Marshal.GetLastWin32Error();
-        if (!bringResult || !foregroundResult)
-        {
-            NativeMethods.SetWindowPos(hwnd, NativeMethods.HwndTopmost, 0, 0, 0, 0, NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow);
-            NativeMethods.SetWindowPos(hwnd, NativeMethods.HwndNoTopmost, 0, 0, 0, 0, NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow);
-            bringResult = NativeMethods.BringWindowToTop(hwnd);
-            bringError = Marshal.GetLastWin32Error();
-            foregroundResult = NativeMethods.SetForegroundWindow(hwnd);
-            foregroundError = Marshal.GetLastWin32Error();
-        }
-        var actuallyMaximized = NativeMethods.IsZoomed(hwnd);
-        if (actuallyMaximized)
-        {
-            var message = bringResult && foregroundResult ? "；已最大化并置前" : "；已最大化（Windows 未允许强制置前）";
-            return WindowActivationResult.Succeeded(message, path, hwnd);
-        }
-        var detail = $"{label} HWND=0x{hwnd.ToInt64():X}; ShowWindow={showResult}/错误{showError}; BringWindowToTop={bringResult}/错误{bringError}; SetForegroundWindow={foregroundResult}/错误{foregroundError}";
-        _log.Warn($"PowerPoint window activation incomplete: path={path}; {detail}");
-        return WindowActivationResult.Failed(failurePrefix + $"（{detail}）", path, hwnd);
+        var result = _windowActivator.Activate(hwnd, path, label, failurePrefix);
+        return new WindowActivationResult(
+            result.Success,
+            result.Message,
+            result.Path,
+            result.Hwnd);
     }
 
     private static object? FindSlideShowWindow(object windows, string presentationPath)

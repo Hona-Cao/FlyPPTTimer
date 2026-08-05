@@ -119,6 +119,18 @@ public sealed class PresentationControlAbstractionTests
         Assert.DoesNotContain("CloneState(PresentationState", source);
     }
 
+    [Fact]
+    public void PowerPointControlServiceDelegatesNativeWindowActivation()
+    {
+        var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "Services", "PowerPointControlService.cs"));
+
+        Assert.Contains("PresentationWindowActivator _windowActivator", source);
+        Assert.Contains("_windowActivator = new PresentationWindowActivator(warn: _log.Warn)", source);
+        Assert.Contains("_windowActivator.Activate(hwnd, path, label, failurePrefix)", source);
+        Assert.Contains("return new WindowActivationResult(", source);
+        Assert.DoesNotContain("PowerPoint window activation incomplete", source);
+    }
+
     private static string SourcePath(params string[] segments)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
