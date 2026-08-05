@@ -36,14 +36,14 @@ public sealed class V0191FeatureTests
     }
 
     [Fact]
-    public void OverlayAndTrayMenusContainOnlyRequestedFiveCommands()
+    public void OverlayAndTrayMenusContainWpfAndClassicSettings()
     {
         var source = File.ReadAllText(Path.Combine(Root, "src", "FlyPPTTimer", "FlyPPTTimerContext.cs"));
         var start = source.IndexOf("private ContextMenuStrip BuildCommandMenu(bool", StringComparison.Ordinal);
         var end = source.IndexOf("private void ShowCommandMenuAtCursor", start, StringComparison.Ordinal);
         var menu = source[start..end];
 
-        foreach (var label in new[] { "重置计时窗口位置", "静音/取消静音", "远程控制", "设置", "退出" })
+        foreach (var label in new[] { "重置计时窗口位置", "静音/取消静音", "远程控制", "设置（WPF 预览）", "经典设置", "退出" })
             Assert.Contains($"menu.Items.Add(\"{label}\"", menu);
 
         foreach (var removed in new[] { "开始/暂停", "停止/重置", "显示/隐藏计时窗口", "触发闪烁" })

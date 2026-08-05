@@ -17,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FlyPPTTimer\FlyPPTTimer.csproj" />
+    <ProjectReference Include="..\..\src\FlyPPTTimer.Desktop\FlyPPTTimer.Desktop.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

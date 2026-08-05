@@ -38,8 +38,11 @@ jobs:
       - name: Restore WPF desktop
         run: dotnet restore src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj
 
-      - name: Restore publish runtime
+      - name: Restore main publish runtime
         run: dotnet restore src/FlyPPTTimer/FlyPPTTimer.csproj -r win-x64
+
+      - name: Restore settings publish runtime
+        run: dotnet restore src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj -r win-x64
 
       - name: Build release
         shell: pwsh
@@ -57,18 +60,34 @@ jobs:
       - name: Test core behavior
         run: dotnet test tests/FlyPPTTimer.Core.Tests/FlyPPTTimer.Core.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=core-$env:APP_VERSION.trx" --results-directory artifacts/test-results
 
-      - name: Publish single file
-        run: dotnet publish src/FlyPPTTimer/FlyPPTTimer.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o artifacts/publish
+      - name: Publish single-file applications
+        shell: pwsh
+        run: |
+          dotnet publish src/FlyPPTTimer/FlyPPTTimer.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o artifacts/publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o artifacts/settings-publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item artifacts/settings-publish/FlyPPTTimer.Settings.exe artifacts/publish/FlyPPTTimer.Settings.exe -Force
+          Remove-Item artifacts/settings-publish -Recurse -Force
 
       - name: Create checksum and collect audit material
         shell: pwsh
         run: |
-          $hash = (Get-FileHash artifacts/publish/FlyPPTTimer.exe -Algorithm SHA256).Hash
+          if (!(Test-Path artifacts/publish/FlyPPTTimer.exe)) { throw "Main executable is missing from the artifact." }
+          if (!(Test-Path artifacts/publish/FlyPPTTimer.Settings.exe)) { throw "Settings executable is missing from the artifact." }
+          $mainHash = (Get-FileHash artifacts/publish/FlyPPTTimer.exe -Algorithm SHA256).Hash
+          $settingsHash = (Get-FileHash artifacts/publish/FlyPPTTimer.Settings.exe -Algorithm SHA256).Hash
           $checksumPath = "artifacts/FlyPPTTimer-v$env:APP_VERSION.sha256"
-          "$hash  FlyPPTTimer.exe" | Set-Content $checksumPath -Encoding ascii
-          $writtenHash = (Get-Content $checksumPath -Raw).Trim().Split(' ')[0]
-          if ($hash -ne $writtenHash) { throw "CI artifact EXE hash verification failed." }
-          "CI Artifact EXE SHA-256: $hash" | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
+          @(
+            "$mainHash  FlyPPTTimer.exe"
+            "$settingsHash  FlyPPTTimer.Settings.exe"
+          ) | Set-Content $checksumPath -Encoding ascii
+          $writtenHashes = Get-Content $checksumPath | ForEach-Object { ($_ -split '\s+')[0] }
+          if ($mainHash -ne $writtenHashes[0] -or $settingsHash -ne $writtenHashes[1]) { throw "CI artifact EXE hash verification failed." }
+          @(
+            "FlyPPTTimer.exe SHA-256: $mainHash"
+            "FlyPPTTimer.Settings.exe SHA-256: $settingsHash"
+          ) | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
           Copy-Item build-desktop.log artifacts/build-desktop.log
           Copy-Item build-core.log artifacts/build-core.log
           Copy-Item build-wpf.log artifacts/build-wpf.log

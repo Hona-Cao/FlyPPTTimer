@@ -43,6 +43,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     };
     private ContextMenuStrip? _activeMenu;
     private SettingsForm? _settings;
+    private Process? _wpfSettingsProcess;
     private RemoteControlForm? _remoteControlWindow;
     private AppConfig _config;
     private string _screenSignature = "";
@@ -183,7 +184,8 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         menu.Items.Add("重置计时窗口位置", null, (_, _) => ResetOverlayPosition());
         menu.Items.Add("静音/取消静音", null, (_, _) => _commands.ToggleMute());
         menu.Items.Add("远程控制", null, (_, _) => ShowRemoteControl());
-        menu.Items.Add("设置", null, (_, _) => _commands.OpenSettings());
+        menu.Items.Add("设置（WPF 预览）", null, (_, _) => _commands.OpenSettings());
+        menu.Items.Add("经典设置", null, (_, _) => ShowClassicSettings());
         if (includeUpdateCheck) menu.Items.Add("检测新版本", null, (_, _) => CheckForUpdates(true));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Exit());
@@ -306,6 +308,100 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     }
 
     private void ShowSettings()
+    {
+        if (_wpfSettingsProcess is not null)
+        {
+            try
+            {
+                if (!_wpfSettingsProcess.HasExited)
+                {
+                    ActivateWpfSettings(_wpfSettingsProcess);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"Unable to inspect the WPF settings process: {ex.Message}");
+            }
+
+            _wpfSettingsProcess.Dispose();
+            _wpfSettingsProcess = null;
+        }
+
+        var settingsPath = Path.Combine(AppContext.BaseDirectory, "FlyPPTTimer.Settings.exe");
+        if (!File.Exists(settingsPath))
+        {
+            _log.Warn($"WPF settings executable was not found: {settingsPath}; falling back to classic settings.");
+            ShowClassicSettings();
+            return;
+        }
+
+        try
+        {
+            var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = settingsPath,
+                WorkingDirectory = AppContext.BaseDirectory,
+                UseShellExecute = true
+            });
+            if (process is null) throw new InvalidOperationException("The WPF settings process did not start.");
+
+            _wpfSettingsProcess = process;
+            process.Exited += (_, _) => HandleWpfSettingsExited(process);
+            process.EnableRaisingEvents = true;
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"Unable to start WPF settings; falling back to classic settings: {ex.Message}");
+            ShowClassicSettings();
+        }
+    }
+
+    private void ActivateWpfSettings(Process process)
+    {
+        try
+        {
+            process.Refresh();
+            var hwnd = process.MainWindowHandle;
+            if (hwnd == IntPtr.Zero)
+            {
+                _log.Warn("WPF settings is already running, but its window is not ready for activation.");
+                return;
+            }
+            NativeMethods.ShowWindow(hwnd, NativeMethods.SwRestore);
+            NativeMethods.SetForegroundWindow(hwnd);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"Unable to activate the existing WPF settings window: {ex.Message}");
+        }
+    }
+
+    private void HandleWpfSettingsExited(Process process)
+    {
+        RunOnUi(() =>
+        {
+            if (!ReferenceEquals(_wpfSettingsProcess, process))
+            {
+                process.Dispose();
+                return;
+            }
+
+            _wpfSettingsProcess = null;
+            process.Dispose();
+            try
+            {
+                var reloadedConfig = _configService.Load();
+                ApplyConfig(reloadedConfig);
+            }
+            catch (Exception ex)
+            {
+                _log.Error("Unable to reload configuration after WPF settings exited.", ex);
+            }
+        });
+    }
+
+    private void ShowClassicSettings()
     {
         if (_settings is null || _settings.IsDisposed)
         {
