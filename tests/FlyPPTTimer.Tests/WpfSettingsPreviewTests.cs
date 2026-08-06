@@ -1,12 +1,62 @@
 using FlyPPTTimer.Desktop.ViewModels;
+using FlyPPTTimer.Desktop.Views;
 using FlyPPTTimer.Models;
 using FlyPPTTimer.Services;
 using System.Diagnostics;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace FlyPPTTimer.Tests;
 
 public sealed class WpfSettingsPreviewTests
 {
+    [Fact]
+    public void RealWpfControlsBindAndDispatcherRespondsOnStaThread()
+    {
+        Exception? failure = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                using var environment = new TestEnvironment();
+                var application = new FlyPPTTimer.Desktop.App();
+                application.InitializeComponent();
+                var viewModel = new SettingsViewModel(new AppConfig(), environment.ConfigService);
+                var window = new MainWindow(viewModel);
+                window.Show();
+                window.ApplyTemplate();
+                window.UpdateLayout();
+
+                var duration = FindByAutomationId<System.Windows.Controls.TextBox>(window, "DefaultDuration");
+                var mode = FindByAutomationId<System.Windows.Controls.ComboBox>(window, "TimerMode");
+                var overtime = FindByAutomationId<System.Windows.Controls.CheckBox>(window, "ContinueOvertime");
+                var width = FindByAutomationId<System.Windows.Controls.TextBox>(window, "Width");
+
+                ExecuteControlOperation(window.Dispatcher, () => duration.Text = "00:09:30");
+                ExecuteControlOperation(window.Dispatcher, () => mode.SelectedIndex = 1);
+                ExecuteControlOperation(window.Dispatcher, () => overtime.IsChecked = false);
+                ExecuteControlOperation(window.Dispatcher, () => width.Text = "680");
+
+                Assert.Equal("00:09:30", viewModel.DefaultDuration);
+                Assert.Equal(TimerMode.CountUp, viewModel.SelectedTimerMode);
+                Assert.False(viewModel.ContinueOvertime);
+                Assert.Equal("680", viewModel.WidthText);
+                Assert.True(viewModel.IsDirty);
+                Assert.Equal("有未保存的更改", viewModel.UnsavedStatus);
+                viewModel.CancelCommand.Execute(null);
+                application.Shutdown();
+                window.Dispatcher.InvokeShutdown();
+            }
+            catch (Exception ex) { failure = ex; }
+        });
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(15)), "The real WPF control/Dispatcher test did not finish.");
+        Assert.Null(failure);
+    }
+
     [Fact]
     public void ViewModelLoadsEveryPreviewFieldFromConfiguration()
     {
@@ -240,6 +290,28 @@ public sealed class WpfSettingsPreviewTests
         config.Controls.MinimizeToTray = false;
         config.Update.CheckOnStartup = true;
         return config;
+    }
+
+    private static void ExecuteControlOperation(Dispatcher dispatcher, Action action)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        action();
+        var frame = new DispatcherFrame();
+        dispatcher.BeginInvoke(() => frame.Continue = false, DispatcherPriority.ApplicationIdle);
+        Dispatcher.PushFrame(frame);
+        stopwatch.Stop();
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"A real WPF control operation took {stopwatch.Elapsed}.");
+    }
+
+    private static T FindByAutomationId<T>(DependencyObject root, string automationId) where T : DependencyObject
+    {
+        if (root is T typed && AutomationProperties.GetAutomationId(typed) == automationId) return typed;
+        for (var index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            try { return FindByAutomationId<T>(System.Windows.Media.VisualTreeHelper.GetChild(root, index), automationId); }
+            catch (InvalidOperationException) { }
+        }
+        throw new InvalidOperationException($"Real WPF control '{automationId}' was not found.");
     }
 
     private static string SourcePath(params string[] segments)

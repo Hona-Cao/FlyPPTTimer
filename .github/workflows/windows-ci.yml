@@ -73,12 +73,37 @@ jobs:
       - name: Exercise published WPF settings controls
         shell: pwsh
         timeout-minutes: 2
-        run: tests/FlyPPTTimer.Tests/WpfSettingsInteractionSmoke.ps1 -SettingsExe artifacts/publish/FlyPPTTimer.Settings.exe -LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3
+        run: |
+          & tests/FlyPPTTimer.Tests/WpfSettingsInteractionSmoke.ps1 -SettingsExe artifacts/publish/FlyPPTTimer.Settings.exe -LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3 -ReportHostedRunnerUnavailability
+          $interactionExit = $LASTEXITCODE
+          if ($interactionExit -eq 42) {
+            Write-Warning "Hosted runner has no UI Automation-visible desktop; running the explicit STA real-WPF-control/Dispatcher fallback."
+            dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName=FlyPPTTimer.Tests.WpfSettingsPreviewTests.RealWpfControlsBindAndDispatcherRespondsOnStaThread"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host "STA real WPF control binding and Dispatcher fallback passed."
+          } elseif ($interactionExit -ne 0) {
+            exit $interactionExit
+          }
 
       - name: Exercise main application after WPF settings exit
         shell: pwsh
         timeout-minutes: 2
         run: tests/FlyPPTTimer.Tests/WpfSettingsProcessExitSmoke.ps1 -PublishDirectory artifacts/publish
+
+      - name: Exercise published WPF timer window
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          & tests/FlyPPTTimer.Tests/WpfTimerWindowInteractionSmoke.ps1 -PublishDirectory artifacts/publish -LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3 -ReportHostedRunnerUnavailability
+          $interactionExit = $LASTEXITCODE
+          if ($interactionExit -eq 43) {
+            Write-Warning "Hosted runner has no UI Automation-visible desktop; running the explicit STA real-WPF-window/Dispatcher fallback."
+            dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName=FlyPPTTimer.Tests.WpfTimerDisplayTests.WpfOverlayUsesRealControlsAndProcessesDispatcherUpdates"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host "STA real WPF timer controls and Dispatcher fallback passed."
+          } elseif ($interactionExit -ne 0) {
+            exit $interactionExit
+          }
 
       - name: Create checksum and collect audit material
         shell: pwsh

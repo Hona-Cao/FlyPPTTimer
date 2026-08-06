@@ -23,7 +23,7 @@
 - WPF：独立 `FlyPPTTimer.Settings.exe`、基础 MVVM 设置、未保存状态/验证/保存放弃取消、真实 UI Automation 与退出死锁回归。
 - CI：三个项目构建、桌面/Core 测试、双单文件发布、WPF 控件和主程序退出 smoke、SHA-256 Artifact。
 
-主要技术债务：`FlyPPTTimerContext` 仍是 WinForms composition root；正式计时窗、大屏、远程电脑端和完整设置仍由 WinForms 承担；WPF Settings 直接引用主项目；Remote 尚未形成独立层。
+阶段 1 已将正式普通计时窗和大屏窗切换为同进程 WPF Window，并复用同一 Timer 快照、命令和显示拓扑。主要技术债务：`FlyPPTTimerContext` 仍是兼容 composition root；托盘、远程电脑端、时间到窗口和完整设置仍有 WinForms 实现；WPF Settings 直接引用主项目；Remote 尚未形成独立层。
 
 ## 3. 目标分层
 

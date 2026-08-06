@@ -36,7 +36,7 @@ public sealed class V0191FeatureTests
     }
 
     [Fact]
-    public void OverlayAndTrayMenusContainWpfAndClassicSettings()
+    public void TrayMenuContainsWpfAndClassicSettings()
     {
         var source = File.ReadAllText(Path.Combine(Root, "src", "FlyPPTTimer", "FlyPPTTimerContext.cs"));
         var start = source.IndexOf("private ContextMenuStrip BuildCommandMenu(bool", StringComparison.Ordinal);
@@ -49,7 +49,7 @@ public sealed class V0191FeatureTests
         foreach (var removed in new[] { "开始/暂停", "停止/重置", "显示/隐藏计时窗口", "触发闪烁" })
             Assert.DoesNotContain($"menu.Items.Add(\"{removed}\"", menu);
 
-        Assert.Contains("_overlayMenu = BuildCommandMenu();", source);
         Assert.Contains("_trayMenu = BuildCommandMenu(includeUpdateCheck: true);", source);
+        Assert.DoesNotContain("_overlayMenu = BuildCommandMenu();", source);
     }
 }

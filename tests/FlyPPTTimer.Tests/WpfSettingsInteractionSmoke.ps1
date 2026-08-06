@@ -6,10 +6,13 @@ param(
     [int]$LaunchTimeoutSeconds = 20,
 
     [ValidateRange(1, 10)]
-    [int]$OperationTimeoutSeconds = 3
+    [int]$OperationTimeoutSeconds = 3,
+
+    [switch]$ReportHostedRunnerUnavailability
 )
 
 $ErrorActionPreference = 'Stop'
+$global:LASTEXITCODE = 0
 $launchTimeout = [TimeSpan]::FromSeconds($LaunchTimeoutSeconds)
 $operationTimeout = [TimeSpan]::FromSeconds($OperationTimeoutSeconds)
 $sourceExe = (Resolve-Path $SettingsExe).Path
@@ -103,6 +106,11 @@ try {
     } while ($null -eq $window -and $launchStopwatch.Elapsed -lt $launchTimeout)
     $launchStopwatch.Stop()
     if ($null -eq $window) {
+        if ($ReportHostedRunnerUnavailability -and $env:GITHUB_ACTIONS -eq 'true') {
+            Write-Warning 'GitHub-hosted Windows runner did not expose an UI Automation window. The workflow must run the explicit STA real-WPF-control fallback; this is not a passing or skipped interaction test.'
+            $global:LASTEXITCODE = 42
+            return
+        }
         throw "The settings window was not found within $LaunchTimeoutSeconds seconds by MainWindowHandle or UI Automation process ID lookup."
     }
     Write-Host ("Settings window startup: {0:N0} ms" -f $launchStopwatch.Elapsed.TotalMilliseconds)

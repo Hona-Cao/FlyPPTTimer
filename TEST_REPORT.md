@@ -1,5 +1,20 @@
 # FlyPPTTimer 测试报告
 
+## 4.0 完整重构阶段 1：WPF 计时与显示（2026-08-06）
+
+- 正式普通计时窗口切换为同进程 `WpfTimerOverlayWindow`；保持显示/隐藏、后台计时、外观、超时、置顶、透明/形状、点击穿透、锁定、拖动、右键命令和提醒闪烁。
+- 正式大屏切换为 `WpfBigScreenTimerWindow`；保持非主屏限制、标准标题栏、缩放/最小/最大/关闭和共享计时快照。
+- 新增 `OverlayPlacementService`，经典兼容窗与 WPF 窗共享九宫格、百分比微调、负坐标和 DPI 物理像素计算。
+- 修复启动期文字自动扩展提示同步阻塞 composition root：提示改为投递到 UI 消息循环，热键/托盘/服务可继续完成初始化；发布版 readiness 约 7ms。
+- 三个 Release Build：各 **0 warnings / 0 errors**。
+- 桌面测试：**274/274 通过**；Core：**4/4 通过**；0 失败，0 跳过。
+- 发布版 WPF 设置 smoke：启动 1,164ms；文本 88ms；下拉 83ms；复选 23ms；数字 17ms；取消 105ms。
+- 设置退出回归：集成启动 2,915ms；返回主程序 198ms。
+- 正式 WPF 计时窗 smoke：冷启动 1,467ms；F3 更新 82ms；F5 隐藏 1,183ms、显示 14ms；主程序保持响应。
+- GitHub Hosted Runner 缺少 UI Automation 可见窗口时不跳过测试：脚本返回专用环境码，workflow 显式运行 STA 线程内真实 WPF Window/控件绑定与 Dispatcher 操作；普通 ViewModel 测试不作为替代。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,564,260 bytes，SHA-256 `43A5D27B64185F7DAC460369F382BE142F3E00B0ABEEADC361D2EDE6269B618C`；`FlyPPTTimer.Settings.exe` 75,577,569 bytes，SHA-256 `CD681FC50B1750EE3253AD0BD44C54CC237A3F7B07CC5C93558B09DF0B8785C0`。
+- 本机只有一个主显示器；扩展屏热插拔保留为人工验收，自动化已覆盖真实 WPF 大屏控件、主屏拒绝、显示拓扑/负坐标/DPI 和安全重建。
+
 ## 4.0 完整重构阶段 0：审计基线（2026-08-06）
 
 - 稳定行为基线：`v0.30.2`（`8921390ac99d574f99be46b7e08d36a191b3e483`）。

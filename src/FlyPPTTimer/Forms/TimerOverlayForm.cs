@@ -260,32 +260,10 @@ public sealed class TimerOverlayForm : Form
     }
 
     internal static PointF CalculateOrigin(Rectangle area, int dpi, OverlayAnchor anchor, decimal offsetXPercent, decimal offsetYPercent)
-    {
-        var baseline = RemoteWindowLayoutService.DipToPhysical(new Size(140, 50), dpi);
-        var x = anchor switch
-        {
-            OverlayAnchor.TopCenter or OverlayAnchor.Center or OverlayAnchor.BottomCenter => area.Left + area.Width / 2f,
-            OverlayAnchor.TopRight or OverlayAnchor.MiddleRight or OverlayAnchor.BottomRight => area.Right - baseline.Width / 2f,
-            _ => area.Left + baseline.Width / 2f
-        };
-        var y = anchor switch
-        {
-            OverlayAnchor.MiddleLeft or OverlayAnchor.Center or OverlayAnchor.MiddleRight => area.Top + area.Height / 2f,
-            OverlayAnchor.BottomLeft or OverlayAnchor.BottomCenter or OverlayAnchor.BottomRight => area.Bottom - baseline.Height / 2f,
-            _ => area.Top + baseline.Height / 2f
-        };
-
-        x += (float)(area.Width * (double)offsetXPercent / 100d);
-        y += (float)(area.Height * (double)offsetYPercent / 100d);
-        return new PointF(x, y);
-    }
+        => OverlayPlacementService.CalculateOrigin(area, dpi, anchor, offsetXPercent, offsetYPercent);
 
     public static Point LocationFromCenter(PointF center, Size size, Rectangle workingArea)
-    {
-        var x = (int)Math.Round(center.X - size.Width / 2f, MidpointRounding.AwayFromZero);
-        var y = (int)Math.Round(center.Y - size.Height / 2f, MidpointRounding.AwayFromZero);
-        return new Point(x, y);
-    }
+        => OverlayPlacementService.LocationFromCenter(center, size);
 
     public PointF CenterPoint => new(Left + Width / 2f, Top + Height / 2f);
 

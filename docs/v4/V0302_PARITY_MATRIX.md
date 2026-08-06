@@ -32,14 +32,14 @@
 
 | 子模块/行为 | 依据 | 配置 | 目标 | 验收 | 状态 |
 |---|---|---|---|---|---|
-| 倒计时与正计时 | `TimerService.cs`; `TimerServiceTests.cs` | Timer.Mode | Core `TimerEngine` | Core 方向/格式行为 | 进行中 |
-| 开始、暂停、继续、停止、重置 | Timer/AppCommand tests | — | Timer use cases | 状态转换 + WPF UIA | 进行中 |
+| 倒计时与正计时 | `TimerEngine`; `TimerServiceTests`; `WpfTimerDisplayTests` | Timer.Mode | Core `TimerEngine` + WPF 投影 | Core 方向/格式行为 | 已完成 |
+| 开始、暂停、继续、停止、重置 | Timer/AppCommand tests；发布版 F3 UIA | — | Timer use cases + WPF 窗口 | 状态转换 + WPF UIA | 已完成 |
 | 立即重新计时 | `AppCommandService.Restart`; web | Rules/DefaultDuration | Restart use case | 运行/暂停/规则三场景 | 兼容保留 |
 | 默认时长和 3/5/8/10/15 预设 | config defaults; command tests | DefaultDuration/Hotkeys | typed preset commands | 本地/热键/远程一致 | 兼容保留 |
 | 当前文稿规则优先，无规则用全局 | lifecycle/rule tests | Rules | RuleResolver | 路径/禁用/无匹配表驱动 | 兼容保留 |
-| 到零停止或继续显示超时 | Timer/Alert tests | ContinueOvertime | Core policy | 跨零点与显示 UIA | 进行中 |
+| 到零停止或继续显示超时 | Timer/Alert/Display tests | ContinueOvertime | Core policy + WPF formatter | 跨零点与显示 UIA | 已完成 |
 | 单调时钟抵抗系统时间变化/后台运行 | timer tests; TEST_REPORT | — | `IMonotonicClock` | 假时钟跳变/暂停 | 已完成 |
-| 桌面、远程、普通窗、大屏状态一致 | `GetRemoteState`; forms/web | 运行态 | 单一快照/Revision | 多消费者投影 | 兼容保留 |
+| 桌面、远程、普通窗、大屏状态一致 | `GetRemoteState`; WPF timer/big-screen | 运行态 | 单一快照/Revision | 多消费者投影 | 已完成 |
 
 ## C. 提醒、声音和到时动作
 
@@ -59,22 +59,22 @@
 
 | 子模块/行为 | 依据 | 配置 | 目标 | 验收 | 状态 |
 |---|---|---|---|---|---|
-| 显示/隐藏且后台继续计时 | `TimerOverlayForm.cs`; commands | Placement.Visible | WPF TimerWindow | UIA 隐藏/显示/后台 | 兼容保留 |
-| 字体、字号、颜色、背景、超时色、透明度、尺寸 | Appearance/presets | Appearance.* | WPF style/VM | 预设和视觉基线 | 兼容保留 |
-| 置顶、无边框、形状、点击穿透、锁定 | overlay/native | Appearance/Controls | WindowChrome/native adapter | 点击/焦点/置顶实测 | 兼容保留 |
-| 拖动、右键菜单、位置重置 | overlay/context | Placement | WPF behavior/commands | UIA + 人工拖动 | 兼容保留 |
-| 单屏或所有屏幕显示 | context; V0204+ tests | ShowOnAllScreens/Target | Display topology | 虚拟/真实双屏 | 兼容保留 |
-| 九宫格锚点与 X/Y 百分比微调 | WindowPlacement; overlay | Anchor/Offsets | placement calculator | 负坐标/混合 DPI | 兼容保留 |
-| 投影/DPI/断连后重建并保持状态 | display event 回归 | Placement | topology observer | 断连/重连/主屏切换 | 兼容保留 |
+| 显示/隐藏且后台继续计时 | `WpfTimerOverlayWindow`; F3/F5 发布 smoke | Placement.Visible | WPF TimerWindow | UIA 隐藏/显示/后台 | 已完成 |
+| 字体、字号、颜色、背景、超时色、透明度、尺寸 | WPF overlay/formatter；Appearance tests | Appearance.* | WPF style | 预设和视觉基线 | 已完成 |
+| 置顶、无边框、形状、点击穿透、锁定 | WPF overlay/native | Appearance/Controls | Window/native adapter | 点击/焦点/置顶实测 | 已完成 |
+| 拖动、右键菜单、位置重置 | WPF overlay；STA 真 MenuItem test | Placement | WPF behavior/commands | 真控件 + 人工拖动 | 已完成 |
+| 单屏或所有屏幕显示 | context; placement tests | ShowOnAllScreens/Target | WPF window per display | 虚拟/真实双屏 | 已完成 |
+| 九宫格锚点与 X/Y 百分比微调 | `OverlayPlacementService`; tests | Anchor/Offsets | placement calculator | 负坐标/144-DPI 表驱动 | 已完成 |
+| 投影/DPI/断连后重建并保持状态 | display event + WPF rebuild | Placement | topology observer | 重建回归；热插拔人工 | 已完成 |
 
 ## E. 大屏计时
 
 | 子模块/行为 | 依据 | 配置 | 目标 | 验收 | 状态 |
 |---|---|---|---|---|---|
-| 只列非主扩展屏；无扩展屏禁用 | `BigScreenTimerForm.cs`; Settings | BigScreen fields | WPF BigScreenWindow | 单/双/断连显示器 | 兼容保留 |
-| 标准标题栏；移动、缩放、最小/最大/关闭 | BigScreen; TEST_REPORT 0.19 | 运行态 | WPF 标准 Window | UIA 系统按钮 | 兼容保留 |
-| 与主计时实时同步 | context/snapshot | — | 共享状态投影 | 快照 + UIA | 兼容保留 |
-| 设备变化安全关闭，释放后设置仍可打开 | 生命周期回归 | DeviceName | display observer | 热插拔/关闭后开设置 | 兼容保留 |
+| 只列非主扩展屏；无扩展屏禁用 | context + `WpfBigScreenTimerWindow`; tests | BigScreen fields | WPF BigScreenWindow | 单屏拒绝；双屏人工计划 | 已完成 |
+| 标准标题栏；移动、缩放、最小/最大/关闭 | WPF big-screen；STA 真 Window test | 运行态 | WPF 标准 Window | 真控件/系统按钮人工 | 已完成 |
+| 与主计时实时同步 | context/snapshot/formatter | — | 共享状态投影 | 快照 + WPF 控件 | 已完成 |
+| 设备变化安全关闭，释放后设置仍可打开 | WPF rebuild + 设置退出 smoke | DeviceName | display observer | 生命周期回归；热插拔人工 | 已完成 |
 
 ## F. 文稿规则
 
@@ -180,6 +180,6 @@
 
 ## 阶段 0 结论
 
-矩阵共 **99** 个行为单元。当前正式 4.0 架构达到“已完成”的是 2 项；其余多数功能仍可通过经典兼容实现使用，或正在抽取为 Core/Presentation/WPF 边界。这个比例衡量 WPF 正式迁移完成度，不是现有可用功能比例。
+矩阵共 **99** 个行为单元。阶段 1 后达到“已完成”的是 **17** 项；其余多数功能仍可通过经典兼容实现使用，或正在抽取为 Core/Presentation/WPF 边界。这个比例衡量 WPF 正式迁移完成度，不是现有可用功能比例。
 
-阶段 0 实测：v0.30.2 Release 0 warnings/0 errors、188/188；当前三个 Release Build 均 0 warnings/0 errors、桌面 264/264、Core 4/4；双 EXE 发布及真实 WPF 控件/主程序退出 smoke 通过。
+阶段 1 本地实测：三个 Release Build 均 0 warnings/0 errors、桌面 274/274、Core 4/4；双 EXE 发布、真实 WPF 设置、主程序退出及正式 WPF 计时窗 smoke 通过。当前机器只有主显示器，大屏热插拔人工步骤保留到具备扩展屏的验收环境，但真实 WPF Window、非主屏约束、共享格式化和显示拓扑均有自动化覆盖。
