@@ -189,6 +189,8 @@ public sealed class WpfSettingsPreviewTests
     {
         var project = File.ReadAllText(SourcePath("src", "FlyPPTTimer.Desktop", "FlyPPTTimer.Desktop.csproj"));
         var workflow = File.ReadAllText(SourcePath(".github", "workflows", "windows-ci.yml"));
+        var interactionScript = File.ReadAllText(
+            SourcePath("tests", "FlyPPTTimer.Tests", "WpfSettingsInteractionSmoke.ps1"));
 
         Assert.Contains("<AssemblyName>FlyPPTTimer.Settings</AssemblyName>", project);
         Assert.Contains("..\\FlyPPTTimer\\FlyPPTTimer.csproj", project);
@@ -197,6 +199,12 @@ public sealed class WpfSettingsPreviewTests
         Assert.Contains("Test-Path artifacts/publish/FlyPPTTimer.Settings.exe", workflow);
         Assert.Contains("Get-FileHash", workflow);
         Assert.Contains("WpfSettingsInteractionSmoke.ps1", workflow);
+        Assert.Contains("[int]$LaunchTimeoutSeconds = 20", interactionScript);
+        Assert.Contains("[int]$OperationTimeoutSeconds = 3", interactionScript);
+        Assert.Contains("AutomationElement]::ProcessIdProperty", interactionScript);
+        Assert.Contains("AutomationElement]::RootElement.FindFirst", interactionScript);
+        Assert.Contains("Settings window startup:", interactionScript);
+        Assert.Contains("-LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3", workflow);
     }
 
     private static AppConfig CreateDistinctConfig()

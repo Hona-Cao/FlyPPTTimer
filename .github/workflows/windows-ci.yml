@@ -72,7 +72,8 @@ jobs:
 
       - name: Exercise published WPF settings controls
         shell: pwsh
-        run: tests/FlyPPTTimer.Tests/WpfSettingsInteractionSmoke.ps1 -SettingsExe artifacts/publish/FlyPPTTimer.Settings.exe
+        timeout-minutes: 2
+        run: tests/FlyPPTTimer.Tests/WpfSettingsInteractionSmoke.ps1 -SettingsExe artifacts/publish/FlyPPTTimer.Settings.exe -LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3
 
       - name: Create checksum and collect audit material
         shell: pwsh

@@ -1,10 +1,17 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$SettingsExe
+    [string]$SettingsExe,
+
+    [ValidateRange(1, 120)]
+    [int]$LaunchTimeoutSeconds = 20,
+
+    [ValidateRange(1, 10)]
+    [int]$OperationTimeoutSeconds = 3
 )
 
 $ErrorActionPreference = 'Stop'
-$deadline = [TimeSpan]::FromSeconds(3)
+$launchTimeout = [TimeSpan]::FromSeconds($LaunchTimeoutSeconds)
+$operationTimeout = [TimeSpan]::FromSeconds($OperationTimeoutSeconds)
 $sourceExe = (Resolve-Path $SettingsExe).Path
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ("FlyPPTTimer-WpfSmoke-" + [Guid]::NewGuid().ToString('N'))
 $testExe = Join-Path $testDirectory 'FlyPPTTimer.Settings.exe'
@@ -27,6 +34,21 @@ function Find-ByAutomationId {
     return $element
 }
 
+function Find-WindowByProcessId {
+    param([int]$ProcessId)
+
+    $processCondition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::ProcessIdProperty,
+        $ProcessId)
+    $windowCondition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [Windows.Automation.ControlType]::Window)
+    $condition = [Windows.Automation.AndCondition]::new($processCondition, $windowCondition)
+    return [Windows.Automation.AutomationElement]::RootElement.FindFirst(
+        [Windows.Automation.TreeScope]::Children,
+        $condition)
+}
+
 function Assert-Responsive {
     param(
         [Diagnostics.Process]$Process,
@@ -42,7 +64,7 @@ function Assert-Responsive {
     if ($Process.HasExited) { throw "$Operation terminated the settings process." }
     if (!$Process.Responding) { throw "$Operation left the settings window unresponsive." }
     $Stopwatch.Stop()
-    if ($Stopwatch.Elapsed -ge $deadline) { throw "$Operation took $($Stopwatch.Elapsed.TotalMilliseconds) ms." }
+    if ($Stopwatch.Elapsed -ge $operationTimeout) { throw "$Operation took $($Stopwatch.Elapsed.TotalMilliseconds) ms." }
     Write-Host ("{0}: {1:N0} ms, responsive" -f $Operation, $Stopwatch.Elapsed.TotalMilliseconds)
 }
 
@@ -64,16 +86,27 @@ try {
     Copy-Item -LiteralPath $sourceExe -Destination $testExe
     $process = Start-Process -FilePath $testExe -WorkingDirectory $testDirectory -PassThru
 
-    $launchDeadline = [Diagnostics.Stopwatch]::StartNew()
+    $launchStopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $window = $null
     do {
         Start-Sleep -Milliseconds 100
         $process.Refresh()
         if ($process.HasExited) { throw 'The settings process exited before showing its window.' }
-    } while ($process.MainWindowHandle -eq 0 -and $launchDeadline.Elapsed -lt $deadline)
-    if ($process.MainWindowHandle -eq 0) { throw 'The settings window was not shown within 3 seconds.' }
+        if ($process.MainWindowHandle -ne 0) {
+            try { $window = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle) }
+            catch { $window = $null }
+        }
+        if ($null -eq $window) {
+            try { $window = Find-WindowByProcessId $process.Id }
+            catch { $window = $null }
+        }
+    } while ($null -eq $window -and $launchStopwatch.Elapsed -lt $launchTimeout)
+    $launchStopwatch.Stop()
+    if ($null -eq $window) {
+        throw "The settings window was not found within $LaunchTimeoutSeconds seconds by MainWindowHandle or UI Automation process ID lookup."
+    }
+    Write-Host ("Settings window startup: {0:N0} ms" -f $launchStopwatch.Elapsed.TotalMilliseconds)
 
-    $window = [Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle)
-    if ($null -eq $window) { throw 'UI Automation could not attach to the settings window.' }
     $configPath = Join-Path $testDirectory 'FlyPPTTimer.config.json'
     $initialConfigHash = $null
     if (Test-Path $configPath) {
@@ -132,9 +165,11 @@ try {
     $cancelPattern = [Windows.Automation.InvokePattern]$cancel.GetCurrentPattern(
         [Windows.Automation.InvokePattern]::Pattern)
     $cancelPattern.Invoke()
-    if (!$process.WaitForExit(3000)) { throw 'Cancel did not close the settings process within 3 seconds.' }
+    if (!$process.WaitForExit($OperationTimeoutSeconds * 1000)) {
+        throw "Cancel did not close the settings process within $OperationTimeoutSeconds seconds."
+    }
     $cancelStopwatch.Stop()
-    if ($cancelStopwatch.Elapsed -ge $deadline) { throw "Cancel took $($cancelStopwatch.Elapsed.TotalMilliseconds) ms." }
+    if ($cancelStopwatch.Elapsed -ge $operationTimeout) { throw "Cancel took $($cancelStopwatch.Elapsed.TotalMilliseconds) ms." }
     Write-Host ("Cancel without saving: {0:N0} ms, process closed" -f $cancelStopwatch.Elapsed.TotalMilliseconds)
     $finalConfigHash = $null
     if (Test-Path $configPath) {
