@@ -14,6 +14,7 @@
 - GitHub Hosted Runner 缺少 UI Automation 可见窗口时不跳过测试：脚本返回专用环境码，workflow 显式运行 STA 线程内真实 WPF Window/控件绑定与 Dispatcher 操作；普通 ViewModel 测试不作为替代。
 - 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,564,260 bytes，SHA-256 `43A5D27B64185F7DAC460369F382BE142F3E00B0ABEEADC361D2EDE6269B618C`；`FlyPPTTimer.Settings.exe` 75,577,569 bytes，SHA-256 `CD681FC50B1750EE3253AD0BD44C54CC237A3F7B07CC5C93558B09DF0B8785C0`。
 - 本机只有一个主显示器；扩展屏热插拔保留为人工验收，自动化已覆盖真实 WPF 大屏控件、主屏拒绝、显示拓扑/负坐标/DPI 和安全重建。
+- 阶段 1 提交 `82712046f0bb56a67d964a3327232c809ca43421` 的 [Windows CI 31093177173](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31093177173) 成功；本次 Runner 直接完成发布版 UI Automation（设置启动 1,059ms，四类控件 59/77/118/13ms；计时窗启动 1,184ms，F3 84ms，F5 1,151/26ms），未触发 STA 环境回退；Artifact 上传成功。
 
 ## 4.0 完整重构阶段 0：审计基线（2026-08-06）
 

@@ -46,7 +46,7 @@
 
 ## 最新自动验证
 
-阶段 1 本地门槛：三个 Release Build 均 0 warnings / 0 errors；桌面 274/274、Core 4/4；`win-x64` 双自包含单文件发布通过。发布版 UI Automation 覆盖 WPF 设置四类控件、设置退出后的主程序响应，以及正式 WPF 计时窗 F3 计时和 F5 显隐。阶段 1 GitHub Actions 运行号在提交后写回 `V4_PROGRESS.md`。
+阶段 1：三个 Release Build 均 0 warnings / 0 errors；桌面 274/274、Core 4/4；`win-x64` 双自包含单文件发布通过。发布版 UI Automation 覆盖 WPF 设置四类控件、设置退出后的主程序响应，以及正式 WPF 计时窗 F3 计时和 F5 显隐。[Windows CI 31093177173](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31093177173) 成功并上传 Artifact。
 
 ## 下一阶段顺序
 
