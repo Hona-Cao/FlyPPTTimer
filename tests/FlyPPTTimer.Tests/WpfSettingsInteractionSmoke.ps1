@@ -206,10 +206,17 @@ try {
         $pattern.SetValue('4098')
     } $process $window
 
-    $currentStatus = (Find-ByAutomationId $window 'UnsavedStatus').Current.Name
+    $statusStopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $currentStatus = $initialStatus
+    do {
+        Start-Sleep -Milliseconds 50
+        $currentStatus = (Find-ByAutomationId $window 'UnsavedStatus').Current.Name
+    } while (($currentStatus -eq $initialStatus -or [string]::IsNullOrWhiteSpace($currentStatus)) -and $statusStopwatch.Elapsed -lt $operationTimeout)
+    $statusStopwatch.Stop()
     if ([string]::IsNullOrWhiteSpace($currentStatus) -or $currentStatus -eq $initialStatus) {
-        throw 'The unsaved-settings status did not change.'
+        throw "The unsaved-settings status did not change within $OperationTimeoutSeconds seconds."
     }
+    Write-Host ("Unsaved status update: {0:N0} ms" -f $statusStopwatch.Elapsed.TotalMilliseconds)
 
     $cancelStopwatch = [Diagnostics.Stopwatch]::StartNew()
     $cancelPattern = [Windows.Automation.InvokePattern]$cancel.GetCurrentPattern(
