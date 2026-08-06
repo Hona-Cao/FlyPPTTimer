@@ -11,6 +11,7 @@
 - 发布版 WPF UI Automation：启动 1,332ms；时长文本 137ms；模式下拉 151ms；超时复选框 15ms；外观数字字段 16ms；取消退出通过。每项控件操作均低于 3 秒。
 - 主程序/设置退出 smoke：集成设置启动 2,108ms；设置关闭后主程序 191ms 内响应。
 - 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 51,823,905 bytes，SHA-256 `CA355E6AC3368807EEE1F639FDC304F1577D6D36C712C757C59C06F206F929C0`；`FlyPPTTimer.Settings.exe` 75,353,968 bytes，SHA-256 `6306B8B140DD0A1774C6D0440F7D8FF9738A344DDE3BF26D2539D2D7348B3ED9`。
+- GitHub Actions：阶段 0 内容提交 `3369825d8c983b4589a3f3814be86175a6210cf1` 的 [Windows CI 31090670000](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31090670000) 成功；Restore、三个 Release Build、264+4 测试、双 EXE 发布、两项 GUI smoke、校验和与 Artifact 上传步骤全部成功。
 
 ## v0.30.2 当前验证
 
