@@ -140,7 +140,8 @@ try {
     $continueOvertime = Find-ByAutomationId $window 'ContinueOvertime'
     $width = Find-ByAutomationId $window 'Width'
     $unsavedStatus = Find-ByAutomationId $window 'UnsavedStatus'
-    $initialStatus = $unsavedStatus.Current.Name
+    $unsavedPattern = [Windows.Automation.ValuePattern]$unsavedStatus.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
+    $initialStatus = $unsavedPattern.Current.Value
     $cancel = Find-ByAutomationId $window 'Cancel'
     $saveAndClose = Find-ByAutomationId $window 'SaveAndClose'
     if (!$saveAndClose.Current.IsEnabled) { throw 'SaveAndClose is unexpectedly disabled.' }
@@ -210,7 +211,9 @@ try {
     $currentStatus = $initialStatus
     do {
         Start-Sleep -Milliseconds 50
-        $currentStatus = (Find-ByAutomationId $window 'UnsavedStatus').Current.Name
+        $statusElement = Find-ByAutomationId $window 'UnsavedStatus'
+        $statusPattern = [Windows.Automation.ValuePattern]$statusElement.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
+        $currentStatus = $statusPattern.Current.Value
     } while (($currentStatus -eq $initialStatus -or [string]::IsNullOrWhiteSpace($currentStatus)) -and $statusStopwatch.Elapsed -lt $operationTimeout)
     $statusStopwatch.Stop()
     if ([string]::IsNullOrWhiteSpace($currentStatus) -or $currentStatus -eq $initialStatus) {

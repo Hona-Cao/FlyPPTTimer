@@ -9,9 +9,9 @@
 - `JsonExtensionData` 在全部持久化层级保留未来字段；真实 `v0.30.2-config.json` fixture 验证根对象、嵌套对象和规则未知字段保存往返。
 - 真实 WPF 测试统一进入禁并行 collection，避免两个 STA 测试争抢 AppDomain 唯一 `Application`；完整桌面套件连续运行两次均 279/279 通过。
 - 三个 Release Build：各 **0 warnings / 0 errors**。桌面测试：**279/279 通过**；Core：**4/4 通过**；0 失败，0 跳过。
-- 最终发布版 WPF 设置 UI Automation：启动 1,283ms；基础四类控件 88/79/18/15ms；提醒切页/编辑 137/15ms；热键切页/编辑 139/33ms；远程切页/复选/端口 104/11/15ms；取消 83ms。所有操作低于 3 秒。
+- 最终发布版 WPF 设置 UI Automation：启动 1,302ms；基础四类控件 95/92/133/18ms；提醒切页/编辑 170/20ms；热键切页/编辑 220/18ms；远程切页/复选/端口 120/11/17ms；脏状态 ValuePattern 更新 100ms；取消 106ms。所有操作低于 3 秒。
 - 设置退出回归：集成启动 2,948ms；返回主程序 196ms 内响应并重载配置。WPF 计时窗回归：启动 1,492ms；F3 78ms；F5 隐藏/显示 1,166/14ms。
-- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,684,704 bytes，SHA-256 `BEBEB044290404E9CC3DC6E8569BFEDC947144BFD68912A6132F9D70051BA75E`；`FlyPPTTimer.Settings.exe` 75,714,957 bytes，SHA-256 `8B2D18CFB85507F794059941A289950A64EF47F34B8A08731BABCE02777DD247`。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,684,704 bytes，SHA-256 `BEBEB044290404E9CC3DC6E8569BFEDC947144BFD68912A6132F9D70051BA75E`；`FlyPPTTimer.Settings.exe` 75,715,003 bytes，SHA-256 `585B27CB92F8F9155B12BFB138A5D702E3867FA662CAEDC39A6581A57A8244D9`。
 
 ## 4.0 完整重构阶段 1：WPF 计时与显示（2026-08-06）
 

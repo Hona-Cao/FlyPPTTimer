@@ -78,7 +78,7 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 |---|---|
 | 主程序/Core/WPF Settings Release Build | 各 0 warnings / 0 errors |
 | 桌面/Core 测试 | 279/279；4/4；0 跳过 |
-| 发布版六页 WPF 设置 UIA | 启动 1,283ms；基础 88/79/18/15ms；提醒 137/15ms；热键 139/33ms；远程 104/11/15ms；取消 83ms |
+| 发布版六页 WPF 设置 UIA | 启动 1,302ms；基础 95/92/133/18ms；提醒 170/20ms；热键 220/18ms；远程 120/11/17ms；脏状态 100ms；取消 106ms |
 | 设置退出 smoke | 集成启动 2,948ms；主程序 196ms 响应并重载 |
 | WPF 计时回归 | 启动 1,492ms；F3 78ms；F5 隐藏/显示 1,166/14ms |
 | 发布 | win-x64、自包含、单文件、双 EXE |
@@ -86,7 +86,7 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 | 本地 Artifact（不提交） | 字节与 SHA-256 |
 |---|---|
 | `artifacts/phase2/publish/FlyPPTTimer.exe` | 75,684,704 bytes；SHA-256 `BEBEB044290404E9CC3DC6E8569BFEDC947144BFD68912A6132F9D70051BA75E` |
-| `artifacts/phase2/publish/FlyPPTTimer.Settings.exe` | 75,714,957 bytes；SHA-256 `8B2D18CFB85507F794059941A289950A64EF47F34B8A08731BABCE02777DD247` |
+| `artifacts/phase2/publish/FlyPPTTimer.Settings.exe` | 75,715,003 bytes；SHA-256 `585B27CB92F8F9155B12BFB138A5D702E3867FA662CAEDC39A6581A57A8244D9` |
 
 本机 Restore 曾因受限用户 NuGet 缓存指向缺失包失败；改用仓库内已忽略的 `.nuget/packages` 后完整 Restore 与测试通过，未修改依赖或项目文件。
 
