@@ -1,192 +1,93 @@
 <Window x:Class="FlyPPTTimer.Desktop.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FlyPPTTimer 设置（WPF 预览）"
-        Width="900"
-        Height="760"
-        MinWidth="760"
-        MinHeight="600"
+        Title="FlyPPTTimer 设置" Width="980" Height="780" MinWidth="780" MinHeight="600"
         WindowStartupLocation="CenterScreen">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <Border Grid.Row="0"
-                Background="{DynamicResource Brush.Surface}"
-                BorderBrush="{DynamicResource Brush.Border}"
-                BorderThickness="0,0,0,1"
-                Padding="28,22">
+    <Window.Resources>
+        <Style x:Key="Field" TargetType="FrameworkElement"><Setter Property="Margin" Value="5"/></Style>
+        <DataTemplate x:Key="PromptEditor">
             <StackPanel>
-                <TextBlock Style="{StaticResource SectionTitle}"
-                           Text="FlyPPTTimer 设置" />
-                <TextBlock Margin="0,6,0,0"
-                           Style="{StaticResource SecondaryText}"
-                           Text="WPF 预览版 · 保存并关闭后，主程序会自动重新加载并应用配置。" />
+                <WrapPanel>
+                    <CheckBox Style="{StaticResource Field}" Content="启用" IsChecked="{Binding Enabled}"/>
+                    <CheckBox Style="{StaticResource Field}" Content="语音播报" IsChecked="{Binding Speak}"/>
+                    <TextBlock Style="{StaticResource Field}" Text="提前秒数"/>
+                    <TextBox Style="{StaticResource Field}" Width="90" AutomationProperties.AutomationId="PromptBefore" Text="{Binding TriggerBeforeEndSeconds,UpdateSourceTrigger=PropertyChanged}"/>
+                </WrapPanel>
+                <WrapPanel>
+                    <TextBlock Style="{StaticResource Field}" Text="声音文件"/>
+                    <TextBox Style="{StaticResource Field}" Width="480" IsReadOnly="True" Text="{Binding SoundFile}"/>
+                    <Button Style="{StaticResource Field}" Content="选择声音…" Click="ChooseSound_Click"/>
+                    <Button Style="{StaticResource Field}" Content="恢复默认" Click="ClearSound_Click"/>
+                </WrapPanel>
+                <WrapPanel>
+                    <TextBlock Style="{StaticResource Field}" Text="闪烁样式"/>
+                    <ComboBox Style="{StaticResource Field}" Width="130" ItemsSource="{Binding DataContext.FlashStyles,RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding FlashStyle}"/>
+                    <TextBlock Style="{StaticResource Field}" Text="闪现 ms"/><TextBox Style="{StaticResource Field}" Width="70" Text="{Binding FlashOnMs,UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Style="{StaticResource Field}" Text="隐藏 ms"/><TextBox Style="{StaticResource Field}" Width="70" Text="{Binding FlashOffMs,UpdateSourceTrigger=PropertyChanged}"/>
+                    <TextBlock Style="{StaticResource Field}" Text="持续秒"/><TextBox Style="{StaticResource Field}" Width="70" Text="{Binding FlashSeconds,UpdateSourceTrigger=PropertyChanged}"/>
+                </WrapPanel>
             </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Border Padding="24,18" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,0,0,1">
+            <StackPanel><TextBlock Style="{StaticResource SectionTitle}" Text="FlyPPTTimer 设置"/><TextBlock Margin="0,5,0,0" Style="{StaticResource SecondaryText}" Text="完整 WPF 设置 · 保存关闭后主程序自动应用配置"/></StackPanel>
         </Border>
-
-        <ScrollViewer Grid.Row="1"
-                      HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="{DynamicResource Spacing.Page}">
-                <Border Style="{StaticResource CardBorder}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource CardTitle}" Text="计时" />
-                        <Grid Margin="0,14,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="180" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="默认时长" />
-                            <TextBox Grid.Column="1"
-                                     AutomationProperties.AutomationId="DefaultDuration"
-                                     Text="{Binding DefaultDuration, UpdateSourceTrigger=PropertyChanged}"
-                                     ToolTip="例如 00:08:00" />
-                            <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="模式" />
-                            <ComboBox Grid.Row="1" Grid.Column="1"
-                                      AutomationProperties.AutomationId="TimerMode"
-                                      ItemsSource="{Binding TimerModeOptions}"
-                                      DisplayMemberPath="Label"
-                                      SelectedValuePath="Value"
-                                      SelectedValue="{Binding SelectedTimerMode}" />
-                            <CheckBox Grid.Row="2" Grid.Column="1"
-                                      AutomationProperties.AutomationId="ContinueOvertime"
-                                      Content="到零后继续超时"
-                                      IsChecked="{Binding ContinueOvertime}" />
-                            <TextBlock Grid.Row="3" Style="{StaticResource FieldLabel}" Text="到时动作" />
-                            <ComboBox Grid.Row="3" Grid.Column="1"
-                                      ItemsSource="{Binding EndActionOptions}"
-                                      DisplayMemberPath="Label"
-                                      SelectedValuePath="Value"
-                                      SelectedValue="{Binding SelectedEndAction}" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <Border Margin="0,16,0,0" Style="{StaticResource CardBorder}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource CardTitle}" Text="自动行为" />
-                        <UniformGrid Margin="0,14,0,0" Columns="2">
-                            <CheckBox Content="全屏时自动开始" IsChecked="{Binding AutoStartOnFullscreen}" />
-                            <CheckBox Content="离开全屏时停止" IsChecked="{Binding StopWhenLeavingFullscreen}" />
-                            <CheckBox Content="离开全屏时重置" IsChecked="{Binding ResetWhenLeavingFullscreen}" />
-                            <CheckBox Content="暂停/继续时闪烁" IsChecked="{Binding FlashOnPauseResume}" />
-                            <CheckBox Content="暂停时闪烁时间" IsChecked="{Binding FlashPausedTime}" />
-                        </UniformGrid>
-                    </StackPanel>
-                </Border>
-
-                <Border Margin="0,16,0,0" Style="{StaticResource CardBorder}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource CardTitle}" Text="外观" />
-                        <Grid Margin="0,14,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="180" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="180" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="字体大小（8–96）" />
-                            <TextBox Grid.Column="1" Text="{Binding FontSizeText, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="宽度（40–2000）" />
-                            <TextBox Grid.Column="3"
-                                     AutomationProperties.AutomationId="Width"
-                                     Text="{Binding WidthText, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="高度（20–1000）" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding HeightText, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource FieldLabel}" Text="背景透明度（0–100）" />
-                            <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding BackgroundOpacityText, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Row="2" Style="{StaticResource FieldLabel}" Text="文字透明度（0–100）" />
-                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TextOpacityText, UpdateSourceTrigger=PropertyChanged}" />
-                            <CheckBox Grid.Row="3" Grid.Column="1" Content="窗口始终置顶" IsChecked="{Binding AlwaysOnTop}" />
-                            <CheckBox Grid.Row="3" Grid.Column="3" Content="无边框显示" IsChecked="{Binding Borderless}" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <Border Margin="0,16,0,0" Style="{StaticResource CardBorder}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource CardTitle}" Text="控制与其他" />
-                        <Grid Margin="0,14,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="180" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="180" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Style="{StaticResource FieldLabel}" Text="开始/暂停热键" />
-                            <TextBox Grid.Column="1" Text="{Binding StartPauseHotkey, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="停止/重置热键" />
-                            <TextBox Grid.Column="3" Text="{Binding StopResetHotkey, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="显示/隐藏热键" />
-                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ToggleWindowHotkey, UpdateSourceTrigger=PropertyChanged}" />
-                            <CheckBox Grid.Row="2" Grid.Column="1" Content="最小化到托盘" IsChecked="{Binding MinimizeToTray}" />
-                            <CheckBox Grid.Row="2" Grid.Column="3" Content="启动时检查更新" IsChecked="{Binding CheckOnStartup}" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <Border Margin="0,16,0,0"
-                        Background="{DynamicResource Brush.SurfaceMuted}"
-                        BorderBrush="{DynamicResource Brush.Border}"
-                        BorderThickness="1"
-                        CornerRadius="{DynamicResource Radius.Card}"
-                        Padding="18">
-                    <TextBlock Style="{StaticResource SecondaryText}"
-                               Text="文件规则、远程控制、提示音和高级外观暂在“经典设置”中编辑。这里保存时会原样保留这些配置。" />
-                </Border>
-            </StackPanel>
-        </ScrollViewer>
-
-        <Border Grid.Row="2"
-                Background="{DynamicResource Brush.Surface}"
-                BorderBrush="{DynamicResource Brush.Border}"
-                BorderThickness="0,1,0,0"
-                Padding="28,16">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock AutomationProperties.AutomationId="UnsavedStatus"
-                               Foreground="{DynamicResource Brush.Warning}"
-                               Text="{Binding UnsavedStatus}" />
-                    <TextBlock Margin="0,4,16,0"
-                               Foreground="{DynamicResource Brush.Danger}"
-                               Text="{Binding ErrorMessage}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button MinWidth="100"
-                            AutomationProperties.AutomationId="Cancel"
-                            Content="取消"
-                            Command="{Binding CancelCommand}" />
-                    <Button MinWidth="130" Margin="12,0,0,0" Style="{StaticResource PrimaryButton}"
-                            AutomationProperties.AutomationId="SaveAndClose"
-                            Content="保存并关闭" Command="{Binding SaveAndCloseCommand}" />
-                </StackPanel>
-            </Grid>
-        </Border>
+        <TabControl Grid.Row="1" Margin="18" AutomationProperties.AutomationId="SettingsTabs" SelectionChanged="SettingsTabs_SelectionChanged">
+            <TabItem Header="计时">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16">
+                    <TextBlock Style="{StaticResource CardTitle}" Text="全局计时"/>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="默认时长"/><TextBox Style="{StaticResource Field}" Width="140" AutomationProperties.AutomationId="DefaultDuration" Text="{Binding DefaultDuration,UpdateSourceTrigger=PropertyChanged}"/>
+                        <TextBlock Style="{StaticResource Field}" Text="模式"/><ComboBox Style="{StaticResource Field}" Width="130" AutomationProperties.AutomationId="TimerMode" ItemsSource="{Binding TimerModeOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding SelectedTimerMode}"/>
+                        <CheckBox Style="{StaticResource Field}" AutomationProperties.AutomationId="ContinueOvertime" Content="到零后继续超时" IsChecked="{Binding ContinueOvertime}"/></WrapPanel>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="到时动作"/><ComboBox Style="{StaticResource Field}" Width="150" ItemsSource="{Binding EndActionOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding SelectedEndAction}"/></WrapPanel>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="计时窗口宽度"/><TextBox Style="{StaticResource Field}" Width="90" AutomationProperties.AutomationId="Width" Text="{Binding WidthText,UpdateSourceTrigger=PropertyChanged}"/></WrapPanel>
+                    <TextBlock Margin="5,18,5,5" Style="{StaticResource CardTitle}" Text="自动行为"/>
+                    <WrapPanel><CheckBox Style="{StaticResource Field}" Content="全屏时自动开始" IsChecked="{Binding AutoStartOnFullscreen}"/><CheckBox Style="{StaticResource Field}" Content="离开全屏时停止" IsChecked="{Binding StopWhenLeavingFullscreen}"/><CheckBox Style="{StaticResource Field}" Content="离开全屏时重置" IsChecked="{Binding ResetWhenLeavingFullscreen}"/><CheckBox Style="{StaticResource Field}" Content="暂停/继续时闪烁" IsChecked="{Binding FlashOnPauseResume}"/><CheckBox Style="{StaticResource Field}" Content="暂停时闪烁时间" IsChecked="{Binding FlashPausedTime}"/></WrapPanel>
+                </StackPanel></ScrollViewer>
+            </TabItem>
+            <TabItem Header="文件规则">
+                <Grid Margin="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <WrapPanel><Button Style="{StaticResource Field}" AutomationProperties.AutomationId="AddRules" Content="添加文件…" Click="AddRules_Click"/><Button Style="{StaticResource Field}" Content="删除已勾选" Command="{Binding RemoveSelectedRulesCommand}"/><Button Style="{StaticResource Field}" Content="清空" Command="{Binding ClearRulesCommand}"/></WrapPanel>
+                    <DataGrid Grid.Row="1" Margin="5" ItemsSource="{Binding Rules}" AutoGenerateColumns="False" CanUserAddRows="False" AutomationProperties.AutomationId="RulesGrid">
+                        <DataGrid.Columns><DataGridCheckBoxColumn Header="选择" Binding="{Binding Selected}"/><DataGridTextColumn Header="文件" Binding="{Binding FileName}" IsReadOnly="True" Width="160"/><DataGridTextColumn Header="路径" Binding="{Binding FilePath}" IsReadOnly="True" Width="*"/><DataGridTextColumn Header="时长" Binding="{Binding Duration,UpdateSourceTrigger=PropertyChanged}" Width="110"/><DataGridComboBoxColumn Header="模式" SelectedItemBinding="{Binding Mode}" ItemsSource="{Binding DataContext.TimerModes,RelativeSource={RelativeSource AncestorType=Window}}"/><DataGridCheckBoxColumn Header="启用" Binding="{Binding Enabled}"/></DataGrid.Columns>
+                    </DataGrid>
+                    <WrapPanel Grid.Row="2"><TextBlock Style="{StaticResource Field}" Text="批量时长"/><TextBox x:Name="BatchDuration" Style="{StaticResource Field}" Width="100" Text="00:08:00"/><TextBlock Style="{StaticResource Field}" Text="批量模式"/><ComboBox x:Name="BatchMode" Style="{StaticResource Field}" Width="110" SelectedIndex="0"><ComboBoxItem Content="倒计时"/><ComboBoxItem Content="正计时"/></ComboBox><Button Style="{StaticResource Field}" Content="应用到已勾选" Click="ApplyBatch_Click"/><TextBlock Style="{StaticResource Field}" Text="同一路径只保留一条规则。"/></WrapPanel>
+                </Grid>
+            </TabItem>
+            <TabItem Header="提醒与声音">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16">
+                    <GroupBox Header="提示 1" Margin="5" Content="{Binding Prompt1}" ContentTemplate="{StaticResource PromptEditor}"/>
+                    <GroupBox Header="提示 2" Margin="5" Content="{Binding Prompt2}" ContentTemplate="{StaticResource PromptEditor}"/>
+                    <GroupBox Header="计时结束" Margin="5" Content="{Binding EndPrompt}" ContentTemplate="{StaticResource PromptEditor}"/>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="超时前缀"/><TextBox Style="{StaticResource Field}" Width="80" Text="{Binding OvertimePrefix,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="超时文字颜色"/><TextBox Style="{StaticResource Field}" Width="100" Text="{Binding TimeoutTextColor,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="超时背景颜色"/><TextBox Style="{StaticResource Field}" Width="100" Text="{Binding TimeoutBackgroundColor,UpdateSourceTrigger=PropertyChanged}"/></WrapPanel>
+                </StackPanel></ScrollViewer>
+            </TabItem>
+            <TabItem Header="外观与显示">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16">
+                    <WrapPanel><CheckBox Style="{StaticResource Field}" Content="显示计时器窗口" IsChecked="{Binding TimerWindowVisible}"/><CheckBox Style="{StaticResource Field}" Content="始终置顶" IsChecked="{Binding AlwaysOnTop}"/><CheckBox Style="{StaticResource Field}" Content="无边框" IsChecked="{Binding Borderless}"/></WrapPanel>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="配色方案"/><ComboBox Style="{StaticResource Field}" Width="200" ItemsSource="{Binding ColorSchemes}" SelectedItem="{Binding ColorScheme}"/><TextBlock Style="{StaticResource Field}" Text="形状"/><ComboBox Style="{StaticResource Field}" Width="160" ItemsSource="{Binding Shapes}" SelectedItem="{Binding Shape}"/></WrapPanel>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="文字颜色"/><TextBox Style="{StaticResource Field}" Width="100" Text="{Binding TextColor,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="背景颜色"/><TextBox Style="{StaticResource Field}" Width="100" Text="{Binding BackgroundColor,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="闪烁背景"/><TextBox Style="{StaticResource Field}" Width="100" Text="{Binding FlashBackgroundColor,UpdateSourceTrigger=PropertyChanged}"/></WrapPanel>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="字号"/><TextBox Style="{StaticResource Field}" Width="70" Text="{Binding FontSizeText,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="宽"/><TextBox Style="{StaticResource Field}" Width="80" Text="{Binding WidthText,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="高"/><TextBox Style="{StaticResource Field}" Width="80" Text="{Binding HeightText,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="背景不透明度"/><TextBox Style="{StaticResource Field}" Width="65" Text="{Binding BackgroundOpacityText,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="文字不透明度"/><TextBox Style="{StaticResource Field}" Width="65" Text="{Binding TextOpacityText,UpdateSourceTrigger=PropertyChanged}"/></WrapPanel>
+                    <Separator Margin="5,15"/><WrapPanel><CheckBox Style="{StaticResource Field}" Content="所有屏幕同时显示" IsChecked="{Binding ShowOnAllScreens}"/><TextBlock Style="{StaticResource Field}" Text="单屏显示"/><ComboBox Style="{StaticResource Field}" Width="180" ItemsSource="{Binding ScreenOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding TargetScreen}"/><CheckBox Style="{StaticResource Field}" Content="启用大屏" IsEnabled="{Binding IsBigScreenAvailable}" IsChecked="{Binding BigScreenEnabled}"/><TextBlock Style="{StaticResource Field}" Text="大屏显示"/><ComboBox Style="{StaticResource Field}" Width="180" IsEnabled="{Binding IsBigScreenAvailable}" ItemsSource="{Binding ExtendedScreenOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding BigScreenTarget}"/></WrapPanel>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="默认点位"/><ComboBox Style="{StaticResource Field}" Width="120" ItemsSource="{Binding AnchorOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Anchor}"/><TextBlock Style="{StaticResource Field}" Text="水平微调 %"/><TextBox Style="{StaticResource Field}" Width="70" Text="{Binding OffsetX,UpdateSourceTrigger=PropertyChanged}"/><TextBlock Style="{StaticResource Field}" Text="垂直微调 %"/><TextBox Style="{StaticResource Field}" Width="70" Text="{Binding OffsetY,UpdateSourceTrigger=PropertyChanged}"/></WrapPanel>
+                </StackPanel></ScrollViewer>
+            </TabItem>
+            <TabItem Header="快捷键">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16"><WrapPanel><CheckBox Style="{StaticResource Field}" Content="鼠标穿透" IsChecked="{Binding ClickThrough}"/><CheckBox Style="{StaticResource Field}" Content="锁定窗口" IsChecked="{Binding LockPosition}"/><CheckBox Style="{StaticResource Field}" Content="最小化到托盘" IsChecked="{Binding MinimizeToTray}"/><TextBlock Style="{StaticResource Field}" Text="关闭按钮"/><ComboBox Style="{StaticResource Field}" Width="160" ItemsSource="{Binding CloseBehaviorOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding CloseButtonBehavior}"/></WrapPanel><ItemsControl ItemsSource="{Binding Hotkeys}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="5"><Grid.ColumnDefinitions><ColumnDefinition Width="220"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Label}"/><TextBox Grid.Column="1" AutomationProperties.AutomationId="HotkeyEditor" Text="{Binding Value,UpdateSourceTrigger=PropertyChanged}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></ScrollViewer>
+            </TabItem>
+            <TabItem Header="远程与其他">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16">
+                    <TextBlock Style="{StaticResource CardTitle}" Text="远程控制"/><WrapPanel><CheckBox Style="{StaticResource Field}" AutomationProperties.AutomationId="RemoteEnabled" Content="启用远程控制" IsChecked="{Binding RemoteEnabled}"/><CheckBox Style="{StaticResource Field}" Content="使用随机端口" IsChecked="{Binding RemoteRandomPort}"/><TextBlock Style="{StaticResource Field}" Text="端口"/><TextBox Style="{StaticResource Field}" Width="100" AutomationProperties.AutomationId="RemotePort" Text="{Binding RemotePort,UpdateSourceTrigger=PropertyChanged}"/><Button Style="{StaticResource Field}" Content="重新生成访问令牌" Command="{Binding RegenerateTokenCommand}"/></WrapPanel>
+                    <TextBlock Margin="5" Style="{StaticResource SecondaryText}" Text="令牌不会显示在界面中；重新生成后，旧的远程链接将在保存并重载服务后失效。实时服务、地址、二维码和断开设备在主程序的远程控制窗口中管理。" TextWrapping="Wrap"/>
+                    <Separator Margin="5,15"/><TextBlock Style="{StaticResource CardTitle}" Text="语言、更新与配置"/>
+                    <WrapPanel><TextBlock Style="{StaticResource Field}" Text="界面语言"/><ComboBox Style="{StaticResource Field}" Width="150" ItemsSource="{Binding LanguageOptions}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Language}"/><CheckBox Style="{StaticResource Field}" Content="启动时检查更新" IsChecked="{Binding CheckOnStartup}"/></WrapPanel>
+                    <WrapPanel><Button Style="{StaticResource Field}" Content="导入配置…" Click="ImportConfig_Click"/><Button Style="{StaticResource Field}" Content="导出配置…" Click="ExportConfig_Click"/><Button Style="{StaticResource Field}" Content="恢复默认" Click="ResetConfig_Click"/><Button Style="{StaticResource Field}" Content="打开配置目录" Click="OpenConfigFolder_Click"/><Button Style="{StaticResource Field}" Content="打开日志目录" Click="OpenLogFolder_Click"/></WrapPanel>
+                    <TextBlock Margin="5,12" Style="{StaticResource SecondaryText}" Text="语言更改将在主程序重新启动后完全生效。配置导入会先校验并保留兼容字段。"/>
+                </StackPanel></ScrollViewer>
+            </TabItem>
+        </TabControl>
+        <Border Grid.Row="2" Padding="24,14" Background="{DynamicResource Brush.Surface}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="0,1,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock AutomationProperties.AutomationId="UnsavedStatus" Foreground="{DynamicResource Brush.Warning}" Text="{Binding UnsavedStatus}"/><TextBlock Foreground="{DynamicResource Brush.Danger}" Text="{Binding ErrorMessage}" TextWrapping="Wrap"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal"><Button MinWidth="100" AutomationProperties.AutomationId="Cancel" Content="取消" Command="{Binding CancelCommand}"/><Button MinWidth="130" Margin="12,0,0,0" Style="{StaticResource PrimaryButton}" AutomationProperties.AutomationId="SaveAndClose" Content="保存并关闭" Command="{Binding SaveAndCloseCommand}"/></StackPanel></Grid></Border>
     </Grid>
 </Window>

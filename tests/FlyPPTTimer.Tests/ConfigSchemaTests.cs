@@ -101,4 +101,45 @@ public sealed class ConfigSchemaTests
         Assert.Equal("迁移后的用户设置", config.Behavior.Prompt1.Text);
         Assert.Equal(ConfigSchema.Current, config.SchemaVersion);
     }
+
+    [Fact]
+    public void V0302ConfigurationPreservesUnknownFieldsAtEveryPersistedLevel()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"FlyPPTTimer-Unknown-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "FlyPPTTimer.config.json");
+            File.Copy(SourcePath("tests", "FlyPPTTimer.Tests", "Fixtures", "v0.30.2-config.json"), path);
+            var service = new ConfigService(new LogService(Path.Combine(directory, "logs")), path);
+
+            var config = service.Load();
+            config.Timer.DefaultDuration = "00:10:00";
+            service.Save(config);
+            using var json = JsonDocument.Parse(File.ReadAllText(path));
+            var root = json.RootElement;
+
+            Assert.True(root.GetProperty("FutureRoot").GetProperty("enabled").GetBoolean());
+            Assert.Equal(17, root.GetProperty("Timer").GetProperty("FutureTimer").GetInt32());
+            Assert.Equal("keep", root.GetProperty("Behavior").GetProperty("FutureBehavior").GetString());
+            Assert.Equal(3, root.GetProperty("Behavior").GetProperty("Prompt1").GetProperty("FuturePrompt").GetArrayLength());
+            Assert.Equal("#123456", root.GetProperty("Appearance").GetProperty("FutureAppearance").GetString());
+            Assert.Equal("value", root.GetProperty("Controls").GetProperty("FutureControl").GetProperty("key").GetString());
+            Assert.True(root.GetProperty("RemoteControl").GetProperty("FutureRemote").GetBoolean());
+            Assert.Equal(4, root.GetProperty("RemoteControl").GetProperty("Window").GetProperty("FutureWindow").GetInt32());
+            Assert.Equal("screen", root.GetProperty("Placement").GetProperty("FuturePlacement").GetString());
+            Assert.Equal("keep", root.GetProperty("Rules")[0].GetProperty("FutureRule").GetString());
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    private static string SourcePath(params string[] segments)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            var path = Path.Combine([directory.FullName, .. segments]);
+            if (File.Exists(path)) return path;
+        }
+        throw new DirectoryNotFoundException("Unable to locate repository fixture.");
+    }
 }

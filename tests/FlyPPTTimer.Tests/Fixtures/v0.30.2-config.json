@@ -1,0 +1,27 @@
+{
+  "Version": "0.30.2",
+  "SchemaVersion": 1,
+  "FutureRoot": { "enabled": true },
+  "Timer": { "DefaultDuration": "00:09:00", "Mode": 0, "FutureTimer": 17 },
+  "Behavior": {
+    "FutureBehavior": "keep",
+    "Prompt1": { "Enabled": true, "SoundFile": "alert-sounds/prompt1.wav", "FuturePrompt": [1, 2, 3] }
+  },
+  "Appearance": { "FutureAppearance": "#123456" },
+  "Controls": { "StartPauseHotkey": "F3", "FutureControl": { "key": "value" } },
+  "RemoteControl": {
+    "Port": 4080,
+    "Token": "fixture-token-not-secret",
+    "FutureRemote": true,
+    "Window": { "FutureWindow": 4 }
+  },
+  "Placement": { "ScreenDeviceName": "DISPLAY-FIXTURE", "FuturePlacement": "screen" },
+  "Rules": [
+    {
+      "FileName": "deck.pptx",
+      "FilePath": "C:\\Fixture\\deck.pptx",
+      "Duration": "00:08:00",
+      "FutureRule": "keep"
+    }
+  ]
+}

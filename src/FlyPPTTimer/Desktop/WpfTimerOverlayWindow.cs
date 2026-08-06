@@ -240,7 +240,7 @@ public sealed class WpfTimerOverlayWindow : Wpf.Window
         AddMenuItem(menu, "ResetTimerPosition", "重置计时窗口位置", resetPosition);
         AddMenuItem(menu, "ToggleMute", "静音/取消静音", toggleMute);
         AddMenuItem(menu, "OpenRemoteControl", "远程控制", showRemote);
-        AddMenuItem(menu, "OpenWpfSettings", "设置（WPF 预览）", showSettings);
+        AddMenuItem(menu, "OpenWpfSettings", "设置", showSettings);
         AddMenuItem(menu, "OpenClassicSettings", "经典设置", showClassicSettings);
         menu.Items.Add(new WpfControls.Separator());
         AddMenuItem(menu, "ExitApplication", "退出", exit);

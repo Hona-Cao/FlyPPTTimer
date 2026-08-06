@@ -73,9 +73,11 @@ FlyPPTTimer.Infrastructure.Windows
 
 ## 6. 配置兼容策略
 
-配置采用“原 JSON DOM + typed projection”双层迁移：读取失败先保留损坏副本并尝试备份；按 `Version` 运行幂等迁移；缺失字段补默认、非法字段按 0.30.2 语义归一化；保存时只覆盖已知字段并保留未知字段；同目录临时写入、flush、时间戳备份、原子替换。token 不改写；自定义声音引用和 `alert-sounds/` 不因安装升级删除。
+配置采用 typed projection + 各持久化对象 `JsonExtensionData`：读取失败先保留损坏副本并尝试备份；按 `SchemaVersion` 运行幂等迁移；缺失字段补默认、非法字段按 0.30.2 语义归一化；保存时覆盖已知字段并逐层保留未知 JSON；同目录临时写入、复核、时间戳备份、原子替换。token 不改写；自定义声音引用和 `alert-sounds/` 不因安装升级删除。
 
 阶段 2 增加 `V4_CONFIGURATION_MIGRATION.md` 和真实 0.30.2 fixture，覆盖旧三快捷键字段与 `Hotkeys`、规则、token、窗口位置、显示器、提示声音及未知字段。
+
+阶段 2 的 WPF Settings 使用一个窗口级协调 ViewModel 和三个可观察 draft（Prompt、Rule、Hotkey）。属性 setter 只更新内存和脏状态；规则/声音选择由 WPF 对话框适配，声音复制、配置导入/导出在显式异步命令后执行。保存先整体校验，再一次性投影回 `AppConfig` 并原子写入。六个页面共享同一 draft，因此切页不会重新读取磁盘或丢失未保存状态。
 
 ## 7. Presentation 迁移策略
 

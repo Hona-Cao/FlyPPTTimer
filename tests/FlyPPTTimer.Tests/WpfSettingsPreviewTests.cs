@@ -10,6 +10,7 @@ using System.Windows.Threading;
 
 namespace FlyPPTTimer.Tests;
 
+[Collection(WpfUiTestCollection.Name)]
 public sealed class WpfSettingsPreviewTests
 {
     [Fact]
@@ -38,11 +39,31 @@ public sealed class WpfSettingsPreviewTests
                 ExecuteControlOperation(window.Dispatcher, () => mode.SelectedIndex = 1);
                 ExecuteControlOperation(window.Dispatcher, () => overtime.IsChecked = false);
                 ExecuteControlOperation(window.Dispatcher, () => width.Text = "680");
+                viewModel.AddRulePaths(["C:\\Slides\\ui-test.pptx"]);
+                var tabs = FindByAutomationId<System.Windows.Controls.TabControl>(window, "SettingsTabs");
+                ExecuteControlOperation(window.Dispatcher, () => tabs.SelectedIndex = 1);
+                var rules = FindByAutomationId<System.Windows.Controls.DataGrid>(window, "RulesGrid");
+                ExecuteControlOperation(window.Dispatcher, () => rules.SelectedIndex = 0);
+                ExecuteControlOperation(window.Dispatcher, () => tabs.SelectedIndex = 2);
+                var promptBefore = FindByAutomationId<System.Windows.Controls.TextBox>(window, "PromptBefore");
+                ExecuteControlOperation(window.Dispatcher, () => promptBefore.Text = "75");
+                ExecuteControlOperation(window.Dispatcher, () => tabs.SelectedIndex = 4);
+                var hotkey = FindByAutomationId<System.Windows.Controls.TextBox>(window, "HotkeyEditor");
+                ExecuteControlOperation(window.Dispatcher, () => hotkey.Text = "Ctrl+Shift+F9");
+                ExecuteControlOperation(window.Dispatcher, () => tabs.SelectedIndex = 5);
+                var remoteEnabled = FindByAutomationId<System.Windows.Controls.CheckBox>(window, "RemoteEnabled");
+                var remotePort = FindByAutomationId<System.Windows.Controls.TextBox>(window, "RemotePort");
+                ExecuteControlOperation(window.Dispatcher, () => remoteEnabled.IsChecked = false);
+                ExecuteControlOperation(window.Dispatcher, () => remotePort.Text = "4098");
 
                 Assert.Equal("00:09:30", viewModel.DefaultDuration);
                 Assert.Equal(TimerMode.CountUp, viewModel.SelectedTimerMode);
                 Assert.False(viewModel.ContinueOvertime);
                 Assert.Equal("680", viewModel.WidthText);
+                Assert.Equal("75", viewModel.Prompt1.TriggerBeforeEndSeconds);
+                Assert.Equal("Ctrl+Shift+F9", viewModel.Hotkeys[0].Value);
+                Assert.False(viewModel.RemoteEnabled);
+                Assert.Equal("4098", viewModel.RemotePort);
                 Assert.True(viewModel.IsDirty);
                 Assert.Equal("有未保存的更改", viewModel.UnsavedStatus);
                 viewModel.CancelCommand.Execute(null);
@@ -218,13 +239,121 @@ public sealed class WpfSettingsPreviewTests
     }
 
     [Fact]
+    public void CompleteWpfSettingsSaveRulesPromptsDisplayHotkeysRemoteAndLanguage()
+    {
+        using var environment = new TestEnvironment();
+        var config = new AppConfig();
+        config.RemoteControl.Token = "keep-token";
+        var viewModel = new SettingsViewModel(config, environment.ConfigService)
+        {
+            ColorScheme = "深色模式",
+            TextColor = "#112233",
+            BackgroundColor = "#445566",
+            TimeoutTextColor = "#778899",
+            TimeoutBackgroundColor = "#AABBCC",
+            FlashBackgroundColor = "#DDEEFF",
+            Shape = "圆角矩形（大）",
+            OvertimePrefix = "+",
+            TimerWindowVisible = false,
+            ShowOnAllScreens = false,
+            TargetScreen = "DISPLAY2",
+            BigScreenEnabled = true,
+            BigScreenTarget = "DISPLAY3",
+            Anchor = OverlayAnchor.BottomRight,
+            OffsetX = "12.5",
+            OffsetY = "-8",
+            ClickThrough = true,
+            LockPosition = true,
+            CloseButtonBehavior = CloseButtonBehavior.Exit,
+            RemoteEnabled = false,
+            RemoteRandomPort = false,
+            RemotePort = "4099",
+            Language = FlyPPTTimer.Services.Localization.English
+        };
+        viewModel.Prompt1.Enabled = true;
+        viewModel.Prompt1.TriggerBeforeEndSeconds = "90";
+        viewModel.Prompt1.Speak = false;
+        viewModel.Prompt1.SoundFile = "alert-sounds/prompt1.wav";
+        viewModel.Prompt1.FlashStyle = "边框加背景";
+        viewModel.Prompt1.FlashOnMs = "250";
+        viewModel.Prompt1.FlashOffMs = "450";
+        viewModel.Prompt1.FlashSeconds = "5";
+        viewModel.AddRulePaths(["C:\\Slides\\deck-a.pptx", "C:\\Slides\\deck-b.pptx"]);
+        viewModel.Rules[0].Duration = "00:12:00";
+        viewModel.Rules[0].Mode = TimerMode.CountUp;
+        viewModel.Hotkeys.Single(item => item.Key == "flash").Value = "Ctrl+Shift+F";
+
+        Assert.True(viewModel.TrySave(), viewModel.ErrorMessage);
+        var saved = environment.ConfigService.Load();
+
+        Assert.Equal("#112233", saved.Appearance.TextColor);
+        Assert.Equal("圆角矩形（大）", saved.Appearance.Shape);
+        Assert.False(saved.Placement.Visible);
+        Assert.Equal(OverlayAnchor.BottomRight, saved.Placement.Anchor);
+        Assert.Equal(12.5m, saved.Placement.OffsetXPercent);
+        Assert.True(saved.Controls.ClickThrough);
+        Assert.Equal(CloseButtonBehavior.Exit, saved.Controls.CloseButtonBehavior);
+        Assert.Equal("Ctrl+Shift+F", saved.Controls.Hotkeys["flash"]);
+        Assert.False(saved.RemoteControl.Enabled);
+        Assert.Equal(4099, saved.RemoteControl.Port);
+        Assert.Equal("keep-token", saved.RemoteControl.Token);
+        Assert.Equal(FlyPPTTimer.Services.Localization.English, saved.Language);
+        Assert.Equal(2, saved.Rules.Count);
+        Assert.Equal(TimerMode.CountUp, saved.Rules[0].Mode);
+        Assert.Equal(90, saved.Behavior.Prompt1.TriggerBeforeEndSeconds);
+        Assert.True(saved.Behavior.Prompt1.PlaySound);
+        Assert.Equal("边框+背景", saved.Behavior.Prompt1.FlashStyle);
+    }
+
+    [Theory]
+    [InlineData(true, "00:10:00")]
+    [InlineData(false, "00:12:00")]
+    public void DefaultDurationChangeHonorsRuleSynchronizationChoice(bool synchronize, string expectedRuleDuration)
+    {
+        using var environment = new TestEnvironment();
+        var config = new AppConfig
+        {
+            Rules = [new FileRule { FileName = "deck.pptx", FilePath = "C:\\Slides\\deck.pptx", Duration = "00:12:00" }]
+        };
+        var viewModel = new SettingsViewModel(config, environment.ConfigService)
+        {
+            DefaultDuration = "00:10:00",
+            SyncRuleDurationsRequested = (duration, count) =>
+            {
+                Assert.Equal("00:10:00", duration);
+                Assert.Equal(1, count);
+                return synchronize;
+            }
+        };
+
+        Assert.True(viewModel.TrySave(), viewModel.ErrorMessage);
+        Assert.Equal(expectedRuleDuration, environment.ConfigService.Load().Rules.Single().Duration);
+    }
+
+    [Fact]
+    public void RuleBatchEditOnlyChangesSelectedDrafts()
+    {
+        using var environment = new TestEnvironment();
+        var viewModel = new SettingsViewModel(new AppConfig(), environment.ConfigService);
+        viewModel.AddRulePaths(["C:\\Slides\\one.pptx", "C:\\Slides\\two.pptx"]);
+        viewModel.Rules[0].Selected = true;
+
+        viewModel.ApplyBatchToSelectedRules("00:20:00", TimerMode.CountUp);
+
+        Assert.Equal("00:20:00", viewModel.Rules[0].Duration);
+        Assert.Equal(TimerMode.CountUp, viewModel.Rules[0].Mode);
+        Assert.Equal("00:08:00", viewModel.Rules[1].Duration);
+        Assert.Equal(TimerMode.Countdown, viewModel.Rules[1].Mode);
+    }
+
+    [Fact]
     public void MainApplicationKeepsClassicSettingsAndReloadsAfterWpfExit()
     {
         var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "FlyPPTTimerContext.cs"));
 
         Assert.Contains("Path.Combine(AppContext.BaseDirectory, \"FlyPPTTimer.Settings.exe\")", source);
         Assert.Contains("private void ShowClassicSettings()", source);
-        Assert.Contains("设置（WPF 预览）", source);
+        Assert.Contains("menu.Items.Add(\"设置\"", source);
         Assert.Contains("经典设置", source);
         Assert.Contains("ActivateWpfSettings(_wpfSettingsProcess)", source);
         Assert.Contains("_uiContext.Post(_ => CompleteWpfSettingsExit(process), null);", source);

@@ -84,6 +84,21 @@ function Invoke-ControlOperation {
     Assert-Responsive -Process $Process -Window $Window -Operation $Name -Stopwatch $stopwatch
 }
 
+function Select-SettingsTab {
+    param(
+        [Windows.Automation.AutomationElement]$Tabs,
+        [int]$Index
+    )
+    $condition = [Windows.Automation.PropertyCondition]::new(
+        [Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [Windows.Automation.ControlType]::TabItem)
+    $items = $Tabs.FindAll([Windows.Automation.TreeScope]::Descendants, $condition)
+    if ($items.Count -le $Index) { throw "Settings tab index $Index was not found." }
+    $tab = $items.Item($Index)
+    $pattern = [Windows.Automation.SelectionItemPattern]$tab.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern)
+    $pattern.Select()
+}
+
 try {
     New-Item -ItemType Directory -Path $testDirectory | Out-Null
     Copy-Item -LiteralPath $sourceExe -Destination $testExe
@@ -162,6 +177,33 @@ try {
         $pattern = [Windows.Automation.ValuePattern]$width.GetCurrentPattern(
             [Windows.Automation.ValuePattern]::Pattern)
         $pattern.SetValue('680')
+    } $process $window
+
+    $tabs = Find-ByAutomationId $window 'SettingsTabs'
+    Invoke-ControlOperation 'Reminder tab selection' { Select-SettingsTab $tabs 2 } $process $window
+    $promptBefore = Find-ByAutomationId $window 'PromptBefore'
+    Invoke-ControlOperation 'Prompt numeric edit' {
+        $pattern = [Windows.Automation.ValuePattern]$promptBefore.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
+        $pattern.SetValue('75')
+    } $process $window
+
+    Invoke-ControlOperation 'Hotkey tab selection' { Select-SettingsTab $tabs 4 } $process $window
+    $hotkeyEditor = Find-ByAutomationId $window 'HotkeyEditor'
+    Invoke-ControlOperation 'Hotkey edit' {
+        $pattern = [Windows.Automation.ValuePattern]$hotkeyEditor.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
+        $pattern.SetValue('Ctrl+Shift+F9')
+    } $process $window
+
+    Invoke-ControlOperation 'Remote tab selection' { Select-SettingsTab $tabs 5 } $process $window
+    $remoteEnabled = Find-ByAutomationId $window 'RemoteEnabled'
+    $remotePort = Find-ByAutomationId $window 'RemotePort'
+    Invoke-ControlOperation 'Remote checkbox toggle' {
+        $pattern = [Windows.Automation.TogglePattern]$remoteEnabled.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)
+        $pattern.Toggle()
+    } $process $window
+    Invoke-ControlOperation 'Remote port edit' {
+        $pattern = [Windows.Automation.ValuePattern]$remotePort.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
+        $pattern.SetValue('4098')
     } $process $window
 
     $currentStatus = (Find-ByAutomationId $window 'UnsavedStatus').Current.Name

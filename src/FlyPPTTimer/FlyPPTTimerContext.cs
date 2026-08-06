@@ -183,7 +183,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         menu.Items.Add("重置计时窗口位置", null, (_, _) => ResetOverlayPosition());
         menu.Items.Add("静音/取消静音", null, (_, _) => _commands.ToggleMute());
         menu.Items.Add("远程控制", null, (_, _) => ShowRemoteControl());
-        menu.Items.Add("设置（WPF 预览）", null, (_, _) => _commands.OpenSettings());
+        menu.Items.Add("设置", null, (_, _) => _commands.OpenSettings());
         menu.Items.Add("经典设置", null, (_, _) => ShowClassicSettings());
         if (includeUpdateCheck) menu.Items.Add("检测新版本", null, (_, _) => CheckForUpdates(true));
         menu.Items.Add(new ToolStripSeparator());

@@ -21,6 +21,8 @@ public sealed class ConfigService
         _configPath = configPath ?? AppPaths.ConfigPath;
     }
 
+    public string ConfigPath => _configPath;
+
     public AppConfig Load()
     {
         if (!File.Exists(_configPath))

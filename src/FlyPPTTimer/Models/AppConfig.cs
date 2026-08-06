@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace FlyPPTTimer.Models;
 
@@ -27,6 +28,7 @@ public sealed class AppConfig
     public RemoteControlSettings RemoteControl { get; set; } = new();
     public WindowPlacement Placement { get; set; } = new();
     public List<FileRule> Rules { get; set; } = [];
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public sealed class TimerSettings
@@ -36,11 +38,13 @@ public sealed class TimerSettings
     public bool EnablePerSlideTimer { get; set; }
     public bool ContinueOvertime { get; set; } = true;
     public TimerEndAction EndAction { get; set; } = TimerEndAction.None;
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public sealed class UpdateSettings
 {
     public bool CheckOnStartup { get; set; }
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public enum TimerEndAction
@@ -76,6 +80,7 @@ public sealed class BehaviorSettings
         "chrome.exe",
         "msedge.exe"
     ];
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public class PromptSettings
@@ -93,6 +98,7 @@ public class PromptSettings
     public int FlashOnMs { get; set; } = 350;
     public int FlashOffMs { get; set; } = 350;
     public int FlashSeconds { get; set; } = 3;
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public sealed class EndPromptSettings : PromptSettings
@@ -130,6 +136,7 @@ public sealed class AppearanceSettings
     public string OvertimePrefix { get; set; } = "-";
     public bool Borderless { get; set; } = true;
     public bool AlwaysOnTop { get; set; } = true;
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public sealed class ControlSettings
@@ -142,6 +149,7 @@ public sealed class ControlSettings
     public bool LockPosition { get; set; } = false;
     public bool MinimizeToTray { get; set; } = true;
     public CloseButtonBehavior CloseButtonBehavior { get; set; } = CloseButtonBehavior.MinimizeToTray;
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
     public static Dictionary<string, string> DefaultHotkeys() => new()
     {
@@ -188,6 +196,7 @@ public sealed class WindowPlacement
     public int Y { get; set; } = 80;
     public string ScreenDeviceName { get; set; } = "";
     public bool HasCustomPlacement { get; set; }
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public enum OverlayAnchor
@@ -212,6 +221,7 @@ public sealed class FileRule
     public bool Enabled { get; set; } = true;
     public string TitlePattern { get; set; } = "";
     public string Feature { get; set; } = "";
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public sealed class RemoteControlSettings
@@ -221,6 +231,7 @@ public sealed class RemoteControlSettings
     public int Port { get; set; } = 4080;
     public string Token { get; set; } = "";
     public RemoteWindowPlacement Window { get; set; } = new();
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public sealed class RemoteWindowPlacement
@@ -232,6 +243,7 @@ public sealed class RemoteWindowPlacement
     public int WidthDip { get; set; } = 700;
     public int HeightDip { get; set; } = 510;
     public bool Maximized { get; set; }
+    [JsonExtensionData] public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public sealed class RemoteCommand

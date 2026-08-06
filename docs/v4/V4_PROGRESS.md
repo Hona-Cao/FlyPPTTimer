@@ -10,11 +10,12 @@
 
 ## 当前状态
 
-- 当前阶段：**阶段 2 — 完整 WPF 设置、规则和提醒（已自动开始）**
+- 当前阶段：**阶段 3 — PowerPoint、WPS 和自动联动（已自动开始）**
 - 阶段 0 完成度：**100%**
 - 阶段 1 完成度：**100%**
-- 阶段 2 完成度：**0%，接线审计已开始**
-- 全工程完成度：**约 20%**（矩阵 17/99 完成；阶段 0–1 完成）
+- 阶段 2 完成度：**100%（等待本阶段提交 CI 回填）**
+- 阶段 3 完成度：**0%，接线审计已开始**
+- 全工程完成度：**约 43%**（矩阵 42/99 完成；阶段 0–2 完成）
 - 阶段 0 提交：`3369825d8c983b4589a3f3814be86175a6210cf1`
 - 阶段 0 CI：[Windows CI 31090670000](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31090670000)，成功，含 Artifact 上传。
 - 阶段 1 提交：`82712046f0bb56a67d964a3327232c809ca43421`
@@ -24,8 +25,8 @@
 |---|---|---|---|
 | 0 审计与架构 | 完成 | 矩阵、架构/迁移、进度、双基准、Artifact | `3369825`; CI 31090670000 成功 |
 | 1 WPF 外壳/计时/多屏/大屏 | 完成 | WPF 正式计时/大屏入口、拓扑、UIA | `8271204`; CI 31093177173 成功 |
-| 2 完整设置/规则/提醒 | 进行中 | WPF 不再依赖经典设置 | — |
-| 3 PowerPoint/WPS/联动 | 未开始 | Presentation 全能力 | — |
+| 2 完整设置/规则/提醒 | 完成 | 六页 WPF 设置、fixture、UIA | 本阶段提交/CI 待回填 |
+| 3 PowerPoint/WPS/联动 | 进行中 | Presentation 全能力 | — |
 | 4 远程控制 | 未开始 | WPF 电脑端、HTTP、手机网页 | — |
 | 5 唯一入口/更新/安装/发布 | 未开始 | 清理无兼容责任的旧 UI | — |
 | 6 全功能候选版 | 未开始 | 完整文档与候选 Artifact | — |
@@ -69,16 +70,35 @@
 
 阶段 1 CI 直接发布版 UI Automation：设置启动 1,059ms，文本/下拉/复选/数字 59/77/118/13ms；正式计时窗启动 1,184ms，F3 84ms，F5 隐藏/显示 1,151/26ms。STA 回退未触发；其存在是为了 Runner 无窗口时仍以真实控件失败/通过，而不是跳过。
 
+## 阶段 2 本地验证
+
+WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、全部外观与显示、多屏/大屏、全部快捷键、远程配置、语言、更新字段及配置管理。属性编辑只改变内存 draft；声音复制与配置导入/导出只在显式操作后执行。真实 v0.30.2 fixture 和逐层 `JsonExtensionData` 保证未知字段往返。
+
+| 对象 | 结果 |
+|---|---|
+| 主程序/Core/WPF Settings Release Build | 各 0 warnings / 0 errors |
+| 桌面/Core 测试 | 279/279；4/4；0 跳过 |
+| 发布版六页 WPF 设置 UIA | 启动 1,283ms；基础 88/79/18/15ms；提醒 137/15ms；热键 139/33ms；远程 104/11/15ms；取消 83ms |
+| 设置退出 smoke | 集成启动 2,948ms；主程序 196ms 响应并重载 |
+| WPF 计时回归 | 启动 1,492ms；F3 78ms；F5 隐藏/显示 1,166/14ms |
+| 发布 | win-x64、自包含、单文件、双 EXE |
+
+| 本地 Artifact（不提交） | 字节与 SHA-256 |
+|---|---|
+| `artifacts/phase2/publish/FlyPPTTimer.exe` | 75,684,704 bytes；SHA-256 `BEBEB044290404E9CC3DC6E8569BFEDC947144BFD68912A6132F9D70051BA75E` |
+| `artifacts/phase2/publish/FlyPPTTimer.Settings.exe` | 75,714,957 bytes；SHA-256 `8B2D18CFB85507F794059941A289950A64EF47F34B8A08731BABCE02777DD247` |
+
+本机 Restore 曾因受限用户 NuGet 缓存指向缺失包失败；改用仓库内已忽略的 `.nuget/packages` 后完整 Restore 与测试通过，未修改依赖或项目文件。
+
 ## 风险与下一步
 
 - 主 composition root、托盘、远程电脑端、时间到窗口和完整设置仍有 WinForms 兼容实现，矩阵通过前不能删除；正式普通计时窗与大屏已是 WPF。
-- WPF Settings 当前引用 WinForms 主项目；阶段 1–2 需反转到 Application/Infrastructure 抽象。
-- WPF 设置尚缺规则、提醒声音、完整显示、完整热键与远程设置。
+- WPF Settings 当前仍通过主项目引用配置、声音和显示基础设施；后续随 Application/Infrastructure 分层继续反转，但 ViewModel 属性编辑不直接执行磁盘 I/O。
 - PowerPoint/WPS、多屏、音频、热键、安装升级需要实机验收，CI 替身不能冒充。
 - 本机只有 `DISPLAY1`，无法完成物理扩展屏热插拔；阶段 1 已覆盖真实 WPF 大屏控件、主屏拒绝、负坐标/DPI/锚点计算和重建生命周期，物理双屏步骤列为阶段 6 人工验收项。
 - GitHub Hosted Windows Runner 的 UI Automation 桌面可用性不稳定：31090670000 成功操作发布版窗口，31090929246 随后无法发现同一发布版设置窗口。发布版脚本继续保留且本机必跑；CI 不把环境缺窗计为通过/跳过，而以专用退出码转入 STA 线程内真实 WPF 控件绑定/Dispatcher 测试，回退测试失败仍使 CI 失败。
 
-阶段 2 精确任务：把经典设置中尚未覆盖的规则 CRUD/批量操作、三组提醒、语音/声音、完整闪烁、全部外观与显示、全部快捷键、远程、语言/更新迁移到 WPF；建立 v0.30.2 配置 fixture 和未知字段 round-trip；完成后正式入口不再依赖经典设置。
+阶段 3 精确任务：逐项核对矩阵 G，完成 PowerPoint/WPS 文稿、放映、导航、黑白屏、关闭/退出与全屏联动的正式 Application/WPF 命令入口；保留并强化现有 STA、500ms monitor、activator、detector、terminator 和 COM 生命周期；使用可替换 adapter 自动化，并在有 Office/WPS 的环境执行真机清单。
 
 ## 会话恢复指令
 

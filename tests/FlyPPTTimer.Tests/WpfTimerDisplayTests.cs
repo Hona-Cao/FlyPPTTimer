@@ -9,6 +9,7 @@ using FlyPPTTimer.Services;
 
 namespace FlyPPTTimer.Tests;
 
+[Collection(WpfUiTestCollection.Name)]
 public sealed class WpfTimerDisplayTests
 {
     [Theory]
