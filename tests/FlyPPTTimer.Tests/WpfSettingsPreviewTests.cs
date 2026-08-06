@@ -177,7 +177,9 @@ public sealed class WpfSettingsPreviewTests
         Assert.Contains("设置（WPF 预览）", source);
         Assert.Contains("经典设置", source);
         Assert.Contains("ActivateWpfSettings(_wpfSettingsProcess)", source);
-        Assert.Contains("RunOnUi(() =>", source);
+        Assert.Contains("_uiContext.Post(_ => CompleteWpfSettingsExit(process), null);", source);
+        Assert.DoesNotContain("RunOnUi(() =>\n        {\n            if (!ReferenceEquals(_wpfSettingsProcess, process))", source);
+        Assert.Contains("private void CompleteWpfSettingsExit(Process process)", source);
         Assert.Contains("var reloadedConfig = _configService.Load();", source);
         Assert.Contains("ApplyConfig(reloadedConfig);", source);
         Assert.Contains("falling back to classic settings", source);
@@ -191,6 +193,8 @@ public sealed class WpfSettingsPreviewTests
         var workflow = File.ReadAllText(SourcePath(".github", "workflows", "windows-ci.yml"));
         var interactionScript = File.ReadAllText(
             SourcePath("tests", "FlyPPTTimer.Tests", "WpfSettingsInteractionSmoke.ps1"));
+        var processExitScript = File.ReadAllText(
+            SourcePath("tests", "FlyPPTTimer.Tests", "WpfSettingsProcessExitSmoke.ps1"));
 
         Assert.Contains("<AssemblyName>FlyPPTTimer.Settings</AssemblyName>", project);
         Assert.Contains("..\\FlyPPTTimer\\FlyPPTTimer.csproj", project);
@@ -199,12 +203,16 @@ public sealed class WpfSettingsPreviewTests
         Assert.Contains("Test-Path artifacts/publish/FlyPPTTimer.Settings.exe", workflow);
         Assert.Contains("Get-FileHash", workflow);
         Assert.Contains("WpfSettingsInteractionSmoke.ps1", workflow);
+        Assert.Contains("WpfSettingsProcessExitSmoke.ps1", workflow);
         Assert.Contains("[int]$LaunchTimeoutSeconds = 20", interactionScript);
         Assert.Contains("[int]$OperationTimeoutSeconds = 3", interactionScript);
         Assert.Contains("AutomationElement]::ProcessIdProperty", interactionScript);
         Assert.Contains("AutomationElement]::RootElement.FindFirst", interactionScript);
         Assert.Contains("Settings window startup:", interactionScript);
         Assert.Contains("-LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3", workflow);
+        Assert.Contains("--show-settings", processExitScript);
+        Assert.Contains("Config loaded.", processExitScript);
+        Assert.Contains("$mainProcess.Responding", processExitScript);
     }
 
     private static AppConfig CreateDistinctConfig()

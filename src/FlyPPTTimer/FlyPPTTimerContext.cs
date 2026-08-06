@@ -379,26 +379,29 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void HandleWpfSettingsExited(Process process)
     {
-        RunOnUi(() =>
-        {
-            if (!ReferenceEquals(_wpfSettingsProcess, process))
-            {
-                process.Dispose();
-                return;
-            }
+        // Queue cleanup so the Exited callback returns before Process.Dispose runs on the UI thread.
+        _uiContext.Post(_ => CompleteWpfSettingsExit(process), null);
+    }
 
-            _wpfSettingsProcess = null;
+    private void CompleteWpfSettingsExit(Process process)
+    {
+        if (!ReferenceEquals(_wpfSettingsProcess, process))
+        {
             process.Dispose();
-            try
-            {
-                var reloadedConfig = _configService.Load();
-                ApplyConfig(reloadedConfig);
-            }
-            catch (Exception ex)
-            {
-                _log.Error("Unable to reload configuration after WPF settings exited.", ex);
-            }
-        });
+            return;
+        }
+
+        _wpfSettingsProcess = null;
+        process.Dispose();
+        try
+        {
+            var reloadedConfig = _configService.Load();
+            ApplyConfig(reloadedConfig);
+        }
+        catch (Exception ex)
+        {
+            _log.Error("Unable to reload configuration after WPF settings exited.", ex);
+        }
     }
 
     private void ShowClassicSettings()
