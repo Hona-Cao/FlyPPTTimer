@@ -1,6 +1,7 @@
 using FlyPPTTimer.Desktop.ViewModels;
 using FlyPPTTimer.Models;
 using FlyPPTTimer.Services;
+using System.Diagnostics;
 
 namespace FlyPPTTimer.Tests;
 
@@ -138,6 +139,35 @@ public sealed class WpfSettingsPreviewTests
     }
 
     [Fact]
+    public void ConsecutiveChangesHaveBoundedSynchronousNotifications()
+    {
+        using var environment = new TestEnvironment();
+        var viewModel = new SettingsViewModel(new AppConfig(), environment.ConfigService);
+        var notifications = new List<string?>();
+        viewModel.PropertyChanged += (_, args) => notifications.Add(args.PropertyName);
+        var stopwatch = Stopwatch.StartNew();
+
+        viewModel.DefaultDuration = "00:09:30";
+        viewModel.SelectedTimerMode = TimerMode.CountUp;
+        viewModel.ContinueOvertime = !viewModel.ContinueOvertime;
+        viewModel.WidthText = "680";
+        viewModel.HeightText = "260";
+        stopwatch.Stop();
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"Changes took {stopwatch.Elapsed}.");
+        Assert.True(viewModel.IsDirty);
+        Assert.Equal("有未保存的更改", viewModel.UnsavedStatus);
+        Assert.InRange(notifications.Count, 7, 9);
+        Assert.Equal(1, notifications.Count(name => name == nameof(SettingsViewModel.IsDirty)));
+        Assert.Equal(1, notifications.Count(name => name == nameof(SettingsViewModel.UnsavedStatus)));
+        Assert.Equal(1, notifications.Count(name => name == nameof(SettingsViewModel.DefaultDuration)));
+        Assert.Equal(1, notifications.Count(name => name == nameof(SettingsViewModel.SelectedTimerMode)));
+        Assert.Equal(1, notifications.Count(name => name == nameof(SettingsViewModel.ContinueOvertime)));
+        Assert.Equal(1, notifications.Count(name => name == nameof(SettingsViewModel.WidthText)));
+        Assert.Equal(1, notifications.Count(name => name == nameof(SettingsViewModel.HeightText)));
+    }
+
+    [Fact]
     public void MainApplicationKeepsClassicSettingsAndReloadsAfterWpfExit()
     {
         var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "FlyPPTTimerContext.cs"));
@@ -166,6 +196,7 @@ public sealed class WpfSettingsPreviewTests
         Assert.Contains("Test-Path artifacts/publish/FlyPPTTimer.exe", workflow);
         Assert.Contains("Test-Path artifacts/publish/FlyPPTTimer.Settings.exe", workflow);
         Assert.Contains("Get-FileHash", workflow);
+        Assert.Contains("WpfSettingsInteractionSmoke.ps1", workflow);
     }
 
     private static AppConfig CreateDistinctConfig()

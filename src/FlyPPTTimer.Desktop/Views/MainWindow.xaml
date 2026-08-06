@@ -31,14 +31,13 @@
         <ScrollViewer Grid.Row="1"
                       HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">
-            <StackPanel Margin="{DynamicResource Spacing.Page}"
-                        Grid.IsSharedSizeScope="True">
+            <StackPanel Margin="{DynamicResource Spacing.Page}">
                 <Border Style="{StaticResource CardBorder}">
                     <StackPanel>
                         <TextBlock Style="{StaticResource CardTitle}" Text="计时" />
                         <Grid Margin="0,14,0,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="180" SharedSizeGroup="Label" />
+                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -48,14 +47,21 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <TextBlock Style="{StaticResource FieldLabel}" Text="默认时长" />
-                            <TextBox Grid.Column="1" Text="{Binding DefaultDuration, UpdateSourceTrigger=PropertyChanged}" ToolTip="例如 00:08:00" />
+                            <TextBox Grid.Column="1"
+                                     AutomationProperties.AutomationId="DefaultDuration"
+                                     Text="{Binding DefaultDuration, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="例如 00:08:00" />
                             <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="模式" />
                             <ComboBox Grid.Row="1" Grid.Column="1"
+                                      AutomationProperties.AutomationId="TimerMode"
                                       ItemsSource="{Binding TimerModeOptions}"
                                       DisplayMemberPath="Label"
                                       SelectedValuePath="Value"
                                       SelectedValue="{Binding SelectedTimerMode}" />
-                            <CheckBox Grid.Row="2" Grid.Column="1" Content="到零后继续超时" IsChecked="{Binding ContinueOvertime}" />
+                            <CheckBox Grid.Row="2" Grid.Column="1"
+                                      AutomationProperties.AutomationId="ContinueOvertime"
+                                      Content="到零后继续超时"
+                                      IsChecked="{Binding ContinueOvertime}" />
                             <TextBlock Grid.Row="3" Style="{StaticResource FieldLabel}" Text="到时动作" />
                             <ComboBox Grid.Row="3" Grid.Column="1"
                                       ItemsSource="{Binding EndActionOptions}"
@@ -84,9 +90,9 @@
                         <TextBlock Style="{StaticResource CardTitle}" Text="外观" />
                         <Grid Margin="0,14,0,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="180" SharedSizeGroup="Label" />
+                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="180" SharedSizeGroup="Label2" />
+                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -98,7 +104,9 @@
                             <TextBlock Style="{StaticResource FieldLabel}" Text="字体大小（8–96）" />
                             <TextBox Grid.Column="1" Text="{Binding FontSizeText, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Grid.Column="2" Style="{StaticResource FieldLabel}" Text="宽度（40–2000）" />
-                            <TextBox Grid.Column="3" Text="{Binding WidthText, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBox Grid.Column="3"
+                                     AutomationProperties.AutomationId="Width"
+                                     Text="{Binding WidthText, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Grid.Row="1" Style="{StaticResource FieldLabel}" Text="高度（20–1000）" />
                             <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding HeightText, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource FieldLabel}" Text="背景透明度（0–100）" />
@@ -116,9 +124,9 @@
                         <TextBlock Style="{StaticResource CardTitle}" Text="控制与其他" />
                         <Grid Margin="0,14,0,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="180" SharedSizeGroup="Label" />
+                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="180" SharedSizeGroup="Label2" />
+                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -161,15 +169,21 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding UnsavedStatus}" />
+                    <TextBlock AutomationProperties.AutomationId="UnsavedStatus"
+                               Foreground="{DynamicResource Brush.Warning}"
+                               Text="{Binding UnsavedStatus}" />
                     <TextBlock Margin="0,4,16,0"
                                Foreground="{DynamicResource Brush.Danger}"
                                Text="{Binding ErrorMessage}"
                                TextWrapping="Wrap" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button MinWidth="100" Content="取消" Command="{Binding CancelCommand}" />
+                    <Button MinWidth="100"
+                            AutomationProperties.AutomationId="Cancel"
+                            Content="取消"
+                            Command="{Binding CancelCommand}" />
                     <Button MinWidth="130" Margin="12,0,0,0" Style="{StaticResource PrimaryButton}"
+                            AutomationProperties.AutomationId="SaveAndClose"
                             Content="保存并关闭" Command="{Binding SaveAndCloseCommand}" />
                 </StackPanel>
             </Grid>

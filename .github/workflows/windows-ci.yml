@@ -70,6 +70,10 @@ jobs:
           Copy-Item artifacts/settings-publish/FlyPPTTimer.Settings.exe artifacts/publish/FlyPPTTimer.Settings.exe -Force
           Remove-Item artifacts/settings-publish -Recurse -Force
 
+      - name: Exercise published WPF settings controls
+        shell: pwsh
+        run: tests/FlyPPTTimer.Tests/WpfSettingsInteractionSmoke.ps1 -SettingsExe artifacts/publish/FlyPPTTimer.Settings.exe
+
       - name: Create checksum and collect audit material
         shell: pwsh
         run: |
