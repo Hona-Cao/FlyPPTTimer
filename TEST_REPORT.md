@@ -1,5 +1,17 @@
 # FlyPPTTimer 测试报告
 
+## 4.0 完整重构阶段 0：审计基线（2026-08-06）
+
+- 稳定行为基线：`v0.30.2`（`8921390ac99d574f99be46b7e08d36a191b3e483`）。
+- 已审计中英文 README、截至 0.30.2 的 CHANGELOG、历史 TEST_REPORT、全部基线产品/测试源码、嵌入远程网页以及构建、发布、更新、安装脚本；创建 `docs/v4/V0302_PARITY_MATRIX.md`、`V4_ARCHITECTURE.md` 和 `V4_PROGRESS.md`。
+- v0.30.2 Release Build：**0 warnings / 0 errors**；测试 **188/188 通过**，0 失败，0 跳过。首次 testhost 因独立 .NET 10 SDK 目录没有 .NET 8 runtime 未能启动；对同一生成物启用 runtime major roll-forward 后全部通过，属于宿主环境差异。
+- 当前 4.0 Release Build：主程序、Core、WPF Settings 均 **0 warnings / 0 errors**。
+- 当前 4.0 测试：桌面 **264/264 通过**；Core **4/4 通过**；0 失败，0 跳过。
+- `win-x64` 自包含单文件发布在同一目录生成两个 EXE。
+- 发布版 WPF UI Automation：启动 1,332ms；时长文本 137ms；模式下拉 151ms；超时复选框 15ms；外观数字字段 16ms；取消退出通过。每项控件操作均低于 3 秒。
+- 主程序/设置退出 smoke：集成设置启动 2,108ms；设置关闭后主程序 191ms 内响应。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 51,823,905 bytes，SHA-256 `CA355E6AC3368807EEE1F639FDC304F1577D6D36C712C757C59C06F206F929C0`；`FlyPPTTimer.Settings.exe` 75,353,968 bytes，SHA-256 `6306B8B140DD0A1774C6D0440F7D8FF9738A344DDE3BF26D2539D2D7348B3ED9`。
+
 ## v0.30.2 当前验证
 
 - Release 编译：0 个警告，0 个错误。
