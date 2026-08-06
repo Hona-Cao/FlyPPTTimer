@@ -13,19 +13,21 @@
 - 当前阶段：**阶段 3 — PowerPoint、WPS 和自动联动（已自动开始）**
 - 阶段 0 完成度：**100%**
 - 阶段 1 完成度：**100%**
-- 阶段 2 完成度：**100%（等待本阶段提交 CI 回填）**
+- 阶段 2 完成度：**100%**
 - 阶段 3 完成度：**0%，接线审计已开始**
 - 全工程完成度：**约 43%**（矩阵 42/99 完成；阶段 0–2 完成）
 - 阶段 0 提交：`3369825d8c983b4589a3f3814be86175a6210cf1`
 - 阶段 0 CI：[Windows CI 31090670000](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31090670000)，成功，含 Artifact 上传。
 - 阶段 1 提交：`82712046f0bb56a67d964a3327232c809ca43421`
 - 阶段 1 CI：[Windows CI 31093177173](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31093177173)，成功，直接完成发布版 UI Automation 并上传 Artifact。
+- 阶段 2 主提交：`288fbed578a63d05e832415254316bfae6ad4fa1`；UIA 可靠性修复至 `520af4586a270d46e4435b5352b3e147b2fdffff`。
+- 阶段 2 CI：[Windows CI 31096841196](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31096841196)，成功，含直接发布版 UI Automation 和 Artifact 上传。
 
 | 阶段 | 状态 | 交付 | 提交/CI |
 |---|---|---|---|
 | 0 审计与架构 | 完成 | 矩阵、架构/迁移、进度、双基准、Artifact | `3369825`; CI 31090670000 成功 |
 | 1 WPF 外壳/计时/多屏/大屏 | 完成 | WPF 正式计时/大屏入口、拓扑、UIA | `8271204`; CI 31093177173 成功 |
-| 2 完整设置/规则/提醒 | 完成 | 六页 WPF 设置、fixture、UIA | 本阶段提交/CI 待回填 |
+| 2 完整设置/规则/提醒 | 完成 | 六页 WPF 设置、fixture、UIA | `288fbed` + `520af45`; CI 31096841196 成功 |
 | 3 PowerPoint/WPS/联动 | 进行中 | Presentation 全能力 | — |
 | 4 远程控制 | 未开始 | WPF 电脑端、HTTP、手机网页 | — |
 | 5 唯一入口/更新/安装/发布 | 未开始 | 清理无兼容责任的旧 UI | — |
@@ -89,6 +91,8 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 | `artifacts/phase2/publish/FlyPPTTimer.Settings.exe` | 75,715,003 bytes；SHA-256 `585B27CB92F8F9155B12BFB138A5D702E3867FA662CAEDC39A6581A57A8244D9` |
 
 本机 Restore 曾因受限用户 NuGet 缓存指向缺失包失败；改用仓库内已忽略的 `.nuget/packages` 后完整 Restore 与测试通过，未修改依赖或项目文件。
+
+阶段 2 CI 直接操作发布版窗口：设置启动 1,119ms；基础控件 138/156/10/10ms；提醒切页/编辑 317/113ms；热键 153/11ms；远程 135/6/10ms；脏状态 ValuePattern 95ms；取消 110ms。主程序设置集成启动 2,416ms、退出后 194ms 响应；计时窗启动 1,199ms、F3 88ms、F5 隐藏/显示 1,148/116ms。全部步骤和 Artifact 上传成功，未触发无窗口回退。
 
 ## 风险与下一步
 

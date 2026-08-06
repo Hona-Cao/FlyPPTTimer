@@ -12,6 +12,7 @@
 - 最终发布版 WPF 设置 UI Automation：启动 1,302ms；基础四类控件 95/92/133/18ms；提醒切页/编辑 170/20ms；热键切页/编辑 220/18ms；远程切页/复选/端口 120/11/17ms；脏状态 ValuePattern 更新 100ms；取消 106ms。所有操作低于 3 秒。
 - 设置退出回归：集成启动 2,948ms；返回主程序 196ms 内响应并重载配置。WPF 计时窗回归：启动 1,492ms；F3 78ms；F5 隐藏/显示 1,166/14ms。
 - 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,684,704 bytes，SHA-256 `BEBEB044290404E9CC3DC6E8569BFEDC947144BFD68912A6132F9D70051BA75E`；`FlyPPTTimer.Settings.exe` 75,715,003 bytes，SHA-256 `585B27CB92F8F9155B12BFB138A5D702E3867FA662CAEDC39A6581A57A8244D9`。
+- 阶段 2 主提交 `288fbed578a63d05e832415254316bfae6ad4fa1`，UIA 可靠性修复至 `520af4586a270d46e4435b5352b3e147b2fdffff`；[Windows CI 31096841196](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31096841196) 全绿并上传 Artifact。Runner 直接 UIA：设置启动 1,119ms，所有编辑/切页/状态更新 6–317ms；设置退出后主程序 194ms 响应；计时窗 F3 88ms、F5 隐藏/显示 1,148/116ms。
 
 ## 4.0 完整重构阶段 1：WPF 计时与显示（2026-08-06）
 
