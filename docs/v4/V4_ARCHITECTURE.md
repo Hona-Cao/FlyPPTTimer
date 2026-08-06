@@ -81,15 +81,17 @@ FlyPPTTimer.Infrastructure.Windows
 
 ## 7. Presentation 迁移策略
 
-保留 `IPresentationControlService` 为 Application 端口：
+保留 `IPresentationControlService` 为 provider 端口，并由阶段 3 的 `PresentationCommandService` 提供正式 Application 用例边界。托盘计时到时、HTTP、电脑端兼容窗口和后续 WPF 电脑端只发送 `PresentationCommandKind`；仅该服务把强类型命令映射回稳定的 `ppt.*` 远程协议：
 
 - `PresentationStaDispatcher` 承担 COM STA 与现有 15/5 秒超时。
 - `PresentationStateMonitor` 保持 500ms 刷新并发布不可变副本。
 - detector/terminator 集中进程名、能力与退出语义。
 - activator 集中最大化、置前、TopMost 重试；调用方仍保留 20×100ms 放映窗口查找。
+- COM 引用按每次取得的 RCW 引用平衡释放，禁止 `FinalReleaseComObject` 清空仍由别名使用的共享 Application RCW。
+- PowerPoint/WPS 无法通过 COM 读取放映 HWND 时，从可见 `POWERPNT`/`wpp`/`wps` 窗口中按前台、放映标题、窗口类和面积选择目标，再交给同一 activator。
 - 自动测试使用替身；Office/WPS 真机验收不由缺少 Office 的 CI 冒充。
 
-受管文稿注册表区分程序只读打开与外部打开；关闭顺序、未保存状态、临时 `SlideShowSettings` 恢复和 COM 释放是不可回退契约。
+受管文稿注册表区分程序只读打开与外部打开；只有受管只读文稿可抑制临时放映设置产生的伪保存提示，外部文稿必须保留 Office/WPS 原生未保存确认。关闭顺序、临时 `SlideShowSettings` 恢复和 COM 释放是不可回退契约。
 
 ## 8. Remote 兼容策略
 

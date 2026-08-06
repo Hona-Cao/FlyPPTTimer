@@ -541,7 +541,16 @@ public sealed class PowerPointControlService : IDisposable
                             SlideShowWindowActivated?.Invoke(this, EventArgs.Empty);
                             return result;
                         }
-                        catch (Exception ex) { return WindowActivationResult.Failed("放映已启动但无法读取窗口句柄", presentationPath, IntPtr.Zero, ex); }
+                        catch (Exception ex)
+                        {
+                            _log.Warn($"Slide show COM HWND lookup failed; trying native window: path={presentationPath}; {ex.Message}");
+                            var hwnd = FindPowerPointSlideShowNativeWindow(presentationPath);
+                            if (hwnd == IntPtr.Zero)
+                                return WindowActivationResult.Failed("放映已启动但无法读取窗口句柄", presentationPath, IntPtr.Zero, ex);
+                            var result = ActivateNativeWindow(hwnd, presentationPath, "放映窗口", true, "；放映已启动但置前失败");
+                            SlideShowWindowActivated?.Invoke(this, EventArgs.Empty);
+                            return result;
+                        }
                     }
                 }
                 Release(presentation, ownsWindow ? window : null, windows);
@@ -553,6 +562,58 @@ public sealed class PowerPointControlService : IDisposable
         finally { Release(presentation, ownsWindow ? window : null, windows); }
         return WindowActivationResult.Failed("放映已启动但未找到目标放映窗口", presentationPath, IntPtr.Zero);
     }
+
+    private static IntPtr FindPowerPointSlideShowNativeWindow(string presentationPath)
+    {
+        var foreground = NativeMethods.GetForegroundWindow();
+        var titleToken = Path.GetFileNameWithoutExtension(presentationPath);
+        var candidates = new List<PresentationNativeWindowCandidate>();
+        NativeMethods.EnumWindows((hwnd, _) =>
+        {
+            if (!NativeMethods.IsWindowVisible(hwnd)) return true;
+            NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+            try
+            {
+                using var process = Process.GetProcessById(checked((int)pid));
+                if (!new[] { "POWERPNT", "wpp", "wps" }.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase)) return true;
+
+                var className = new StringBuilder(128);
+                NativeMethods.GetClassName(hwnd, className, className.Capacity);
+                var isSlideShowClass = className.ToString().Contains("screenClass", StringComparison.OrdinalIgnoreCase)
+                    || className.ToString().Equals("PP12FrameClass", StringComparison.Ordinal);
+                var title = new StringBuilder(512);
+                NativeMethods.GetWindowText(hwnd, title, title.Capacity);
+                var titleText = title.ToString();
+                var titleMatches = !string.IsNullOrWhiteSpace(titleToken)
+                    && titleText.Contains(titleToken, StringComparison.CurrentCultureIgnoreCase);
+                if (!isSlideShowClass && !titleMatches) return true;
+
+                var isSlideShowTitle = titleText.Contains("Slide Show", StringComparison.OrdinalIgnoreCase)
+                    || titleText.Contains("放映", StringComparison.CurrentCultureIgnoreCase);
+
+                NativeMethods.GetWindowRect(hwnd, out var rect);
+                candidates.Add(new PresentationNativeWindowCandidate(
+                    hwnd,
+                    hwnd == foreground,
+                    isSlideShowTitle,
+                    isSlideShowClass,
+                    (long)rect.Width * rect.Height));
+            }
+            catch { }
+            return true;
+        }, IntPtr.Zero);
+
+        return SelectPreferredSlideShowWindow(candidates);
+    }
+
+    internal static IntPtr SelectPreferredSlideShowWindow(IEnumerable<PresentationNativeWindowCandidate> candidates) =>
+        candidates
+            .OrderByDescending(candidate => candidate.IsForeground)
+            .ThenByDescending(candidate => candidate.IsSlideShowTitle)
+            .ThenByDescending(candidate => candidate.IsSlideShowClass)
+            .ThenByDescending(candidate => candidate.Area)
+            .Select(candidate => candidate.Hwnd)
+            .FirstOrDefault();
 
     private WindowActivationResult ActivateNativeWindow(IntPtr hwnd, string path, string label, bool maximized, string failurePrefix = "；文稿已打开但最大化或置前失败")
     {
@@ -685,12 +746,15 @@ public sealed class PowerPointControlService : IDisposable
             presentation = ((dynamic)presentations)[count];
             var path = SafeString(() => (string)((dynamic)presentation).FullName);
             var key = NormalizePath(path);
+            var isManaged = _managedPresentations.ContainsKey(key);
             EndShowIfShowing(app, path);
-            // The controller never edits a presentation. Marking the COM document
-            // as saved suppresses the spurious save prompt seen after slideshow
-            // control; Close() then discards no application-authored changes.
-            try { ((dynamic)presentation).Saved = true; } catch { }
-            ((dynamic)presentation).Close();
+            ClosePresentationPreservingUserChanges(
+                isManaged,
+                () =>
+                {
+                    try { ((dynamic)presentation).Saved = true; } catch { }
+                },
+                () => ((dynamic)presentation).Close());
             _managedPresentations.Remove(key);
             return $"已关闭最后打开的文稿：{Path.GetFileName(path)}。";
         }
@@ -711,9 +775,15 @@ public sealed class PowerPointControlService : IDisposable
 
             var path = SafeString(() => (string)((dynamic)presentation).FullName);
             var key = NormalizePath(path);
+            var isManaged = _managedPresentations.ContainsKey(key);
             EndShowIfShowing(app, path);
-            try { ((dynamic)presentation).Saved = true; } catch { }
-            ((dynamic)presentation).Close();
+            ClosePresentationPreservingUserChanges(
+                isManaged,
+                () =>
+                {
+                    try { ((dynamic)presentation).Saved = true; } catch { }
+                },
+                () => ((dynamic)presentation).Close());
             _managedPresentations.Remove(key);
             return $"已关闭当前文稿：{Path.GetFileName(path)}。";
         }
@@ -726,6 +796,20 @@ public sealed class PowerPointControlService : IDisposable
         if (!result.AnyDetected) return result.Message;
         _managedPresentations.Clear();
         return result.Message;
+    }
+
+    internal static void ClosePresentationPreservingUserChanges(
+        bool isManaged,
+        Action suppressManagedSavePrompt,
+        Action close)
+    {
+        ArgumentNullException.ThrowIfNull(suppressManagedSavePrompt);
+        ArgumentNullException.ThrowIfNull(close);
+        // Files opened by FlyPPTTimer are read-only and may receive a false dirty
+        // flag from temporary slideshow settings. External files belong to the
+        // user, so their native save prompt must never be suppressed.
+        if (isManaged) suppressManagedSavePrompt();
+        close();
     }
 
     private static void EndShowIfShowing(dynamic app, string path)
@@ -945,7 +1029,11 @@ public sealed class PowerPointControlService : IDisposable
         foreach (var value in values)
         {
             if (value is null || !Marshal.IsComObject(value)) continue;
-            try { Marshal.FinalReleaseComObject(value); } catch { }
+            // A COM identity can be returned through several PowerPoint properties
+            // (for example deck.Application and the active application RCW). A
+            // final release here invalidates every alias, including ones still in
+            // use by the current command. Balance this acquired reference only.
+            try { Marshal.ReleaseComObject(value); } catch { }
         }
     }
 
@@ -962,3 +1050,10 @@ public sealed class PowerPointControlService : IDisposable
         _dispatcher.Dispose();
     }
 }
+
+internal readonly record struct PresentationNativeWindowCandidate(
+    IntPtr Hwnd,
+    bool IsForeground,
+    bool IsSlideShowTitle,
+    bool IsSlideShowClass,
+    long Area);

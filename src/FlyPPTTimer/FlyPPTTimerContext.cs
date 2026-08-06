@@ -20,6 +20,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly NetworkAddressService _networkAddresses = new();
     private readonly AppCommandService _commands;
     private readonly IPresentationControlService _powerPoint;
+    private readonly PresentationCommandService _presentationCommands;
     private readonly PresentationLifecycleController _presentationLifecycle;
     private readonly RemoteControlService _remoteControl;
     private readonly GiteeUpdateService _updateService;
@@ -60,10 +61,11 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _updateService = new GiteeUpdateService(_log);
         _powerPoint = new PowerPointPresentationAdapter(
             new PowerPointControlService(() => _config, _log));
+        _presentationCommands = new PresentationCommandService(_powerPoint);
         _timer = new TimerService(_log);
         _alerts = new AlertService(_log);
         _systemAudio = new SystemAudioService(_log);
-        _fullscreen = new FullscreenDetector(() => _powerPoint.GetState(), _log);
+        _fullscreen = new FullscreenDetector(_presentationCommands.GetState, _log);
         _hotkeys = new HotkeyService(_log);
         _trayMenu = BuildCommandMenu(includeUpdateCheck: true);
         _commands = new AppCommandService(
@@ -90,13 +92,13 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             reset => _timer.Stop(reset),
             _timer.Reset,
             _log);
-        _powerPoint.SlideShowStarted += (_, path) => RunOnUi(() => HandlePresentationStarted(path, "远程控制"));
-        _powerPoint.SlideShowEnded += (_, _) => RunOnUi(() => HandlePresentationEnded("远程控制"));
-        _powerPoint.SlideShowWindowActivated += (_, _) => RunOnUi(() =>
+        _presentationCommands.SlideShowStarted += (_, path) => RunOnUi(() => HandlePresentationStarted(path, "远程控制"));
+        _presentationCommands.SlideShowEnded += (_, _) => RunOnUi(() => HandlePresentationEnded("远程控制"));
+        _presentationCommands.SlideShowWindowActivated += (_, _) => RunOnUi(() =>
         {
             foreach (var overlay in _overlays) overlay.ReassertTopMost();
         });
-        _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _powerPoint, _log);
+        _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _presentationCommands, _log);
 
         _timer.Configure(_config);
         RebuildOverlays();
@@ -496,7 +498,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void EndSlideShowAtTimeUp()
     {
-        var result = _powerPoint.Queue(new RemoteCommand { Command = "ppt.endShow" });
+        var result = _presentationCommands.Queue(new PresentationCommand(PresentationCommandKind.EndShow));
         if (!result.Success) _log.Warn($"Time-up slideshow exit was not accepted: {result.Message}");
     }
 

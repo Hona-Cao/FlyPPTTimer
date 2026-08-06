@@ -141,12 +141,12 @@ public sealed class RemoteControlFormContractTests
             "AddPresentationRules",
             "DeleteSelectedRule",
             "SaveRulesImmediately",
-            "ppt.openPresentation",
-            "ppt.startFromBeginning",
-            "ppt.startFromCurrent",
-            "ppt.endShow",
-            "ppt.closeCurrentPresentation",
-            "ppt.forceQuitAll"
+            "PresentationCommandKind.OpenPresentation",
+            "PresentationCommandKind.StartFromBeginning",
+            "PresentationCommandKind.StartFromCurrent",
+            "PresentationCommandKind.EndShow",
+            "PresentationCommandKind.CloseCurrentPresentation",
+            "PresentationCommandKind.ForceQuitAll"
         })
         {
             Assert.Contains(member, source);

@@ -13,7 +13,7 @@ public sealed class RemoteControlForm : Form
 {
     private AppConfig _config;
     private readonly RemoteControlService _remoteControl;
-    private readonly IPresentationControlService? _powerPoint;
+    private readonly PresentationCommandService? _presentationCommands;
     private readonly NetworkAddressService _networkAddressService;
     private readonly Action<AppConfig> _saveConfig;
 
@@ -156,7 +156,7 @@ public sealed class RemoteControlForm : Form
         AutoScaleDimensions = new SizeF(96F, 96F);
         _config = config;
         _remoteControl = remoteControl;
-        _powerPoint = remoteControl.PresentationController;
+        _presentationCommands = remoteControl.PresentationCommands;
         _networkAddressService = networkAddressService;
         _saveConfig = saveConfig;
 
@@ -1379,23 +1379,23 @@ public sealed class RemoteControlForm : Form
 
         _openPresentationButton = CreateActionButton(
             "打开演示文稿",
-            (_, _) => SendPresentationCommand("ppt.openPresentation"),
+            (_, _) => SendPresentationCommand(PresentationCommandKind.OpenPresentation),
             RemoteButtonKind.Secondary);
         _startFromBeginningButton = CreateActionButton(
             "从头放映",
-            (_, _) => SendPresentationCommand("ppt.startFromBeginning"),
+            (_, _) => SendPresentationCommand(PresentationCommandKind.StartFromBeginning),
             RemoteButtonKind.Secondary);
         _startFromCurrentButton = CreateActionButton(
             "当前页放映",
-            (_, _) => SendPresentationCommand("ppt.startFromCurrent"),
+            (_, _) => SendPresentationCommand(PresentationCommandKind.StartFromCurrent),
             RemoteButtonKind.Secondary);
         var end = _endSlideShowButton = CreateActionButton(
             "结束放映",
-            (_, _) => SendPresentationCommand("ppt.endShow"),
+            (_, _) => SendPresentationCommand(PresentationCommandKind.EndShow),
             RemoteButtonKind.DangerOutline);
         _closeActivePresentationButton = CreateActionButton(
             "关闭当前文档",
-            (_, _) => SendPresentationCommand("ppt.closeActivePresentation"),
+            (_, _) => SendPresentationCommand(PresentationCommandKind.CloseActivePresentation),
             RemoteButtonKind.DangerOutline);
 
         actions.Controls.Add(_openPresentationButton, 0, 0);
@@ -1703,7 +1703,7 @@ public sealed class RemoteControlForm : Form
     {
         if (IsDisposed) return;
 
-        var state = _powerPoint?.GetState() ??
+        var state = _presentationCommands?.GetState() ??
                     new PresentationState { Error = "PowerPoint 不可用。" };
         var message = !string.IsNullOrWhiteSpace(state.OperationMessage)
             ? state.OperationMessage
@@ -1928,7 +1928,7 @@ public sealed class RemoteControlForm : Form
         menu.Items.Add(
             "关闭最后打开的文稿",
             null,
-            (_, _) => SendPresentationCommand("ppt.closeCurrentPresentation"));
+            (_, _) => SendPresentationCommand(PresentationCommandKind.CloseCurrentPresentation));
 
         foreach (ToolStripItem item in menu.Items.OfType<ToolStripMenuItem>())
         {
@@ -2016,18 +2016,18 @@ public sealed class RemoteControlForm : Form
         }
     }
 
-    private void SendPresentationCommand(string command)
+    private void SendPresentationCommand(PresentationCommandKind command)
     {
-        if (_powerPoint is null)
+        if (_presentationCommands is null)
         {
             SetPresentationFeedback("PowerPoint 不可用。", FeedbackKind.Warning);
             return;
         }
 
         var needsSelection = command is
-            "ppt.openPresentation" or
-            "ppt.startFromBeginning" or
-            "ppt.startFromCurrent";
+            PresentationCommandKind.OpenPresentation or
+            PresentationCommandKind.StartFromBeginning or
+            PresentationCommandKind.StartFromCurrent;
 
         if (needsSelection &&
             string.IsNullOrWhiteSpace(_selectedPresentationId))
@@ -2036,13 +2036,9 @@ public sealed class RemoteControlForm : Form
             return;
         }
 
-        var result = _powerPoint.Execute(new RemoteCommand
-        {
-            Command = command,
-            PresentationId = needsSelection
-                ? _selectedPresentationId
-                : null
-        });
+        var result = _presentationCommands.Execute(new PresentationCommand(
+            command,
+            needsSelection ? _selectedPresentationId : null));
         SetPresentationFeedback(
             result.Message,
             result.Success
@@ -2054,17 +2050,15 @@ public sealed class RemoteControlForm : Form
     private void ConfirmForceQuit()
     {
         if (!RemoteConfirmDialog.Confirm(this)) return;
-        if (_powerPoint is null)
+        if (_presentationCommands is null)
         {
             SetPresentationFeedback("PowerPoint 不可用。", FeedbackKind.Warning);
             return;
         }
 
-        var result = _powerPoint.Queue(new RemoteCommand
-        {
-            Command = "ppt.forceQuitAll",
-            Confirmed = true
-        });
+        var result = _presentationCommands.Queue(new PresentationCommand(
+            PresentationCommandKind.ForceQuitAll,
+            Confirmed: true));
         SetPresentationFeedback(
             result.Message,
             result.Success

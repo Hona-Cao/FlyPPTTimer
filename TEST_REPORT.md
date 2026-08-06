@@ -1,5 +1,19 @@
 # FlyPPTTimer 测试报告
 
+## 4.0 完整重构阶段 3：PowerPoint、WPS 和自动联动（2026-08-06）
+
+- 新增 `PresentationCommandService` 与 13 种 `PresentationCommandKind`，将计时到时、HTTP、电脑端兼容窗口和状态读取统一到可替换的 Application 用例边界；`ppt.*` 协议与全部中文消息保持不变。
+- 补齐 13 种双向命令映射、未知命令拒绝、生命周期事件、自动开始顺序、重复路径、换稿、四种离开组合、所有权和原生窗口候选行为测试。
+- 修复真机发现的共享 COM RCW 缺陷：`FinalReleaseComObject` 会在文稿窗口激活后破坏仍在使用的 Application 别名，导致“打开成功、开始放映失败”；现改为每次引用平衡释放。
+- 修复外部文稿关闭会强制 `Saved=true` 并吞掉用户保存提示的问题；只有 FlyPPTTimer 只读打开的受管文稿抑制伪提示。
+- COM 无法读取 WPS/特定 Office 放映 HWND 时，按进程、前台、放映标题、窗口类和面积回退查找原生窗口，再复用最大化/置前/TopMost activator。
+- Microsoft PowerPoint 64 位临时三页文稿真机：只读打开与受管状态、从头放映、下一页、跳第 2 页、黑屏/恢复、白屏/恢复、结束放映、关闭最后打开文稿全部通过；打开和放映窗口均报告“已最大化并置前”。
+- WPS `wpp.exe` 兼容 COM 临时文稿真机同一链路通过；检测到 `PP12FrameClass` 文稿窗和 `WPS Presentation Slide Show` 放映窗，原生回退成功最大化。破坏性的强制退出只用 terminator 替身验证确认和进程集合，未终止用户正在使用的 WPS。
+- 三个 Release Build：各 **0 warnings / 0 errors**。桌面测试：**314/314 通过**；Core：**4/4 通过**；0 失败，0 跳过。
+- 最终发布版 WPF 设置 UIA：启动 1,334ms；基础四类控件 93/113/22/17ms；提醒 133/15ms；热键 217/15ms；远程 129/12/17ms；未保存状态 100ms；取消 132ms。设置退出集成启动 3,242ms，主程序 252ms 恢复响应。计时窗启动 1,557ms，F3 82ms，F5 隐藏/显示 1,142/26ms。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,687,921 bytes，SHA-256 `0AB5E03119803614063A24687E12AE2BB99ACB7767218ABCEE03381775EA2E75`；`FlyPPTTimer.Settings.exe` 75,718,225 bytes，SHA-256 `19C712B734FC3A436E1B6F90CDF9E2577797028121CF4C8290E4DADC3D0C2E61`。
+- GitHub Actions：阶段 3 提交推送后补录；CI 必须完成三个构建、314+4 测试、双 EXE 发布、三组 WPF UIA、哈希与 Artifact 上传。
+
 ## 4.0 完整重构阶段 2：完整 WPF 设置、规则和提醒（2026-08-06）
 
 - WPF 设置扩展为计时、文件规则、提醒与声音、外观与显示、快捷键、远程与其他六个页面；正式配置入口不再把高级字段转交经典设置。

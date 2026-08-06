@@ -1001,7 +1001,7 @@ public sealed class SettingsForm : Form
     {
         if (_rulesList is null) return;
         var selectedPath = (_rulesSource.Current as FileRule)?.FilePath;
-        var state = _remoteControl.PresentationController?.GetState();
+        var state = _remoteControl.PresentationCommands?.GetState();
         foreach (var row in _rulesList.Controls.OfType<PresentationRuleRow>())
         {
             if (row.Tag is not FileRule rule) continue;
@@ -1018,7 +1018,7 @@ public sealed class SettingsForm : Form
         try
         {
             var selectedPath = (_rulesSource.Current as FileRule)?.FilePath ?? "";
-            var state = _remoteControl.PresentationController?.GetState();
+            var state = _remoteControl.PresentationCommands?.GetState();
             var scroll = _rulesList.AutoScrollPosition;
             _rulesList.SuspendLayout();
             foreach (Control control in _rulesList.Controls) control.Dispose();

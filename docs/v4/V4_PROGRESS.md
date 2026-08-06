@@ -10,12 +10,12 @@
 
 ## 当前状态
 
-- 当前阶段：**阶段 3 — PowerPoint、WPS 和自动联动（已自动开始）**
+- 当前阶段：**阶段 3 — PowerPoint、WPS 和自动联动（本地完成，等待 CI）**
 - 阶段 0 完成度：**100%**
 - 阶段 1 完成度：**100%**
 - 阶段 2 完成度：**100%**
-- 阶段 3 完成度：**0%，接线审计已开始**
-- 全工程完成度：**约 43%**（矩阵 42/99 完成；阶段 0–2 完成）
+- 阶段 3 完成度：**95%，本地门槛与 PowerPoint/WPS 真机通过，等待 Actions**
+- 全工程完成度：**约 55%**（矩阵 54/99 完成；阶段 0–2 完成，阶段 3 待 CI 封板）
 - 阶段 0 提交：`3369825d8c983b4589a3f3814be86175a6210cf1`
 - 阶段 0 CI：[Windows CI 31090670000](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31090670000)，成功，含 Artifact 上传。
 - 阶段 1 提交：`82712046f0bb56a67d964a3327232c809ca43421`
@@ -28,7 +28,7 @@
 | 0 审计与架构 | 完成 | 矩阵、架构/迁移、进度、双基准、Artifact | `3369825`; CI 31090670000 成功 |
 | 1 WPF 外壳/计时/多屏/大屏 | 完成 | WPF 正式计时/大屏入口、拓扑、UIA | `8271204`; CI 31093177173 成功 |
 | 2 完整设置/规则/提醒 | 完成 | 六页 WPF 设置、fixture、UIA | `288fbed` + `520af45`; CI 31096841196 成功 |
-| 3 PowerPoint/WPS/联动 | 进行中 | Presentation 全能力 | — |
+| 3 PowerPoint/WPS/联动 | 等待 CI | typed commands、所有权、RCW/窗口回退、真机 | 待推送 |
 | 4 远程控制 | 未开始 | WPF 电脑端、HTTP、手机网页 | — |
 | 5 唯一入口/更新/安装/发布 | 未开始 | 清理无兼容责任的旧 UI | — |
 | 6 全功能候选版 | 未开始 | 完整文档与候选 Artifact | — |
@@ -94,6 +94,28 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 
 阶段 2 CI 直接操作发布版窗口：设置启动 1,119ms；基础控件 138/156/10/10ms；提醒切页/编辑 317/113ms；热键 153/11ms；远程 135/6/10ms；脏状态 ValuePattern 95ms；取消 110ms。主程序设置集成启动 2,416ms、退出后 194ms 响应；计时窗启动 1,199ms、F3 88ms、F5 隐藏/显示 1,148/116ms。全部步骤和 Artifact 上传成功，未触发无窗口回退。
 
+## 阶段 3 本地验证
+
+`PresentationCommandService` 现在是演示控制的正式 Application 用例边界，统一计时到时、HTTP 和电脑端兼容窗口的 13 种命令，并保持既有 `ppt.*` 协议、15/5 秒超时、STA、500ms monitor、20×100ms 找窗、中文消息和事件位置。修复真机暴露的共享 RCW 被 `FinalReleaseComObject` 提前清空问题，并为 WPS/Office COM HWND 不可读增加原生窗口回退。关闭策略只对程序只读打开的受管文稿抑制伪保存提示，外部文稿保留原生未保存确认。
+
+| 对象 | 结果 |
+|---|---|
+| 主程序/Core/WPF Settings Release Build | 各 0 warnings / 0 errors |
+| 桌面/Core 测试 | 314/314；4/4；0 跳过 |
+| Microsoft PowerPoint 64 位真机 | 临时三页文稿：只读打开、受管状态、从头放映、下一页、跳页、黑/白屏及恢复、结束、关闭全部通过；窗口最大化并置前 |
+| WPS 演示真机 | `wpp.exe` 兼容 COM 同一非破坏链路通过；原生放映窗口回退成功；未执行会终止用户进程的 ForceQuitAll |
+| 发布版六页设置 UIA | 启动 1,334ms；基础 93/113/22/17ms；提醒 133/15ms；热键 217/15ms；远程 129/12/17ms；脏状态 100ms；取消 132ms |
+| 设置退出 smoke | 集成启动 3,242ms；主程序 252ms 响应 |
+| WPF 计时回归 | 启动 1,557ms；F3 82ms；F5 隐藏/显示 1,142/26ms |
+| 发布 | win-x64、自包含、单文件、双 EXE |
+
+| 本地 Artifact（不提交） | 字节与 SHA-256 |
+|---|---|
+| `artifacts/phase3/publish/FlyPPTTimer.exe` | 75,687,921 bytes；SHA-256 `0AB5E03119803614063A24687E12AE2BB99ACB7767218ABCEE03381775EA2E75` |
+| `artifacts/phase3/publish/FlyPPTTimer.Settings.exe` | 75,718,225 bytes；SHA-256 `19C712B734FC3A436E1B6F90CDF9E2577797028121CF4C8290E4DADC3D0C2E61` |
+
+阶段 3 Actions 待本次提交推送后补录；只有 CI 全绿并上传 Artifact 后才把阶段状态改为 100% 并自动开始阶段 4。
+
 ## 风险与下一步
 
 - 主 composition root、托盘、远程电脑端、时间到窗口和完整设置仍有 WinForms 兼容实现，矩阵通过前不能删除；正式普通计时窗与大屏已是 WPF。
@@ -102,7 +124,7 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 - 本机只有 `DISPLAY1`，无法完成物理扩展屏热插拔；阶段 1 已覆盖真实 WPF 大屏控件、主屏拒绝、负坐标/DPI/锚点计算和重建生命周期，物理双屏步骤列为阶段 6 人工验收项。
 - GitHub Hosted Windows Runner 的 UI Automation 桌面可用性不稳定：31090670000 成功操作发布版窗口，31090929246 随后无法发现同一发布版设置窗口。发布版脚本继续保留且本机必跑；CI 不把环境缺窗计为通过/跳过，而以专用退出码转入 STA 线程内真实 WPF 控件绑定/Dispatcher 测试，回退测试失败仍使 CI 失败。
 
-阶段 3 精确任务：逐项核对矩阵 G，完成 PowerPoint/WPS 文稿、放映、导航、黑白屏、关闭/退出与全屏联动的正式 Application/WPF 命令入口；保留并强化现有 STA、500ms monitor、activator、detector、terminator 和 COM 生命周期；使用可替换 adapter 自动化，并在有 Office/WPS 的环境执行真机清单。
+阶段 3 剩余任务：提交并推送当前实现，等待 Windows CI 全绿并补录提交/Run/Runner 数据；随后自动进入阶段 4，迁移 WPF 电脑端远程控制窗口、HTTP/鉴权状态投影和手机网页全部行为。
 
 ## 会话恢复指令
 

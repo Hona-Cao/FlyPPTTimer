@@ -92,18 +92,18 @@
 
 | 子模块/行为 | 依据 | 配置 | 目标 | 验收 | 状态 |
 |---|---|---|---|---|---|
-| 检测进程、文稿、放映、页码、能力 | `PowerPointControlService.cs`; presentation tests | — | interface/adapter/detector/monitor | 替身 + Office/WPS 真机 | 进行中 |
-| 进入/离开全屏自动开始、停止、重置 | Fullscreen/Lifecycle | Behavior 自动字段 | coordinator | 状态序列 | 兼容保留 |
-| 非 Office 全屏白名单 | FullscreenDetector/defaults | whitelist | fullscreen adapter | 浏览器/PDF/非白名单 | 兼容保留 |
-| 打开文稿；受管 PowerPoint 只读 | control service; TEST_REPORT | rule path | presentation adapter | COM 替身/真机只读 | 进行中 |
-| 从头/当前页放映，恢复临时 SlideShowSettings | service/control tests; 0.19.3 | — | adapter + STA | Saved/设置恢复 | 进行中 |
-| 上一页/下一页/跳页 | Execute/remote tests | SlideNumber | typed command | 边界页码/真机 | 进行中 |
-| 黑屏、白屏、恢复 | Execute | — | typed command | 状态/视觉真机 | 进行中 |
-| 结束放映；20×100ms 找窗并激活最大化 | service; activator tests | — | adapter + activator | Win32 替身/真机 | 进行中 |
-| 关闭当前、最后打开、外部/受管文稿顺序 | lifecycle/control tests | managed runtime list | ownership registry | 多文稿/未保存 | 进行中 |
-| 明确确认后强制退出 PowerPoint/WPS | terminator tests | Confirmed | terminator | 假进程/真机确认 | 进行中 |
-| 保留用户未保存状态并完整释放 COM | 0.19.3 报告/控制测试 | — | disposable COM scope | 异常注入/释放 | 进行中 |
-| WPS 只启用真实能力并保留中文提示 | detector/control tests | — | capability model | 假进程 + WPS 真机 | 进行中 |
+| 检测进程、文稿、放映、页码、能力 | detector/monitor tests；PowerPoint/WPS 临时文稿真机 | — | interface/adapter/detector/monitor | 替身 + Office/WPS 真机 | 已完成 |
+| 进入/离开全屏自动开始、停止、重置 | lifecycle 状态序列与重复/换稿测试 | Behavior 自动字段 | coordinator | 状态序列 | 已完成 |
+| 非 Office 全屏白名单 | FullscreenDetector/defaults/tests | whitelist | fullscreen adapter | 浏览器/PDF/非白名单 | 已完成 |
+| 打开文稿；受管 PowerPoint 只读 | ownership tests；PowerPoint/WPS 真机只读 | rule path | presentation adapter | COM 替身/真机只读 | 已完成 |
+| 从头/当前页放映，恢复临时 SlideShowSettings | service tests；PowerPoint/WPS 真机 | — | adapter + STA | Saved/设置恢复 | 已完成 |
+| 上一页/下一页/跳页 | typed command 表驱动；PowerPoint/WPS 真机 | SlideNumber | typed command | 边界页码/真机 | 已完成 |
+| 黑屏、白屏、恢复 | typed command 表驱动；PowerPoint/WPS 真机 | — | typed command | 状态/视觉真机 | 已完成 |
+| 结束放映；20×100ms 找窗并激活最大化 | activator/native-candidate tests；PowerPoint/WPS 真机 | — | adapter + activator | Win32 替身/真机 | 已完成 |
+| 关闭当前、最后打开、外部/受管文稿顺序 | ownership/lifecycle tests；临时文稿真机 | managed runtime list | ownership registry | 多文稿/未保存 | 已完成 |
+| 明确确认后强制退出 PowerPoint/WPS | terminator/command tests；不终止用户进程 | Confirmed | terminator | 假进程/明确确认 | 已完成 |
+| 保留用户未保存状态并完整释放 COM | managed/external close tests；共享 RCW 回归；真机 | — | disposable COM scope | 异常注入/释放 | 已完成 |
+| WPS 只启用真实能力并保留中文提示 | detector/control tests；本机 WPS 检测与兼容 COM | — | capability model | 假进程 + WPS 真机 | 已完成 |
 
 ## H. 远程服务与电脑端
 

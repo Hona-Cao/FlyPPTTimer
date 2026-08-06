@@ -49,18 +49,18 @@ public sealed class PresentationControlAbstractionTests
     }
 
     [Fact]
-    public void RemoteControlServiceUsesPresentationBoundary()
+    public void RemoteControlServiceUsesApplicationPresentationCommands()
     {
         var constructor = Assert.Single(typeof(RemoteControlService).GetConstructors());
-        var parameter = Assert.Single(constructor.GetParameters(), item => item.Name == "powerPoint");
+        var parameter = Assert.Single(constructor.GetParameters(), item => item.Name == "presentationCommands");
 
-        Assert.Equal(typeof(IPresentationControlService), parameter.ParameterType);
+        Assert.Equal(typeof(PresentationCommandService), parameter.ParameterType);
         Assert.Equal(
             NullabilityState.Nullable,
             new NullabilityInfoContext().Create(parameter).ReadState);
         Assert.Equal(
-            typeof(IPresentationControlService),
-            typeof(RemoteControlService).GetProperty(nameof(RemoteControlService.PresentationController))!.PropertyType);
+            typeof(PresentationCommandService),
+            typeof(RemoteControlService).GetProperty(nameof(RemoteControlService.PresentationCommands))!.PropertyType);
     }
 
     [Fact]
@@ -73,12 +73,12 @@ public sealed class PresentationControlAbstractionTests
     }
 
     [Fact]
-    public void RemoteControlFormUsesPresentationBoundaryField()
+    public void RemoteControlFormUsesApplicationCommandBoundaryField()
     {
         var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "Forms", "RemoteControlForm.cs"));
 
-        Assert.Contains("IPresentationControlService? _powerPoint", source);
-        Assert.DoesNotContain("PowerPointControlService? _powerPoint", source);
+        Assert.Contains("PresentationCommandService? _presentationCommands", source);
+        Assert.DoesNotContain("IPresentationControlService? _powerPoint", source);
     }
 
     [Fact]
@@ -161,6 +161,54 @@ public sealed class PresentationControlAbstractionTests
         Assert.Contains("_managedPresentations.Clear();", source);
         Assert.Contains("return result.Message;", source);
         Assert.DoesNotContain("process.Kill(true)", source);
+    }
+
+    [Fact]
+    public void ManagedCloseSuppressesOnlyItsReadOnlyPrompt()
+    {
+        var calls = new List<string>();
+
+        PowerPointControlService.ClosePresentationPreservingUserChanges(
+            true,
+            () => calls.Add("suppress"),
+            () => calls.Add("close"));
+
+        Assert.Equal(["suppress", "close"], calls);
+    }
+
+    [Fact]
+    public void ExternalClosePreservesNativeUnsavedChangesPrompt()
+    {
+        var calls = new List<string>();
+
+        PowerPointControlService.ClosePresentationPreservingUserChanges(
+            false,
+            () => calls.Add("suppress"),
+            () => calls.Add("close"));
+
+        Assert.Equal(["close"], calls);
+    }
+
+    [Fact]
+    public void ComCleanupDoesNotFinalReleaseSharedPowerPointRcws()
+    {
+        var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "Services", "PowerPointControlService.cs"));
+
+        Assert.Contains("Marshal.ReleaseComObject(value)", source);
+        Assert.DoesNotContain("Marshal.FinalReleaseComObject(value)", source);
+    }
+
+    [Fact]
+    public void NativeFallbackPrefersForegroundSlideShowOverWpsDocumentFrame()
+    {
+        var selected = PowerPointControlService.SelectPreferredSlideShowWindow(
+        [
+            new PresentationNativeWindowCandidate(new IntPtr(1), false, false, true, 2_000_000),
+            new PresentationNativeWindowCandidate(new IntPtr(2), true, true, false, 1_000_000),
+            new PresentationNativeWindowCandidate(new IntPtr(3), false, false, false, 3_000_000)
+        ]);
+
+        Assert.Equal(new IntPtr(2), selected);
     }
 
     private static string SourcePath(params string[] segments)
