@@ -12,7 +12,7 @@
 - 三个 Release Build：各 **0 warnings / 0 errors**。桌面测试：**314/314 通过**；Core：**4/4 通过**；0 失败，0 跳过。
 - 最终发布版 WPF 设置 UIA：启动 1,334ms；基础四类控件 93/113/22/17ms；提醒 133/15ms；热键 217/15ms；远程 129/12/17ms；未保存状态 100ms；取消 132ms。设置退出集成启动 3,242ms，主程序 252ms 恢复响应。计时窗启动 1,557ms，F3 82ms，F5 隐藏/显示 1,142/26ms。
 - 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,687,921 bytes，SHA-256 `0AB5E03119803614063A24687E12AE2BB99ACB7767218ABCEE03381775EA2E75`；`FlyPPTTimer.Settings.exe` 75,718,225 bytes，SHA-256 `19C712B734FC3A436E1B6F90CDF9E2577797028121CF4C8290E4DADC3D0C2E61`。
-- GitHub Actions：阶段 3 提交推送后补录；CI 必须完成三个构建、314+4 测试、双 EXE 发布、三组 WPF UIA、哈希与 Artifact 上传。
+- 阶段 3 提交 `069ce33a3a1246dd88eb470b372695a0ca78d66c` 的 [Windows CI 31099197824](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31099197824) 全绿并上传 Artifact：三个 Build、314+4 测试、双 EXE、校验和全部成功。Runner 直接 UIA：设置启动 1,234ms，各项操作 7–301ms；设置退出后主程序 218ms 响应；计时窗启动 1,223ms，F3 90ms，F5 隐藏/显示 1,088/27ms。
 
 ## 4.0 完整重构阶段 2：完整 WPF 设置、规则和提醒（2026-08-06）
 

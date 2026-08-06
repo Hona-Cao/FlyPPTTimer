@@ -10,26 +10,29 @@
 
 ## 当前状态
 
-- 当前阶段：**阶段 3 — PowerPoint、WPS 和自动联动（本地完成，等待 CI）**
+- 当前阶段：**阶段 4 — 远程控制（已自动开始）**
 - 阶段 0 完成度：**100%**
 - 阶段 1 完成度：**100%**
 - 阶段 2 完成度：**100%**
-- 阶段 3 完成度：**95%，本地门槛与 PowerPoint/WPS 真机通过，等待 Actions**
-- 全工程完成度：**约 55%**（矩阵 54/99 完成；阶段 0–2 完成，阶段 3 待 CI 封板）
+- 阶段 3 完成度：**100%**
+- 阶段 4 完成度：**0%，入口与协议审计已开始**
+- 全工程完成度：**约 55%**（矩阵 54/99 完成；阶段 0–3 完成）
 - 阶段 0 提交：`3369825d8c983b4589a3f3814be86175a6210cf1`
 - 阶段 0 CI：[Windows CI 31090670000](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31090670000)，成功，含 Artifact 上传。
 - 阶段 1 提交：`82712046f0bb56a67d964a3327232c809ca43421`
 - 阶段 1 CI：[Windows CI 31093177173](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31093177173)，成功，直接完成发布版 UI Automation 并上传 Artifact。
 - 阶段 2 主提交：`288fbed578a63d05e832415254316bfae6ad4fa1`；UIA 可靠性修复至 `520af4586a270d46e4435b5352b3e147b2fdffff`。
 - 阶段 2 CI：[Windows CI 31096841196](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31096841196)，成功，含直接发布版 UI Automation 和 Artifact 上传。
+- 阶段 3 提交：`069ce33a3a1246dd88eb470b372695a0ca78d66c`。
+- 阶段 3 CI：[Windows CI 31099197824](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31099197824)，成功，含 314+4 测试、三组直接发布版 UI Automation 和 Artifact 上传。
 
 | 阶段 | 状态 | 交付 | 提交/CI |
 |---|---|---|---|
 | 0 审计与架构 | 完成 | 矩阵、架构/迁移、进度、双基准、Artifact | `3369825`; CI 31090670000 成功 |
 | 1 WPF 外壳/计时/多屏/大屏 | 完成 | WPF 正式计时/大屏入口、拓扑、UIA | `8271204`; CI 31093177173 成功 |
 | 2 完整设置/规则/提醒 | 完成 | 六页 WPF 设置、fixture、UIA | `288fbed` + `520af45`; CI 31096841196 成功 |
-| 3 PowerPoint/WPS/联动 | 等待 CI | typed commands、所有权、RCW/窗口回退、真机 | 待推送 |
-| 4 远程控制 | 未开始 | WPF 电脑端、HTTP、手机网页 | — |
+| 3 PowerPoint/WPS/联动 | 完成 | typed commands、所有权、RCW/窗口回退、真机 | `069ce33`; CI 31099197824 成功 |
+| 4 远程控制 | 进行中 | WPF 电脑端、HTTP、手机网页 | — |
 | 5 唯一入口/更新/安装/发布 | 未开始 | 清理无兼容责任的旧 UI | — |
 | 6 全功能候选版 | 未开始 | 完整文档与候选 Artifact | — |
 
@@ -114,7 +117,7 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 | `artifacts/phase3/publish/FlyPPTTimer.exe` | 75,687,921 bytes；SHA-256 `0AB5E03119803614063A24687E12AE2BB99ACB7767218ABCEE03381775EA2E75` |
 | `artifacts/phase3/publish/FlyPPTTimer.Settings.exe` | 75,718,225 bytes；SHA-256 `19C712B734FC3A436E1B6F90CDF9E2577797028121CF4C8290E4DADC3D0C2E61` |
 
-阶段 3 Actions 待本次提交推送后补录；只有 CI 全绿并上传 Artifact 后才把阶段状态改为 100% 并自动开始阶段 4。
+阶段 3 CI 直接发布版 UIA：设置启动 1,234ms，基础控件 64/69/16/13ms，提醒 208/13ms，热键 301/14ms，远程 242/7/13ms，脏状态 115ms，取消 107ms；设置集成启动 2,899ms、主程序 218ms 响应；计时窗启动 1,223ms、F3 90ms、F5 隐藏/显示 1,088/27ms。Restore、三个 Release Build、314+4 测试、双 EXE 发布、校验和与 Artifact 上传全部成功。
 
 ## 风险与下一步
 
@@ -124,7 +127,7 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 - 本机只有 `DISPLAY1`，无法完成物理扩展屏热插拔；阶段 1 已覆盖真实 WPF 大屏控件、主屏拒绝、负坐标/DPI/锚点计算和重建生命周期，物理双屏步骤列为阶段 6 人工验收项。
 - GitHub Hosted Windows Runner 的 UI Automation 桌面可用性不稳定：31090670000 成功操作发布版窗口，31090929246 随后无法发现同一发布版设置窗口。发布版脚本继续保留且本机必跑；CI 不把环境缺窗计为通过/跳过，而以专用退出码转入 STA 线程内真实 WPF 控件绑定/Dispatcher 测试，回退测试失败仍使 CI 失败。
 
-阶段 3 剩余任务：提交并推送当前实现，等待 Windows CI 全绿并补录提交/Run/Runner 数据；随后自动进入阶段 4，迁移 WPF 电脑端远程控制窗口、HTTP/鉴权状态投影和手机网页全部行为。
+阶段 4 精确任务：审计矩阵 H/I 与现有 HTTP、token、Revision、状态投影、电脑端窗口和三份 Web 资源；建立可替换 Remote Application 边界，迁移正式 WPF 电脑端“远程连接/演示文稿”窗口，并以 HTTP 集成、真实浏览器手势和发布版 WPF UIA 覆盖全部协议与交互。
 
 ## 会话恢复指令
 
