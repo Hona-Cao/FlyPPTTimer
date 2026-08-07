@@ -16,7 +16,7 @@ function Invoke-PlaywrightCli {
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $output = & npx.cmd --yes --package '@playwright/cli' playwright-cli --session $session @Arguments 2>&1 | Out-String
+        $output = & npx.cmd --yes --package '@playwright/cli@0.1.18' playwright-cli "-s=$session" @Arguments 2>&1 | Out-String
     }
     finally { $ErrorActionPreference = $previousErrorAction }
     if ($LASTEXITCODE -ne 0) { throw "Playwright CLI failed: $output" }
