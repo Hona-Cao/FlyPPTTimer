@@ -11,12 +11,24 @@ $testRoot = Join-Path ([IO.Path]::GetTempPath()) $session
 $assets = Join-Path $testRoot 'assets'
 $server = $null
 
+$script:cliEntry = $null
+
+function Install-PlaywrightCli {
+    # Invoke the CLI entry point through node.exe directly: npx.cmd/.cmd shims mangle
+    # the session flag when the script runs under Windows PowerShell or pwsh on CI.
+    $cliRoot = Join-Path $testRoot 'cli'
+    $output = & npm.cmd install --prefix $cliRoot --no-fund --no-audit --loglevel=error '@playwright/cli@0.1.18' 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "npm install of @playwright/cli failed: $output" }
+    $script:cliEntry = Join-Path $cliRoot 'node_modules\@playwright\cli\playwright-cli.js'
+    if (-not (Test-Path -LiteralPath $script:cliEntry)) { throw "playwright-cli entry point is missing: $script:cliEntry" }
+}
+
 function Invoke-PlaywrightCli {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $output = & npx.cmd --yes --package '@playwright/cli@0.1.18' playwright-cli "-s=$session" @Arguments 2>&1 | Out-String
+        $output = & node $script:cliEntry "-s=$session" @Arguments 2>&1 | Out-String
     }
     finally { $ErrorActionPreference = $previousErrorAction }
     if ($LASTEXITCODE -ne 0) { throw "Playwright CLI failed: $output" }
@@ -54,12 +66,13 @@ try {
         -RedirectStandardError $stderr -PassThru
     Wait-ForPort $port
 
-    if ($InstallBrowser) { Invoke-PlaywrightCli install-browser chromium | Out-Null }
+    if ($InstallBrowser) { Install-PlaywrightCli; Invoke-PlaywrightCli install-browser chromium | Out-Null }
+    if ($null -eq $script:cliEntry) { Install-PlaywrightCli }
     Invoke-PlaywrightCli open "http://127.0.0.1:$port/index.html?token=browser-test" | Out-Null
 
     $state = '{"ok":true,"message":"","timerState":{"mode":"\u5012\u8ba1\u65f6","state":"\u505c\u6b62","running":false,"durationMs":480000,"elapsedMs":0,"remainingMs":480000,"displayText":"08:00","isOvertime":false,"continueOvertime":true,"windowVisible":true,"muted":false,"timeUpBlackoutActive":false,"ruleCount":1},"presentationState":{"powerPointInstalled":true,"powerPointRunning":true,"hasPresentation":true,"isSlideShowRunning":true,"presentationName":"browser-fixture.pptx","presentationPath":"C:/fixture/browser-fixture.pptx","currentSlide":2,"totalSlides":10,"screenMode":"\u6b63\u5e38","presentations":[{"id":"fixture-id","name":"browser-fixture.pptx","directory":"C:/fixture","isActive":true,"isOpen":true,"isManaged":true}]},"version":"4.0.0","connectedClients":1,"revision":7}'
     $command = '{"ok":true,"message":"\u547d\u4ee4\u5df2\u6267\u884c","timerState":{"mode":"\u5012\u8ba1\u65f6","state":"\u8fd0\u884c\u4e2d","running":true,"durationMs":480000,"elapsedMs":1000,"remainingMs":479000,"displayText":"07:59","isOvertime":false,"windowVisible":true,"muted":false,"timeUpBlackoutActive":false,"ruleCount":1},"presentationState":{"powerPointInstalled":true,"powerPointRunning":true,"hasPresentation":true,"isSlideShowRunning":true,"presentationName":"browser-fixture.pptx","currentSlide":3,"totalSlides":10,"screenMode":"\u6b63\u5e38","presentations":[]},"version":"4.0.0","revision":8}'
-    # npx.cmd uses Windows batch argument parsing under both Windows PowerShell and pwsh.
+    # Quote escaping keeps the JSON intact through PowerShell native argument passing and node argv parsing.
     $stateArgument = $state.Replace('"', '\"')
     $commandArgument = $command.Replace('"', '\"')
     Invoke-PlaywrightCli route '**/state*' --content-type application/json --body $stateArgument | Out-Null
