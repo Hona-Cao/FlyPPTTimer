@@ -1,5 +1,16 @@
 # FlyPPTTimer 测试报告
 
+## 4.0 完整重构阶段 4：远程控制（2026-08-06，CI 待确认）
+
+- 正式电脑端远程入口切换为同进程 `WpfRemoteControlWindow`，提供“远程连接/演示文稿”两页、服务启停、固定/随机端口、地址/脱敏 URL/二维码、复制/打开、断开全部、规则 CRUD、演示控制、能力禁用和危险操作确认；经典 WinForms 远程窗只保留兼容源码。
+- `RemoteDashboardService` 成为 WPF 的 Application facade；窗口不直接监听 HTTP、写配置或操作 COM。窗口位置继续使用既有按显示器/DPI 比例持久化，500ms 刷新只消费快照。
+- 新增真实本地 `TcpListener` 集成测试：错误 token 403、正确 token 状态、计时 POST、演示 POST、断开全部后旧 token 403/新 token 200；强类型演示命令完整保留 `operationId`。
+- Playwright CLI 真实 Chromium：390×844 的 `innerWidth/clientWidth/scrollWidth/bodyScrollWidth` 均为 390；状态和文稿渲染、计时 POST、计时/演示标签、40ms 连续反向 touch 抢占、中文及英文自动切换全部通过。
+- WPF STA 真实控件测试覆盖窗口打开、端口编辑应用、780×600 响应式布局、演示页控件和 Dispatcher，全部操作低于 3 秒。发布版 UIA 脚本已加入 CI；本机会话的 GUI 启动授权因 Codex 使用额度策略被拒绝，未以其他测试冒充发布版 UIA，等待 Actions 直接执行或按既有环境码进入真实 STA 控件回退。
+- 三个 Release Build：各 **0 warnings / 0 errors**。桌面测试：**319/319 通过**；Core：**4/4 通过**；0 失败，0 跳过。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,700,011 bytes，SHA-256 `B79BF4258BA85A1B24BAD13877A95BC10F2933668BA9AE7F8243538618586012`；`FlyPPTTimer.Settings.exe` 75,730,316 bytes，SHA-256 `01D8E7B1DB4FD41AF9078D5CA3A7BDBB176714A7427D48EAC7345A600D72400F`。
+- CI 新增真实 Chromium 网页 smoke 和发布版 WPF 远程 dashboard UIA；阶段提交、运行号、直接 UIA/回退结论与 Artifact 哈希将在 Actions 成功后回填。
+
 ## 4.0 完整重构阶段 3：PowerPoint、WPS 和自动联动（2026-08-06）
 
 - 新增 `PresentationCommandService` 与 13 种 `PresentationCommandKind`，将计时到时、HTTP、电脑端兼容窗口和状态读取统一到可替换的 Application 用例边界；`ppt.*` 协议与全部中文消息保持不变。

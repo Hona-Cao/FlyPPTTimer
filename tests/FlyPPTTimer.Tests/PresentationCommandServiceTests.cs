@@ -29,7 +29,7 @@ public sealed class PresentationCommandServiceTests
         var controller = new RecordingPresentationController();
         var sut = new PresentationCommandService(controller);
 
-        var result = sut.Execute(new PresentationCommand(kind, "deck-id", 17, true));
+        var result = sut.Execute(new PresentationCommand(kind, "deck-id", 17, true, "operation-17"));
 
         Assert.True(result.Success);
         var sent = Assert.Single(controller.Executed);
@@ -37,6 +37,7 @@ public sealed class PresentationCommandServiceTests
         Assert.Equal("deck-id", sent.PresentationId);
         Assert.Equal(17, sent.SlideNumber);
         Assert.True(sent.Confirmed);
+        Assert.Equal("operation-17", sent.OperationId);
     }
 
     [Theory]
@@ -50,7 +51,8 @@ public sealed class PresentationCommandServiceTests
             Command = protocol,
             PresentationId = "deck-id",
             SlideNumber = 8,
-            Confirmed = true
+            Confirmed = true,
+            OperationId = "operation-8"
         };
 
         Assert.True(PresentationCommandService.TryFromRemoteCommand(remote, out var typed));
@@ -58,6 +60,7 @@ public sealed class PresentationCommandServiceTests
         Assert.Equal("deck-id", typed.PresentationId);
         Assert.Equal(8, typed.SlideNumber);
         Assert.True(typed.Confirmed);
+        Assert.Equal("operation-8", typed.OperationId);
 
         var result = sut.QueueRemote(remote);
         Assert.True(result.Success);
@@ -66,6 +69,7 @@ public sealed class PresentationCommandServiceTests
         Assert.Equal("deck-id", queued.PresentationId);
         Assert.Equal(8, queued.SlideNumber);
         Assert.True(queued.Confirmed);
+        Assert.Equal("operation-8", queued.OperationId);
     }
 
     [Fact]

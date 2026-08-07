@@ -87,7 +87,8 @@ public sealed class PresentationCommandService
             kind.Value,
             command.PresentationId,
             command.SlideNumber,
-            command.Confirmed);
+            command.Confirmed,
+            command.OperationId);
         return true;
     }
 
@@ -112,7 +113,8 @@ public sealed class PresentationCommandService
         },
         PresentationId = command.PresentationId,
         SlideNumber = command.SlideNumber,
-        Confirmed = command.Confirmed
+        Confirmed = command.Confirmed,
+        OperationId = command.OperationId
     };
 }
 
@@ -137,4 +139,5 @@ public readonly record struct PresentationCommand(
     PresentationCommandKind Kind,
     string? PresentationId = null,
     int? SlideNumber = null,
-    bool? Confirmed = null);
+    bool? Confirmed = null,
+    string? OperationId = null);

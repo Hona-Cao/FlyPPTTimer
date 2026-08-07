@@ -23,7 +23,7 @@
 - WPF：独立 `FlyPPTTimer.Settings.exe`、基础 MVVM 设置、未保存状态/验证/保存放弃取消、真实 UI Automation 与退出死锁回归。
 - CI：三个项目构建、桌面/Core 测试、双单文件发布、WPF 控件和主程序退出 smoke、SHA-256 Artifact。
 
-阶段 1 已将正式普通计时窗和大屏窗切换为同进程 WPF Window，并复用同一 Timer 快照、命令和显示拓扑。主要技术债务：`FlyPPTTimerContext` 仍是兼容 composition root；托盘、远程电脑端、时间到窗口和完整设置仍有 WinForms 实现；WPF Settings 直接引用主项目；Remote 尚未形成独立层。
+阶段 1 已将正式普通计时窗和大屏窗切换为同进程 WPF Window；阶段 2 完成正式 WPF Settings；阶段 4 又把正式远程电脑端切换为同进程 WPF dashboard。主要技术债务：`FlyPPTTimerContext` 仍是兼容 composition root；托盘和时间到窗口仍有 WinForms 实现；WPF Settings 直接引用主项目；经典远程 Form 暂留源码兼容但已不承担正式入口。
 
 ## 3. 目标分层
 
@@ -96,6 +96,10 @@ FlyPPTTimer.Infrastructure.Windows
 ## 8. Remote 兼容策略
 
 保持默认 4080、随机端口选项、URL token、现有扁平 timer 字段和 `RemoteCommand`；新增字段必须可选。token 至少 128 bit，日志/诊断掩码；“断开全部”轮换 token 并增加 Revision。HTTP handler 仅解析、鉴权、映射 DTO，业务交给 command bus。静态网页继续嵌入，HTTP 集成测协议，真实浏览器测移动手势与布局。
+
+阶段 4 以 `RemoteDashboardService` 作为 WPF 电脑端的 Application facade，统一配置副本、监听生命周期、地址发现、URL、规则 CRUD 和 typed Presentation command；`WpfRemoteControlWindow` 只绑定快照和发命令，不直接监听端口、写文件或操作 COM。正式托盘/启动参数入口均打开该 WPF 窗口，经典 `RemoteControlForm` 仅保留兼容源码，待阶段 5 按删除门槛清理。
+
+远程监听器当前采用每连接一请求模型，响应显式声明 `Connection: close`；真实端口测试连续验证 token、`/state`、计时命令、演示命令和 token 轮换。`operationId` 穿过 Remote DTO、typed command 和 provider，保持既有去重/追踪语义。网页验证由 Playwright CLI 在真实 Chromium 中执行，覆盖 390×844、POST、演示状态、中英文和连续反向手势，不以静态字符串测试冒充浏览器行为。
 
 ## 9. WPF 窗口策略
 

@@ -23,6 +23,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly PresentationCommandService _presentationCommands;
     private readonly PresentationLifecycleController _presentationLifecycle;
     private readonly RemoteControlService _remoteControl;
+    private readonly RemoteDashboardService _remoteDashboard;
     private readonly GiteeUpdateService _updateService;
     private readonly NotifyIcon _tray;
     private readonly ContextMenuStrip _trayMenu;
@@ -45,7 +46,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private ContextMenuStrip? _activeMenu;
     private SettingsForm? _settings;
     private Process? _wpfSettingsProcess;
-    private RemoteControlForm? _remoteControlWindow;
+    private WpfRemoteControlWindow? _remoteControlWindow;
     private AppConfig _config;
     private string _screenSignature = "";
     private bool _preserveTimeUpScreens;
@@ -99,6 +100,11 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             foreach (var overlay in _overlays) overlay.ReassertTopMost();
         });
         _remoteControl = new RemoteControlService(() => _config, SaveConfigOnly, _commands, _presentationCommands, _log);
+        _remoteDashboard = new RemoteDashboardService(
+            () => _config,
+            SaveConfigOnly,
+            _remoteControl,
+            _networkAddresses);
 
         _timer.Configure(_config);
         RebuildOverlays();
@@ -425,16 +431,14 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void ShowRemoteControl()
     {
-        _config.RemoteControl.Enabled = true;
-        SaveConfigOnly(_config);
-        if (!_remoteControl.IsRunning) _remoteControl.Start();
+        if (!_config.RemoteControl.Enabled || !_remoteControl.IsRunning)
+            _remoteDashboard.SetServiceEnabled(true);
         if (_remoteControlWindow is null || _remoteControlWindow.IsDisposed)
         {
-            _remoteControlWindow = new RemoteControlForm(_config, _remoteControl, _networkAddresses, SaveConfigOnly);
+            _remoteControlWindow = new WpfRemoteControlWindow(_remoteDashboard);
         }
 
-        _remoteControlWindow.Show();
-        _remoteControlWindow.Activate();
+        _remoteControlWindow.ShowModeless();
     }
 
     private void ApplyConfig(AppConfig config)
@@ -906,6 +910,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _hotkeys.Dispose();
         _fullscreen.Dispose();
         _remoteControl.Dispose();
+        _remoteControlWindow?.ClosePermanently();
         _powerPoint.Dispose();
         _alerts.Dispose();
         _screenTimer.Dispose();
@@ -953,7 +958,9 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             _menuOwner.Dispose();
             _hotkeys.Dispose();
             _fullscreen.Dispose();
+            _remoteControl.Dispose();
             _powerPoint.Dispose();
+            _remoteControlWindow?.ClosePermanently();
             _alerts.Dispose();
             _screenTimer.Dispose();
             _menuCloseTimer.Dispose();

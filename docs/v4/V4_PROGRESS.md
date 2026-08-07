@@ -10,13 +10,13 @@
 
 ## 当前状态
 
-- 当前阶段：**阶段 4 — 远程控制（已自动开始）**
+- 当前阶段：**阶段 4 — 远程控制（实现与本地质量门完成，等待 CI）**
 - 阶段 0 完成度：**100%**
 - 阶段 1 完成度：**100%**
 - 阶段 2 完成度：**100%**
 - 阶段 3 完成度：**100%**
-- 阶段 4 完成度：**0%，入口与协议审计已开始**
-- 全工程完成度：**约 55%**（矩阵 54/99 完成；阶段 0–3 完成）
+- 阶段 4 完成度：**95%，代码/本地验证/Artifact 完成，等待 GitHub Actions**
+- 全工程完成度：**约 71%**（矩阵 70/99 完成；阶段 0–3 完成，阶段 4 等待 CI）
 - 阶段 0 提交：`3369825d8c983b4589a3f3814be86175a6210cf1`
 - 阶段 0 CI：[Windows CI 31090670000](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31090670000)，成功，含 Artifact 上传。
 - 阶段 1 提交：`82712046f0bb56a67d964a3327232c809ca43421`
@@ -32,7 +32,7 @@
 | 1 WPF 外壳/计时/多屏/大屏 | 完成 | WPF 正式计时/大屏入口、拓扑、UIA | `8271204`; CI 31093177173 成功 |
 | 2 完整设置/规则/提醒 | 完成 | 六页 WPF 设置、fixture、UIA | `288fbed` + `520af45`; CI 31096841196 成功 |
 | 3 PowerPoint/WPS/联动 | 完成 | typed commands、所有权、RCW/窗口回退、真机 | `069ce33`; CI 31099197824 成功 |
-| 4 远程控制 | 进行中 | WPF 电脑端、HTTP、手机网页 | — |
+| 4 远程控制 | 等待 CI | 正式 WPF 电脑端、真实 HTTP、Chromium 手机网页 | 本地 319+4 全过；提交待创建 |
 | 5 唯一入口/更新/安装/发布 | 未开始 | 清理无兼容责任的旧 UI | — |
 | 6 全功能候选版 | 未开始 | 完整文档与候选 Artifact | — |
 
@@ -119,15 +119,35 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 
 阶段 3 CI 直接发布版 UIA：设置启动 1,234ms，基础控件 64/69/16/13ms，提醒 208/13ms，热键 301/14ms，远程 242/7/13ms，脏状态 115ms，取消 107ms；设置集成启动 2,899ms、主程序 218ms 响应；计时窗启动 1,223ms、F3 90ms、F5 隐藏/显示 1,088/27ms。Restore、三个 Release Build、314+4 测试、双 EXE 发布、校验和与 Artifact 上传全部成功。
 
+## 阶段 4 本地验证
+
+正式电脑端远程入口现为同进程 WPF dashboard；`RemoteDashboardService` 隔离配置、监听器、网络地址、规则和演示命令。旧 `RemoteControlForm` 暂留源码兼容，不再由托盘或 `--show-remote` 启动。真实监听器测试覆盖 token、状态、计时/演示 POST、`operationId` 和 token 轮换；Playwright CLI 真实 Chromium 覆盖移动布局、命令、双页、连续反向手势及 zh/en。
+
+| 对象 | 结果 |
+|---|---|
+| 主程序/Core/WPF Settings Release Build | 各 0 warnings / 0 errors |
+| 桌面/Core 测试 | 319/319；4/4；0 失败，0 跳过 |
+| WPF 真实控件 | STA 窗口/端口/780×600/演示页/Dispatcher，操作均 <3 秒 |
+| 真实浏览器 | Chromium 390×844，无横向溢出；POST、状态、标签、40ms 连续反向 swipe、zh/en 通过 |
+| 发布版 WPF UIA | 脚本和 CI 强制步骤已就绪；本机会话 GUI 授权因 Codex 使用额度限制未获批准，等待 Actions |
+| 发布 | win-x64、自包含、单文件、双 EXE |
+
+| 本地 Artifact（不提交） | 字节与 SHA-256 |
+|---|---|
+| `artifacts/phase4-candidate/publish/FlyPPTTimer.exe` | 75,700,011 bytes；SHA-256 `B79BF4258BA85A1B24BAD13877A95BC10F2933668BA9AE7F8243538618586012` |
+| `artifacts/phase4-candidate/publish/FlyPPTTimer.Settings.exe` | 75,730,316 bytes；SHA-256 `01D8E7B1DB4FD41AF9078D5CA3A7BDBB176714A7427D48EAC7345A600D72400F` |
+
 ## 风险与下一步
 
-- 主 composition root、托盘、远程电脑端、时间到窗口和完整设置仍有 WinForms 兼容实现，矩阵通过前不能删除；正式普通计时窗与大屏已是 WPF。
+- 主 composition root、托盘和时间到窗口仍有 WinForms 兼容实现；经典设置和远程窗保留源码兼容但不再承担正式入口，阶段 5 按矩阵删除门槛清理。
 - WPF Settings 当前仍通过主项目引用配置、声音和显示基础设施；后续随 Application/Infrastructure 分层继续反转，但 ViewModel 属性编辑不直接执行磁盘 I/O。
 - PowerPoint/WPS、多屏、音频、热键、安装升级需要实机验收，CI 替身不能冒充。
 - 本机只有 `DISPLAY1`，无法完成物理扩展屏热插拔；阶段 1 已覆盖真实 WPF 大屏控件、主屏拒绝、负坐标/DPI/锚点计算和重建生命周期，物理双屏步骤列为阶段 6 人工验收项。
 - GitHub Hosted Windows Runner 的 UI Automation 桌面可用性不稳定：31090670000 成功操作发布版窗口，31090929246 随后无法发现同一发布版设置窗口。发布版脚本继续保留且本机必跑；CI 不把环境缺窗计为通过/跳过，而以专用退出码转入 STA 线程内真实 WPF 控件绑定/Dispatcher 测试，回退测试失败仍使 CI 失败。
 
-阶段 4 精确任务：审计矩阵 H/I 与现有 HTTP、token、Revision、状态投影、电脑端窗口和三份 Web 资源；建立可替换 Remote Application 边界，迁移正式 WPF 电脑端“远程连接/演示文稿”窗口，并以 HTTP 集成、真实浏览器手势和发布版 WPF UIA 覆盖全部协议与交互。
+阶段 4 下一步：提交并推送当前实现，等待 Windows CI 的真实 Chromium、发布版 WPF 远程 dashboard UIA/明确 STA 回退、319+4 测试、双 EXE 和 Artifact 上传；全绿后回填提交/运行号并自动开始阶段 5 的唯一入口、旧 UI 删除门槛、更新/安装/便携发布链。
+
+当前阻塞（2026-08-06）：阶段 4 代码、测试、文档、本地质量门和 Artifact 已完成，但 `git add` 的 `.git` 写权限申请被 Codex 权限审查器拒绝，明确原因为当前账户使用额度耗尽（提示 2026-08-08 12:31 后重试或升级）。未尝试绕过权限；阶段 4 尚未提交/推送，CI 尚未触发。恢复时先核对当前未提交文件与生成目录，重新执行 `git diff --check`、三个 Release Build、319+4 测试；仅暂存本阶段明确文件，排除 `artifacts/` 和两个本地历史测试包目录，然后提交推送并等待 Actions。
 
 ## 会话恢复指令
 

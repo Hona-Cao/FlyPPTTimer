@@ -109,27 +109,27 @@
 
 | 子模块/行为 | 依据 | 配置 | 目标 | 验收 | 状态 |
 |---|---|---|---|---|---|
-| HTTP 启停/重启且不阻塞 UI | `RemoteControlService.cs`; HTTP tests | Enabled | Remote host | 端口占用/取消/退出 | 兼容保留 |
-| 默认 4080 与随机端口 | config/network tests/README | Port/UseRandomPort | endpoint policy | 冲突与重启 | 兼容保留 |
-| IPv4 选择、URL、二维码、复制、防火墙说明 | network/form | Window | WPF remote window | 多网卡/无网络/UIA | 兼容保留 |
-| 强 token 鉴权与一键断开所有设备 | token/security tests | Token | auth/session service | 旧 token 失效、新 token 可用 | 兼容保留 |
-| 启动失败、网卡变化和防火墙提示 | service/form | — | health state/notices | 占用/断网实测 | 兼容保留 |
-| “远程连接/演示文稿”两模块 | RemoteControlForm/tests | Window | WPF dashboard | 响应式 UIA | 兼容保留 |
-| 文稿列表/详情/规则编辑/危险操作确认 | form/validator | Rules | WPF dashboard | CRUD/确认/长文件名 | 兼容保留 |
-| 窄宽布局、DPI、位置恢复 | layout service/V0302 tests | Remote Window | adaptive WPF layout | 700/900 宽、100–200% | 兼容保留 |
+| HTTP 启停/重启且不阻塞 UI | `RemoteControlService.cs`; real-listener HTTP tests | Enabled | `RemoteControlService` + dashboard facade | 随机端口/连续请求/取消/退出 | 已完成 |
+| 默认 4080 与随机端口 | config/network/dashboard tests/README | Port/UseRandomPort | endpoint policy | 校验、随机监听与重启 | 已完成 |
+| IPv4 选择、URL、二维码、复制、防火墙说明 | network/WPF dashboard/UIA | Window | `WpfRemoteControlWindow` | 多网卡/无网络/真实控件 | 已完成 |
+| 强 token 鉴权与一键断开所有设备 | token/security/real HTTP tests | Token | auth/session service | 旧 token 403、新 token 200 | 已完成 |
+| 启动失败、网卡变化和防火墙提示 | service/WPF dashboard | — | health state/notices | 状态快照、刷新与人工网络步骤 | 已完成 |
+| “远程连接/演示文稿”两模块 | WPF dashboard/STA/UIA | Window | formal WPF dashboard | 响应式真实控件 UIA | 已完成 |
+| 文稿列表/详情/规则编辑/危险操作确认 | dashboard/validator/command tests | Rules | WPF dashboard | CRUD/确认/能力禁用/长文件名 | 已完成 |
+| 窄宽布局、DPI、位置恢复 | layout service/WPF UIA | Remote Window | adaptive WPF layout | 780px、断点、持久化 | 已完成 |
 
 ## I. 手机/浏览器
 
 | 子模块/行为 | 依据 | 配置 | 目标 | 验收 | 状态 |
 |---|---|---|---|---|---|
-| 零安装；zh/en 跟随浏览器 | Web assets/tests | — | 嵌入 Web app/i18n | Playwright 移动视口 | 兼容保留 |
-| token 缺失/错误/轮换失效 | security/HTTP tests | Token | auth middleware | HTTP 401/失效 | 兼容保留 |
-| 计时状态、时长、模式和全套控制 | app.js/AppCommand/HTTP tests | RemoteCommand | versioned API | API + 浏览器 E2E | 兼容保留 |
-| 窗口、闪烁、提示、静音 | 同上 | — | command bus | API/E2E | 兼容保留 |
-| 文稿列表、打开、放映、导航、黑白屏、结束/关闭 | web/control | presentation DTO | presentation use cases | adapter HTTP + 真机 | 兼容保留 |
-| “计时/演示”标签与能力反馈 | web assets/tests | — | Web state | Playwright | 兼容保留 |
-| 横向方向锁、纵向滚动保护、吸附和反向抢占 | app.js; 0.19/0.20 tests | — | 手势状态机 | pointer/touch E2E | 兼容保留 |
-| 移动布局、可访问性、常用浏览器 | HTML/CSS/TEST_REPORT | — | semantic Web UI | Chrome/Edge/Safari | 兼容保留 |
+| 零安装；zh/en 跟随浏览器 | Web assets/tests/Chromium smoke | — | 嵌入 Web app/i18n | 390×844 zh/en 真浏览器 | 已完成 |
+| token 缺失/错误/轮换失效 | security/real HTTP tests | Token | auth middleware | HTTP 403/轮换失效 | 已完成 |
+| 计时状态、时长、模式和全套控制 | app.js/AppCommand/real HTTP | RemoteCommand | stable API | API + Chromium POST E2E | 已完成 |
+| 窗口、闪烁、提示、静音 | command/asset/browser tests | — | command bus | API/控件可用性 | 已完成 |
+| 文稿列表、打开、放映、导航、黑白屏、结束/关闭 | web/typed presentation control | presentation DTO | presentation use cases | adapter HTTP + 阶段3真机 | 已完成 |
+| “计时/演示”标签与能力反馈 | web assets/Chromium smoke | — | Web state | 真浏览器切页与状态渲染 | 已完成 |
+| 横向方向锁、纵向滚动保护、吸附和反向抢占 | app.js; 0.19/0.20 + Chromium | — | 手势状态机 | 40ms 连续反向 touch E2E | 已完成 |
+| 移动布局、可访问性、常用浏览器 | semantic HTML/CSS/Chromium | — | semantic Web UI | 390px 无溢出；Edge/Safari 阶段6真机 | 已完成 |
 
 ## J. 命令、托盘和快捷键
 
