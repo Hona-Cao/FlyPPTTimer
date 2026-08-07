@@ -42,7 +42,6 @@ public sealed class WpfTimerOverlayWindow : Wpf.Window
         Action toggleMute,
         Action showRemote,
         Action showSettings,
-        Action showClassicSettings,
         Action exit)
     {
         WindowStyle = Wpf.WindowStyle.None;
@@ -69,7 +68,7 @@ public sealed class WpfTimerOverlayWindow : Wpf.Window
         };
         _surface = new WpfControls.Border { Child = _flashBorder };
         Content = _surface;
-        ContextMenu = BuildContextMenu(resetPosition, toggleMute, showRemote, showSettings, showClassicSettings, exit);
+        ContextMenu = BuildContextMenu(resetPosition, toggleMute, showRemote, showSettings, exit);
 
         SourceInitialized += (_, _) =>
         {
@@ -233,7 +232,6 @@ public sealed class WpfTimerOverlayWindow : Wpf.Window
         Action toggleMute,
         Action showRemote,
         Action showSettings,
-        Action showClassicSettings,
         Action exit)
     {
         var menu = new WpfControls.ContextMenu();
@@ -241,7 +239,6 @@ public sealed class WpfTimerOverlayWindow : Wpf.Window
         AddMenuItem(menu, "ToggleMute", "静音/取消静音", toggleMute);
         AddMenuItem(menu, "OpenRemoteControl", "远程控制", showRemote);
         AddMenuItem(menu, "OpenWpfSettings", "设置", showSettings);
-        AddMenuItem(menu, "OpenClassicSettings", "经典设置", showClassicSettings);
         menu.Items.Add(new WpfControls.Separator());
         AddMenuItem(menu, "ExitApplication", "退出", exit);
         return menu;

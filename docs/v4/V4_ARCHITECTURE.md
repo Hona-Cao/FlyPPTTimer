@@ -23,7 +23,7 @@
 - WPF：独立 `FlyPPTTimer.Settings.exe`、基础 MVVM 设置、未保存状态/验证/保存放弃取消、真实 UI Automation 与退出死锁回归。
 - CI：三个项目构建、桌面/Core 测试、双单文件发布、WPF 控件和主程序退出 smoke、SHA-256 Artifact。
 
-阶段 1 已将正式普通计时窗和大屏窗切换为同进程 WPF Window；阶段 2 完成正式 WPF Settings；阶段 4 又把正式远程电脑端切换为同进程 WPF dashboard。主要技术债务：`FlyPPTTimerContext` 仍是兼容 composition root；托盘和时间到窗口仍有 WinForms 实现；WPF Settings 直接引用主项目；经典远程 Form 暂留源码兼容但已不承担正式入口。
+阶段 1 已将正式普通计时窗和大屏窗切换为同进程 WPF Window；阶段 2 完成正式 WPF Settings；阶段 4 又把正式远程电脑端切换为同进程 WPF dashboard；阶段 5 把“时间到”全屏窗口也切换为 WPF `WpfTimeUpOverlayWindow`，并删除了无兼容责任的旧 WinForms UI（计时窗/大屏/设置/远程/时间到 Form 及 6 个 helper 控件）与经典设置回退。主要技术债务：`FlyPPTTimerContext` 仍是兼容 composition root；托盘菜单仍复用少量 Forms 基础设施（`LocalizedMessageDialog`、`ModernTheme`）；WPF Settings 直接引用主项目；静音/结束放映/更新检查等少量行为仍标记为“兼容保留”待阶段 6 收敛。
 
 ## 3. 目标分层
 

@@ -60,7 +60,7 @@ public sealed class WpfTimerDisplayTests
             try
             {
                 var window = new WpfTimerOverlayWindow(
-                    () => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+                    () => { }, () => { }, () => { }, () => { }, () => { });
                 var config = new AppConfig();
                 config.Placement.Visible = false;
                 window.ApplyConfig(config, Screen.PrimaryScreen!);
@@ -79,7 +79,7 @@ public sealed class WpfTimerDisplayTests
 
                 var resetInvoked = false;
                 var menuWindow = new WpfTimerOverlayWindow(
-                    () => resetInvoked = true, () => { }, () => { }, () => { }, () => { }, () => { });
+                    () => resetInvoked = true, () => { }, () => { }, () => { }, () => { });
                 var resetItem = menuWindow.ContextMenu!.Items
                     .OfType<System.Windows.Controls.MenuItem>()
                     .Single(item => AutomationProperties.GetAutomationId(item) == "ResetTimerPosition");

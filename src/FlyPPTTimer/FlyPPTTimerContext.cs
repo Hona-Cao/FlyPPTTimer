@@ -30,7 +30,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
     private readonly List<WpfTimerOverlayWindow> _overlays = [];
     private WpfBigScreenTimerWindow? _bigScreenTimer;
     private readonly Dictionary<string, PointF> _overlayCenters = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<TimeUpBlackoutForm> _timeUpScreens = [];
+    private readonly List<WpfTimeUpOverlayWindow> _timeUpScreens = [];
     private readonly System.Windows.Forms.Timer _screenTimer = new() { Interval = 1500 };
     private readonly System.Windows.Forms.Timer _menuCloseTimer = new() { Interval = 40 };
     private readonly System.Windows.Forms.Timer _startupUpdateTimer = new() { Interval = 1500 };
@@ -44,9 +44,9 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         Location = new Point(-32000, -32000)
     };
     private ContextMenuStrip? _activeMenu;
-    private SettingsForm? _settings;
     private Process? _wpfSettingsProcess;
     private WpfRemoteControlWindow? _remoteControlWindow;
+
     private AppConfig _config;
     private string _screenSignature = "";
     private bool _preserveTimeUpScreens;
@@ -192,7 +192,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         menu.Items.Add("静音/取消静音", null, (_, _) => _commands.ToggleMute());
         menu.Items.Add("远程控制", null, (_, _) => ShowRemoteControl());
         menu.Items.Add("设置", null, (_, _) => _commands.OpenSettings());
-        menu.Items.Add("经典设置", null, (_, _) => ShowClassicSettings());
         if (includeUpdateCheck) menu.Items.Add("检测新版本", null, (_, _) => CheckForUpdates(true));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Exit());
@@ -337,8 +336,12 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         var settingsPath = Path.Combine(AppContext.BaseDirectory, "FlyPPTTimer.Settings.exe");
         if (!File.Exists(settingsPath))
         {
-            _log.Warn($"WPF settings executable was not found: {settingsPath}; falling back to classic settings.");
-            ShowClassicSettings();
+            _log.Warn($"WPF settings executable was not found: {settingsPath}.");
+            LocalizedMessageDialog.Show(
+                Localization.T("未找到设置程序 FlyPPTTimer.Settings.exe，无法打开设置。"),
+                Localization.T("FlyPPTTimer 设置"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
             return;
         }
 
@@ -358,8 +361,12 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            _log.Warn($"Unable to start WPF settings; falling back to classic settings: {ex.Message}");
-            ShowClassicSettings();
+            _log.Warn($"Unable to start WPF settings: {ex.Message}");
+            LocalizedMessageDialog.Show(
+                Localization.T("无法启动设置程序，请确认 FlyPPTTimer.Settings.exe 与程序同目录。"),
+                Localization.T("FlyPPTTimer 设置"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
         }
     }
 
@@ -410,25 +417,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         }
     }
 
-    private void ShowClassicSettings()
-    {
-        if (_settings is null || _settings.IsDisposed)
-        {
-            _settings = new SettingsForm(_config, _remoteControl, _networkAddresses);
-            _settings.ConfigApplied += (_, cfg) => ApplyConfig(cfg);
-            _settings.ResetRequested += (_, _) => ApplyConfig(new AppConfig());
-            _settings.ExportRequested += (_, _) => ExportConfig();
-            _settings.ImportRequested += (_, _) => ImportConfig();
-            _settings.OpenConfigRequested += (_, _) => OpenPath(Path.GetDirectoryName(AppPaths.ConfigPath)!);
-            _settings.OpenLogRequested += (_, _) => OpenPath(AppPaths.LogDirectory);
-            _settings.ResetOverlayPositionRequested += (_, _) => ResetOverlayPosition();
-            _settings.CheckUpdateRequested += (_, _) => CheckForUpdates(true);
-            _settings.RestartRequested += (_, _) => Restart();
-        }
-        _settings.Show();
-        _settings.Activate();
-    }
-
     private void ShowRemoteControl()
     {
         if (!_config.RemoteControl.Enabled || !_remoteControl.IsRunning)
@@ -474,8 +462,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         _configService.Save(_config);
         _remoteControl.NotifyStateChanged();
         _remoteControlWindow?.ReloadConfig(_config);
-        _settings?.SyncRules(_config.Rules);
-        _settings?.SyncTimerSettings(_config.Timer);
     }
 
     private void HandleTimeReached()
@@ -511,10 +497,10 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         HideTimeUpScreens();
         foreach (var screen in Screen.AllScreens)
         {
-            var blackout = new TimeUpBlackoutForm(screen);
-            blackout.FormClosed += (_, _) => _timeUpScreens.Remove(blackout);
-            _timeUpScreens.Add(blackout);
-            blackout.Show();
+            var window = new WpfTimeUpOverlayWindow(screen, () => DismissTimeUpBlackout());
+            window.Closed += (_, _) => _timeUpScreens.Remove(window);
+            _timeUpScreens.Add(window);
+            window.Show();
         }
         _remoteControl?.NotifyStateChanged();
     }
@@ -528,10 +514,9 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void HideTimeUpScreens()
     {
-        foreach (var blackout in _timeUpScreens.ToArray())
+        foreach (var window in _timeUpScreens.ToArray())
         {
-            blackout.Close();
-            blackout.Dispose();
+            window.Close();
         }
         _timeUpScreens.Clear();
     }
@@ -571,7 +556,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void HandlePresentationStarted(string presentationPath, string source)
     {
-        _settings?.Hide();
         _remoteControlWindow?.Hide();
         _presentationLifecycle.Observe(true, presentationPath, source);
     }
@@ -606,7 +590,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
                 _commands.ToggleMute,
                 ShowRemoteControl,
                 ShowSettings,
-                ShowClassicSettings,
                 Exit);
             overlay.PositionChangedByUser += OverlayMoved;
             overlay.SizeExpansionRequested += OverlaySizeExpansionRequested;
@@ -744,8 +727,7 @@ public sealed class FlyPPTTimerContext : ApplicationContext
 
     private void ShowUpdateMessage(string message, MessageBoxIcon icon)
     {
-        if (_settings is { Visible: true }) LocalizedMessageDialog.Show(_settings, Localization.T(message), Localization.T("FlyPPTTimer 更新"), MessageBoxButtons.OK, icon);
-        else LocalizedMessageDialog.Show(Localization.T(message), Localization.T("FlyPPTTimer 更新"), MessageBoxButtons.OK, icon);
+        LocalizedMessageDialog.Show(Localization.T(message), Localization.T("FlyPPTTimer 更新"), MessageBoxButtons.OK, icon);
     }
 
     private void OverlaySizeExpansionRequested(object? sender, OverlaySizeExpansionEventArgs e)
@@ -920,7 +902,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
         foreach (var timerWindow in _overlays) timerWindow.Close();
         _bigScreenTimer?.Close();
         HideTimeUpScreens();
-        _settings?.Dispose();
         ExitThread();
     }
 
@@ -969,7 +950,6 @@ public sealed class FlyPPTTimerContext : ApplicationContext
             foreach (var overlay in _overlays) overlay.Close();
             _bigScreenTimer?.Close();
             HideTimeUpScreens();
-            _settings?.Dispose();
         }
         base.Dispose(disposing);
     }

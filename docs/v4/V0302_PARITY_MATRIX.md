@@ -51,7 +51,7 @@
 | 后台语音队列不阻塞 UI | `WindowsAlertPlaybackEngine`; WPF Speak | Speak/Text | speech adapter | 队列、取消、退出 | 已完成 |
 | 自定义声音导入本地副本并播放 | WPF picker; `AlertSoundStorage`; tests | PlaySound/SoundFile | 异步 sound store/player | 覆盖/格式/路径持久化 | 已完成 |
 | 静音/取消静音和电脑音频控制 | `SystemAudioService.cs`; commands | 运行态 | audio adapter | 两次切换恢复/远程同步 | 兼容保留 |
-| 全屏“时间到”画面 | `TimeUpBlackoutForm.cs` | EndAction | WPF overlay | 多屏关闭与释放 | 兼容保留 |
+| 全屏“时间到”画面 | `WpfTimeUpOverlayWindow.cs` | EndAction | WPF overlay | 多屏关闭与释放 | 已完成 |
 | 到时无动作/黑屏/结束放映 | TimerEndAction; context | EndAction | EndAction coordinator | adapter 替身 + 真机 | 兼容保留 |
 | 提醒不重复、不漏发、重置后无残留 | `ResetTriggers`; 历史回归 | 运行态 | alert state machine | 跨阈值/暂停/重置 | 已完成 |
 
@@ -154,7 +154,7 @@
 | 全部快捷键与冲突 | WPF Hotkeys page | Controls.Hotkeys | WPF Hotkeys page | 20 项/重复拒绝/UIA | 已完成 |
 | 完整远程设置 | WPF Remote/Other 页 | RemoteControl | WPF Remote settings | 保存/token 轮换/UIA | 已完成 |
 | 未保存、校验、保存/放弃/取消、连续编辑不卡死 | 当前 WPF tests/smokes | all edited | MVVM + async boundary | 发布版四类控件 <3s；退出回归 | 已完成 |
-| 经典设置回退直至完整覆盖 | context | 同一 config | 阶段 5 前保留 | 双入口互操作 | 兼容保留 |
+| 经典设置回退（阶段 5 已移除，WPF 单入口） | context | 同一 config | 阶段 5 移除 | WPF 单入口 | 已完成 |
 
 ## L. 更新、安装与发布
 

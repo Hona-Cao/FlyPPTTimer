@@ -1,20 +1,7 @@
-using FlyPPTTimer.Forms;
-
 namespace FlyPPTTimer.Tests;
 
 public sealed class V0187FeatureTests
 {
-    [Fact]
-    public void CompactTimerCentersVisibleGlyphsAroundConfiguredAnchor()
-    {
-        using var font = new Font("Microsoft YaHei UI", 18F, FontStyle.Bold);
-        var layout = TimeDisplayControl.MeasureLogicalLayout("08:00", font);
-        var origin = TimeDisplayControl.CalculateDrawOrigin(new Size(100, 30), layout);
-
-        Assert.InRange(origin.X + layout.AnchorOffset, 49.99F, 50.01F);
-        Assert.InRange(origin.Y + layout.InkCenterY, 14.99F, 15.01F);
-    }
-
     [Fact]
     public void MobileBlackoutControlsAreAlwaysPresentInBothPages()
     {

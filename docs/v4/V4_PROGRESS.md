@@ -10,13 +10,14 @@
 
 ## 当前状态
 
-- 当前阶段：**阶段 5 — 唯一入口/更新/安装/发布（清理经典设置回退、旧 UI 删除门槛、更新/安装/便携发布链）**
+- 当前阶段：**阶段 6 — 全功能候选版（完整文档与候选 Artifact；阶段 5 已完成）**
 - 阶段 0 完成度：**100%**
 - 阶段 1 完成度：**100%**
 - 阶段 2 完成度：**100%**
 - 阶段 3 完成度：**100%**
 - 阶段 4 完成度：**100%**（CI 31166500912 成功）
-- 全工程完成度：**约 72%**（矩阵 70/99 完成；阶段 0–4 完成，阶段 5 进行中）
+- 阶段 5 完成度：**100%**（代码/测试/构建/用户指南/人工测试计划达成；提交待回填）
+- 全工程完成度：**约 73%**（矩阵 72/99 完成；阶段 0–5 完成，阶段 6 候选版未开始）
 - 阶段 0 提交：`3369825d8c983b4589a3f3814be86175a6210cf1`
 - 阶段 0 CI：[Windows CI 31090670000](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31090670000)，成功，含 Artifact 上传。
 - 阶段 1 提交：`82712046f0bb56a67d964a3327232c809ca43421`
@@ -33,8 +34,8 @@
 | 2 完整设置/规则/提醒 | 完成 | 六页 WPF 设置、fixture、UIA | `288fbed` + `520af45`; CI 31096841196 成功 |
 | 3 PowerPoint/WPS/联动 | 完成 | typed commands、所有权、RCW/窗口回退、真机 | `069ce33`; CI 31099197824 成功 |
 | 4 远程控制 | 完成 | 正式 WPF 电脑端、真实 HTTP、Chromium 手机网页 | 提交 `aac29e6`；CI 31166500912 成功 |
-| 5 唯一入口/更新/安装/发布 | 进行中 | 清理经典设置回退、旧 UI 删除门槛、更新/安装/便携发布链 | 进行中 |
-| 6 全功能候选版 | 未开始 | 完整文档与候选 Artifact | — |
+| 5 唯一入口/更新/安装/发布 | 完成 | 删除无兼容责任旧 UI、移除经典设置回退、双 EXE 发布链、V4 用户指南 + 人工测试计划 | 代码/测试/构建达成；用户指南与人工测试计划已补；提交待回填 |
+| 6 全功能候选版 | 进行中 | 完整文档与候选 Artifact | 提交待回填后 CI 全绿进入 |
 
 ## 阶段 0 审计与验证
 
@@ -137,15 +138,34 @@ WPF 正式设置现覆盖计时、规则、三组提醒/语音/声音/闪烁、�
 | `artifacts/phase4-candidate/publish/FlyPPTTimer.exe` | 75,700,011 bytes；SHA-256 `B79BF4258BA85A1B24BAD13877A95BC10F2933668BA9AE7F8243538618586012` |
 | `artifacts/phase4-candidate/publish/FlyPPTTimer.Settings.exe` | 75,730,316 bytes；SHA-256 `01D8E7B1DB4FD41AF9078D5CA3A7BDBB176714A7427D48EAC7345A600D72400F` |
 
+## 阶段 5 本地验证
+
+唯一 WPF 入口已确立：经典设置回退（`ShowClassicSettings`、托盘“经典设置”项、计时窗上下文“经典设置”项）全部移除；时间到窗口改为 WPF `WpfTimeUpOverlayWindow`，多屏关闭与释放同矩阵 EndAction 行。无兼容责任的旧 WinForms UI 已删除（均未在源码中实例化，纯死代码）。
+
+| 对象 | 结果 |
+|---|---|
+| 主程序/Core/WPF Settings Release Build | 各 0 warnings / 0 errors |
+| 桌面/Core 测试 | 184/184；4/4；0 跳过（删除 23 个旧 WinForms 测试文件、4 个契约测试随新行为更新） |
+| 删除的旧 Forms/helper | `SettingsForm`、`RemoteControlForm`、`TimerOverlayForm`、`BigScreenTimerForm`、`TimeUpBlackoutForm`、`BatchRuleSettingsDialog`、`PresentationRuleRow`、`RemoteAddressSelector`、`RemoteDashboardTheme`、`RemotePresentationRow`、`RemoteTextButton` |
+| 保留的 Forms 基础设施 | `LocalizedMessageDialog`（主程序告警）、`ModernTheme`（托盘菜单）、`RemoteWindowLayoutService`（WPF 布局）、`OverlayEvents`（计时窗事件参数另立文件） |
+| 新增文件 | `WpfTimeUpOverlayWindow.cs`（WPF “时间到”全屏）、`Forms/OverlayEvents.cs`（另立事件参数记录） |
+| 文档补齐 | `V4_USER_GUIDE.zh-CN.md`、`V4_USER_GUIDE.md`、`V4_MANUAL_TEST_PLAN.md` |
+| 发布 | win-x64、自包含、单文件、双 EXE |
+
+| 本地 Artifact（不提交） | 字节与 SHA-256 |
+|---|---|
+| `artifacts/publish/FlyPPTTimer.exe` | 75,655,133 bytes；SHA-256 `51B295E24D2969E71BF20CE106EB4DDD526F560543E8D85DAD71A8633EF43E95` |
+| `artifacts/publish/FlyPPTTimer.Settings.exe` | 75,685,437 bytes；SHA-256 `403F43CA30BC1BDBCF6156B58C7DB0CC0568B6A67993AEF381E6F0B0A7FF3B7E` |
+
 ## 风险与下一步
 
-- 阶段 5 进行中：经典设置回退已从主 composition root 与时间到窗口移除（时间到窗口改为 WPF `WpfTimeUpOverlayWindow`，多屏关闭与释放同矩阵 EndAction 行）。WinForms `SettingsForm` 等旧 UI 仍保留源码，待阶段 5 按矩阵删除门槛清理——仅删除 WPF 已完整覆盖、无兼容责任者。
+- 阶段 5 代码、测试、构建质量门已达成：移除经典设置回退、删除无兼容责任的旧 WinForms UI（11 个源文件）与对应旧测试（23 个文件），主程序/Core/WPF Settings 三个 Release Build 0/0，桌面 184 + Core 4 测试全过。CI 替身不能冒充 PowerPoint/WPS、多屏、音频、热键、安装升级的实机验收。
 - WPF Settings 当前仍通过主项目引用配置、声音和显示基础设施；后续随 Application/Infrastructure 分层继续反转，但 ViewModel 属性编辑不直接执行磁盘 I/O。
-- PowerPoint/WPS、多屏、音频、热键、安装升级需要实机验收，CI 替身不能冒充。
 - 本机只有 `DISPLAY1`，无法完成物理扩展屏热插拔；阶段 1 已覆盖真实 WPF 大屏控件、主屏拒绝、负坐标/DPI/锚点计算和重建生命周期，物理双屏步骤列为阶段 6 人工验收项。
 - GitHub Hosted Windows Runner 的 UI Automation 桌面可用性不稳定：31090670000 成功操作发布版窗口，31090929246 随后无法发现同一发布版设置窗口。发布版脚本继续保留且本机必跑；CI 不把环境缺窗计为通过/跳过，而以专用退出码转入 STA 线程内真实 WPF 控件绑定/Dispatcher 测试，回退测试失败仍使 CI 失败。
+- V4 用户指南（zh-CN/en）与人工测试计划文档已补齐；阶段 6 候选 Artifact 待提交后 CI 全绿产出。
 
-阶段 5 下一步：清理经典设置回退残骸后的编译/测试，按矩阵删除门槛删除无兼容责任的旧 WinForms UI 与对应旧测试，重建更新/安装/便携发布链指向唯一 WPF 入口，补齐 V4 用户指南与人工测试计划；每步构建 0/0、319+4 测试、真实发布版 WPF UIA、双 EXE 与 SHA-256、CI 全绿后提交推送。
+阶段 5 已完成：移除经典设置回退、删除无兼容责任的旧 WinForms UI（11 个源文件）与对应旧测试（23 个文件），补齐 V4 用户指南与人工测试计划，主程序/Core/WPF Settings 三个 Release Build 0/0，桌面 184 + Core 4 测试全过。提交 `agent/v4-foundation` 后等待 CI 全绿，回填提交/运行号并进入阶段 6 候选版。
 
 ## 会话恢复指令
 

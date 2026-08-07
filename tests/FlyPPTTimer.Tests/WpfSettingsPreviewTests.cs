@@ -347,22 +347,21 @@ public sealed class WpfSettingsPreviewTests
     }
 
     [Fact]
-    public void MainApplicationKeepsClassicSettingsAndReloadsAfterWpfExit()
+    public void MainApplicationReloadsConfigAfterWpfExit()
     {
         var source = File.ReadAllText(SourcePath("src", "FlyPPTTimer", "FlyPPTTimerContext.cs"));
 
         Assert.Contains("Path.Combine(AppContext.BaseDirectory, \"FlyPPTTimer.Settings.exe\")", source);
-        Assert.Contains("private void ShowClassicSettings()", source);
-        Assert.Contains("menu.Items.Add(\"设置\"", source);
-        Assert.Contains("经典设置", source);
         Assert.Contains("ActivateWpfSettings(_wpfSettingsProcess)", source);
         Assert.Contains("_uiContext.Post(_ => CompleteWpfSettingsExit(process), null);", source);
         Assert.DoesNotContain("RunOnUi(() =>\n        {\n            if (!ReferenceEquals(_wpfSettingsProcess, process))", source);
         Assert.Contains("private void CompleteWpfSettingsExit(Process process)", source);
         Assert.Contains("var reloadedConfig = _configService.Load();", source);
         Assert.Contains("ApplyConfig(reloadedConfig);", source);
-        Assert.Contains("falling back to classic settings", source);
-        Assert.Contains("ShowClassicSettings();", source);
+        Assert.DoesNotContain("private void ShowClassicSettings()", source);
+        Assert.DoesNotContain("经典设置", source);
+        Assert.DoesNotContain("falling back to classic settings", source);
+        Assert.DoesNotContain("ShowClassicSettings();", source);
     }
 
     [Fact]
