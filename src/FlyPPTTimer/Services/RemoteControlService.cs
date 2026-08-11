@@ -19,7 +19,7 @@ public sealed class RemoteControlService : IDisposable
     private readonly Func<AppConfig> _getConfig;
     private readonly Action<AppConfig> _saveConfig;
     private readonly AppCommandService _commands;
-    private readonly PowerPointControlService? _powerPoint;
+    private readonly PresentationCommandService? _presentationCommands;
     private readonly LogService _log;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
@@ -29,18 +29,18 @@ public sealed class RemoteControlService : IDisposable
     internal const int MaxHeaderBytes = 16 * 1024;
     internal const int MaxBodyBytes = 64 * 1024;
 
-    public RemoteControlService(Func<AppConfig> getConfig, Action<AppConfig> saveConfig, AppCommandService commands, PowerPointControlService? powerPoint, LogService log)
+    public RemoteControlService(Func<AppConfig> getConfig, Action<AppConfig> saveConfig, AppCommandService commands, PresentationCommandService? presentationCommands, LogService log)
     {
         _getConfig = getConfig;
         _saveConfig = saveConfig;
         _commands = commands;
-        _powerPoint = powerPoint;
+        _presentationCommands = presentationCommands;
         _log = log;
-        if (_powerPoint is not null) _powerPoint.StateChanged += (_, _) => NotifyStateChanged();
+        if (_presentationCommands is not null) _presentationCommands.StateChanged += OnPresentationStateChanged;
     }
 
     public bool IsRunning { get; private set; }
-    public PowerPointControlService? PresentationController => _powerPoint;
+    public PresentationCommandService? PresentationCommands => _presentationCommands;
     public string StatusText { get; private set; } = "未启动";
     public int CurrentPort { get; private set; }
     public int ConnectedClients
@@ -54,6 +54,8 @@ public sealed class RemoteControlService : IDisposable
             }
         }
     }
+
+    private void OnPresentationStateChanged(object? sender, EventArgs e) => NotifyStateChanged();
 
     public void NotifyStateChanged() => Interlocked.Increment(ref _revision);
 
@@ -293,13 +295,13 @@ public sealed class RemoteControlService : IDisposable
             string message;
             if (command.Command.StartsWith("ppt.", StringComparison.Ordinal))
             {
-                if (_powerPoint is null)
+                if (_presentationCommands is null)
                 {
                     status = 503;
                     response = ToJson(StateWithClientCount(false, "演示控制服务当前不可用。"));
                     return false;
                 }
-                var result = _powerPoint.Queue(command);
+                var result = _presentationCommands.QueueRemote(command);
                 if (!result.Success)
                 {
                     status = 400;
@@ -332,7 +334,7 @@ public sealed class RemoteControlService : IDisposable
         var state = _commands.GetRemoteState();
         state.Ok = ok;
         state.Message = message;
-        state.PresentationState = _powerPoint?.GetState() ?? new PresentationState { Error = "演示控制服务当前不可用。" };
+        state.PresentationState = _presentationCommands?.GetState() ?? new PresentationState { Error = "演示控制服务当前不可用。" };
         state.ConnectedClients = ConnectedClients;
         state.Revision = Volatile.Read(ref _revision);
         return state;
@@ -414,5 +416,9 @@ public sealed class RemoteControlService : IDisposable
 
     private static string ToJson<T>(T value) => JsonSerializer.Serialize(value, JsonOptions);
 
-    public void Dispose() => Stop();
+    public void Dispose()
+    {
+        if (_presentationCommands is not null) _presentationCommands.StateChanged -= OnPresentationStateChanged;
+        Stop();
+    }
 }

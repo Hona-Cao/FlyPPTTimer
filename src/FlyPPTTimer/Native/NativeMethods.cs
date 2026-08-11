@@ -88,12 +88,25 @@ internal static class NativeMethods
 
     public static string GetProcessName(IntPtr hwnd)
     {
+        if (hwnd == IntPtr.Zero) return "";
+
         try
         {
             GetWindowThreadProcessId(hwnd, out var pid);
-            return Process.GetProcessById((int)pid).ProcessName + ".exe";
+            if (pid == 0) return "";
+
+            using var process = Process.GetProcessById(checked((int)pid));
+            return process.ProcessName + ".exe";
         }
-        catch
+        catch (ArgumentException)
+        {
+            return "";
+        }
+        catch (InvalidOperationException)
+        {
+            return "";
+        }
+        catch (System.ComponentModel.Win32Exception)
         {
             return "";
         }

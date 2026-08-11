@@ -1,5 +1,73 @@
 # FlyPPTTimer 测试报告
 
+## 4.0 完整重构阶段 4：远程控制（2026-08-06，CI 待确认）
+
+- 正式电脑端远程入口切换为同进程 `WpfRemoteControlWindow`，提供“远程连接/演示文稿”两页、服务启停、固定/随机端口、地址/脱敏 URL/二维码、复制/打开、断开全部、规则 CRUD、演示控制、能力禁用和危险操作确认；经典 WinForms 远程窗只保留兼容源码。
+- `RemoteDashboardService` 成为 WPF 的 Application facade；窗口不直接监听 HTTP、写配置或操作 COM。窗口位置继续使用既有按显示器/DPI 比例持久化，500ms 刷新只消费快照。
+- 新增真实本地 `TcpListener` 集成测试：错误 token 403、正确 token 状态、计时 POST、演示 POST、断开全部后旧 token 403/新 token 200；强类型演示命令完整保留 `operationId`。
+- Playwright CLI 真实 Chromium：390×844 的 `innerWidth/clientWidth/scrollWidth/bodyScrollWidth` 均为 390；状态和文稿渲染、计时 POST、计时/演示标签、40ms 连续反向 touch 抢占、中文及英文自动切换全部通过。
+- WPF STA 真实控件测试覆盖窗口打开、端口编辑应用、780×600 响应式布局、演示页控件和 Dispatcher，全部操作低于 3 秒。发布版 UIA 脚本已加入 CI；本机会话的 GUI 启动授权因 Codex 使用额度策略被拒绝，未以其他测试冒充发布版 UIA，等待 Actions 直接执行或按既有环境码进入真实 STA 控件回退。
+- 三个 Release Build：各 **0 warnings / 0 errors**。桌面测试：**319/319 通过**；Core：**4/4 通过**；0 失败，0 跳过。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,700,011 bytes，SHA-256 `B79BF4258BA85A1B24BAD13877A95BC10F2933668BA9AE7F8243538618586012`；`FlyPPTTimer.Settings.exe` 75,730,316 bytes，SHA-256 `01D8E7B1DB4FD41AF9078D5CA3A7BDBB176714A7427D48EAC7345A600D72400F`。
+- CI 新增真实 Chromium 网页 smoke 和发布版 WPF 远程 dashboard UIA；阶段提交、运行号、直接 UIA/回退结论与 Artifact 哈希将在 Actions 成功后回填。
+
+## 4.0 完整重构阶段 3：PowerPoint、WPS 和自动联动（2026-08-06）
+
+- 新增 `PresentationCommandService` 与 13 种 `PresentationCommandKind`，将计时到时、HTTP、电脑端兼容窗口和状态读取统一到可替换的 Application 用例边界；`ppt.*` 协议与全部中文消息保持不变。
+- 补齐 13 种双向命令映射、未知命令拒绝、生命周期事件、自动开始顺序、重复路径、换稿、四种离开组合、所有权和原生窗口候选行为测试。
+- 修复真机发现的共享 COM RCW 缺陷：`FinalReleaseComObject` 会在文稿窗口激活后破坏仍在使用的 Application 别名，导致“打开成功、开始放映失败”；现改为每次引用平衡释放。
+- 修复外部文稿关闭会强制 `Saved=true` 并吞掉用户保存提示的问题；只有 FlyPPTTimer 只读打开的受管文稿抑制伪提示。
+- COM 无法读取 WPS/特定 Office 放映 HWND 时，按进程、前台、放映标题、窗口类和面积回退查找原生窗口，再复用最大化/置前/TopMost activator。
+- Microsoft PowerPoint 64 位临时三页文稿真机：只读打开与受管状态、从头放映、下一页、跳第 2 页、黑屏/恢复、白屏/恢复、结束放映、关闭最后打开文稿全部通过；打开和放映窗口均报告“已最大化并置前”。
+- WPS `wpp.exe` 兼容 COM 临时文稿真机同一链路通过；检测到 `PP12FrameClass` 文稿窗和 `WPS Presentation Slide Show` 放映窗，原生回退成功最大化。破坏性的强制退出只用 terminator 替身验证确认和进程集合，未终止用户正在使用的 WPS。
+- 三个 Release Build：各 **0 warnings / 0 errors**。桌面测试：**314/314 通过**；Core：**4/4 通过**；0 失败，0 跳过。
+- 最终发布版 WPF 设置 UIA：启动 1,334ms；基础四类控件 93/113/22/17ms；提醒 133/15ms；热键 217/15ms；远程 129/12/17ms；未保存状态 100ms；取消 132ms。设置退出集成启动 3,242ms，主程序 252ms 恢复响应。计时窗启动 1,557ms，F3 82ms，F5 隐藏/显示 1,142/26ms。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,687,921 bytes，SHA-256 `0AB5E03119803614063A24687E12AE2BB99ACB7767218ABCEE03381775EA2E75`；`FlyPPTTimer.Settings.exe` 75,718,225 bytes，SHA-256 `19C712B734FC3A436E1B6F90CDF9E2577797028121CF4C8290E4DADC3D0C2E61`。
+- 阶段 3 提交 `069ce33a3a1246dd88eb470b372695a0ca78d66c` 的 [Windows CI 31099197824](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31099197824) 全绿并上传 Artifact：三个 Build、314+4 测试、双 EXE、校验和全部成功。Runner 直接 UIA：设置启动 1,234ms，各项操作 7–301ms；设置退出后主程序 218ms 响应；计时窗启动 1,223ms，F3 90ms，F5 隐藏/显示 1,088/27ms。
+
+## 4.0 完整重构阶段 2：完整 WPF 设置、规则和提醒（2026-08-06）
+
+- WPF 设置扩展为计时、文件规则、提醒与声音、外观与显示、快捷键、远程与其他六个页面；正式配置入口不再把高级字段转交经典设置。
+- 文件规则支持添加、编辑、删除、清空、独立时长/模式/启用、批量修改及全局时长变化后的同步选择。
+- 三组提醒支持启用、提前秒数、语音、自定义声音副本、五种闪烁样式和节奏；保留既有中文提示文字。
+- 外观、多屏、大屏、全部 20 项热键、冲突校验、远程端口/token、语言、更新字段、导入/导出/恢复默认和目录入口均可在 WPF 编辑。
+- `JsonExtensionData` 在全部持久化层级保留未来字段；真实 `v0.30.2-config.json` fixture 验证根对象、嵌套对象和规则未知字段保存往返。
+- 真实 WPF 测试统一进入禁并行 collection，避免两个 STA 测试争抢 AppDomain 唯一 `Application`；完整桌面套件连续运行两次均 279/279 通过。
+- 三个 Release Build：各 **0 warnings / 0 errors**。桌面测试：**279/279 通过**；Core：**4/4 通过**；0 失败，0 跳过。
+- 最终发布版 WPF 设置 UI Automation：启动 1,302ms；基础四类控件 95/92/133/18ms；提醒切页/编辑 170/20ms；热键切页/编辑 220/18ms；远程切页/复选/端口 120/11/17ms；脏状态 ValuePattern 更新 100ms；取消 106ms。所有操作低于 3 秒。
+- 设置退出回归：集成启动 2,948ms；返回主程序 196ms 内响应并重载配置。WPF 计时窗回归：启动 1,492ms；F3 78ms；F5 隐藏/显示 1,166/14ms。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,684,704 bytes，SHA-256 `BEBEB044290404E9CC3DC6E8569BFEDC947144BFD68912A6132F9D70051BA75E`；`FlyPPTTimer.Settings.exe` 75,715,003 bytes，SHA-256 `585B27CB92F8F9155B12BFB138A5D702E3867FA662CAEDC39A6581A57A8244D9`。
+- 阶段 2 主提交 `288fbed578a63d05e832415254316bfae6ad4fa1`，UIA 可靠性修复至 `520af4586a270d46e4435b5352b3e147b2fdffff`；[Windows CI 31096841196](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31096841196) 全绿并上传 Artifact。Runner 直接 UIA：设置启动 1,119ms，所有编辑/切页/状态更新 6–317ms；设置退出后主程序 194ms 响应；计时窗 F3 88ms、F5 隐藏/显示 1,148/116ms。
+
+## 4.0 完整重构阶段 1：WPF 计时与显示（2026-08-06）
+
+- 正式普通计时窗口切换为同进程 `WpfTimerOverlayWindow`；保持显示/隐藏、后台计时、外观、超时、置顶、透明/形状、点击穿透、锁定、拖动、右键命令和提醒闪烁。
+- 正式大屏切换为 `WpfBigScreenTimerWindow`；保持非主屏限制、标准标题栏、缩放/最小/最大/关闭和共享计时快照。
+- 新增 `OverlayPlacementService`，经典兼容窗与 WPF 窗共享九宫格、百分比微调、负坐标和 DPI 物理像素计算。
+- 修复启动期文字自动扩展提示同步阻塞 composition root：提示改为投递到 UI 消息循环，热键/托盘/服务可继续完成初始化；发布版 readiness 约 7ms。
+- 三个 Release Build：各 **0 warnings / 0 errors**。
+- 桌面测试：**274/274 通过**；Core：**4/4 通过**；0 失败，0 跳过。
+- 发布版 WPF 设置 smoke：启动 1,164ms；文本 88ms；下拉 83ms；复选 23ms；数字 17ms；取消 105ms。
+- 设置退出回归：集成启动 2,915ms；返回主程序 198ms。
+- 正式 WPF 计时窗 smoke：冷启动 1,467ms；F3 更新 82ms；F5 隐藏 1,183ms、显示 14ms；主程序保持响应。
+- GitHub Hosted Runner 缺少 UI Automation 可见窗口时不跳过测试：脚本返回专用环境码，workflow 显式运行 STA 线程内真实 WPF Window/控件绑定与 Dispatcher 操作；普通 ViewModel 测试不作为替代。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 75,564,260 bytes，SHA-256 `43A5D27B64185F7DAC460369F382BE142F3E00B0ABEEADC361D2EDE6269B618C`；`FlyPPTTimer.Settings.exe` 75,577,569 bytes，SHA-256 `CD681FC50B1750EE3253AD0BD44C54CC237A3F7B07CC5C93558B09DF0B8785C0`。
+- 本机只有一个主显示器；扩展屏热插拔保留为人工验收，自动化已覆盖真实 WPF 大屏控件、主屏拒绝、显示拓扑/负坐标/DPI 和安全重建。
+- 阶段 1 提交 `82712046f0bb56a67d964a3327232c809ca43421` 的 [Windows CI 31093177173](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31093177173) 成功；本次 Runner 直接完成发布版 UI Automation（设置启动 1,059ms，四类控件 59/77/118/13ms；计时窗启动 1,184ms，F3 84ms，F5 1,151/26ms），未触发 STA 环境回退；Artifact 上传成功。
+
+## 4.0 完整重构阶段 0：审计基线（2026-08-06）
+
+- 稳定行为基线：`v0.30.2`（`8921390ac99d574f99be46b7e08d36a191b3e483`）。
+- 已审计中英文 README、截至 0.30.2 的 CHANGELOG、历史 TEST_REPORT、全部基线产品/测试源码、嵌入远程网页以及构建、发布、更新、安装脚本；创建 `docs/v4/V0302_PARITY_MATRIX.md`、`V4_ARCHITECTURE.md` 和 `V4_PROGRESS.md`。
+- v0.30.2 Release Build：**0 warnings / 0 errors**；测试 **188/188 通过**，0 失败，0 跳过。首次 testhost 因独立 .NET 10 SDK 目录没有 .NET 8 runtime 未能启动；对同一生成物启用 runtime major roll-forward 后全部通过，属于宿主环境差异。
+- 当前 4.0 Release Build：主程序、Core、WPF Settings 均 **0 warnings / 0 errors**。
+- 当前 4.0 测试：桌面 **264/264 通过**；Core **4/4 通过**；0 失败，0 跳过。
+- `win-x64` 自包含单文件发布在同一目录生成两个 EXE。
+- 发布版 WPF UI Automation：启动 1,332ms；时长文本 137ms；模式下拉 151ms；超时复选框 15ms；外观数字字段 16ms；取消退出通过。每项控件操作均低于 3 秒。
+- 主程序/设置退出 smoke：集成设置启动 2,108ms；设置关闭后主程序 191ms 内响应。
+- 本地阶段 Artifact（不提交）：`FlyPPTTimer.exe` 51,823,905 bytes，SHA-256 `CA355E6AC3368807EEE1F639FDC304F1577D6D36C712C757C59C06F206F929C0`；`FlyPPTTimer.Settings.exe` 75,353,968 bytes，SHA-256 `6306B8B140DD0A1774C6D0440F7D8FF9738A344DDE3BF26D2539D2D7348B3ED9`。
+- GitHub Actions：阶段 0 内容提交 `3369825d8c983b4589a3f3814be86175a6210cf1` 的 [Windows CI 31090670000](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/31090670000) 成功；Restore、三个 Release Build、264+4 测试、双 EXE 发布、两项 GUI smoke、校验和与 Artifact 上传步骤全部成功。
+
 ## v0.30.2 当前验证
 
 - Release 编译：0 个警告，0 个错误。

@@ -34,6 +34,48 @@ public sealed class PresentationLifecycleTests
         Assert.Equal(expected, calls.Count == 0 ? "none" : calls.Single());
     }
 
+    [Fact]
+    public void EnteringPresentation_AppliesRuleBeforeStartingInStableOrder()
+    {
+        var config = new AppConfig();
+        var calls = new List<string>();
+        var sut = Create(config, calls);
+
+        sut.Observe(true, @"C:\slides\demo.pptx", "adapter");
+
+        Assert.Equal(["alerts", "duration", "stop-reset", "start"], calls);
+    }
+
+    [Fact]
+    public void DuplicatePathDoesNotRestartButPathChangeDoes()
+    {
+        var config = new AppConfig();
+        var calls = new List<string>();
+        var sut = Create(config, calls);
+        sut.Observe(true, @"C:\slides\first.pptx", "adapter");
+        calls.Clear();
+
+        sut.Observe(true, @"c:\SLIDES\first.pptx", "fullscreen");
+        Assert.Empty(calls);
+
+        sut.Observe(true, @"C:\slides\second.pptx", "adapter");
+        Assert.Equal(["alerts", "duration", "stop-reset", "start"], calls);
+    }
+
+    [Fact]
+    public void LeavingAfterDetectionWithoutAutoStartDoesNotStopUserTimer()
+    {
+        var config = new AppConfig();
+        config.Behavior.AutoStartOnFullscreen = false;
+        var calls = new List<string>();
+        var sut = Create(config, calls);
+        sut.Observe(true, @"C:\slides\demo.pptx", "fullscreen");
+
+        sut.Observe(false, "", "fullscreen");
+
+        Assert.Empty(calls);
+    }
+
     private static PresentationLifecycleController Create(AppConfig config, List<string> calls) => new(
         () => config, _ => calls.Add("duration"), () => calls.Add("alerts"),
         () => calls.Add("stop-reset"), () => calls.Add("start"),

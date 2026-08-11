@@ -21,6 +21,8 @@ public sealed class ConfigService
         _configPath = configPath ?? AppPaths.ConfigPath;
     }
 
+    public string ConfigPath => _configPath;
+
     public AppConfig Load()
     {
         if (!File.Exists(_configPath))
@@ -142,87 +144,153 @@ public sealed class ConfigService
 
     internal static void Normalize(AppConfig config)
     {
-        var previousVersion = config.Version;
-        config.Version = AppVersion.Current;
+        ArgumentNullException.ThrowIfNull(config);
+        var previousSchemaVersion = Math.Max(0, config.SchemaVersion);
+
+        EnsureConfigurationObjects(config);
         config.Language = Localization.Normalize(config.Language);
+
+        if (previousSchemaVersion < 1)
+            MigrateToSchema1(config);
+
+        NormalizeCurrentSchema(config);
+        config.SchemaVersion = ConfigSchema.Current;
+        config.Version = AppVersion.Current;
+    }
+
+    private static void EnsureConfigurationObjects(AppConfig config)
+    {
+        config.Update ??= new UpdateSettings();
+        config.Timer ??= new TimerSettings();
+        config.Behavior ??= new BehaviorSettings();
+        config.Behavior.Prompt1 ??= new PromptSettings
+        {
+            Enabled = true,
+            TriggerBeforeEndSeconds = 120,
+            Text = "时间即将结束",
+            Speak = true,
+            FlashBackground = true
+        };
+        config.Behavior.Prompt2 ??= new PromptSettings
+        {
+            TriggerBeforeEndSeconds = 30,
+            Text = "时间即将结束",
+            Speak = true,
+            FlashBackground = true
+        };
+        config.Behavior.EndPrompt ??= new EndPromptSettings();
+        config.Behavior.FullscreenProcessWhitelist ??= new BehaviorSettings().FullscreenProcessWhitelist;
+        config.Appearance ??= new AppearanceSettings();
+        config.Controls ??= new ControlSettings();
+        config.RemoteControl ??= new RemoteControlSettings();
         config.RemoteControl.Window ??= new RemoteWindowPlacement();
-        if (!string.Equals(previousVersion, AppVersion.Current, StringComparison.Ordinal)
-            && config.Appearance.ColorScheme is "默认" or "医疗与卫生-手术室蓝")
+        config.Placement ??= new WindowPlacement();
+        config.Rules ??= [];
+    }
+
+    private static void MigrateToSchema1(AppConfig config)
+    {
+        if (config.Appearance.ColorScheme is "默认" or "医疗与卫生-手术室蓝")
         {
             AppearancePresetService.Apply("医疗卫生（蓝白）", config.Appearance);
             if (config.Appearance.Width == 200) config.Appearance.Width = 160;
             if (Math.Abs(config.Appearance.FontSize - 20F) < 0.01F) config.Appearance.FontSize = 18F;
         }
-        if (!string.Equals(previousVersion, AppVersion.Current, StringComparison.Ordinal))
+
+        if (config.RemoteControl.Window.WidthDip > 800 || config.RemoteControl.Window.HeightDip > 600)
         {
-            if (config.RemoteControl.Window.WidthDip > 800 || config.RemoteControl.Window.HeightDip > 600)
-            {
-                config.RemoteControl.Window.WidthDip = 700;
-                config.RemoteControl.Window.HeightDip = 510;
-                config.RemoteControl.Window.Maximized = false;
-            }
-            if (config.RemoteControl.UseRandomPort)
-            {
-                config.RemoteControl.UseRandomPort = false;
-                config.RemoteControl.Port = 4080;
-            }
-            MigratePromptFlash(config.Behavior.Prompt1, config.Appearance, 3);
-            MigratePromptFlash(config.Behavior.Prompt2, config.Appearance, 3);
-            MigratePromptFlash(config.Behavior.EndPrompt, config.Appearance, Math.Max(1, config.Behavior.EndPrompt.FlashSeconds));
-            if (config.Appearance.Width == 160 && config.Appearance.Height == 60)
-            {
-                config.Appearance.Width = 140;
-                config.Appearance.Height = 50;
-            }
-            if (config.Appearance.Width == 140 && config.Appearance.Height == 50)
-            {
-                config.Appearance.Width = 100;
-                config.Appearance.Height = 35;
-            }
+            config.RemoteControl.Window.WidthDip = 700;
+            config.RemoteControl.Window.HeightDip = 510;
+            config.RemoteControl.Window.Maximized = false;
         }
+
+        if (config.RemoteControl.UseRandomPort)
+        {
+            config.RemoteControl.UseRandomPort = false;
+            config.RemoteControl.Port = 4080;
+        }
+
+        MigratePromptFlash(config.Behavior.Prompt1, config.Appearance, 3);
+        MigratePromptFlash(config.Behavior.Prompt2, config.Appearance, 3);
+        MigratePromptFlash(
+            config.Behavior.EndPrompt,
+            config.Appearance,
+            Math.Max(1, config.Behavior.EndPrompt.FlashSeconds));
+
+        if (config.Appearance.Width == 160 && config.Appearance.Height == 60)
+        {
+            config.Appearance.Width = 140;
+            config.Appearance.Height = 50;
+        }
+        if (config.Appearance.Width == 140 && config.Appearance.Height == 50)
+        {
+            config.Appearance.Width = 100;
+            config.Appearance.Height = 35;
+        }
+
         config.Behavior.Prompt1.Text = "时间即将结束";
-        config.Update ??= new UpdateSettings();
-        config.Appearance.FontFamily = "Microsoft YaHei UI";
-        config.Timer.EnablePerSlideTimer = false;
         config.Behavior.Prompt2.Text = "时间即将结束";
         config.Behavior.EndPrompt.Text = "预设时间到";
+        config.Appearance.FontFamily = "Microsoft YaHei UI";
+        config.Timer.EnablePerSlideTimer = false;
         config.Behavior.Prompt1.Beep = false;
         config.Behavior.Prompt2.Beep = false;
         config.Behavior.EndPrompt.Beep = false;
+    }
+
+    private static void NormalizeCurrentSchema(AppConfig config)
+    {
         NormalizeSelectedSound(config.Behavior.Prompt1);
         NormalizeSelectedSound(config.Behavior.Prompt2);
         NormalizeSelectedSound(config.Behavior.EndPrompt);
+
         if (!config.Placement.HasCustomPlacement)
         {
             config.Placement.Anchor = OverlayAnchor.TopCenter;
             config.Placement.OffsetXPercent = 0;
             config.Placement.OffsetYPercent = 0.5m;
         }
+
         foreach (var rule in config.Rules)
         {
-            if (string.IsNullOrWhiteSpace(rule.FileName) && !string.IsNullOrWhiteSpace(rule.FilePath)) rule.FileName = Path.GetFileName(rule.FilePath);
+            if (string.IsNullOrWhiteSpace(rule.FileName) && !string.IsNullOrWhiteSpace(rule.FilePath))
+                rule.FileName = Path.GetFileName(rule.FilePath);
             if (string.IsNullOrWhiteSpace(rule.FilePath) && !string.IsNullOrWhiteSpace(rule.TitlePattern))
             {
                 rule.FilePath = rule.TitlePattern;
                 rule.FileName = Path.GetFileName(rule.TitlePattern);
             }
-            if (string.IsNullOrWhiteSpace(rule.Duration)) rule.Duration = config.Timer.DefaultDuration;
+            if (string.IsNullOrWhiteSpace(rule.Duration))
+                rule.Duration = config.Timer.DefaultDuration;
         }
+
         config.Rules = config.Rules
             .Where(rule => !string.IsNullOrWhiteSpace(rule.FilePath))
             .GroupBy(rule => NormalizeRulePath(rule.FilePath), StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .ToList();
-        if (string.IsNullOrWhiteSpace(config.Controls.StartPauseHotkey) || config.Controls.StartPauseHotkey.Contains('+')) config.Controls.StartPauseHotkey = "F3";
-        if (string.IsNullOrWhiteSpace(config.Controls.StopResetHotkey) || config.Controls.StopResetHotkey.Contains('+')) config.Controls.StopResetHotkey = "F4";
-        if (string.IsNullOrWhiteSpace(config.Controls.ToggleWindowHotkey) || config.Controls.ToggleWindowHotkey.Contains('+')) config.Controls.ToggleWindowHotkey = "F5";
+
+        if (string.IsNullOrWhiteSpace(config.Controls.StartPauseHotkey)
+            || config.Controls.StartPauseHotkey.Contains('+'))
+            config.Controls.StartPauseHotkey = "F3";
+        if (string.IsNullOrWhiteSpace(config.Controls.StopResetHotkey)
+            || config.Controls.StopResetHotkey.Contains('+'))
+            config.Controls.StopResetHotkey = "F4";
+        if (string.IsNullOrWhiteSpace(config.Controls.ToggleWindowHotkey)
+            || config.Controls.ToggleWindowHotkey.Contains('+'))
+            config.Controls.ToggleWindowHotkey = "F5";
+
         config.Controls.Hotkeys ??= ControlSettings.DefaultHotkeys();
-        foreach (var pair in ControlSettings.DefaultHotkeys()) if (!config.Controls.Hotkeys.ContainsKey(pair.Key)) config.Controls.Hotkeys[pair.Key] = pair.Value;
+        foreach (var pair in ControlSettings.DefaultHotkeys())
+            if (!config.Controls.Hotkeys.ContainsKey(pair.Key))
+                config.Controls.Hotkeys[pair.Key] = pair.Value;
         config.Controls.Hotkeys["startPause"] = config.Controls.StartPauseHotkey;
         config.Controls.Hotkeys["stopReset"] = config.Controls.StopResetHotkey;
         config.Controls.Hotkeys["toggleWindow"] = config.Controls.ToggleWindowHotkey;
         config.Controls.Hotkeys.Remove("openSettings");
-        if (string.IsNullOrWhiteSpace(config.RemoteControl.Token)) config.RemoteControl.Token = GenerateToken();
+
+        if (string.IsNullOrWhiteSpace(config.RemoteControl.Token))
+            config.RemoteControl.Token = GenerateToken();
     }
 
     private static void MigratePromptFlash(PromptSettings prompt, AppearanceSettings appearance, int seconds)

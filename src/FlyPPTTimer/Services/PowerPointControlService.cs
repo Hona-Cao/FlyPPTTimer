@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -13,20 +12,16 @@ public sealed class PowerPointControlService : IDisposable
     private const int SlideShowRunning = 1;
     private const int SlideShowBlackScreen = 3;
     private const int SlideShowWhiteScreen = 4;
-    private readonly BlockingCollection<Action> _queue = new(32);
-    private readonly Thread _thread;
+    private readonly PresentationStaDispatcher _dispatcher;
+    private readonly PresentationStateMonitor _stateMonitor;
     private readonly Func<AppConfig> _getConfig;
     private readonly LogService _log;
-    private readonly System.Threading.Timer _refreshTimer;
-    private readonly object _stateSync = new();
+    private readonly PresentationWindowActivator _windowActivator;
+    private readonly PresentationProcessDetector _processDetector;
+    private readonly PresentationProcessTerminator _processTerminator;
     private readonly object _operationSync = new();
     private readonly Dictionary<string, ManagedPresentation> _managedPresentations = new(StringComparer.OrdinalIgnoreCase);
-    private PresentationState _cachedState = new();
-    private bool _lastShowRunning;
-    private string _lastShowPath = "";
     private long _lastNavigationTick;
-    private int _refreshQueued;
-    private DateTime _lastRefreshFailureLog = DateTime.MinValue;
     private bool _disposed;
     private PresentationOperationInfo _operation = PresentationOperationInfo.Idle;
 
@@ -34,10 +29,21 @@ public sealed class PowerPointControlService : IDisposable
     {
         _getConfig = getConfig;
         _log = log;
-        _thread = new Thread(Run) { IsBackground = true, Name = "FlyPPTTimer PowerPoint STA" };
-        _thread.SetApartmentState(ApartmentState.STA);
-        _thread.Start();
-        _refreshTimer = new System.Threading.Timer(_ => QueueRefresh(), null, 0, 500);
+        _windowActivator = new PresentationWindowActivator(warn: _log.Warn);
+        _processDetector = new PresentationProcessDetector();
+        _processTerminator = new PresentationProcessTerminator(warn: _log.Warn);
+        _dispatcher = new PresentationStaDispatcher(
+            "FlyPPTTimer PowerPoint STA",
+            warn: _log.Warn);
+        _stateMonitor = new PresentationStateMonitor(
+            _dispatcher,
+            ReadState,
+            ApplyOperation,
+            FriendlyError,
+            _log.Warn);
+        _stateMonitor.SlideShowStarted += (_, path) => SlideShowStarted?.Invoke(this, path);
+        _stateMonitor.SlideShowEnded += (_, _) => SlideShowEnded?.Invoke(this, EventArgs.Empty);
+        _stateMonitor.StateChanged += (_, _) => StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public event EventHandler<string>? SlideShowStarted;
@@ -45,10 +51,7 @@ public sealed class PowerPointControlService : IDisposable
     public event EventHandler? SlideShowWindowActivated;
     public event EventHandler? StateChanged;
 
-    public PresentationState GetState()
-    {
-        lock (_stateSync) return CloneState(_cachedState);
-    }
+    public PresentationState GetState() => _stateMonitor.GetState();
 
     /// <summary>
     /// Accepts a whitelisted presentation command without making the HTTP request wait for COM.
@@ -70,7 +73,7 @@ public sealed class PowerPointControlService : IDisposable
         }
         NotifyStateChanged();
 
-        if (!_queue.TryAdd(() => RunQueuedOperation(command, operation), 200))
+        if (!_dispatcher.TryEnqueue(() => RunQueuedOperation(command, operation)))
         {
             SetOperation(PresentationOperationInfo.Failed(operation, "演示命令队列繁忙，请稍后重试。"));
             return new PresentationCommandResult(false, "演示命令队列繁忙，请稍后重试。", GetState());
@@ -85,7 +88,7 @@ public sealed class PowerPointControlService : IDisposable
         try
         {
             SetOperation(operation with { Message = "正在" + operation.Message });
-            var message = RetryComBusy(() => ExecuteCore(command));
+            var message = _dispatcher.ExecuteWithBusyRetry(() => ExecuteCore(command));
             UpdateCachedState();
             SetOperation(PresentationOperationInfo.Idle with { Message = message });
         }
@@ -93,7 +96,7 @@ public sealed class PowerPointControlService : IDisposable
         {
             _log.Error($"PowerPoint command failed: {command.Command}", ex);
             var error = FriendlyError(ex);
-            lock (_stateSync) _cachedState.Error = error;
+            _stateMonitor.MutateCurrent(state => state.Error = error, notify: false);
             SetOperation(PresentationOperationInfo.Failed(operation, error));
         }
     }
@@ -102,7 +105,7 @@ public sealed class PowerPointControlService : IDisposable
     {
         var timeout = command.Command is "ppt.openPresentation" or "ppt.startFromBeginning" or "ppt.startFromCurrent"
             ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(5);
-        try { return Invoke(() =>
+        try { return _dispatcher.Invoke(() =>
         {
             try
             {
@@ -129,82 +132,7 @@ public sealed class PowerPointControlService : IDisposable
         }
     }
 
-    private void Run()
-    {
-        foreach (var action in _queue.GetConsumingEnumerable()) action();
-    }
-
-    private T Invoke<T>(Func<T> operation, TimeSpan timeout)
-    {
-        if (_disposed) throw new ObjectDisposedException(nameof(PowerPointControlService));
-        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var cancellation = new CancellationTokenSource();
-        var cancellationToken = cancellation.Token;
-        if (!_queue.TryAdd(() =>
-        {
-            if (cancellationToken.IsCancellationRequested) return;
-            try { completion.TrySetResult(RetryComBusy(operation)); }
-            catch (Exception ex) { completion.SetException(ex); }
-        }, 200)) throw new InvalidOperationException("PowerPoint 命令队列繁忙，请稍后重试。");
-        if (!completion.Task.Wait(timeout)) { cancellation.Cancel(); throw new TimeoutException(); }
-        return completion.Task.GetAwaiter().GetResult();
-    }
-
-    private T RetryComBusy<T>(Func<T> operation)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try { return operation(); }
-            catch (COMException ex) when (attempt < 3 && (ex.HResult == unchecked((int)0x80010001) || ex.HResult == unchecked((int)0x8001010A)))
-            {
-                Thread.Sleep(100 * (attempt + 1));
-            }
-        }
-    }
-
-    private void QueueRefresh()
-    {
-        if (_disposed) return;
-        if (Interlocked.Exchange(ref _refreshQueued, 1) != 0) return;
-        if (!_queue.TryAdd(() =>
-        {
-            try { RetryComBusy(UpdateCachedState); }
-            catch (Exception ex)
-            {
-                if (DateTime.UtcNow - _lastRefreshFailureLog >= TimeSpan.FromSeconds(30))
-                {
-                    _lastRefreshFailureLog = DateTime.UtcNow;
-                    _log.Warn($"PowerPoint background refresh failed: {FriendlyError(ex)}");
-                }
-            }
-            finally { Interlocked.Exchange(ref _refreshQueued, 0); }
-        })) Interlocked.Exchange(ref _refreshQueued, 0);
-    }
-
-    private PresentationState UpdateCachedState()
-    {
-        var state = ReadState();
-        if (!string.IsNullOrWhiteSpace(state.Error))
-        {
-            lock (_stateSync)
-            {
-                var stale = CloneState(_cachedState);
-                stale.Error = state.Error;
-                _cachedState = stale;
-                return CloneState(stale);
-            }
-        }
-        state.UpdatedAt = DateTime.Now;
-        ApplyOperation(state);
-        lock (_stateSync) _cachedState = CloneState(state);
-        if (state.IsSlideShowRunning && (!_lastShowRunning || !SamePath(_lastShowPath, state.PresentationPath)))
-            SlideShowStarted?.Invoke(this, state.PresentationPath);
-        else if (!state.IsSlideShowRunning && _lastShowRunning) SlideShowEnded?.Invoke(this, EventArgs.Empty);
-        _lastShowRunning = state.IsSlideShowRunning;
-        _lastShowPath = state.PresentationPath;
-        NotifyStateChanged();
-        return state;
-    }
+    private PresentationState UpdateCachedState() => _stateMonitor.RefreshNow();
 
     private string ExecuteCore(RemoteCommand command)
     {
@@ -250,8 +178,7 @@ public sealed class PowerPointControlService : IDisposable
     private void SetOperation(PresentationOperationInfo operation)
     {
         lock (_operationSync) _operation = operation;
-        lock (_stateSync) ApplyOperation(_cachedState);
-        NotifyStateChanged();
+        _stateMonitor.MutateCurrent(ApplyOperation);
     }
 
     private void ApplyOperation(PresentationState state)
@@ -614,7 +541,16 @@ public sealed class PowerPointControlService : IDisposable
                             SlideShowWindowActivated?.Invoke(this, EventArgs.Empty);
                             return result;
                         }
-                        catch (Exception ex) { return WindowActivationResult.Failed("放映已启动但无法读取窗口句柄", presentationPath, IntPtr.Zero, ex); }
+                        catch (Exception ex)
+                        {
+                            _log.Warn($"Slide show COM HWND lookup failed; trying native window: path={presentationPath}; {ex.Message}");
+                            var hwnd = FindPowerPointSlideShowNativeWindow(presentationPath);
+                            if (hwnd == IntPtr.Zero)
+                                return WindowActivationResult.Failed("放映已启动但无法读取窗口句柄", presentationPath, IntPtr.Zero, ex);
+                            var result = ActivateNativeWindow(hwnd, presentationPath, "放映窗口", true, "；放映已启动但置前失败");
+                            SlideShowWindowActivated?.Invoke(this, EventArgs.Empty);
+                            return result;
+                        }
                     }
                 }
                 Release(presentation, ownsWindow ? window : null, windows);
@@ -627,33 +563,66 @@ public sealed class PowerPointControlService : IDisposable
         return WindowActivationResult.Failed("放映已启动但未找到目标放映窗口", presentationPath, IntPtr.Zero);
     }
 
+    private static IntPtr FindPowerPointSlideShowNativeWindow(string presentationPath)
+    {
+        var foreground = NativeMethods.GetForegroundWindow();
+        var titleToken = Path.GetFileNameWithoutExtension(presentationPath);
+        var candidates = new List<PresentationNativeWindowCandidate>();
+        NativeMethods.EnumWindows((hwnd, _) =>
+        {
+            if (!NativeMethods.IsWindowVisible(hwnd)) return true;
+            NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+            try
+            {
+                using var process = Process.GetProcessById(checked((int)pid));
+                if (!new[] { "POWERPNT", "wpp", "wps" }.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase)) return true;
+
+                var className = new StringBuilder(128);
+                NativeMethods.GetClassName(hwnd, className, className.Capacity);
+                var isSlideShowClass = className.ToString().Contains("screenClass", StringComparison.OrdinalIgnoreCase)
+                    || className.ToString().Equals("PP12FrameClass", StringComparison.Ordinal);
+                var title = new StringBuilder(512);
+                NativeMethods.GetWindowText(hwnd, title, title.Capacity);
+                var titleText = title.ToString();
+                var titleMatches = !string.IsNullOrWhiteSpace(titleToken)
+                    && titleText.Contains(titleToken, StringComparison.CurrentCultureIgnoreCase);
+                if (!isSlideShowClass && !titleMatches) return true;
+
+                var isSlideShowTitle = titleText.Contains("Slide Show", StringComparison.OrdinalIgnoreCase)
+                    || titleText.Contains("放映", StringComparison.CurrentCultureIgnoreCase);
+
+                NativeMethods.GetWindowRect(hwnd, out var rect);
+                candidates.Add(new PresentationNativeWindowCandidate(
+                    hwnd,
+                    hwnd == foreground,
+                    isSlideShowTitle,
+                    isSlideShowClass,
+                    (long)rect.Width * rect.Height));
+            }
+            catch { }
+            return true;
+        }, IntPtr.Zero);
+
+        return SelectPreferredSlideShowWindow(candidates);
+    }
+
+    internal static IntPtr SelectPreferredSlideShowWindow(IEnumerable<PresentationNativeWindowCandidate> candidates) =>
+        candidates
+            .OrderByDescending(candidate => candidate.IsForeground)
+            .ThenByDescending(candidate => candidate.IsSlideShowTitle)
+            .ThenByDescending(candidate => candidate.IsSlideShowClass)
+            .ThenByDescending(candidate => candidate.Area)
+            .Select(candidate => candidate.Hwnd)
+            .FirstOrDefault();
+
     private WindowActivationResult ActivateNativeWindow(IntPtr hwnd, string path, string label, bool maximized, string failurePrefix = "；文稿已打开但最大化或置前失败")
     {
-        if (hwnd == IntPtr.Zero) return WindowActivationResult.Failed($"未找到目标{label}", path, hwnd);
-        var showResult = NativeMethods.ShowWindow(hwnd, NativeMethods.SwMaximize);
-        var showError = Marshal.GetLastWin32Error();
-        var bringResult = NativeMethods.BringWindowToTop(hwnd);
-        var bringError = Marshal.GetLastWin32Error();
-        var foregroundResult = NativeMethods.SetForegroundWindow(hwnd);
-        var foregroundError = Marshal.GetLastWin32Error();
-        if (!bringResult || !foregroundResult)
-        {
-            NativeMethods.SetWindowPos(hwnd, NativeMethods.HwndTopmost, 0, 0, 0, 0, NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow);
-            NativeMethods.SetWindowPos(hwnd, NativeMethods.HwndNoTopmost, 0, 0, 0, 0, NativeMethods.SwpNoMove | NativeMethods.SwpNoSize | NativeMethods.SwpShowWindow);
-            bringResult = NativeMethods.BringWindowToTop(hwnd);
-            bringError = Marshal.GetLastWin32Error();
-            foregroundResult = NativeMethods.SetForegroundWindow(hwnd);
-            foregroundError = Marshal.GetLastWin32Error();
-        }
-        var actuallyMaximized = NativeMethods.IsZoomed(hwnd);
-        if (actuallyMaximized)
-        {
-            var message = bringResult && foregroundResult ? "；已最大化并置前" : "；已最大化（Windows 未允许强制置前）";
-            return WindowActivationResult.Succeeded(message, path, hwnd);
-        }
-        var detail = $"{label} HWND=0x{hwnd.ToInt64():X}; ShowWindow={showResult}/错误{showError}; BringWindowToTop={bringResult}/错误{bringError}; SetForegroundWindow={foregroundResult}/错误{foregroundError}";
-        _log.Warn($"PowerPoint window activation incomplete: path={path}; {detail}");
-        return WindowActivationResult.Failed(failurePrefix + $"（{detail}）", path, hwnd);
+        var result = _windowActivator.Activate(hwnd, path, label, failurePrefix);
+        return new WindowActivationResult(
+            result.Success,
+            result.Message,
+            result.Path,
+            result.Hwnd);
     }
 
     private static object? FindSlideShowWindow(object windows, string presentationPath)
@@ -777,12 +746,15 @@ public sealed class PowerPointControlService : IDisposable
             presentation = ((dynamic)presentations)[count];
             var path = SafeString(() => (string)((dynamic)presentation).FullName);
             var key = NormalizePath(path);
+            var isManaged = _managedPresentations.ContainsKey(key);
             EndShowIfShowing(app, path);
-            // The controller never edits a presentation. Marking the COM document
-            // as saved suppresses the spurious save prompt seen after slideshow
-            // control; Close() then discards no application-authored changes.
-            try { ((dynamic)presentation).Saved = true; } catch { }
-            ((dynamic)presentation).Close();
+            ClosePresentationPreservingUserChanges(
+                isManaged,
+                () =>
+                {
+                    try { ((dynamic)presentation).Saved = true; } catch { }
+                },
+                () => ((dynamic)presentation).Close());
             _managedPresentations.Remove(key);
             return $"已关闭最后打开的文稿：{Path.GetFileName(path)}。";
         }
@@ -803,9 +775,15 @@ public sealed class PowerPointControlService : IDisposable
 
             var path = SafeString(() => (string)((dynamic)presentation).FullName);
             var key = NormalizePath(path);
+            var isManaged = _managedPresentations.ContainsKey(key);
             EndShowIfShowing(app, path);
-            try { ((dynamic)presentation).Saved = true; } catch { }
-            ((dynamic)presentation).Close();
+            ClosePresentationPreservingUserChanges(
+                isManaged,
+                () =>
+                {
+                    try { ((dynamic)presentation).Saved = true; } catch { }
+                },
+                () => ((dynamic)presentation).Close());
             _managedPresentations.Remove(key);
             return $"已关闭当前文稿：{Path.GetFileName(path)}。";
         }
@@ -814,17 +792,24 @@ public sealed class PowerPointControlService : IDisposable
 
     private string ForceQuitAll()
     {
-        var names = new[] { "POWERPNT", "WPSOffice", "wpp", "wps" };
-        var processes = Process.GetProcesses().Where(process => names.Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase)).ToArray();
-        if (processes.Length == 0) return "未发现正在运行的 PowerPoint 或 WPS 演示进程。";
-        foreach (var process in processes)
-        {
-            try { process.Kill(true); }
-            catch (Exception ex) { _log.Warn($"Failed to force quit {process.ProcessName}: {ex.Message}"); }
-            finally { process.Dispose(); }
-        }
+        var result = _processTerminator.TerminateAll();
+        if (!result.AnyDetected) return result.Message;
         _managedPresentations.Clear();
-        return "已请求退出演示软件。未保存内容不会恢复。";
+        return result.Message;
+    }
+
+    internal static void ClosePresentationPreservingUserChanges(
+        bool isManaged,
+        Action suppressManagedSavePrompt,
+        Action close)
+    {
+        ArgumentNullException.ThrowIfNull(suppressManagedSavePrompt);
+        ArgumentNullException.ThrowIfNull(close);
+        // Files opened by FlyPPTTimer are read-only and may receive a false dirty
+        // flag from temporary slideshow settings. External files belong to the
+        // user, so their native save prompt must never be suppressed.
+        if (isManaged) suppressManagedSavePrompt();
+        close();
     }
 
     private static void EndShowIfShowing(dynamic app, string path)
@@ -939,17 +924,11 @@ public sealed class PowerPointControlService : IDisposable
         return state;
     }
 
-    private static void PopulateWpsCapabilities(PresentationState state)
+    private void PopulateWpsCapabilities(PresentationState state)
     {
-        var detected = Process.GetProcesses().Any(process =>
-        {
-            try { return process.ProcessName.Equals("WPSOffice", StringComparison.OrdinalIgnoreCase) || process.ProcessName.Equals("wpp", StringComparison.OrdinalIgnoreCase) || process.ProcessName.Equals("wps", StringComparison.OrdinalIgnoreCase); }
-            finally { process.Dispose(); }
-        });
-        state.WpsDetected = detected;
-        state.WpsCapabilities = detected
-            ? new WpsCapabilities { CanEndSlideShow = false, CanClosePresentation = false, CanExitApplication = false, CanForceExit = true, Message = "检测到 WPS 演示；当前版本未声明可靠的 WPS 文稿 COM 关闭能力，只允许明确确认后的强制退出。" }
-            : new WpsCapabilities();
+        var snapshot = _processDetector.Detect();
+        state.WpsDetected = snapshot.WpsDetected;
+        state.WpsCapabilities = PresentationProcessDetector.CreateWpsCapabilities(snapshot.WpsDetected);
     }
 
     private void AddRuleOptions(PresentationState state, IReadOnlyCollection<string> openPaths)
@@ -1024,37 +1003,6 @@ public sealed class PowerPointControlService : IDisposable
         _ => "PowerPoint 操作失败，请查看程序日志。"
     };
     private static bool IsComBusy(COMException ex) => ex.HResult == unchecked((int)0x80010001) || ex.HResult == unchecked((int)0x8001010A);
-    private static PresentationState CloneState(PresentationState state) => new()
-    {
-        PowerPointInstalled = state.PowerPointInstalled,
-        PowerPointRunning = state.PowerPointRunning,
-        HasPresentation = state.HasPresentation,
-        IsSlideShowRunning = state.IsSlideShowRunning,
-        PresentationName = state.PresentationName,
-        PresentationPath = state.PresentationPath,
-        CurrentSlide = state.CurrentSlide,
-        TotalSlides = state.TotalSlides,
-        ScreenMode = state.ScreenMode,
-        UpdatedAt = state.UpdatedAt,
-        Error = state.Error,
-        Presentations = state.Presentations.Select(x => new PresentationOption { Id = x.Id, Name = x.Name, Directory = x.Directory, IsOpen = x.IsOpen, IsActive = x.IsActive, IsSlideShowRunning = x.IsSlideShowRunning, IsManaged = x.IsManaged }).ToList(),
-        Operation = state.Operation,
-        OperationMessage = state.OperationMessage,
-        OperationStartedAt = state.OperationStartedAt,
-        OperationId = state.OperationId,
-        IsOperationBusy = state.IsOperationBusy,
-        IsCurrentPresentationManaged = state.IsCurrentPresentationManaged,
-        OpenPresentationCount = state.OpenPresentationCount,
-        WpsDetected = state.WpsDetected,
-        WpsCapabilities = new WpsCapabilities
-        {
-            CanEndSlideShow = state.WpsCapabilities.CanEndSlideShow,
-            CanClosePresentation = state.WpsCapabilities.CanClosePresentation,
-            CanExitApplication = state.WpsCapabilities.CanExitApplication,
-            CanForceExit = state.WpsCapabilities.CanForceExit,
-            Message = state.WpsCapabilities.Message
-        }
-    };
 
     private sealed record ManagedPresentation(string Path, DateTime OpenedAt, bool ReadOnlyRequested);
     private sealed record WindowActivationResult(bool Success, string Message, string Path, IntPtr Hwnd)
@@ -1081,7 +1029,11 @@ public sealed class PowerPointControlService : IDisposable
         foreach (var value in values)
         {
             if (value is null || !Marshal.IsComObject(value)) continue;
-            try { Marshal.FinalReleaseComObject(value); } catch { }
+            // A COM identity can be returned through several PowerPoint properties
+            // (for example deck.Application and the active application RCW). A
+            // final release here invalidates every alias, including ones still in
+            // use by the current command. Balance this acquired reference only.
+            try { Marshal.ReleaseComObject(value); } catch { }
         }
     }
 
@@ -1094,13 +1046,14 @@ public sealed class PowerPointControlService : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        _refreshTimer.Dispose();
-        _queue.CompleteAdding();
-        if (!_thread.Join(TimeSpan.FromSeconds(2)))
-        {
-            _log.Warn("PowerPoint STA thread did not stop within two seconds; queue disposal deferred until process exit.");
-            return;
-        }
-        _queue.Dispose();
+        _stateMonitor.Dispose();
+        _dispatcher.Dispose();
     }
 }
+
+internal readonly record struct PresentationNativeWindowCandidate(
+    IntPtr Hwnd,
+    bool IsForeground,
+    bool IsSlideShowTitle,
+    bool IsSlideShowClass,
+    long Area);

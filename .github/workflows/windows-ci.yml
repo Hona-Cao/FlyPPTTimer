@@ -2,41 +2,155 @@ name: Windows CI
 
 on:
   push:
-    branches: [main, feature/v0.12-stability-ui, feature/v0.13.2-winforms-ui-polish]
+    branches: [main]
   pull_request:
     branches: [main]
+
+concurrency:
+  group: windows-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
-      - name: Restore
+          dotnet-version: 10.0.x
+
+      - name: Read application version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (dotnet msbuild src/FlyPPTTimer/FlyPPTTimer.csproj -nologo -getProperty:Version).Trim()
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "Application version is empty." }
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Restore desktop tests
         run: dotnet restore tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj
-      - name: Restore publish runtime
+
+      - name: Restore core tests
+        run: dotnet restore tests/FlyPPTTimer.Core.Tests/FlyPPTTimer.Core.Tests.csproj
+
+      - name: Restore WPF desktop
+        run: dotnet restore src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj
+
+      - name: Restore main publish runtime
         run: dotnet restore src/FlyPPTTimer/FlyPPTTimer.csproj -r win-x64
+
+      - name: Restore settings publish runtime
+        run: dotnet restore src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj -r win-x64
+
       - name: Build release
-        run: dotnet build src/FlyPPTTimer/FlyPPTTimer.csproj -c Release --no-restore | Tee-Object -FilePath build.log
-      - name: Test
-        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=v0.20.2.trx" --results-directory artifacts/test-results
-      - name: Publish single file
-        run: dotnet publish src/FlyPPTTimer/FlyPPTTimer.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o artifacts/publish
+        shell: pwsh
+        run: |
+          dotnet build src/FlyPPTTimer/FlyPPTTimer.csproj -c Release --no-restore | Tee-Object -FilePath build-desktop.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/FlyPPTTimer.Core/FlyPPTTimer.Core.csproj -c Release --no-restore | Tee-Object -FilePath build-core.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj -c Release --no-restore | Tee-Object -FilePath build-wpf.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test desktop behavior
+        run: dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=desktop-$env:APP_VERSION.trx" --results-directory artifacts/test-results
+
+      - name: Test core behavior
+        run: dotnet test tests/FlyPPTTimer.Core.Tests/FlyPPTTimer.Core.Tests.csproj -c Release --no-restore --logger "trx;LogFileName=core-$env:APP_VERSION.trx" --results-directory artifacts/test-results
+
+      - name: Exercise remote page in real Chromium
+        shell: pwsh
+        timeout-minutes: 5
+        run: tests/FlyPPTTimer.Tests/RemoteWebBrowserSmoke.ps1 -WebDirectory src/FlyPPTTimer/Web -InstallBrowser
+
+      - name: Publish single-file applications
+        shell: pwsh
+        run: |
+          dotnet publish src/FlyPPTTimer/FlyPPTTimer.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o artifacts/publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish src/FlyPPTTimer.Desktop/FlyPPTTimer.Desktop.csproj -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o artifacts/settings-publish
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item artifacts/settings-publish/FlyPPTTimer.Settings.exe artifacts/publish/FlyPPTTimer.Settings.exe -Force
+          Remove-Item artifacts/settings-publish -Recurse -Force
+
+      - name: Exercise published WPF settings controls
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          & tests/FlyPPTTimer.Tests/WpfSettingsInteractionSmoke.ps1 -SettingsExe artifacts/publish/FlyPPTTimer.Settings.exe -LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3 -ReportHostedRunnerUnavailability
+          $interactionExit = $LASTEXITCODE
+          if ($interactionExit -eq 42) {
+            Write-Warning "Hosted runner has no UI Automation-visible desktop; running the explicit STA real-WPF-control/Dispatcher fallback."
+            dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName=FlyPPTTimer.Tests.WpfSettingsPreviewTests.RealWpfControlsBindAndDispatcherRespondsOnStaThread"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host "STA real WPF control binding and Dispatcher fallback passed."
+          } elseif ($interactionExit -ne 0) {
+            exit $interactionExit
+          }
+
+      - name: Exercise main application after WPF settings exit
+        shell: pwsh
+        timeout-minutes: 2
+        run: tests/FlyPPTTimer.Tests/WpfSettingsProcessExitSmoke.ps1 -PublishDirectory artifacts/publish
+
+      - name: Exercise published WPF timer window
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          & tests/FlyPPTTimer.Tests/WpfTimerWindowInteractionSmoke.ps1 -PublishDirectory artifacts/publish -LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3 -ReportHostedRunnerUnavailability
+          $interactionExit = $LASTEXITCODE
+          if ($interactionExit -eq 43) {
+            Write-Warning "Hosted runner has no UI Automation-visible desktop; running the explicit STA real-WPF-window/Dispatcher fallback."
+            dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName=FlyPPTTimer.Tests.WpfTimerDisplayTests.WpfOverlayUsesRealControlsAndProcessesDispatcherUpdates"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host "STA real WPF timer controls and Dispatcher fallback passed."
+          } elseif ($interactionExit -ne 0) {
+            exit $interactionExit
+          }
+
+      - name: Exercise published WPF remote dashboard
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          & tests/FlyPPTTimer.Tests/WpfRemoteDashboardInteractionSmoke.ps1 -PublishDirectory artifacts/publish -LaunchTimeoutSeconds 20 -OperationTimeoutSeconds 3 -ReportHostedRunnerUnavailability
+          $interactionExit = $LASTEXITCODE
+          if ($interactionExit -eq 44) {
+            Write-Warning "Hosted runner has no UI Automation-visible desktop; running the explicit STA real-WPF-remote-control/Dispatcher fallback."
+            dotnet test tests/FlyPPTTimer.Tests/FlyPPTTimer.Tests.csproj -c Release --no-restore --filter "FullyQualifiedName=FlyPPTTimer.Tests.WpfRemoteDashboardTests.RealWpfDashboardControlsBindResizeAndDispatcherResponds"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host "STA real WPF remote dashboard controls and Dispatcher fallback passed."
+          } elseif ($interactionExit -ne 0) {
+            exit $interactionExit
+          }
+
       - name: Create checksum and collect audit material
         shell: pwsh
         run: |
-          $hash = (Get-FileHash artifacts/publish/FlyPPTTimer.exe -Algorithm SHA256).Hash
-          "$hash  FlyPPTTimer.exe" | Set-Content artifacts/FlyPPTTimer-v0.20.2.sha256 -Encoding ascii
-          $writtenHash = (Get-Content artifacts/FlyPPTTimer-v0.20.2.sha256 -Raw).Trim().Split(' ')[0]
-          if ($hash -ne $writtenHash) { throw "CI Artifact EXE hash verification failed." }
-          "CI Artifact EXE SHA-256: $hash" | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
-          Copy-Item build.log artifacts/build.log
+          if (!(Test-Path artifacts/publish/FlyPPTTimer.exe)) { throw "Main executable is missing from the artifact." }
+          if (!(Test-Path artifacts/publish/FlyPPTTimer.Settings.exe)) { throw "Settings executable is missing from the artifact." }
+          $mainHash = (Get-FileHash artifacts/publish/FlyPPTTimer.exe -Algorithm SHA256).Hash
+          $settingsHash = (Get-FileHash artifacts/publish/FlyPPTTimer.Settings.exe -Algorithm SHA256).Hash
+          $checksumPath = "artifacts/FlyPPTTimer-v$env:APP_VERSION.sha256"
+          @(
+            "$mainHash  FlyPPTTimer.exe"
+            "$settingsHash  FlyPPTTimer.Settings.exe"
+          ) | Set-Content $checksumPath -Encoding ascii
+          $writtenHashes = Get-Content $checksumPath | ForEach-Object { ($_ -split '\s+')[0] }
+          if ($mainHash -ne $writtenHashes[0] -or $settingsHash -ne $writtenHashes[1]) { throw "CI artifact EXE hash verification failed." }
+          @(
+            "FlyPPTTimer.exe SHA-256: $mainHash"
+            "FlyPPTTimer.Settings.exe SHA-256: $settingsHash"
+          ) | Set-Content artifacts/CI_ARTIFACT_HASH.txt -Encoding ascii
+          Copy-Item build-desktop.log artifacts/build-desktop.log
+          Copy-Item build-core.log artifacts/build-core.log
+          Copy-Item build-wpf.log artifacts/build-wpf.log
           Copy-Item TEST_REPORT.md artifacts/TEST_REPORT.md
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FlyPPTTimer-v0.20.2-windows-x64
+          name: FlyPPTTimer-v${{ steps.version.outputs.value }}-windows-x64
           path: artifacts
           if-no-files-found: error
