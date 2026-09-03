@@ -17,7 +17,7 @@ raw-window-handle = "0.6"
 png = "0.18"
 qrcode = { version = "0.14", default-features = false }
 clipboard-win = "5.4"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_Networking_WinHttp", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_System_LibraryLoader", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Controls_Dialogs", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_Networking_WinHttp", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_System_LibraryLoader", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Controls_Dialogs", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows = { version = "0.62", features = ["Win32_Media_Audio", "Win32_Media_Audio_Endpoints", "Win32_Media_Speech", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Ole", "Win32_System_Variant"] }
 
 [build-dependencies]

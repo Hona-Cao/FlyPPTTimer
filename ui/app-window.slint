@@ -25,6 +25,10 @@ export struct RuleItem {
 export struct PresentationItem {
     name: string,
     path: string,
+    duration: string,
+    mode: int,
+    enabled: bool,
+    is-rule: bool,
 }
 
 export component AppWindow inherits Window {
@@ -197,6 +201,10 @@ export component PresentationWindow inherits Window {
     in property <[PresentationItem]> presentations;
     in-out property <int> selected-presentation: -1;
     in-out property <string> goto-page: "1";
+    in-out property <string> rule-duration: "00:08:00";
+    in-out property <int> rule-mode: 0;
+    in-out property <bool> rule-enabled: true;
+    in property <[string]> timer-modes: ["倒计时", "正计时"];
     in property <string> open-text: "打开演示文稿";
     in property <string> beginning-text: "从头放映";
     in property <string> current-text: "当前页放映";
@@ -214,6 +222,16 @@ export component PresentationWindow inherits Window {
     in property <string> confirm-title: "确认退出软件";
     in property <string> confirm-message: "将强制关闭全部 PowerPoint/WPS 演示进程，未保存内容会丢失。";
     in property <string> cancel-command-text: "取消";
+    in property <string> add-file-text: "添加";
+    in property <string> delete-file-text: "删除";
+    in property <string> refresh-list-text: "刷新";
+    in property <string> clear-list-text: "清空列表";
+    in property <string> rule-duration-text: "时长";
+    in property <string> rule-mode-text: "模式";
+    in property <string> rule-status-text: "状态";
+    in property <string> rule-enabled-text: "启用规则";
+    in property <string> rule-disabled-text: "禁用规则";
+    in property <string> save-rule-text: "保存";
     in-out property <int> current-page: 0;
     in property <string> connection-page-text: "远程连接";
     in property <string> presentation-page-text: "演示文稿";
@@ -241,10 +259,12 @@ export component PresentationWindow inherits Window {
 
     callback command(int, string);
     callback remote-action(int, string, bool);
+    callback rule-action(int, string);
+    callback presentation-selected(int);
 
     title: root.window-title;
     width: 700px;
-    height: 510px;
+    height: 620px;
     background: #f3f6fa;
 
     Rectangle {
@@ -307,7 +327,7 @@ export component PresentationWindow inherits Window {
 
     Rectangle {
         visible: root.current-page == 1;
-        x: 24px; y: 148px; width: parent.width - 48px; height: 82px;
+        x: 24px; y: 148px; width: parent.width - 48px; height: 116px;
         background: #ffffff; border-radius: 10px; border-width: 1px; border-color: #d7e0ea;
         ScrollView {
             x: 8px; y: 7px; width: parent.width - 16px; height: parent.height - 14px;
@@ -318,31 +338,48 @@ export component PresentationWindow inherits Window {
                     height: 40px; border-radius: 6px;
                     background: root.selected-presentation == index ? #e8f0ff : transparent;
                     Text { x: 10px; y: 2px; width: parent.width - 20px; height: 18px; text: item.name; color: #1e293b; font-size: 12px; vertical-alignment: center; overflow: elide; }
-                    Text { x: 10px; y: 20px; width: parent.width - 20px; height: 17px; text: item.path; color: #64748b; font-size: 10px; vertical-alignment: center; overflow: elide; }
-                    TouchArea { clicked => { root.selected-presentation = index; } }
+                    Text { x: 10px; y: 20px; width: parent.width - 190px; height: 17px; text: item.path; color: #64748b; font-size: 10px; vertical-alignment: center; overflow: elide; }
+                    Text { x: parent.width - 174px; y: 2px; width: 74px; height: 18px; text: item.duration; color: #475569; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                    Text { x: parent.width - 94px; y: 2px; width: 84px; height: 18px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: #475569; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                    Text { x: parent.width - 174px; y: 20px; width: 164px; height: 17px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? #2f7d57 : #9a6a22; font-size: 10px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                    TouchArea { clicked => { root.selected-presentation = index; root.presentation-selected(index); } }
                 }
             }
         }
     }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-text; enabled: root.selected-presentation >= 0; clicked => { root.command(0, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.beginning-text; clicked => { root.command(1, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.current-text; clicked => { root.command(2, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 272px; width: (parent.width - 64px) / 4; height: 34px; text: root.add-file-text; clicked => { root.rule-action(0, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 4; y: 272px; width: (parent.width - 64px) / 4; height: 34px; text: root.delete-file-text; enabled: root.selected-presentation >= 0; clicked => { root.rule-action(1, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 4; y: 272px; width: (parent.width - 64px) / 4; height: 34px; text: root.refresh-list-text; clicked => { root.rule-action(2, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 48px + 3 * (parent.width - 64px) / 4; y: 272px; width: (parent.width - 64px) / 4; height: 34px; text: root.clear-list-text; clicked => { root.rule-action(3, ""); } }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: 282px; width: (parent.width - 64px) / 3; height: 36px; text: root.previous-text; clicked => { root.command(3, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 282px; width: (parent.width - 64px) / 3; height: 36px; text: root.next-text; clicked => { root.command(4, ""); } }
-    LineEdit { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 282px; width: (parent.width - 64px) / 3 - 58px; height: 36px; text <=> root.goto-page; }
-    RemoteButton { visible: root.current-page == 1; x: parent.width - 82px; y: 282px; width: 58px; height: 36px; text: root.goto-text; clicked => { root.command(5, root.goto-page); } }
+    Rectangle { visible: root.current-page == 1 && root.selected-presentation >= 0 && root.presentations[root.selected-presentation].is-rule; x: 24px; y: 312px; width: parent.width - 48px; height: 50px; background: #f8fafc; border-radius: 8px; border-width: 1px; border-color: #d7e0ea;
+        Text { x: 12px; y: 7px; width: 46px; height: 18px; text: root.rule-duration-text; color: #475569; font-size: 11px; vertical-alignment: center; }
+        LineEdit { x: 56px; y: 8px; width: 104px; height: 32px; text <=> root.rule-duration; }
+        Text { x: 176px; y: 7px; width: 46px; height: 18px; text: root.rule-mode-text; color: #475569; font-size: 11px; vertical-alignment: center; }
+        ComboBox { x: 220px; y: 8px; width: 118px; height: 32px; model: root.timer-modes; current-index <=> root.rule-mode; }
+        CheckBox { x: 354px; y: 8px; width: 130px; height: 32px; text: root.rule-enabled-text; checked <=> root.rule-enabled; }
+        RemoteButton { x: parent.width - 98px; y: 8px; width: 86px; height: 32px; text: root.save-rule-text; primary: true; clicked => { root.rule-action(4, root.rule-duration); } }
+    }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.black-text; clicked => { root.command(6, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.white-text; clicked => { root.command(7, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.restore-text; clicked => { root.command(8, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 372px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-text; enabled: root.selected-presentation >= 0; clicked => { root.command(0, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 372px; width: (parent.width - 64px) / 3; height: 36px; text: root.beginning-text; clicked => { root.command(1, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 372px; width: (parent.width - 64px) / 3; height: 36px; text: root.current-text; clicked => { root.command(2, ""); } }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.end-text; clicked => { root.command(9, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-active-text; clicked => { root.command(10, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-managed-text; clicked => { root.command(11, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 414px; width: (parent.width - 64px) / 3; height: 36px; text: root.previous-text; clicked => { root.command(3, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 414px; width: (parent.width - 64px) / 3; height: 36px; text: root.next-text; clicked => { root.command(4, ""); } }
+    LineEdit { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 414px; width: (parent.width - 64px) / 3 - 58px; height: 36px; text <=> root.goto-page; }
+    RemoteButton { visible: root.current-page == 1; x: parent.width - 82px; y: 414px; width: 58px; height: 36px; text: root.goto-text; clicked => { root.command(5, root.goto-page); } }
 
-    RemoteButton { visible: root.current-page == 1; x: parent.width - 238px; y: 420px; width: 214px; height: 38px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = true; } }
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 456px; width: (parent.width - 64px) / 3; height: 36px; text: root.black-text; clicked => { root.command(6, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 456px; width: (parent.width - 64px) / 3; height: 36px; text: root.white-text; clicked => { root.command(7, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 456px; width: (parent.width - 64px) / 3; height: 36px; text: root.restore-text; clicked => { root.command(8, ""); } }
+
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 498px; width: (parent.width - 64px) / 3; height: 36px; text: root.end-text; clicked => { root.command(9, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 498px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-active-text; clicked => { root.command(10, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 498px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-managed-text; clicked => { root.command(11, ""); } }
+
+    RemoteButton { visible: root.current-page == 1; x: parent.width - 238px; y: 552px; width: 214px; height: 38px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = true; } }
 
     if root.confirm-exit && root.current-page == 1: Rectangle {
         background: #66000000;

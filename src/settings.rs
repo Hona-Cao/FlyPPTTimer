@@ -1834,7 +1834,7 @@ fn commit_draft(applied: &mut AppConfig, draft: &AppConfig) {
     *applied = draft.clone();
 }
 
-fn native_open_presentations() -> Vec<PathBuf> {
+pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
     use windows_sys::Win32::UI::Controls::Dialogs::{
         GetOpenFileNameW, OFN_ALLOWMULTISELECT, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_HIDEREADONLY,
         OPENFILENAMEW,

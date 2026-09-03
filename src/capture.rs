@@ -80,8 +80,8 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
     timer_window.hide()?;
     drop(timer_window);
 
-    // Remote PC 窗口两页 (700x510)
-    HEADLESS_WINDOW.with(|window| window.set_size(PhysicalSize::new(700, 510)));
+    // Remote PC 窗口两页 (700x620)
+    HEADLESS_WINDOW.with(|window| window.set_size(PhysicalSize::new(700, 620)));
     let control = crate::app::PresentationWindow::new()?;
     control.set_window_title("远程控制".into());
     control.set_connection_page_text("远程连接".into());
@@ -101,6 +101,10 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
     items.push(crate::app::PresentationItem {
         name: "演示文稿.pptx".into(),
         path: "C:\\Decks\\演示文稿.pptx".into(),
+        duration: "00:08:00".into(),
+        mode: 0,
+        enabled: true,
+        is_rule: true,
     });
     control.set_presentations(slint::ModelRc::new(items));
     control.show()?;

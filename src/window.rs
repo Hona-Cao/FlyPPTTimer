@@ -3,15 +3,16 @@ use slint::{PhysicalPosition, PhysicalSize};
 use windows_sys::Win32::{
     Foundation::{HWND, POINT, RECT},
     Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
+    UI::HiDpi::GetDpiForWindow,
     UI::WindowsAndMessaging::{
         GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetSystemMetrics, GetWindowLongPtrW,
-        HWND_NOTOPMOST, HWND_TOPMOST, IsIconic, IsWindowVisible, LWA_ALPHA, SM_CXVIRTUALSCREEN,
-        SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SPI_GETWORKAREA, SW_HIDE,
-        SW_SHOWNOACTIVATE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-        SystemParametersInfoW, WS_CAPTION, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-        WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
-        WS_THICKFRAME,
+        GetWindowRect, HWND_NOTOPMOST, HWND_TOPMOST, IsIconic, IsWindowVisible, LWA_ALPHA,
+        SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+        SPI_GETWORKAREA, SW_HIDE, SW_SHOWNOACTIVATE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOSIZE, SWP_NOZORDER, SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos,
+        ShowWindow, SystemParametersInfoW, WS_CAPTION, WS_EX_APPWINDOW, WS_EX_LAYERED,
+        WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+        WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
     },
 };
 
@@ -73,7 +74,8 @@ pub fn apply_native_window(
             position_flags |= SWP_FRAMECHANGED;
         }
 
-        let mut style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+        let current_exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+        let mut style = current_exstyle;
         style |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
         style &= !WS_EX_APPWINDOW;
         if click_through {
@@ -81,7 +83,10 @@ pub fn apply_native_window(
         } else {
             style &= !WS_EX_TRANSPARENT;
         }
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style as isize);
+        if style != current_exstyle {
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style as isize);
+            position_flags |= SWP_FRAMECHANGED;
+        }
 
         let alpha = ((opacity_percent.clamp(10, 100) * 255) / 100) as u8;
         SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
@@ -109,6 +114,47 @@ pub fn refresh_shape(window: &slint::Window, shape: &str) {
         return;
     };
     unsafe { apply_shape(hwnd, shape) };
+}
+
+pub fn resize_physical(window: &slint::Window, size: PhysicalSize) {
+    let Some(hwnd) = hwnd(window) else {
+        return;
+    };
+    unsafe {
+        let mut rect = RECT::default();
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return;
+        }
+        if rect.right - rect.left == size.width as i32
+            && rect.bottom - rect.top == size.height as i32
+        {
+            return;
+        }
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            0,
+            0,
+            size.width.max(1) as i32,
+            size.height.max(1) as i32,
+            SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER,
+        );
+    }
+}
+
+pub fn resize_for_dpi(window: &slint::Window, width_dip: i32, height_dip: i32) {
+    let Some(hwnd) = hwnd(window) else {
+        return;
+    };
+    let dpi = unsafe { GetDpiForWindow(hwnd) }.max(96);
+    let scale = dpi as f64 / 96.0;
+    resize_physical(
+        window,
+        PhysicalSize::new(
+            (width_dip.max(1) as f64 * scale).round() as u32,
+            (height_dip.max(1) as f64 * scale).round() as u32,
+        ),
+    );
 }
 
 pub fn cursor_position() -> Option<PhysicalPosition> {
@@ -163,7 +209,9 @@ pub fn is_visible(window: &slint::Window) -> bool {
 
 pub fn restore_remote_window(window: &slint::Window, placement: &RemoteWindowPlacement) {
     let width = placement.width_dip.max(700) as f32;
-    let height = placement.height_dip.max(510) as f32;
+    // The presentation page includes the rule editor and its full control
+    // group. Keep legacy 510-DIP placements usable without clipping it.
+    let height = placement.height_dip.max(620) as f32;
     window.set_size(slint::LogicalSize::new(width, height));
     let size = window.size();
     let work = monitor_work_area(&placement.screen_device_name).unwrap_or_else(primary_work_area);

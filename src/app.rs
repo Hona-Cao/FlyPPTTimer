@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use slint::{Brush, Color, ComponentHandle, LogicalSize, Model, ModelRc, VecModel};
+use slint::{Brush, Color, ComponentHandle, LogicalSize, Model, ModelRc, SharedString, VecModel};
 
 use crate::{
     alerts::AlertTracker,
@@ -107,7 +107,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Rc::clone(&display_rebuild),
             true,
         )?;
-        settings.show()?;
+        show_settings_ready(&settings)?;
         *settings_window.borrow_mut() = Some(settings);
     }
 
@@ -522,7 +522,7 @@ fn handle_desktop_event(
         }
         DesktopEvent::OpenSettings => {
             if let Some(settings) = settings_window.borrow().as_ref() {
-                if let Err(error) = settings.show() {
+                if let Err(error) = show_settings_ready(settings) {
                     eprintln!("failed to show settings: {error}");
                 }
                 return;
@@ -543,7 +543,7 @@ fn handle_desktop_event(
                 false,
             ) {
                 Ok(settings) => {
-                    if let Err(error) = settings.show() {
+                    if let Err(error) = show_settings_ready(&settings) {
                         eprintln!("failed to show settings: {error}");
                     }
                     *settings_window.borrow_mut() = Some(settings);
@@ -558,7 +558,7 @@ fn handle_desktop_event(
                 eprintln!("failed to hide settings: {error}");
             }
             if let Some(control) = presentation_window.borrow().as_ref() {
-                if let Err(error) = control.show() {
+                if let Err(error) = show_presentation_ready(control) {
                     eprintln!("failed to show presentation control: {error}");
                 }
                 populate_remote_connection_window(control, remote, &config.borrow(), true);
@@ -566,7 +566,7 @@ fn handle_desktop_event(
             }
             match create_presentation_window(config, presentation, remote, config_path) {
                 Ok(control) => {
-                    if let Err(error) = control.show() {
+                    if let Err(error) = show_presentation_ready(&control) {
                         eprintln!("failed to show presentation control: {error}");
                     }
                     *presentation_window.borrow_mut() = Some(control);
@@ -797,7 +797,147 @@ fn create_presentation_window(
         .into(),
     );
     window.set_cancel_command_text(if english { "Cancel" } else { "取消" }.into());
+    window.set_add_file_text(if english { "Add" } else { "添加" }.into());
+    window.set_delete_file_text(if english { "Delete" } else { "删除" }.into());
+    window.set_refresh_list_text(if english { "Refresh" } else { "刷新" }.into());
+    window.set_clear_list_text(
+        if english {
+            "Clear list"
+        } else {
+            "清空列表"
+        }
+        .into(),
+    );
+    window.set_rule_duration_text(if english { "Duration" } else { "时长" }.into());
+    window.set_rule_mode_text(if english { "Mode" } else { "模式" }.into());
+    window.set_rule_status_text(if english { "Status" } else { "状态" }.into());
+    window.set_rule_enabled_text(if english { "Enabled" } else { "启用规则" }.into());
+    window.set_rule_disabled_text(if english { "Disabled" } else { "禁用规则" }.into());
+    window.set_save_rule_text(if english { "Save" } else { "保存" }.into());
+    window.set_timer_modes(ModelRc::new(VecModel::from(vec![
+        SharedString::from(if english { "Countdown" } else { "倒计时" }),
+        SharedString::from(if english { "Count up" } else { "正计时" }),
+    ])));
     update_presentation_window(&window, &service.state(), &config.borrow());
+    let weak = window.as_weak();
+    let config_for_rules = Rc::clone(config);
+    let service_for_rules = Rc::clone(service);
+    let config_path_for_rules = config_path.to_path_buf();
+    window.on_presentation_selected(move |index| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let Some(item) = window.get_presentations().row_data(index as usize) else {
+            return;
+        };
+        if item.is_rule {
+            window.set_rule_duration(item.duration);
+            window.set_rule_mode(item.mode);
+            window.set_rule_enabled(item.enabled);
+        }
+    });
+    let weak = window.as_weak();
+    window.on_rule_action(move |action, value| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        match action {
+            0 => {
+                let paths = settings::native_open_presentations();
+                if paths.is_empty() {
+                    return;
+                }
+                let mut config = config_for_rules.borrow_mut();
+                let default_duration = config.timer.default_duration.clone();
+                let default_mode = config.timer.mode;
+                for path in paths {
+                    let full = path
+                        .canonicalize()
+                        .unwrap_or(path)
+                        .to_string_lossy()
+                        .into_owned();
+                    let key = full.to_lowercase();
+                    if config
+                        .rules
+                        .iter()
+                        .any(|rule| rule.file_path.to_lowercase() == key)
+                    {
+                        continue;
+                    }
+                    config.rules.push(crate::config::FileRule {
+                        file_name: std::path::Path::new(&full)
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| full.clone()),
+                        file_path: full,
+                        duration: default_duration.clone(),
+                        mode: default_mode,
+                        enabled: true,
+                        ..crate::config::FileRule::default()
+                    });
+                }
+                save_config(&config, &config_path_for_rules);
+                update_presentation_window(&window, &service_for_rules.state(), &config);
+            }
+            1 => {
+                let Some(item) = window
+                    .get_presentations()
+                    .row_data(window.get_selected_presentation().max(0) as usize)
+                    .filter(|item| item.is_rule)
+                else {
+                    return;
+                };
+                let key = item.path.to_lowercase();
+                let mut config = config_for_rules.borrow_mut();
+                config
+                    .rules
+                    .retain(|rule| rule.file_path.to_lowercase() != key);
+                save_config(&config, &config_path_for_rules);
+                window.set_selected_presentation(-1);
+                update_presentation_window(&window, &service_for_rules.state(), &config);
+            }
+            2 => {
+                let _ = service_for_rules.queue(PresentationCommand::Refresh);
+            }
+            3 => {
+                let mut config = config_for_rules.borrow_mut();
+                config.rules.clear();
+                save_config(&config, &config_path_for_rules);
+                window.set_selected_presentation(-1);
+                update_presentation_window(&window, &service_for_rules.state(), &config);
+            }
+            4 => {
+                let Some(item) = window
+                    .get_presentations()
+                    .row_data(window.get_selected_presentation().max(0) as usize)
+                    .filter(|item| item.is_rule)
+                else {
+                    return;
+                };
+                if !crate::config::is_valid_duration(value.as_str()) {
+                    return;
+                }
+                let key = item.path.to_lowercase();
+                let mut config = config_for_rules.borrow_mut();
+                if let Some(rule) = config
+                    .rules
+                    .iter_mut()
+                    .find(|rule| rule.file_path.to_lowercase() == key)
+                {
+                    rule.duration = value.to_string();
+                    rule.mode = if window.get_rule_mode() == 0 {
+                        TimerMode::Countdown
+                    } else {
+                        TimerMode::CountUp
+                    };
+                    rule.enabled = window.get_rule_enabled();
+                }
+                save_config(&config, &config_path_for_rules);
+                update_presentation_window(&window, &service_for_rules.state(), &config);
+            }
+            _ => {}
+        }
+    });
     let weak = window.as_weak();
     let service = Rc::clone(service);
     window.on_command(move |code, value| {
@@ -976,17 +1116,28 @@ fn update_presentation_window(
         items.push(PresentationItem {
             name: presentation.name.clone().into(),
             path: presentation.path.clone().into(),
+            duration: String::new().into(),
+            mode: 0,
+            enabled: true,
+            is_rule: false,
         });
     }
     for rule in config
         .rules
         .iter()
-        .filter(|rule| rule.enabled && !rule.file_path.trim().is_empty())
+        .filter(|rule| !rule.file_path.trim().is_empty())
     {
         if seen.insert(rule.file_path.to_lowercase()) {
             items.push(PresentationItem {
                 name: rule.file_name.clone().into(),
                 path: rule.file_path.clone().into(),
+                duration: rule.duration.clone().into(),
+                mode: match rule.mode {
+                    TimerMode::Countdown => 0,
+                    TimerMode::CountUp => 1,
+                },
+                enabled: rule.enabled,
+                is_rule: true,
             });
         }
     }
@@ -1589,7 +1740,19 @@ fn configure_timer_window(
     window
         .window()
         .set_position(display::timer_position(monitor, &config.placement, size));
+    // Apply the tool-window style before the first visible frame so timer windows
+    // never acquire an AppWindow/taskbar button during startup.
+    window::apply_native_window(
+        window.window(),
+        config.controls.click_through,
+        config.appearance.always_on_top,
+        config.appearance.background_opacity,
+        &config.appearance.shape,
+    );
     window.show()?;
+    // The native handle is finalized by the first event-loop turn. Keep the
+    // timer hidden until that handle has received its popup/tool-window flags.
+    window::set_visible(window.window(), false);
     window::apply_native_window(
         window.window(),
         config.controls.click_through,
@@ -1599,10 +1762,44 @@ fn configure_timer_window(
     );
     let weak = window.as_weak();
     let shape = config.appearance.shape.clone();
+    let placement = config.placement.clone();
+    let monitor = monitor.clone();
+    let click_through = config.controls.click_through;
+    let always_on_top = config.appearance.always_on_top;
+    let opacity = config.appearance.background_opacity;
+    let visible = config.placement.visible;
+    let logical_size = LogicalSize::new(
+        config.appearance.width as f32,
+        config.appearance.height as f32,
+    );
     slint::Timer::single_shot(Duration::from_millis(80), move || {
         if let Some(window) = weak.upgrade() {
+            // Once the window has crossed a per-monitor-DPI boundary, Slint has
+            // the target scale factor. Re-apply the logical size and physical
+            // anchor then, keeping the configured dimensions and rounded region
+            // in sync with the new monitor.
+            window.window().set_size(logical_size);
+            let size = display::logical_size_physical(
+                logical_size.width as i32,
+                logical_size.height as i32,
+                monitor.dpi,
+            );
+            window
+                .window()
+                .set_position(display::timer_position(&monitor, &placement, size));
+            // Winit may expose the native HWND only after the first event-loop
+            // turn. Repeat the native flags here so the first visible timer
+            // frame is also a tool window and cannot leave a taskbar button.
+            window::apply_native_window(
+                window.window(),
+                click_through,
+                always_on_top,
+                opacity,
+                &shape,
+            );
             window::refresh_shape(window.window(), &shape);
             window::handle_timer_frame_paint(window.window());
+            window::set_visible(window.window(), visible);
         }
     });
     Ok(())
@@ -1616,17 +1813,33 @@ fn update_display_windows(
     frame: FlashFrame,
 ) {
     update_window(root, snapshot, config, frame);
+    if let Some(root_window) = root.upgrade() {
+        sync_timer_window_scale(&root_window, config);
+    }
     if let Some(root) = root.upgrade() {
         connect_timer_visibility(&root, config.placement.visible);
     }
     let displays = holder.borrow();
     for overlay in &displays.overlays {
         update_window(&overlay.as_weak(), snapshot, config, frame);
+        sync_timer_window_scale(overlay, config);
         connect_timer_visibility(overlay, config.placement.visible);
     }
     if let Some(big_screen) = displays.big_screen.as_ref() {
         update_big_screen(big_screen, snapshot, config);
     }
+}
+
+fn sync_timer_window_scale(window: &AppWindow, config: &AppConfig) {
+    window::resize_for_dpi(
+        window.window(),
+        config.appearance.width,
+        config.appearance.height,
+    );
+    // Region dimensions are physical and can change after WM_DPICHANGED.
+    // Refreshing it with the current client rect keeps the configured corners
+    // aligned while a timer is dragged between monitors.
+    window::refresh_shape(window.window(), &config.appearance.shape);
 }
 
 fn update_big_screen(window: &BigScreenWindow, snapshot: &TimerSnapshot, config: &AppConfig) {
@@ -1893,6 +2106,24 @@ fn set_window_visible(window: &AppWindow, visible: bool) {
         eprintln!("failed to show timer window: {error}");
     }
     window::set_visible(window.window(), visible);
+}
+
+fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformError> {
+    window.show()?;
+    // Let Slint build its first frame while the native window is hidden. The
+    // caller then exposes only the fully initialized settings surface.
+    window::set_visible(window.window(), false);
+    slint::platform::update_timers_and_animations();
+    window::set_visible(window.window(), true);
+    Ok(())
+}
+
+fn show_presentation_ready(window: &PresentationWindow) -> Result<(), slint::PlatformError> {
+    window.show()?;
+    window::set_visible(window.window(), false);
+    slint::platform::update_timers_and_animations();
+    window::set_visible(window.window(), true);
+    Ok(())
 }
 
 fn format_snapshot(snapshot: &TimerSnapshot, overtime_prefix: &str) -> String {
