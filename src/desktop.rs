@@ -13,7 +13,8 @@ use windows_sys::Win32::{
             MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, RegisterHotKey, UnregisterHotKey,
         },
         Shell::{
-            NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW, Shell_NotifyIconW,
+            NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY,
+            NOTIFYICONDATAW, Shell_NotifyIconW,
         },
         WindowsAndMessaging::{
             AppendMenuW, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateIconFromResourceEx,
@@ -102,6 +103,21 @@ impl DesktopIntegration {
 
     pub fn try_recv(&self) -> Option<DesktopEvent> {
         self.receiver.try_recv().ok()
+    }
+
+    pub fn notify(&self, message: &str, milliseconds: u32) {
+        let mut data = NOTIFYICONDATAW {
+            cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
+            hWnd: self.hwnd,
+            uID: TRAY_ID,
+            uFlags: NIF_INFO,
+            dwInfoFlags: NIIF_INFO,
+            ..Default::default()
+        };
+        data.Anonymous.uTimeout = milliseconds;
+        copy_wide(&mut data.szInfoTitle, "FlyPPTTimer");
+        copy_wide(&mut data.szInfo, message);
+        unsafe { Shell_NotifyIconW(NIM_MODIFY, &data) };
     }
 
     pub fn shutdown(&self) {
@@ -258,6 +274,10 @@ fn send(event: DesktopEvent) {
     }
 }
 
+pub fn request_update_check() {
+    send(DesktopEvent::CheckUpdate);
+}
+
 unsafe fn add_tray_icon(hwnd: HWND) {
     let mut data = NOTIFYICONDATAW {
         cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
@@ -396,7 +416,7 @@ unsafe fn show_tray_menu(hwnd: HWND) {
         menu,
         MENU_UPDATE,
         if english {
-            "Check for Updates"
+            "Check for updates"
         } else {
             "检测新版本"
         },

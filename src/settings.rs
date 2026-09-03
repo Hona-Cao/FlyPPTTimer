@@ -30,6 +30,16 @@ fn localize(lang: Language, value: &str) -> &str {
         return value;
     }
     match value {
+        "正在打开演示文稿" => "Opening presentation",
+        "正在关闭最后打开的文稿" => "Closing the last-opened presentation",
+        "正在结束放映" => "Ending slide show",
+        "正在启动 PowerPoint" => "Starting PowerPoint",
+        "正在启动放映" => "Starting slide show",
+        "正在强制退出演示程序" => "Force-quitting presentation software",
+        "正在执行演示命令" => "Running presentation command",
+        "状态已刷新" => "Status refreshed",
+        "已切换到上一页" => "Moved to the previous slide",
+        "已切换到下一页" => "Moved to the next slide",
         "时长设置" => "Timer",
         "行为设置" => "Behavior",
         "外观与显示" => "Appearance & Display",
@@ -89,9 +99,9 @@ fn localize(lang: Language, value: &str) -> &str {
         "背景颜色" => "Background color",
         "闪烁背景颜色" => "Flash background color",
         "医疗卫生（蓝白）" => "Healthcare (blue & white)",
-        "教育培训（深蓝金）" => "Education (deep blue & gold)",
-        "商务会议（石墨蓝）" => "Business (graphite blue)",
-        "科技发布（深色青蓝）" => "Tech launch (dark teal)",
+        "教育培训（深蓝金）" => "Education (navy & gold)",
+        "商务会议（石墨蓝）" => "Business meeting (graphite blue)",
+        "科技发布（深色青蓝）" => "Technology launch (dark cyan)",
         "高对比警示（黑红）" => "High-contrast warning (black & red)",
         "自定义" => "Custom",
         "窗口尺寸与字号" => "Window Size & Font",
@@ -209,6 +219,10 @@ fn localize(lang: Language, value: &str) -> &str {
         "有未应用的更改" => "Unapplied changes",
         _ => value,
     }
+}
+
+pub(crate) fn ui_text(value: &str, english: bool) -> &str {
+    localize(Language(english), value)
 }
 
 #[derive(Clone)]
@@ -352,8 +366,17 @@ pub mod native {
         }
     }
 
-    pub fn yes_no(text: &str, title: &str) -> bool {
-        ask_yes_no(std::ptr::null_mut(), text, title)
+    pub fn yes_no_with_icon(text: &str, title: &str, icon: u32) -> bool {
+        let text = wide(text);
+        let title = wide(title);
+        unsafe {
+            MessageBoxW(
+                std::ptr::null_mut(),
+                text.as_ptr(),
+                title.as_ptr(),
+                MB_YESNO | icon,
+            ) == IDYES
+        }
     }
 
     pub fn yes_no_for_window(window: &slint::Window, text: &str, title: &str) -> bool {
@@ -481,13 +504,14 @@ pub fn create(
                     &addresses_for_field,
                 );
                 if let Some(row) = rows.get(index as usize) {
-                    update_field(
-                        &mut draft.borrow_mut(),
-                        &row.key,
-                        value.as_str(),
-                        checked,
-                        selected,
-                    );
+                    let value = if row.kind == 3 {
+                        row.options
+                            .get(selected as usize)
+                            .map_or(value.as_str(), String::as_str)
+                    } else {
+                        value.as_str()
+                    };
+                    update_field(&mut draft.borrow_mut(), &row.key, value, checked, selected);
                     if row.key == "appearance.scheme" {
                         refresh(
                             &w,
@@ -515,6 +539,7 @@ pub fn create(
         let addresses_for_action = Rc::clone(&addresses);
         let selected_rules = selected_rules.clone();
         let action_config_path = config_path.clone();
+        let applied_for_action = applied.clone();
         window.on_field_action(move |index| {
             let rows = rows_for(
                 &draft.borrow(),
@@ -524,6 +549,77 @@ pub fn create(
                 &addresses_for_action,
             );
             if let Some(row) = rows.get(index as usize) {
+                if row.key == "update.check" {
+                    crate::desktop::request_update_check();
+                    return;
+                }
+                if row.key.starts_with("remote.") {
+                    let Some(w) = weak.upgrade() else {
+                        return;
+                    };
+                    if row.key == "remote.restart" {
+                        w.invoke_apply();
+                        let mut active = applied_for_action.borrow_mut();
+                        if let Err(error) = remote_for_action.start(&mut active) {
+                            crate::log::error(&error);
+                        }
+                        let _ = active.save(&action_config_path);
+                        draft.borrow_mut().remote_control = active.remote_control.clone();
+                    } else if matches!(row.key.as_str(), "remote.token" | "remote.disconnect") {
+                        let token = if row.key == "remote.token" {
+                            remote_for_action.regenerate_token()
+                        } else {
+                            remote_for_action.disconnect_all()
+                        };
+                        let mut active = applied_for_action.borrow_mut();
+                        active.remote_control.token = token.clone();
+                        draft.borrow_mut().remote_control.token = token;
+                        let _ = active.save(&action_config_path);
+                    } else {
+                        let active = applied_for_action.borrow();
+                        let port = remote_for_action.info().current_port;
+                        let port = if port > 0 {
+                            port
+                        } else {
+                            active.remote_control.port
+                        };
+                        let url = format!(
+                            "http://127.0.0.1:{port}/?token={}",
+                            active.remote_control.token
+                        );
+                        match row.key.as_str() {
+                            "remote.open" => {
+                                let _ = crate::remote::open_url(&url);
+                            }
+                            "remote.copy" => {
+                                if let Some(address) = addresses_for_action.first() {
+                                    let _ = crate::remote::copy_text(&format!(
+                                        "http://{address}:{port}/?token={}",
+                                        active.remote_control.token
+                                    ));
+                                }
+                            }
+                            "remote.copyfirewall" => {
+                                let _ = crate::remote::copy_text(&crate::remote::firewall_command(
+                                    port,
+                                ));
+                            }
+                            _ => {}
+                        }
+                    }
+                    refresh(
+                        &w,
+                        &draft.borrow(),
+                        *page.borrow(),
+                        w.get_selected_rule(),
+                        &selected_rules.borrow(),
+                        w.get_dirty(),
+                        ui_language,
+                        &remote_for_action,
+                        &addresses_for_action,
+                    );
+                    return;
+                }
                 handle_action(&row.key, &mut draft.borrow_mut(), &action_config_path);
             }
             if let Some(w) = weak.upgrade() {
@@ -1635,16 +1731,19 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
 }
 
 fn apply_scheme(c: &mut AppConfig, scheme: &str) {
-    let (text, background, flash) = match scheme {
-        "教育培训（深蓝金）" => ("#1E3A5F", "#F5E9C8", "#D4A017"),
-        "商务会议（石墨蓝）" => ("#2F3B4C", "#E8ECEF", "#5B7A9D"),
-        "科技发布（深色青蓝）" => ("#0F4C5C", "#0B1B22", "#1B8FA8"),
-        "高对比警示（黑红）" => ("#FFFFFF", "#111111", "#D32F2F"),
-        _ => ("#0B3A66", "#F3F8FC", "#4EA3D8"),
+    let (text, background, timeout_background, flash) = match scheme {
+        "医疗卫生（蓝白）" => ("#0B3A66", "#F3F8FC", "#B00020", "#4EA3D8"),
+        "教育培训（深蓝金）" => ("#FFFFFF", "#17365D", "#9C1C1C", "#F2C14E"),
+        "商务会议（石墨蓝）" => ("#F5F7FA", "#263445", "#B42318", "#5B8DEF"),
+        "科技发布（深色青蓝）" => ("#E6FAFF", "#102A43", "#C62828", "#00B8D9"),
+        "高对比警示（黑红）" => ("#FFFFFF", "#111111", "#D00000", "#FFD400"),
+        _ => return,
     };
     c.appearance.text_color = text.into();
     c.appearance.background_color = background.into();
     c.appearance.flash_background_color = flash.into();
+    c.appearance.timeout_text_color = "#FFFFFF".into();
+    c.appearance.timeout_background_color = timeout_background.into();
 }
 
 fn handle_action(key: &str, c: &mut AppConfig, config_path: &std::path::Path) {
@@ -1682,10 +1781,6 @@ fn handle_action(key: &str, c: &mut AppConfig, config_path: &std::path::Path) {
         "placement.resetpos" => {
             c.placement.has_custom_placement = false;
         }
-        "remote.token" => {
-            let token = crate::remote::generate_token();
-            c.remote_control.token = token;
-        }
         "config.import" => native_import_config(c, config_path),
         "config.export" => native_export_config(c),
         "config.reset" => {
@@ -1708,9 +1803,6 @@ fn handle_action(key: &str, c: &mut AppConfig, config_path: &std::path::Path) {
         }
         "url.mail" => {
             let _ = crate::remote::open_url("mailto:caohunan@smail.nju.edu.cn");
-        }
-        "update.check" => {
-            // Handled by app layer through DesktopEvent::CheckUpdate; here just refresh.
         }
         _ => {}
     }

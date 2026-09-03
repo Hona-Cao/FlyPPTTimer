@@ -5,7 +5,7 @@
   #error OutputDir must be supplied with /DOutputDir=...
 #endif
 #ifndef MyVersion
-  #define MyVersion "1.5.0"
+  #define MyVersion "1.6.0"
 #endif
 
 [Setup]

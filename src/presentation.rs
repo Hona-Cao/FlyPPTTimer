@@ -9,9 +9,9 @@ use std::{
 use windows::{
     Win32::System::{
         Com::{
-            CLSCTX_LOCAL_SERVER, CLSIDFromProgID, COINIT_APARTMENTTHREADED, CoCreateInstance,
-            CoInitializeEx, DISPATCH_METHOD, DISPATCH_PROPERTYGET, DISPATCH_PROPERTYPUT,
-            DISPPARAMS, IDispatch,
+            CLSCTX_LOCAL_SERVER, CLSIDFromProgID, COINIT_APARTMENTTHREADED, CoCreateGuid,
+            CoCreateInstance, CoInitializeEx, DISPATCH_METHOD, DISPATCH_PROPERTYGET,
+            DISPATCH_PROPERTYPUT, DISPPARAMS, IDispatch,
         },
         Ole::GetActiveObject,
         Variant::VARIANT,
@@ -48,6 +48,46 @@ pub struct PresentationState {
     pub message: String,
     pub error: String,
     pub presentations: Vec<OpenPresentation>,
+    pub operation: PresentationOperation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresentationOperation {
+    pub name: String,
+    pub message: String,
+    pub started_at: Option<String>,
+    pub id: String,
+    pub busy: bool,
+}
+
+impl Default for PresentationOperation {
+    fn default() -> Self {
+        Self {
+            name: "Idle".into(),
+            message: String::new(),
+            started_at: None,
+            id: String::new(),
+            busy: false,
+        }
+    }
+}
+
+impl PresentationOperation {
+    fn finish(&mut self, result: &Result<String, String>) {
+        match result {
+            Ok(message) => {
+                *self = Self {
+                    message: message.clone(),
+                    ..Self::default()
+                }
+            }
+            Err(error) => {
+                self.name = "Failed".into();
+                self.message = error.clone();
+                self.busy = false;
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -61,6 +101,7 @@ pub struct OpenPresentation {
 
 #[allow(dead_code)]
 pub enum PresentationCommand {
+    Refresh,
     Open(PathBuf),
     StartFromBeginning(Option<PathBuf>),
     StartFromCurrent(Option<PathBuf>),
@@ -77,9 +118,26 @@ pub enum PresentationCommand {
     ForceQuitAll { confirmed: bool },
 }
 
+impl PresentationCommand {
+    fn operation(&self) -> (&'static str, &'static str) {
+        match self {
+            Self::Open(_) => ("OpeningPresentation", "正在打开演示文稿"),
+            Self::StartFromBeginning(_) | Self::StartFromCurrent(_) => {
+                ("StartingSlideshow", "正在启动放映")
+            }
+            Self::EndShow => ("StoppingSlideshow", "正在结束放映"),
+            Self::CloseActive => ("ClosingPresentation", "正在关闭当前文稿"),
+            Self::CloseLastOpened => ("ClosingPresentation", "正在关闭最后打开的文稿"),
+            Self::ForceQuitAll { .. } => ("ForceExitingApplication", "正在强制退出演示程序"),
+            _ => ("Idle", "正在执行演示命令"),
+        }
+    }
+}
+
 enum Request {
     Execute(
         PresentationCommand,
+        String,
         mpsc::SyncSender<Result<String, String>>,
     ),
     Stop,
@@ -114,19 +172,56 @@ impl PresentationService {
     #[allow(dead_code)]
     pub fn execute(&self, command: PresentationCommand) -> Result<String, String> {
         let (sender, receiver) = mpsc::sync_channel(1);
-        self.sender
-            .send(Request::Execute(command, sender))
-            .map_err(|_| "演示控制服务已关闭。".to_owned())?;
+        self.enqueue(command, sender)?;
         receiver
             .recv_timeout(Duration::from_secs(15))
             .map_err(|_| "PowerPoint 响应超时，计时遥控仍可继续使用。".to_owned())?
     }
 
-    pub fn queue(&self, command: PresentationCommand) -> Result<(), String> {
+    pub fn queue(&self, command: PresentationCommand) -> Result<String, String> {
         let (sender, _receiver) = mpsc::sync_channel(1);
-        self.sender
-            .send(Request::Execute(command, sender))
-            .map_err(|_| "演示控制服务已关闭。".to_owned())
+        self.enqueue(command, sender)
+    }
+
+    fn enqueue(
+        &self,
+        command: PresentationCommand,
+        reply: mpsc::SyncSender<Result<String, String>>,
+    ) -> Result<String, String> {
+        if matches!(
+            command,
+            PresentationCommand::ForceQuitAll { confirmed: false }
+        ) {
+            return Err("强制退出会丢失所有未保存内容，请再次确认。".into());
+        }
+        let mut state = self.state.lock().unwrap();
+        if state.operation.busy {
+            return Err("演示操作正在进行，请等待当前操作完成。".into());
+        }
+        let (name, message) = command.operation();
+        let id = format!(
+            "{:032x}",
+            unsafe { CoCreateGuid() }
+                .map_err(|e| e.to_string())?
+                .to_u128()
+        );
+        state.operation = PresentationOperation {
+            name: name.into(),
+            message: message.into(),
+            started_at: Some(crate::remote::utc_timestamp()),
+            id: id.clone(),
+            busy: name != "Idle",
+        };
+        if self
+            .sender
+            .send(Request::Execute(command, id, reply))
+            .is_err()
+        {
+            let result = Err("演示控制服务已关闭。".to_owned());
+            state.operation.finish(&result);
+            return result;
+        }
+        Ok(message.into())
     }
 }
 
@@ -144,7 +239,7 @@ fn presentation_thread(receiver: mpsc::Receiver<Request>, state: Arc<Mutex<Prese
     let mut session = Session::default();
     loop {
         match receiver.recv_timeout(Duration::from_millis(500)) {
-            Ok(Request::Execute(command, reply)) => {
+            Ok(Request::Execute(command, operation_id, reply)) => {
                 let result = session.execute(command);
                 match &result {
                     Ok(message) => session.message = message.clone(),
@@ -154,12 +249,20 @@ fn presentation_thread(receiver: mpsc::Receiver<Request>, state: Arc<Mutex<Prese
                 if result.is_err() {
                     current.error = session.message.clone();
                 }
-                *state.lock().unwrap() = current;
+                let mut shared = state.lock().unwrap();
+                if shared.operation.id == operation_id {
+                    shared.operation.finish(&result);
+                }
+                current.operation = shared.operation.clone();
+                *shared = current;
                 let _ = reply.send(result);
             }
             Ok(Request::Stop) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                *state.lock().unwrap() = session.read_state();
+                let mut current = session.read_state();
+                let mut shared = state.lock().unwrap();
+                current.operation = shared.operation.clone();
+                *shared = current;
             }
         }
     }
@@ -208,6 +311,7 @@ impl Session {
 
     fn execute(&mut self, command: PresentationCommand) -> Result<String, String> {
         match command {
+            PresentationCommand::Refresh => Ok("状态已刷新".into()),
             PresentationCommand::Open(path) => self.open(path),
             PresentationCommand::StartFromBeginning(path) => self.start_show(path, false),
             PresentationCommand::StartFromCurrent(path) => self.start_show(path, true),
@@ -473,6 +577,7 @@ fn read_application_state(
         message: String::new(),
         error: String::new(),
         presentations: open_presentations,
+        operation: PresentationOperation::default(),
     })
 }
 
@@ -930,6 +1035,40 @@ fn parse_rule_duration(value: &str) -> Option<Duration> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn operation_tracks_busy_completion_and_failure() {
+        let (name, message) = PresentationCommand::Open(PathBuf::from("deck.pptx")).operation();
+        let mut operation = PresentationOperation {
+            name: name.into(),
+            message: message.into(),
+            id: "operation-1".into(),
+            started_at: Some("2026-09-03T00:00:00Z".into()),
+            busy: name != "Idle",
+        };
+        assert!(operation.busy);
+        assert_eq!(operation.name, "OpeningPresentation");
+        operation.finish(&Err("打开失败。".into()));
+        assert_eq!(operation.name, "Failed");
+        assert!(!operation.busy);
+        assert_eq!(operation.id, "operation-1");
+        operation.finish(&Ok("已打开演示文稿".into()));
+        assert_eq!(
+            operation,
+            PresentationOperation {
+                message: "已打开演示文稿".into(),
+                ..PresentationOperation::default()
+            }
+        );
+        assert_eq!(
+            PresentationCommand::Next.operation(),
+            ("Idle", "正在执行演示命令")
+        );
+        assert_eq!(
+            PresentationCommand::EndShow.operation().0,
+            "StoppingSlideshow"
+        );
+    }
 
     #[test]
     fn enabled_full_path_rule_overrides_global_timer() {

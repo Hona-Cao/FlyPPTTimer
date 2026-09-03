@@ -5,6 +5,8 @@
 bin/
 obj/
 target/
+/artifacts/
+/output/
 dist/
 releases/
 tests/**/bin/

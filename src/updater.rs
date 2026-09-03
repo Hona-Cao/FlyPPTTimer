@@ -1,13 +1,11 @@
 use std::{
+    cell::Cell,
     ffi::c_void,
     fs,
+    os::windows::process::CommandExt,
     path::{Path, PathBuf},
     ptr::{null, null_mut},
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+    sync::{Mutex, mpsc},
     thread,
 };
 
@@ -58,7 +56,7 @@ pub enum CheckStatus {
 pub enum Response {
     Checked {
         user_initiated: bool,
-        result: Result<CheckStatus, String>,
+        result: Result<CheckStatus, Box<dyn std::error::Error + Send + Sync>>,
     },
     Downloaded {
         result: Result<PathBuf, String>,
@@ -68,7 +66,7 @@ pub enum Response {
 pub struct UpdateService {
     sender: mpsc::Sender<Response>,
     receiver: Mutex<mpsc::Receiver<Response>>,
-    busy: Arc<AtomicBool>,
+    busy: Cell<bool>,
 }
 
 impl UpdateService {
@@ -77,23 +75,21 @@ impl UpdateService {
         Self {
             sender,
             receiver: Mutex::new(receiver),
-            busy: Arc::new(AtomicBool::new(false)),
+            busy: Cell::new(false),
         }
     }
 
     pub fn check(&self, user_initiated: bool) -> bool {
-        if self.busy.swap(true, Ordering::AcqRel) {
+        if self.busy.replace(true) {
             return false;
         }
         let sender = self.sender.clone();
-        let busy = Arc::clone(&self.busy);
         thread::spawn(move || {
-            let result = check_latest().map_err(|error| error.to_string());
+            let result = check_latest();
             match &result {
                 Ok(status) => crate::log::info(&format!("Update check completed: {status:?}")),
                 Err(error) => crate::log::error(&format!("Update check failed: {error}")),
             }
-            busy.store(false, Ordering::Release);
             let _ = sender.send(Response::Checked {
                 user_initiated,
                 result,
@@ -103,11 +99,7 @@ impl UpdateService {
     }
 
     pub fn download(&self, release: ReleaseInfo) -> bool {
-        if self.busy.swap(true, Ordering::AcqRel) {
-            return false;
-        }
         let sender = self.sender.clone();
-        let busy = Arc::clone(&self.busy);
         thread::spawn(move || {
             let result = download_installer(&release).map_err(|error| error.to_string());
             match &result {
@@ -116,7 +108,6 @@ impl UpdateService {
                 }
                 Err(error) => crate::log::error(&format!("Update download failed: {error}")),
             }
-            busy.store(false, Ordering::Release);
             let _ = sender.send(Response::Downloaded { result });
         });
         true
@@ -127,8 +118,23 @@ impl UpdateService {
     }
 }
 
-pub fn start_check_ui(service: &UpdateService, config: &crate::config::AppConfig, user: bool) {
-    if !service.check(user) && user {
+pub fn start_check_ui(
+    service: &UpdateService,
+    config: &crate::config::AppConfig,
+    desktop: &crate::desktop::DesktopIntegration,
+    user: bool,
+) {
+    let started = service.check(user);
+    if started && user {
+        desktop.notify(
+            text(
+                config,
+                "正在从 Gitee 检测新版本…",
+                "Checking Gitee for updates…",
+            ),
+            2000,
+        );
+    } else if !started && user {
         crate::settings::native::message(
             text(
                 config,
@@ -145,29 +151,34 @@ pub fn handle_response_ui(
     response: Response,
     service: &UpdateService,
     config: &crate::config::AppConfig,
+    desktop: &crate::desktop::DesktopIntegration,
 ) {
     match response {
         Response::Checked {
             user_initiated,
             result,
-        } => handle_checked(result, user_initiated, service, config),
-        Response::Downloaded { result } => match result {
-            Ok(path) => match launch_installer_after_exit(&path) {
-                Ok(()) => {
-                    let _ = slint::quit_event_loop();
-                }
+        } => handle_checked(result, user_initiated, service, config, desktop),
+        Response::Downloaded { result } => {
+            match result {
+                Ok(path) => match launch_installer_after_exit(&path) {
+                    Ok(()) => {
+                        let _ = slint::quit_event_loop();
+                    }
+                    Err(error) => show_error(config, &error),
+                },
                 Err(error) => show_error(config, &error),
-            },
-            Err(error) => show_error(config, &error),
-        },
+            }
+            service.busy.set(false);
+        }
     }
 }
 
 fn handle_checked(
-    result: Result<CheckStatus, String>,
+    result: Result<CheckStatus, Box<dyn std::error::Error + Send + Sync>>,
     user: bool,
     service: &UpdateService,
     config: &crate::config::AppConfig,
+    desktop: &crate::desktop::DesktopIntegration,
 ) {
     match result {
         Ok(CheckStatus::NoRelease) if user => crate::settings::native::message(
@@ -192,13 +203,25 @@ fn handle_checked(
             text(config, "FlyPPTTimer \u{66f4}\u{65b0}", "FlyPPTTimer Update"),
             false,
         ),
-        Ok(CheckStatus::UpdateAvailable(release)) => prompt_update(service, config, release),
-        Err(error) if user => show_error(config, &error),
+        Ok(CheckStatus::UpdateAvailable(release)) => {
+            if prompt_update(service, config, desktop, release) {
+                return;
+            }
+        }
+        Err(error) if user || !error.is::<std::io::Error>() => {
+            show_error(config, &error.to_string())
+        }
         _ => {}
     }
+    service.busy.set(false);
 }
 
-fn prompt_update(service: &UpdateService, config: &crate::config::AppConfig, release: ReleaseInfo) {
+fn prompt_update(
+    service: &UpdateService,
+    config: &crate::config::AppConfig,
+    desktop: &crate::desktop::DesktopIntegration,
+    release: ReleaseInfo,
+) -> bool {
     let installed = is_installed_edition();
     let action = if installed && release.installer().is_some() {
         text(
@@ -220,20 +243,40 @@ fn prompt_update(service: &UpdateService, config: &crate::config::AppConfig, rel
         )
     };
     let prompt = update_prompt(config, &release, action);
-    if crate::settings::native::yes_no(
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        MB_ICONINFORMATION, MB_ICONQUESTION, MB_ICONWARNING,
+    };
+    let icon = if !installed {
+        MB_ICONINFORMATION
+    } else if release.installer().is_some() {
+        MB_ICONQUESTION
+    } else {
+        MB_ICONWARNING
+    };
+    if crate::settings::native::yes_no_with_icon(
         &prompt,
         text(
             config,
             "\u{53d1}\u{73b0}\u{65b0}\u{7248}\u{672c}",
             "Update available",
         ),
+        icon,
     ) {
         if installed && release.installer().is_some() {
-            let _ = service.download(release);
+            desktop.notify(
+                text(
+                    config,
+                    "正在下载更新，完成前请勿退出程序…",
+                    "Downloading the update. Do not exit until it finishes…",
+                ),
+                3000,
+            );
+            return service.download(release);
         } else {
             crate::settings::native::open_url(&release.release_url);
         }
     }
+    false
 }
 
 fn update_prompt(config: &crate::config::AppConfig, release: &ReleaseInfo, action: &str) -> String {
@@ -250,6 +293,13 @@ fn update_prompt(config: &crate::config::AppConfig, release: &ReleaseInfo, actio
             )
         )
     };
+    if crate::config::ui_is_english(&config.language) {
+        return format!(
+            "FlyPPTTimer v{} is available (current: v{}).{notes}\r\n\r\n{action}",
+            release.version,
+            env!("CARGO_PKG_VERSION")
+        );
+    }
     format!(
         "{} v{}\u{ff08}{} v{}\u{ff09}\u{3002}{}\r\n\r\n{}",
         text(
@@ -324,6 +374,7 @@ pub fn launch_installer_after_exit(path: &Path) -> Result<(), String> {
     )
     .map_err(|error| error.to_string())?;
     std::process::Command::new("powershell.exe")
+        .creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW)
         .args([
             "-NoProfile",
             "-ExecutionPolicy",
@@ -344,7 +395,7 @@ fn check_latest() -> Result<CheckStatus, Box<dyn std::error::Error + Send + Sync
         return Ok(CheckStatus::NoRelease);
     }
     if !(200..300).contains(&response.status) {
-        return Err(format!("Gitee HTTP {}", response.status).into());
+        return Err(std::io::Error::other(format!("Gitee HTTP {}", response.status)).into());
     }
     let root: Value = serde_json::from_slice(&response.body)?;
     let tag = json_string(&root, "tag_name");

@@ -4,8 +4,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$version = "1.5.0"
-$artifacts = Join-Path $root "artifacts\release"
+$version = "1.6.0"
+$artifacts = Join-Path $root "artifacts\release\v$version"
 $portable = Join-Path $artifacts "FlyPPTTimer-v$version-portable-win-x64"
 $installerSource = Join-Path $artifacts "installer-source"
 $installerOutput = Join-Path $artifacts "installer-output"
@@ -21,10 +21,7 @@ finally {
     Pop-Location
 }
 
-if (Test-Path -LiteralPath $artifacts) {
-    Remove-Item -LiteralPath $artifacts -Recurse -Force
-}
-New-Item -ItemType Directory -Path $portable, $installerSource, $installerOutput | Out-Null
+New-Item -ItemType Directory -Path $portable, $installerSource, $installerOutput -Force | Out-Null
 
 $files = [ordered]@{
     "FlyPPTTimer.exe" = Join-Path $root "target\release\FlyPPTTimer.exe"
@@ -42,7 +39,7 @@ foreach ($item in $files.GetEnumerator()) {
 }
 
 $portableZip = Join-Path $artifacts "FlyPPTTimer-v$version-portable-win-x64.zip"
-Compress-Archive -Path (Join-Path $portable "*") -DestinationPath $portableZip -CompressionLevel Optimal
+Compress-Archive -LiteralPath @($files.Keys | ForEach-Object { Join-Path $portable $_ }) -DestinationPath $portableZip -CompressionLevel Optimal -Force
 
 if ([string]::IsNullOrWhiteSpace($IsccPath)) {
     $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")

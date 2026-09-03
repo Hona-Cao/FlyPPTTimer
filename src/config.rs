@@ -26,7 +26,7 @@ pub fn ui_is_english(language: &str) -> bool {
     }
 }
 
-pub const V1_CONFIG_VERSION: &str = "1.5.0";
+pub const V1_CONFIG_VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_DURATION_SECONDS: u64 = 8 * 60;
 
 #[derive(Debug)]

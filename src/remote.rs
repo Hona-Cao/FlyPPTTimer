@@ -861,18 +861,18 @@ fn presentation_remote_state(
         updated_at: utc_timestamp(),
         error: state.error.clone(),
         presentations: options,
-        operation: "Idle".to_owned(),
-        operation_message: state.message.clone(),
-        operation_started_at: None,
-        operation_id: String::new(),
-        is_operation_busy: false,
+        operation: state.operation.name.clone(),
+        operation_message: state.operation.message.clone(),
+        operation_started_at: state.operation.started_at.clone(),
+        operation_id: state.operation.id.clone(),
+        is_operation_busy: state.operation.busy,
         is_current_presentation_managed: state.managed,
         open_presentation_count: state.presentations.len(),
         wps_detected: state.application == Some(PresentationApp::Wps),
     }
 }
 
-fn utc_timestamp() -> String {
+pub(crate) fn utc_timestamp() -> String {
     use windows_sys::Win32::{Foundation::SYSTEMTIME, System::SystemInformation::GetSystemTime};
     let mut time = unsafe { std::mem::zeroed::<SYSTEMTIME>() };
     unsafe { GetSystemTime(&mut time) };

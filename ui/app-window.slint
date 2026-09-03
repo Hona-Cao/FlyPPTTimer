@@ -42,6 +42,8 @@ export component AppWindow inherits Window {
     in property <bool> flash-background-active: false;
     in property <bool> flash-border-active: false;
     in property <color> flash-color: #4ea3d8;
+    out property <length> required-text-width: time-text.preferred-width + 8px;
+    out property <length> required-text-height: time-text.preferred-height + 4px;
 
     callback begin-drag();
     callback drag-move();
@@ -61,7 +63,7 @@ export component AppWindow inherits Window {
         border-width: root.flash-border-active ? 3px : 0px;
         border-color: root.flash-color;
 
-        Text {
+        time-text := Text {
             x: 4px;
             width: parent.width - 8px;
             height: parent.height;
@@ -289,8 +291,8 @@ export component PresentationWindow inherits Window {
         RemoteButton { x: 32px + (parent.width - 52px) / 2; y: 282px; width: (parent.width - 52px) / 2; height: 36px; text: root.disconnect-text; clicked => { root.remote-action(3, "", false); } }
 
         RemoteButton { x: 20px; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.copy-address-text; clicked => { root.remote-action(4, "", false); } }
-        RemoteButton { x: 44px + (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
-        RemoteButton { x: 64px + 2 * (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
+        RemoteButton { x: 32px + (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
+        RemoteButton { x: 40px + 2 * (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
 
         Text { x: 20px; y: 366px; width: parent.width - 40px; height: parent.height - 374px; text: root.firewall-text; color: #64748b; font-size: 10px; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
     }
@@ -324,21 +326,21 @@ export component PresentationWindow inherits Window {
     }
 
     RemoteButton { visible: root.current-page == 1; x: 24px; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-text; enabled: root.selected-presentation >= 0; clicked => { root.command(0, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 44px + (parent.width - 64px) / 3; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.beginning-text; clicked => { root.command(1, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 64px + 2 * (parent.width - 64px) / 3; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.current-text; clicked => { root.command(2, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.beginning-text; clicked => { root.command(1, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.current-text; clicked => { root.command(2, ""); } }
 
     RemoteButton { visible: root.current-page == 1; x: 24px; y: 282px; width: (parent.width - 64px) / 3; height: 36px; text: root.previous-text; clicked => { root.command(3, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 44px + (parent.width - 64px) / 3; y: 282px; width: (parent.width - 64px) / 3; height: 36px; text: root.next-text; clicked => { root.command(4, ""); } }
-    LineEdit { visible: root.current-page == 1; x: 64px + 2 * (parent.width - 64px) / 3; y: 282px; width: (parent.width - 64px) / 3 - 58px; height: 36px; text <=> root.goto-page; }
-    RemoteButton { visible: root.current-page == 1; x: 122px + 2 * (parent.width - 64px) / 3 - 58px; y: 282px; width: 58px; height: 36px; text: root.goto-text; clicked => { root.command(5, root.goto-page); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 282px; width: (parent.width - 64px) / 3; height: 36px; text: root.next-text; clicked => { root.command(4, ""); } }
+    LineEdit { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 282px; width: (parent.width - 64px) / 3 - 58px; height: 36px; text <=> root.goto-page; }
+    RemoteButton { visible: root.current-page == 1; x: parent.width - 82px; y: 282px; width: 58px; height: 36px; text: root.goto-text; clicked => { root.command(5, root.goto-page); } }
 
     RemoteButton { visible: root.current-page == 1; x: 24px; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.black-text; clicked => { root.command(6, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 44px + (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.white-text; clicked => { root.command(7, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 64px + 2 * (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.restore-text; clicked => { root.command(8, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.white-text; clicked => { root.command(7, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.restore-text; clicked => { root.command(8, ""); } }
 
     RemoteButton { visible: root.current-page == 1; x: 24px; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.end-text; clicked => { root.command(9, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 44px + (parent.width - 64px) / 3; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-active-text; clicked => { root.command(10, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 64px + 2 * (parent.width - 64px) / 3; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-managed-text; clicked => { root.command(11, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-active-text; clicked => { root.command(10, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-managed-text; clicked => { root.command(11, ""); } }
 
     RemoteButton { visible: root.current-page == 1; x: parent.width - 238px; y: 420px; width: 214px; height: 38px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = true; } }
 

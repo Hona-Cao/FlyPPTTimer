@@ -36,13 +36,11 @@ pub struct DisplayWindows {
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let Some(_instance) = crate::single_instance::acquire()? else {
+        return Ok(());
+    };
     let config_path = config_path()?;
     let config = Rc::new(RefCell::new(load_config(&config_path)?));
-    if let Some(instance) = crate::single_instance::acquire()? {
-        let _ = instance;
-    } else {
-        return Ok(());
-    }
     crate::log::info("FlyPPTTimer starting");
 
     let timer = Rc::new(RefCell::new(timer_from_config(&config.borrow())?));
@@ -93,7 +91,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Optional startup update check.
     if config.borrow().update.check_on_startup {
-        start_check_ui(&update_service, &config.borrow(), false);
+        start_check_ui(&update_service, &config.borrow(), &desktop, false);
     }
 
     // Show settings window on request.
@@ -175,7 +173,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             while let Some(response) = update_for_updates.try_recv() {
-                handle_response_ui(response, &update_for_updates, &config_for_updates.borrow());
+                let config = config_for_updates.borrow().clone();
+                handle_response_ui(response, &update_for_updates, &config, &desktop_for_updates);
             }
             if config_for_updates.borrow().controls.minimize_to_tray
                 && let Some(settings) = settings_for_updates.borrow().as_ref()
@@ -322,6 +321,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             if update.snapshot.state == TimerState::Running && preserve_time_up_for_updates.get() {
                 preserve_time_up_for_updates.set(false);
                 hide_time_up(&time_up_for_updates);
+            }
+            drop(config);
+            if let Some(root) = weak_window.upgrade() {
+                expand_timer_windows_if_needed(
+                    &root,
+                    &display_windows_for_updates.borrow(),
+                    &config_for_updates,
+                    &config_path_for_updates,
+                );
             }
         },
     );
@@ -567,7 +575,8 @@ fn handle_desktop_event(
             }
         }
         DesktopEvent::CheckUpdate => {
-            start_check_ui(update_service, &config.borrow(), true);
+            let config = config.borrow().clone();
+            start_check_ui(update_service, &config, desktop, true);
         }
         DesktopEvent::Exit => {
             if let Some(window) = window.upgrade() {
@@ -927,7 +936,9 @@ fn update_presentation_window(
     config: &AppConfig,
 ) {
     let english = crate::config::ui_is_english(&config.language);
-    let status = if !state.error.is_empty() {
+    let status = if !state.operation.message.is_empty() {
+        state.operation.message.clone()
+    } else if !state.error.is_empty() {
         state.error.clone()
     } else if !state.message.is_empty() {
         state.message.clone()
@@ -948,7 +959,7 @@ fn update_presentation_window(
     } else {
         if english { "Not started" } else { "未启动" }.to_owned()
     };
-    window.set_status_text(status.into());
+    window.set_status_text(settings::ui_text(&status, english).into());
     window.set_document_text(state.presentation_name.clone().into());
     window.set_slide_text(
         if state.total_slides > 0 {
@@ -1277,6 +1288,7 @@ fn execute_remote_command(
             hide_time_up(time_up_window);
             Ok("已退出“时间到”黑屏".to_owned())
         }
+        "ppt.refresh" => presentation.queue(PresentationCommand::Refresh),
         "ppt.openPresentation" => {
             let path = command
                 .presentation_id
@@ -1286,8 +1298,7 @@ fn execute_remote_command(
             let command = path
                 .map(PresentationCommand::Open)
                 .ok_or("请先选择演示文稿。")?;
-            presentation.queue(command)?;
-            Ok("已打开演示文稿".to_owned())
+            presentation.queue(command)
         }
         "ppt.startFromBeginning" => {
             let path = command
@@ -1295,8 +1306,7 @@ fn execute_remote_command(
                 .as_deref()
                 .and_then(remote_path)
                 .map(PathBuf::from);
-            presentation.queue(PresentationCommand::StartFromBeginning(path))?;
-            Ok("已从头开始放映".to_owned())
+            presentation.queue(PresentationCommand::StartFromBeginning(path))
         }
         "ppt.startFromCurrent" => {
             let path = command
@@ -1304,48 +1314,24 @@ fn execute_remote_command(
                 .as_deref()
                 .and_then(remote_path)
                 .map(PathBuf::from);
-            presentation.queue(PresentationCommand::StartFromCurrent(path))?;
-            Ok("已从当前页开始放映".to_owned())
+            presentation.queue(PresentationCommand::StartFromCurrent(path))
         }
-        "ppt.previous" => {
-            presentation.queue(PresentationCommand::Previous)?;
-            Ok("已切换到上一页".to_owned())
-        }
-        "ppt.next" => {
-            presentation.queue(PresentationCommand::Next)?;
-            Ok("已切换到下一页".to_owned())
-        }
+        "ppt.previous" => presentation.queue(PresentationCommand::Previous),
+        "ppt.next" => presentation.queue(PresentationCommand::Next),
         "ppt.gotoSlide" => {
             let slide = command.slide_number.ok_or("请输入有效页码。")?;
-            presentation.queue(PresentationCommand::GoToSlide(slide))?;
-            Ok(format!("已跳转到第 {slide} 页"))
+            presentation.queue(PresentationCommand::GoToSlide(slide))
         }
-        "ppt.blackScreenToggle" => {
-            presentation.queue(PresentationCommand::ToggleBlackScreen)?;
-            Ok("已切换黑屏状态".to_owned())
-        }
-        "ppt.whiteScreenToggle" => {
-            presentation.queue(PresentationCommand::ToggleWhiteScreen)?;
-            Ok("已切换白屏状态".to_owned())
-        }
-        "ppt.endShow" => {
-            presentation.queue(PresentationCommand::EndShow)?;
-            Ok("已结束放映".to_owned())
-        }
-        "ppt.closeActivePresentation" => {
-            presentation.queue(PresentationCommand::CloseActive)?;
-            Ok("已关闭当前文稿".to_owned())
-        }
-        "ppt.closeCurrentPresentation" => {
-            presentation.queue(PresentationCommand::CloseLastOpened)?;
-            Ok("已关闭最后打开的文稿".to_owned())
-        }
+        "ppt.blackScreenToggle" => presentation.queue(PresentationCommand::ToggleBlackScreen),
+        "ppt.whiteScreenToggle" => presentation.queue(PresentationCommand::ToggleWhiteScreen),
+        "ppt.endShow" => presentation.queue(PresentationCommand::EndShow),
+        "ppt.closeActivePresentation" => presentation.queue(PresentationCommand::CloseActive),
+        "ppt.closeCurrentPresentation" => presentation.queue(PresentationCommand::CloseLastOpened),
         "ppt.forceQuitAll" => {
             if command.confirmed != Some(true) {
                 return Err("强制退出会丢失所有未保存内容，请再次确认。".to_owned());
             }
-            presentation.queue(PresentationCommand::ForceQuitAll { confirmed: true })?;
-            Ok("已请求退出演示软件。未保存内容不会恢复。".to_owned())
+            presentation.queue(PresentationCommand::ForceQuitAll { confirmed: true })
         }
         _ => Err(format!("命令不被允许: {name}")),
     }
@@ -1613,18 +1599,8 @@ fn configure_timer_window(
     );
     let weak = window.as_weak();
     let shape = config.appearance.shape.clone();
-    let click_through = config.controls.click_through;
-    let always_on_top = config.appearance.always_on_top;
-    let opacity = config.appearance.background_opacity;
     slint::Timer::single_shot(Duration::from_millis(80), move || {
         if let Some(window) = weak.upgrade() {
-            window::apply_native_window(
-                window.window(),
-                click_through,
-                always_on_top,
-                opacity,
-                &shape,
-            );
             window::refresh_shape(window.window(), &shape);
         }
     });
@@ -1688,6 +1664,66 @@ fn connect_timer_visibility(window: &AppWindow, visible: bool) {
     if window::is_visible(window.window()) != visible {
         set_window_visible(window, visible);
     }
+}
+
+fn expand_timer_windows_if_needed(
+    root: &AppWindow,
+    displays: &DisplayWindows,
+    config: &Rc<RefCell<AppConfig>>,
+    path: &std::path::Path,
+) {
+    let mut config = config.borrow_mut();
+    let width = (root.get_required_text_width().ceil() as i32)
+        .max(config.appearance.width)
+        .min(2000);
+    let height = (root.get_required_text_height().ceil() as i32)
+        .max(config.appearance.height)
+        .min(1000);
+    if width <= config.appearance.width && height <= config.appearance.height {
+        return;
+    }
+    config.appearance.width = width;
+    config.appearance.height = height;
+    save_config(&config, path);
+    for overlay in std::iter::once(root).chain(displays.overlays.iter()) {
+        let old_position = overlay.window().position();
+        let old_size = overlay.window().size();
+        let scale = overlay.window().scale_factor();
+        overlay
+            .window()
+            .set_size(LogicalSize::new(width as f32, height as f32));
+        overlay.window().set_position(slint::PhysicalPosition::new(
+            old_position.x + (old_size.width as i32 - (width as f32 * scale).round() as i32) / 2,
+            old_position.y + (old_size.height as i32 - (height as f32 * scale).round() as i32) / 2,
+        ));
+        let weak = overlay.as_weak();
+        let shape = config.appearance.shape.clone();
+        slint::Timer::single_shot(Duration::from_millis(80), move || {
+            if let Some(window) = weak.upgrade() {
+                window::refresh_shape(window.window(), &shape);
+            }
+        });
+    }
+    let english = crate::config::ui_is_english(&config.language);
+    drop(config);
+    // Deliver the baseline notification after the refresh callback releases its borrows.
+    slint::Timer::single_shot(Duration::ZERO, move || {
+        settings::native::message(
+            &if english {
+                format!(
+                    "The current timer text needs more space. The window was resized to {width} × {height}."
+                )
+            } else {
+                format!("当前时间文字需要更大的显示区域，窗口已自动调整为 {width} × {height}。")
+            },
+            if english {
+                "Presentation Timer"
+            } else {
+                "演讲计时器"
+            },
+            false,
+        );
+    });
 }
 
 pub(crate) fn apply_config(window: &AppWindow, config: &AppConfig) {
@@ -1914,11 +1950,30 @@ fn shape_radius(shape: &str) -> f32 {
 }
 
 fn load_config(path: &std::path::Path) -> Result<AppConfig, Box<dyn std::error::Error>> {
-    if path.exists() {
-        Ok(AppConfig::load(path)?)
+    let mut config = if path.exists() {
+        AppConfig::load(path)?
     } else {
-        Ok(AppConfig::default())
+        AppConfig::default()
+    };
+    let marker = path.with_file_name("install-language.txt");
+    if marker.exists() {
+        let mut apply = || -> Result<(), Box<dyn std::error::Error>> {
+            let language = std::fs::read_to_string(&marker)?;
+            config.language = match language.trim() {
+                "en" => "en",
+                "zh-CN" => "zh-CN",
+                _ => "auto",
+            }
+            .into();
+            config.save(path)?;
+            std::fs::remove_file(&marker)?;
+            Ok(())
+        };
+        if let Err(error) = apply() {
+            crate::log::error(&format!("Unable to apply installer language: {error}"));
+        }
     }
+    Ok(config)
 }
 
 fn config_path() -> Result<PathBuf, std::io::Error> {
