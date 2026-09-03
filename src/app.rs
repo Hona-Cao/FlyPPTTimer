@@ -1602,6 +1602,7 @@ fn configure_timer_window(
     slint::Timer::single_shot(Duration::from_millis(80), move || {
         if let Some(window) = weak.upgrade() {
             window::refresh_shape(window.window(), &shape);
+            window::handle_timer_frame_paint(window.window());
         }
     });
     Ok(())

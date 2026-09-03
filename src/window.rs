@@ -17,6 +17,40 @@ use windows_sys::Win32::{
 
 use crate::config::RemoteWindowPlacement;
 
+pub fn handle_timer_frame_paint(window: &slint::Window) {
+    if let Some(hwnd) = hwnd(window) {
+        unsafe {
+            windows_sys::Win32::UI::Shell::SetWindowSubclass(hwnd, Some(timer_frame_proc), 1, 0)
+        };
+    }
+}
+
+unsafe extern "system" fn timer_frame_proc(
+    hwnd: HWND,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+    id: usize,
+    _: usize,
+) -> isize {
+    use windows_sys::Win32::UI::{
+        Shell::{DefSubclassProc, RemoveWindowSubclass},
+        WindowsAndMessaging::*,
+    };
+    // Prevent Windows' legacy UAH caption painting from covering the frameless timer.
+    const WM_NCUAHDRAWCAPTION: u32 = 0x00ae;
+    if message == WM_NCUAHDRAWCAPTION {
+        return 0;
+    }
+    if message == WM_NCACTIVATE {
+        return unsafe { DefSubclassProc(hwnd, message, wparam, -1) };
+    }
+    if message == WM_NCDESTROY {
+        unsafe { RemoveWindowSubclass(hwnd, Some(timer_frame_proc), id) };
+    }
+    unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+}
+
 pub fn apply_native_window(
     window: &slint::Window,
     click_through: bool,
