@@ -1,0 +1,706 @@
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+
+export struct SettingItem {
+    key: string,
+    label: string,
+    kind: int,
+    value: string,
+    checked: bool,
+    options: [string],
+    selected: int,
+    enabled: bool,
+    button-text: string,
+    row-height: int,
+}
+
+export struct RuleItem {
+    file-name: string,
+    file-path: string,
+    duration: string,
+    mode: int,
+    enabled: bool,
+    selected: bool,
+}
+
+export struct PresentationItem {
+    name: string,
+    path: string,
+}
+
+export component AppWindow inherits Window {
+    in property <string> display-text: "08:00";
+    in property <brush> surface-color: #f3f8fc;
+    in property <color> foreground-color: #0b3a66;
+    in property <length> timer-font-size: 18px;
+    in property <string> timer-font-family: "Microsoft YaHei UI";
+    in property <int> timer-font-weight: 700;
+    in property <bool> timer-font-italic: false;
+    in property <length> corner-radius: 7px;
+    in property <bool> keep-on-top: true;
+    in property <bool> drag-enabled: true;
+    in property <bool> flash-text-visible: true;
+    in property <bool> flash-background-active: false;
+    in property <bool> flash-border-active: false;
+    in property <color> flash-color: #4ea3d8;
+
+    callback begin-drag();
+    callback drag-move();
+    callback end-drag();
+    callback show-menu();
+
+    title: "";
+    width: 100px;
+    height: 35px;
+    no-frame: true;
+    always-on-top: root.keep-on-top;
+    background: root.flash-background-active ? root.flash-color : root.surface-color;
+
+    Rectangle {
+        background: root.flash-background-active ? root.flash-color : root.surface-color;
+        border-radius: root.corner-radius;
+        border-width: root.flash-border-active ? 3px : 0px;
+        border-color: root.flash-color;
+
+        Text {
+            x: 4px;
+            width: parent.width - 8px;
+            height: parent.height;
+            text: root.display-text;
+            color: root.foreground-color;
+            font-family: root.timer-font-family;
+            font-size: root.timer-font-size;
+            font-weight: root.timer-font-weight;
+            font-italic: root.timer-font-italic;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            overflow: elide;
+            visible: root.flash-text-visible;
+        }
+
+        TouchArea {
+            enabled: true;
+            pointer-event(event) => {
+                if root.drag-enabled && event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                    root.begin-drag();
+                }
+                if root.drag-enabled && event.kind == PointerEventKind.move {
+                    root.drag-move();
+                }
+                if root.drag-enabled && ((event.button == PointerEventButton.left && event.kind == PointerEventKind.up) || event.kind == PointerEventKind.cancel) {
+                    root.end-drag();
+                }
+                if event.button == PointerEventButton.right && event.kind == PointerEventKind.up {
+                    root.show-menu();
+                }
+            }
+        }
+    }
+}
+export component BigScreenWindow inherits Window {
+    in property <string> display-text: "08:00";
+    in property <brush> surface-color: #f3f8fc;
+    in property <color> foreground-color: #0b3a66;
+    in property <string> timer-font-family: "Microsoft YaHei UI";
+    in property <bool> keep-on-top: true;
+    in property <length> timer-font-size: 162px;
+
+    title: "";
+    preferred-width: 960px;
+    preferred-height: 540px;
+    min-width: 640px;
+    min-height: 360px;
+    no-frame: true;
+    always-on-top: root.keep-on-top;
+    background: root.surface-color;
+
+    Rectangle {
+        background: root.surface-color;
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: root.display-text;
+            color: root.foreground-color;
+            font-family: root.timer-font-family;
+            font-size: root.timer-font-size;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+export component TimeUpWindow inherits Window {
+    in property <string> message: "时间到";
+    callback dismiss();
+
+    title: "";
+    no-frame: true;
+    always-on-top: true;
+    background: #000000;
+
+    Rectangle {
+        background: #000000;
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: root.message;
+            color: #ffffff;
+            font-family: "Microsoft YaHei UI";
+            font-size: 72px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        TouchArea { clicked => { root.dismiss(); } }
+    }
+}
+
+component RemoteButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <bool> primary: false;
+    in property <bool> danger: false;
+    callback clicked();
+
+    border-radius: 7px;
+    border-width: 1px;
+    border-color: root.primary ? #2d6a91 : root.danger ? #c2413b : #ccd7e3;
+    background: !root.enabled ? #eef2f6 : hit.pressed ? #d8e4ef : hit.has-hover ? #edf4fa : root.primary ? #2d6a91 : root.danger ? #fff3f2 : #ffffff;
+
+    Text {
+        x: 8px;
+        width: parent.width - 16px;
+        height: parent.height;
+        text: root.text;
+        color: !root.enabled ? #94a3b8 : root.primary ? #ffffff : root.danger ? #a8322d : #263b50;
+        font-size: 12px;
+        font-weight: root.primary ? 600 : 500;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        wrap: word-wrap;
+    }
+
+    hit := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component PresentationWindow inherits Window {
+    in property <string> window-title: "远程控制";
+    in property <string> status-text;
+    in property <string> document-text;
+    in property <string> slide-text;
+    in property <[PresentationItem]> presentations;
+    in-out property <int> selected-presentation: -1;
+    in-out property <string> goto-page: "1";
+    in property <string> open-text: "打开演示文稿";
+    in property <string> beginning-text: "从头放映";
+    in property <string> current-text: "当前页放映";
+    in property <string> previous-text: "上一页";
+    in property <string> next-text: "下一页";
+    in property <string> goto-text: "跳转";
+    in property <string> black-text: "黑屏";
+    in property <string> white-text: "白屏";
+    in property <string> restore-text: "恢复";
+    in property <string> end-text: "结束放映";
+    in property <string> close-active-text: "关闭当前文档";
+    in property <string> close-managed-text: "关闭最后打开的文稿";
+    in property <string> exit-text: "退出演示软件";
+    in-out property <bool> confirm-exit: false;
+    in property <string> confirm-title: "确认退出软件";
+    in property <string> confirm-message: "将强制关闭全部 PowerPoint/WPS 演示进程，未保存内容会丢失。";
+    in property <string> cancel-command-text: "取消";
+    in-out property <int> current-page: 0;
+    in property <string> connection-page-text: "远程连接";
+    in property <string> presentation-page-text: "演示文稿";
+    in property <string> connection-subtitle-text: "通过手机或浏览器控制演示";
+    in property <string> presentation-subtitle-text: "规则与放映";
+    in property <string> service-status-text;
+    in property <string> current-port-text;
+    in property <string> next-port-label: "下次服务端口";
+    in-out property <string> next-port: "4080";
+    in-out property <bool> random-port: false;
+    in property <string> random-port-text: "使用随机端口";
+    in property <string> client-count-text;
+    in property <string> recommended-url;
+    in property <string> address-list-text;
+    in property <image> qr-image;
+    in property <string> restart-service-text: "重启远程服务";
+    in property <string> service-toggle-text: "停止服务";
+    in property <string> apply-port-text: "重启远程服务并应用端口";
+    in property <string> regenerate-token-text: "重新生成令牌";
+    in property <string> disconnect-text: "断开所有设备";
+    in property <string> copy-address-text: "复制访问地址";
+    in property <string> open-local-text: "打开本机控制页";
+    in property <string> firewall-text;
+    in property <string> copy-firewall-text: "复制修复命令";
+
+    callback command(int, string);
+    callback remote-action(int, string, bool);
+
+    title: root.window-title;
+    width: 700px;
+    height: 510px;
+    background: #f3f6fa;
+
+    Rectangle {
+        x: 24px; y: 16px; width: parent.width - 48px; height: 40px;
+        background: #e5ebf2; border-radius: 9px;
+        Rectangle {
+            x: root.current-page == 0 ? 4px : parent.width / 2;
+            y: 4px; width: parent.width / 2 - 4px; height: 32px;
+            background: #ffffff; border-radius: 7px;
+        }
+        Text { x: 0; width: parent.width / 2; height: parent.height; text: root.connection-page-text; color: #24364b; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        Text { x: parent.width / 2; width: parent.width / 2; height: parent.height; text: root.presentation-page-text; color: #24364b; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        TouchArea { x: 0; width: parent.width / 2; clicked => { root.current-page = 0; } }
+        TouchArea { x: parent.width / 2; width: parent.width / 2; clicked => { root.current-page = 1; } }
+    }
+
+    Text {
+        x: 28px; y: 64px; width: parent.width - 56px; height: 18px;
+        text: root.current-page == 0 ? root.connection-subtitle-text : root.presentation-subtitle-text;
+        color: #64748b; font-size: 13px; vertical-alignment: center;
+    }
+
+    Rectangle {
+        visible: root.current-page == 0;
+        x: 24px; y: 88px; width: parent.width - 48px; height: parent.height - 102px;
+        background: #ffffff; border-radius: 12px; border-width: 1px; border-color: #d7e0ea;
+
+        Text { x: 20px; y: 14px; width: parent.width - 184px; height: 24px; text: root.service-status-text; color: #1e293b; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+        Text { x: 20px; y: 42px; width: parent.width - 184px; height: 20px; text: root.current-port-text; color: #475569; font-size: 12px; vertical-alignment: center; overflow: elide; }
+        Text { x: 20px; y: 64px; width: parent.width - 184px; height: 20px; text: root.client-count-text; color: #475569; font-size: 12px; vertical-alignment: center; overflow: elide; }
+        Text { x: 20px; y: 87px; width: parent.width - 184px; height: 20px; text: root.recommended-url; color: #155eef; font-size: 12px; vertical-alignment: center; overflow: elide; }
+        Text { x: 20px; y: 109px; width: parent.width - 184px; height: 43px; text: root.address-list-text; color: #64748b; font-size: 11px; wrap: word-wrap; vertical-alignment: center; }
+        Image { x: parent.width - 148px; y: 14px; width: 128px; height: 128px; source: root.qr-image; image-fit: contain; }
+
+        Text { x: 20px; y: 158px; width: 94px; height: 32px; text: root.next-port-label; color: #475569; font-size: 12px; vertical-alignment: center; }
+        LineEdit { x: 114px; y: 158px; width: 96px; height: 32px; text <=> root.next-port; }
+        CheckBox { x: 222px; y: 158px; width: parent.width - 242px; height: 32px; text: root.random-port-text; checked <=> root.random-port; }
+
+        RemoteButton { x: 20px; y: 198px; width: parent.width - 40px; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, root.random-port); } }
+
+        RemoteButton { x: 20px; y: 240px; width: (parent.width - 52px) / 2; height: 36px; text: root.service-toggle-text; clicked => { root.remote-action(7, "", false); } }
+        RemoteButton { x: 32px + (parent.width - 52px) / 2; y: 240px; width: (parent.width - 52px) / 2; height: 36px; text: root.restart-service-text; clicked => { root.remote-action(0, "", false); } }
+        RemoteButton { x: 20px; y: 282px; width: (parent.width - 52px) / 2; height: 36px; text: root.regenerate-token-text; clicked => { root.remote-action(2, "", false); } }
+        RemoteButton { x: 32px + (parent.width - 52px) / 2; y: 282px; width: (parent.width - 52px) / 2; height: 36px; text: root.disconnect-text; clicked => { root.remote-action(3, "", false); } }
+
+        RemoteButton { x: 20px; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.copy-address-text; clicked => { root.remote-action(4, "", false); } }
+        RemoteButton { x: 44px + (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
+        RemoteButton { x: 64px + 2 * (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
+
+        Text { x: 20px; y: 366px; width: parent.width - 40px; height: parent.height - 374px; text: root.firewall-text; color: #64748b; font-size: 10px; wrap: word-wrap; horizontal-alignment: center; vertical-alignment: center; }
+    }
+
+    Rectangle {
+        visible: root.current-page == 1;
+        x: 24px; y: 88px; width: parent.width - 48px; height: 54px;
+        background: #ffffff; border-radius: 10px; border-width: 1px; border-color: #d7e0ea;
+        Text { x: 16px; y: 7px; width: parent.width - 32px; height: 20px; text: root.status-text; color: #334155; font-size: 13px; vertical-alignment: center; overflow: elide; }
+        Text { x: 16px; y: 29px; width: parent.width - 32px; height: 18px; text: root.document-text + "  " + root.slide-text; color: #64748b; font-size: 12px; vertical-alignment: center; overflow: elide; }
+    }
+
+    Rectangle {
+        visible: root.current-page == 1;
+        x: 24px; y: 148px; width: parent.width - 48px; height: 82px;
+        background: #ffffff; border-radius: 10px; border-width: 1px; border-color: #d7e0ea;
+        ScrollView {
+            x: 8px; y: 7px; width: parent.width - 16px; height: parent.height - 14px;
+            VerticalLayout {
+                width: parent.width;
+                spacing: 4px;
+                for item[index] in root.presentations: Rectangle {
+                    height: 40px; border-radius: 6px;
+                    background: root.selected-presentation == index ? #e8f0ff : transparent;
+                    Text { x: 10px; y: 2px; width: parent.width - 20px; height: 18px; text: item.name; color: #1e293b; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                    Text { x: 10px; y: 20px; width: parent.width - 20px; height: 17px; text: item.path; color: #64748b; font-size: 10px; vertical-alignment: center; overflow: elide; }
+                    TouchArea { clicked => { root.selected-presentation = index; } }
+                }
+            }
+        }
+    }
+
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-text; enabled: root.selected-presentation >= 0; clicked => { root.command(0, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 44px + (parent.width - 64px) / 3; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.beginning-text; clicked => { root.command(1, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 64px + 2 * (parent.width - 64px) / 3; y: 240px; width: (parent.width - 64px) / 3; height: 36px; text: root.current-text; clicked => { root.command(2, ""); } }
+
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 282px; width: (parent.width - 64px) / 3; height: 36px; text: root.previous-text; clicked => { root.command(3, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 44px + (parent.width - 64px) / 3; y: 282px; width: (parent.width - 64px) / 3; height: 36px; text: root.next-text; clicked => { root.command(4, ""); } }
+    LineEdit { visible: root.current-page == 1; x: 64px + 2 * (parent.width - 64px) / 3; y: 282px; width: (parent.width - 64px) / 3 - 58px; height: 36px; text <=> root.goto-page; }
+    RemoteButton { visible: root.current-page == 1; x: 122px + 2 * (parent.width - 64px) / 3 - 58px; y: 282px; width: 58px; height: 36px; text: root.goto-text; clicked => { root.command(5, root.goto-page); } }
+
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.black-text; clicked => { root.command(6, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 44px + (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.white-text; clicked => { root.command(7, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 64px + 2 * (parent.width - 64px) / 3; y: 324px; width: (parent.width - 64px) / 3; height: 36px; text: root.restore-text; clicked => { root.command(8, ""); } }
+
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.end-text; clicked => { root.command(9, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 44px + (parent.width - 64px) / 3; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-active-text; clicked => { root.command(10, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 64px + 2 * (parent.width - 64px) / 3; y: 366px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-managed-text; clicked => { root.command(11, ""); } }
+
+    RemoteButton { visible: root.current-page == 1; x: parent.width - 238px; y: 420px; width: 214px; height: 38px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = true; } }
+
+    if root.confirm-exit && root.current-page == 1: Rectangle {
+        background: #66000000;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - 460px) / 2; y: (parent.height - 220px) / 2;
+            width: 460px; height: 220px; background: #ffffff; border-radius: 12px; border-width: 1px; border-color: #d7e0ea;
+            Text { x: 24px; y: 22px; width: parent.width - 48px; height: 30px; text: root.confirm-title; color: #b42318; font-size: 19px; font-weight: 700; vertical-alignment: center; }
+            Text { x: 24px; y: 64px; width: parent.width - 48px; height: 76px; text: root.confirm-message; color: #334155; font-size: 13px; wrap: word-wrap; vertical-alignment: center; }
+            RemoteButton { x: 244px; y: 162px; width: 88px; height: 36px; text: root.cancel-command-text; clicked => { root.confirm-exit = false; } }
+            RemoteButton { x: 342px; y: 162px; width: 94px; height: 36px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = false; root.command(13, ""); } }
+        }
+    }
+}
+component FieldRow inherits Rectangle {
+    in property <SettingItem> item;
+    in property <int> row-index;
+    callback edited(int, string, bool, int);
+    callback action(int);
+
+    height: item.kind == 5 ? (item.row-height > 0 ? item.row-height * 1.3px : 56px) : item.kind == 0 ? 40px : item.row-height > 0 ? item.row-height * 1px : 44px;
+    background: item.kind == 0 ? #eaf0f6 : #ffffff;
+    border-radius: 8px;
+    border-width: item.kind == 0 ? 0px : 1px;
+    border-color: item.kind == 0 ? transparent : #e2e8f0;
+
+    if item.kind == 0: Text {
+        x: 14px;
+        width: parent.width - 28px;
+        height: parent.height;
+        text: item.label;
+        color: #17324d;
+        font-size: 14px;
+        font-weight: 700;
+        vertical-alignment: center;
+    }
+
+    if item.kind == 1 || item.kind == 2 || item.kind == 3 || item.kind == 4: Text {
+        x: 14px;
+        width: parent.width - 286px;
+        height: parent.height;
+        text: item.label;
+        color: #34465a;
+        font-size: 13px;
+        vertical-alignment: center;
+        wrap: word-wrap;
+    }
+
+    if item.kind == 1: CheckBox {
+        x: parent.width - 258px;
+        y: (parent.height - 32px) / 2;
+        width: 244px;
+        height: 32px;
+        checked: item.checked;
+        text: item.button-text;
+        enabled: item.enabled;
+        toggled => { root.edited(row-index, "", self.checked, 0); }
+    }
+
+    if item.kind == 2: LineEdit {
+        x: parent.width - 258px;
+        y: (parent.height - 32px) / 2;
+        width: 244px;
+        height: 32px;
+        text: item.value;
+        enabled: item.enabled;
+        edited(value) => { root.edited(row-index, value, false, 0); }
+    }
+
+    if item.kind == 3: ComboBox {
+        x: parent.width - 258px;
+        y: (parent.height - 32px) / 2;
+        width: 244px;
+        height: 32px;
+        model: item.options;
+        current-index: item.selected;
+        enabled: item.enabled;
+        selected(value) => { root.edited(row-index, value, false, self.current-index); }
+    }
+
+    if item.kind == 4: Button {
+        x: parent.width - 258px;
+        y: (parent.height - 34px) / 2;
+        width: 244px;
+        height: 34px;
+        text: item.button-text;
+        enabled: item.enabled;
+        clicked => { root.action(row-index); }
+    }
+
+    if item.kind == 5: Text {
+        x: 14px;
+        y: 8px;
+        width: parent.width - 28px;
+        height: 20px;
+        text: item.label;
+        color: #34465a;
+        font-size: 13px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+
+    if item.kind == 5: Text {
+        x: 14px;
+        y: 28px;
+        width: parent.width - 28px;
+        height: parent.height - 36px;
+        text: item.value;
+        color: #64748b;
+        font-size: 12px;
+        wrap: word-wrap;
+        vertical-alignment: center;
+    }
+}
+export component SettingsWindow inherits Window {
+    in property <string> settings-title: "FlyPPTTimer Settings";
+    in property <[string]> pages;
+    in property <[SettingItem]> items;
+    in property <[RuleItem]> rules;
+    in property <int> current-page: 0;
+    in property <int> selected-rule: -1;
+    in property <int> selected-rule-count: 0;
+    in property <bool> dirty: false;
+    in property <string> dirty-text;
+    in property <string> ok-text;
+    in property <string> cancel-text;
+    in property <string> apply-text;
+    in property <string> rule-add-text;
+    in property <string> rule-delete-text;
+    in property <string> rule-clear-text;
+    in property <string> rule-batch-text;
+    in property <string> rule-file-label;
+    in property <string> rule-path-label;
+    in property <string> rule-duration-label;
+    in property <string> rule-mode-label;
+    in property <string> rule-status-label;
+    in property <[string]> timer-modes;
+    in-out property <bool> batch-open: false;
+    in-out property <string> batch-duration: "00:08:00";
+    in-out property <int> batch-mode: 0;
+    in property <string> batch-title;
+    in property <string> batch-count-text;
+    in property <string> batch-duration-label;
+    in property <string> batch-mode-label;
+    in-out property <length> preview-scroll-y: 0px;
+
+    callback navigate(int);
+    callback field-edited(int, string, bool, int);
+    callback field-action(int);
+    callback rule-selected(int);
+    callback rule-edited(int, string, bool, int);
+    callback rule-action(int);
+    callback batch-confirm(string, int);
+    callback accept();
+    callback cancel();
+    callback apply();
+
+    title: root.settings-title;
+    width: 900px;
+    height: 650px;
+    background: #f6f8fb;
+
+    Rectangle {
+        x: 0;
+        width: 196px;
+        height: parent.height;
+        background: #18324b;
+
+        Text {
+            x: 24px;
+            y: 28px;
+            text: "FlyPPTTimer";
+            color: #ffffff;
+            font-size: 21px;
+            font-weight: 700;
+        }
+
+        for page[index] in pages: Rectangle {
+            x: 12px;
+            y: 74px + index * 44px;
+            width: 172px;
+            height: 36px;
+            border-radius: 8px;
+            background: root.current-page == index ? #2d6a91 : transparent;
+
+            Text {
+                x: 14px;
+                width: parent.width - 28px;
+                height: parent.height;
+                text: page;
+                color: root.current-page == index ? #ffffff : #c8d3e1;
+                font-size: 14px;
+                vertical-alignment: center;
+            }
+            TouchArea { clicked => { root.navigate(index); } }
+        }
+    }
+
+    Rectangle {
+        x: 196px;
+        width: parent.width - 196px;
+        height: parent.height - 58px;
+        background: #f6f8fb;
+
+        Text {
+            x: 22px;
+            y: 18px;
+            text: pages[root.current-page];
+            color: #152235;
+            font-size: 24px;
+            font-weight: 700;
+            vertical-alignment: top;
+        }
+
+        ScrollView {
+            x: 18px;
+            y: 56px;
+            width: parent.width - 36px;
+            height: parent.height - 64px;
+            viewport-y <=> root.preview-scroll-y;
+
+            VerticalLayout {
+                width: parent.width;
+                spacing: 5px;
+                padding-bottom: 12px;
+
+                for item[index] in root.items: FieldRow {
+                    width: parent.width;
+                    item: item;
+                    row-index: index;
+                    edited(index, value, checked, selected) => { root.field-edited(index, value, checked, selected); }
+                    action(index) => { root.field-action(index); }
+                }
+
+                if root.current-page == 0: Rectangle {
+                    height: 48px;
+                    background: transparent;
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 8px;
+                        Button { text: root.rule-add-text; clicked => { root.rule-action(0); } }
+                        Button { text: root.rule-delete-text; enabled: root.selected-rule-count > 0; clicked => { root.rule-action(1); } }
+                        Button { text: root.rule-clear-text; enabled: root.rules.length > 0; clicked => { root.rule-action(2); } }
+                        Button { text: root.rule-batch-text; enabled: root.selected-rule-count > 0; clicked => { root.rule-action(3); } }
+                    }
+                }
+
+                if root.current-page == 0: Rectangle {
+                    height: root.rules.length > 0 ? max(120px, root.rules.length * 48px + 12px) : 92px;
+                    background: #ffffff;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #d7e0ea;
+                    VerticalLayout {
+                        padding: 6px;
+                        for rule[index] in root.rules: Rectangle {
+                            height: 44px;
+                            border-radius: 6px;
+                            background: rule.selected ? #e8f0ff : transparent;
+                            CheckBox {
+                                x: 8px; y: 12px; width: 24px;
+                                checked: rule.enabled;
+                                toggled => { root.rule-edited(index, "enabled", self.checked, 0); }
+                            }
+                            Text {
+                                x: 40px; y: 4px; width: parent.width - 210px; height: 20px;
+                                text: rule.file-name; color: #1e293b; font-size: 13px; overflow: elide;
+                            }
+                            Text {
+                                x: 40px; y: 23px; width: parent.width - 210px; height: 17px;
+                                text: rule.file-path; color: #64748b; font-size: 11px; overflow: elide;
+                            }
+                            Text {
+                                x: parent.width - 160px; width: 72px; height: parent.height;
+                                text: rule.duration; color: #334155; vertical-alignment: center;
+                            }
+                            Text {
+                                x: parent.width - 84px; width: 76px; height: parent.height;
+                                text: root.timer-modes[rule.mode]; color: #334155; vertical-alignment: center;
+                            }
+                            TouchArea { x: 32px; width: parent.width - 32px; clicked => { root.rule-selected(index); } }
+                        }
+                    }
+                }
+
+                if root.current-page == 0 && root.selected-rule >= 0: Rectangle {
+                    height: 240px;
+                    background: #ffffff;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #d7e0ea;
+                    Text { x: 14px; y: 10px; width: 220px; text: root.rule-file-label; color: #475569; vertical-alignment: top; }
+                    Text { x: 248px; y: 10px; width: parent.width - 262px; text: root.rules[root.selected-rule].file-name; color: #1e293b; overflow: elide; vertical-alignment: top; }
+                    Text { x: 14px; y: 52px; width: 220px; text: root.rule-path-label; color: #475569; vertical-alignment: top; }
+                    Text { x: 248px; y: 52px; width: parent.width - 262px; text: root.rules[root.selected-rule].file-path; color: #1e293b; overflow: elide; vertical-alignment: top; }
+                    Text { x: 14px; y: 94px; width: 220px; text: root.rule-duration-label; color: #475569; vertical-alignment: top; }
+                    LineEdit {
+                        x: 248px; y: 86px; width: parent.width - 262px; height: 34px;
+                        text: root.rules[root.selected-rule].duration;
+                        edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
+                    }
+                    Text { x: 14px; y: 136px; width: 220px; text: root.rule-mode-label; color: #475569; vertical-alignment: top; }
+                    ComboBox {
+                        x: 248px; y: 128px; width: parent.width - 262px; height: 34px;
+                        model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
+                        selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
+                    }
+                    Text { x: 14px; y: 178px; width: 220px; text: root.rule-status-label; color: #475569; vertical-alignment: top; }
+                    CheckBox {
+                        x: 248px; y: 172px; checked: root.rules[root.selected-rule].enabled;
+                        toggled => { root.rule-edited(root.selected-rule, "enabled", self.checked, 0); }
+                    }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        x: 196px;
+        y: parent.height - 58px;
+        width: parent.width - 196px;
+        height: 58px;
+        background: #ffffff;
+        border-width: 1px;
+        border-color: #e2e8f0;
+
+        Text {
+            x: 20px; width: 250px; height: parent.height;
+            text: root.dirty ? root.dirty-text : "";
+            color: #b45309; font-size: 13px; vertical-alignment: center;
+        }
+        HorizontalLayout {
+            x: parent.width - 310px;
+            y: 10px;
+            width: 290px;
+            height: 36px;
+            spacing: 6px;
+            Button { text: root.ok-text; clicked => { root.accept(); } }
+            Button { text: root.cancel-text; clicked => { root.cancel(); } }
+            Button { text: root.apply-text; enabled: root.dirty; clicked => { root.apply(); } }
+        }
+    }
+
+    if root.batch-open: Rectangle {
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        background: #66000000;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - 430px) / 2;
+            y: (parent.height - 260px) / 2;
+            width: 430px; height: 260px;
+            background: #ffffff; border-radius: 12px; border-width: 1px; border-color: #d7e0ea;
+            Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.batch-title; color: #172033; font-size: 20px; font-weight: 700; vertical-alignment: top; }
+            Text { x: 24px; y: 58px; width: parent.width - 48px; text: root.batch-count-text; color: #64748b; font-size: 13px; vertical-alignment: top; }
+            Text { x: 24px; y: 102px; width: 118px; text: root.batch-duration-label; color: #334155; vertical-alignment: top; }
+            LineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
+            Text { x: 24px; y: 150px; width: 118px; text: root.batch-mode-label; color: #334155; vertical-alignment: top; }
+            ComboBox { x: 148px; y: 140px; width: 258px; height: 34px; model: root.timer-modes; current-index <=> root.batch-mode; }
+            Button { x: 222px; y: 202px; width: 88px; height: 36px; text: root.cancel-text; clicked => { root.batch-open = false; } }
+            Button { x: 318px; y: 202px; width: 88px; height: 36px; text: root.ok-text; clicked => { root.batch-confirm(root.batch-duration, root.batch-mode); } }
+        }
+    }
+}
