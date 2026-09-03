@@ -4,13 +4,14 @@ use windows_sys::Win32::{
     Foundation::{HWND, POINT, RECT},
     Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
     UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GetClientRect, GetCursorPos, GetSystemMetrics, GetWindowLongPtrW,
+        GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetSystemMetrics, GetWindowLongPtrW,
         HWND_NOTOPMOST, HWND_TOPMOST, IsIconic, IsWindowVisible, LWA_ALPHA, SM_CXVIRTUALSCREEN,
         SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN, SPI_GETWORKAREA, SW_HIDE,
         SW_SHOWNOACTIVATE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
         SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-        SystemParametersInfoW, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-        WS_EX_TRANSPARENT,
+        SystemParametersInfoW, WS_CAPTION, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+        WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
+        WS_THICKFRAME,
     },
 };
 
@@ -28,6 +29,16 @@ pub fn apply_native_window(
     };
 
     unsafe {
+        let current_style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+        let window_style = (current_style
+            & !(WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX))
+            | WS_POPUP;
+        let mut position_flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
+        if window_style != current_style {
+            SetWindowLongPtrW(hwnd, GWL_STYLE, window_style as isize);
+            position_flags |= SWP_FRAMECHANGED;
+        }
+
         let mut style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
         style |= WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
         style &= !WS_EX_APPWINDOW;
@@ -52,7 +63,7 @@ pub fn apply_native_window(
             0,
             0,
             0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+            position_flags,
         );
 
         apply_shape(hwnd, shape);
