@@ -49,13 +49,28 @@ FlyPPTTimer 把悬浮计时、演示文稿独立规则、局域网遥控、到�
 
 ## 界面预览
 
-| 计时与文件规则 | 外观与显示 |
-|---|---|
-| <img src="docs/media/settings-duration.png" alt="计时与文件规则设置" width="100%"> | <img src="docs/media/settings-appearance.png" alt="外观与显示设置" width="100%"> |
+<p align="center">
+  <img src="docs/media/presentation-timer-overlay.webp" alt="PPT 放映中的悬浮计时效果" width="100%">
+</p>
 
-| 远程连接 | 演示文稿控制 |
+计时窗口会悬浮显示在演示画面上，方便汇报者和现场工作人员随时掌握限定时间，不需要打断放映。
+
+<p align="center">
+  <img src="docs/media/interface-overview.webp" alt="FlyPPTTimer 最新界面总览" width="100%">
+</p>
+
+上图包含最新版的实际放映效果、六个设置页面，以及电脑端远程连接和演示文稿控制页面。截图中的本地路径、访问令牌、二维码、演示文稿名称和单位信息均已隐藏或模糊处理。
+
+| 页面 | 本页主要设置内容 |
 |---|---|
-| <img src="docs/media/remote-connect.png" alt="电脑端远程连接与二维码" width="100%"> | <img src="docs/media/remote-presentations.png" alt="电脑端演示文稿控制" width="100%"> |
+| **时长设置** | 设置默认时长、正计时或倒计时、到零后的处理方式，并为多份 PowerPoint / WPS 文稿保存独立规则。 |
+| **行为设置** | 设置进入或退出全屏时是否自动开始、停止和重置，以及两次提前提醒与最终到时提醒。 |
+| **外观与显示** | 调整计时窗口是否显示、配色、尺寸、透明度、形状、多显示器位置和大屏计时模式。 |
+| **远程控制设置** | 启用本地网页遥控，查看端口和局域网地址，并管理访问令牌及已连接设备。 |
+| **控制设置** | 修改开始、暂停、停止、重置等全局快捷键，并设置鼠标穿透、窗口锁定、托盘和关闭行为。 |
+| **其他设置** | 切换界面语言，检查更新，导入、导出或恢复配置，查看本地目录、版本和诊断信息。 |
+| **远程连接** | 查看服务状态、二维码和浏览器地址。手机无需安装 App，可通过同一局域网或手机热点连接。 |
+| **演示文稿控制** | 集中管理多份演示文稿及计时规则，并在台下完成打开、开始放映、结束放映和关闭文档。 |
 
 <p align="center">
   <img src="docs/media/mobile-timer.jpg" width="310" alt="手机端计时控制">
