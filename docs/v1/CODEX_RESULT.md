@@ -1,72 +1,53 @@
-# FlyPPTTimer V1 — 窗口修复结果
+# FlyPPTTimer V1 — 当前窗口右键遮罩审计结果
 
-日期：2026-09-03。状态：**窗口 Style 修复和构建完成；启动目视确认受工具故障阻塞，等待用户手工测试。**
+日期：2026-09-03
+分支：`codex/v1-06-manual-test`
+实现 commit：`e2c156395bbe154c7d768e4660028a35dadae341`
+任务：只审计并修复计时器窗口右键后出现的系统标题栏/遮罩残影。
 
-## 版本与分支
+## 监测结果
 
-- 本地目录：`E:\快传\计时器\v1.0`
-- 当前 review 分支：`codex/v1-06-manual-test`（没有创建新分支）。
-- 拉取的任务起点：`b19f4fca51983d1c66668ef355a753991e0b21c5`。
-- 最终实现 commit SHA：`b5ecf5a0f54d8555944e67056ea0516c44a32087`。
-- 本报告作为其后的独立文档提交；实现 SHA 对应 Release 的全部代码。包含本报告的最终 HEAD 可用 `git rev-parse origin/codex/v1-06-manual-test` 获取。
-- 按用户要求顺延候选版本为 **1.07（1.7.0）**，不创建 Release 或 Tag。
+直接在 Release 计时器窗口上执行了右键、菜单选择和菜单关闭。一次性诊断记录如下：
 
-## 修改文件
-
-1. `src/window.rs`：仅修改普通 Timer 的原生 Style 设置及对应 SetWindowPos 标志。
-2. `Cargo.toml`、`Cargo.lock`、`resources/app.manifest`：版本标识由 1.6.0 顺延到 1.7.0，无依赖变更。
-3. `docs/v1/CODEX_RESULT.md`：记录本轮结果。
-
-没有修改 Slint UI、Timer、设置、Remote、PPT/WPS、多屏、更新、Installer 或打包脚本。没有新增测试、验证工具或窗口框架。
-
-## 实际 Style 修复
-
-在 `apply_native_window()` 中：
-
-- 读取当前 `GWL_STYLE`。
-- 目标 Style 为：移除 `WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX`，加入 `WS_POPUP`，保留其他原有位。
-- 默认位置标志仍为 `SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE`。
-- **仅当目标 Style 与当前值不同**，写入 `GWL_STYLE`，并为本次 `SetWindowPos` 附加 `SWP_FRAMECHANGED`。
-- Style 已符合目标时，透明度、置顶、穿透或设置应用引起的后续调用不会由此再次触发 `SWP_FRAMECHANGED`。
-- 扩展样式继续保留 `WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`，移除 `WS_EX_APPWINDOW`，按配置切换 `WS_EX_TRANSPARENT`。
-
-现有 Region 圆角、透明度及 TopMost 实现原样保留；`configure_timer_window()` 的 80ms 回调仍只刷新圆角。不修改 renderer，不向窗口添加内容或按钮。
-
-## 构建和现有测试
-
-| 命令 | 结果 |
+| 时刻 | Timer 状态 |
 | --- | --- |
-| `cargo fmt --check` | 通过 |
-| `cargo clippy --all-targets -- -D warnings` | 通过，无警告 |
-| `cargo test` | 33 通过，0 失败，1 跳过 |
-| `cargo build --release` | 通过 |
+| 右键前 | HWND `0x2460fa4`；foreground 为 Timer；Style `0x16ca0000`；ExStyle `0x00040118`；WindowRect `(1205,18)-(1355,71)`；ClientRect `150x53` |
+| `SetForegroundWindow(helper)` 后 | foreground 变为隐藏 Desktop helper `0x1d9001e`，Timer 的 Style、ExStyle 和几何尺寸未变；遮罩首次出现 |
+| `TrackPopupMenu` 返回后 | foreground 可能变为 `0`/其他窗口，Timer 的 Style、ExStyle 和几何尺寸仍未变；系统标题栏残影持续存在 |
 
-跳过项是原有 `manual_powerpoint_and_wps_com_connection`。没有启动 Office 或扩展测试。编译及测试进程已结束。
+禁用整个菜单路径时连续右键均无异常；只调用 `SetForegroundWindow(helper)`（不显示菜单）即可复现。因此问题不是 Slint Timer 内容，也不是尺寸或 Style 被改写。
 
-## Release EXE
+进一步记录到每次菜单路径都会向 Timer 发送 `0x00AE`（`WM_NCUAHDRAWCAPTION`，Windows UAH 主题标题栏绘制），并伴随 `WM_NCACTIVATE`。这两条绘制路径就是遮罩的直接来源。
 
-- 路径：`E:\快传\计时器\v1.0\target\release\FlyPPTTimer.exe`
-- 大小：**16,747,008 字节**。
-- 这是本轮 **1.7.0** EXE。此前 `artifacts/release/v1.6.0` 的 Portable/Installer 未更新，不能用旧包检查本轮修复。
-- 没有生成新的安装器或 ZIP，没有上传二进制，没有修改用户配置或删除旧产物。
+## 最终修复
 
-## 启动检查与阻塞
+只修改两个源码文件：
 
-本轮使用 Computer Use 技能初始化窗口检查。读取应用列表时，底层运行时返回：
+- `src/window.rs`：在 Timer 原生 HWND 创建后安装一个轻量窗口子类；丢弃实际命中的 `WM_NCUAHDRAWCAPTION`，并将 `WM_NCACTIVATE` 交给 `DefSubclassProc` 时使用 `lParam=-1`，避免系统非客户区重绘。窗口样式、圆角、透明度、置顶和菜单项目均未改动。
+- `src/app.rs`：在现有 80ms Timer 窗口初始化回调中安装上述处理。
 
-```text
-failed to launch codex app-server: 系统找不到指定的路径。 (os error 3)
-```
+没有保留 A/B 诊断日志、后台审计线程、第二套菜单、第二套 Timer 或新的窗口框架。`desktop.rs` 已恢复为原有菜单 owner/项目/命令路径。
 
-因此**未能启动 Release 并目视确认时间显示、无标题栏和无图标**。没有把源码判断写成实测通过；没有用额外截图/GUI 工具绕过故障。本轮没有遗留启动的 Timer 窗口。
+## 实际验证
 
-## 用户手测
+使用 `E:\快传\计时器\v1.0\target\release\FlyPPTTimer.exe`（临时将被忽略的 Release 配置 `Placement.Visible` 设为 `true`，测试后恢复原值）验证：
 
-先退出旧版本，再启动上面的 `target/release/FlyPPTTimer.exe`：
+- 启动后 Timer 正常显示 `10:00`。
+- 连续三次在真实 Timer 窗口右键；菜单显示正常。
+- 两次选择菜单项、一次执行“重置计时窗口位置”；菜单关闭后每次都恢复为纯净的 `10:00`，没有留下标题栏、图标、系统按钮或渐变遮罩。
+- 选择菜单项后的 Timer 截图均保持纯色背景和时间显示；弹出菜单覆盖 Timer 的瞬间属于菜单本身的正常覆盖。
+- 测试结束后已关闭我启动的进程，没有遗留 FlyPPTTimer 进程。
 
-1. 确认只有时间与配置背景，无标题栏、程序图标及最小化/最大化/关闭按钮，不出现在任务栏。
-2. 点击、拖动、弹出并收起右键菜单，检查遮罩/残影。
-3. 应用透明度、置顶相关配置、锁定和鼠标穿透后，检查窗口框架没有重新出现。
-4. 在此前复现的 DPI 下检查圆角及时间显示。
+## 构建
 
-本轮仅处理当前窗口回归。其他已知差异不在本轮推进。推送当前 review 分支后停止，等待手测和审核。
+- `cargo fmt --check`：通过
+- `cargo clippy --all-targets -- -D warnings`：通过
+- `cargo test`：33 通过，0 失败，1 忽略（原有 Office 手工 COM 测试）
+- `cargo build --release`：通过
+- Release EXE：`E:\快传\计时器\v1.0\target\release\FlyPPTTimer.exe`，16,748,544 字节
+
+本轮没有修改 `v0.30.2`、`agent/v4-foundation`、配置模型、Remote、PPT/WPS 或其他产品行为；没有创建 Release 或 Tag。应用服务器路径问题的本地修复（旧 `CODEX_CLI_PATH` 指向缺失版本目录）通过目录 junction 解决，不属于项目源码变更。
+
+## 待用户手工复核
+
+请使用同一个 Release EXE，在你的实际配置下重复：右键打开菜单 → 选择/关闭菜单 → 再右键数次，并确认 Timer 始终只有时间和背景。当前任务只处理这一遮罩回归；其他窗口、菜单和功能差异不在本轮扩大范围内。
