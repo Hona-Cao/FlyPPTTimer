@@ -10,6 +10,6 @@ Before changing V1 code, read these files in order:
 
 After completing the current task, update `docs/v1/CODEX_RESULT.md`, commit all source/document changes, and push the review branch so ChatGPT can audit the exact result from GitHub.
 
-V1 must preserve the v0.30.2 feature set, options, defaults, behavior, Chinese and English text, Remote protocol, and PowerPoint/WPS behavior. Do not add product features. Keep implementation direct and lightweight; no SHA-256/integrity framework, no defensive architecture, and only small tests for critical regression-prone logic.
+V1 must preserve the v0.30.2 feature set, options, defaults, behavior, Chinese and English text, Remote protocol, and PowerPoint/WPS behavior. Do not add product features. Keep the implementation direct and lightweight, and add only the code and tests needed for real product behavior.
 
 Do not modify the v0.30.2 tag or `agent/v4-foundation`. Do not create a Release or tag unless the user explicitly asks.
