@@ -76,3 +76,7 @@ Timer/overlay/时间到覆盖窗口继续使用 ToolWindow/Popup 样式，不应
 ## 8. 1.9.0 测试版本编号
 
 源码包版本已从 1.8.0 递增为 1.9.0（`Cargo.toml` 与 `Cargo.lock` 已同步）。本机没有生成新的 EXE；`v1.08` 文件仍是旧构建，不能用于验证本轮修复。
+
+## 9. 当前 review 分支提交
+
+当前 review 分支 tip 为 `d9493d84dcd0e7ac6d65b621bbdbdb833201b0e1`。其中包含源码版本 1.9.0（`Cargo.toml` 与 `Cargo.lock`）以及本轮窗口入口修复；实际代码修复提交为 `93f8f3a2f10714efd0751d3d73f7630c4be1dbae`。
