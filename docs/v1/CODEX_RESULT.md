@@ -91,7 +91,7 @@ Timer/overlay/时间到覆盖窗口继续使用 ToolWindow/Popup 样式，不应
 
 ## 9. 当前 review 分支提交
 
-本轮前一阶段报告提交为 `140936c`；本次布局修正提交为 `dd99988`，随后推送到 `codex/v1-06-manual-test`。不创建 Release 或 Tag。
+本轮前一阶段报告提交为 `140936c`；本次布局修正提交为 `8d6eb16`，随后推送到 `codex/v1-06-manual-test`。不创建 Release 或 Tag。
 
 ## 10. 文件规则操作栏布局修正
 
