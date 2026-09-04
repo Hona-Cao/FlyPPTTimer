@@ -52,31 +52,43 @@ Timer/overlay/时间到覆盖窗口继续使用 ToolWindow/Popup 样式，不应
 
 上一轮窗口/Remote 修复涉及的文件仍见前一版报告：`src/window.rs`、`src/settings.rs`、`ui/app-window.slint`、`src/capture.rs`、`Cargo.toml`。
 
-## 6. 构建与验证状态
+## 6. 构建与桌面验证状态
 
-这次续修后尚未能在本机重新执行 `cargo fmt --check`、`cargo clippy`、`cargo test` 或 `cargo build --release`。当前 Codex 本地执行主机缺少：
+执行宿主恢复后，本机已重新完成：
 
-`C:\Users\mf203\AppData\Local\OpenAI\Codex\bin\994e8469124a0d31\codex-code-mode-host.exe`
+- `cargo fmt --check`：通过；
+- `cargo clippy --all-targets -- -D warnings`：通过；
+- `cargo test`：通过，33 passed、1 ignored（既有 Office 真机 smoke test）；
+- `cargo build --release`：通过。
 
-因此不能把旧的 `v1.08` 测试文件当作本轮结果：它是在上述三个提交之前构建的，不包含当前的延后显示修复。也没有进行新的桌面 EXE 启动验证。
+新的 Release 可执行文件为：
+
+`E:\快传\计时器\v1.0\target\release\FlyPPTTimer.exe`
+
+版本为 `1.9.0`，文件大小 16,836,608 字节。
+
+使用桌面控制和 Win32 窗口轮询直接启动 `--show-settings` 进行了验证。启动期间只观察到 Slint/Winit 的隐藏初始化窗口（`Window Class`，1280×745，Visible=False）和透明的 `Winit Thread Event Target`（15×15）；没有观察到可见的空白设置中间窗口。可见窗口为：
+
+- Timer：类名 `Window Class`、无标题、100×35；
+- 设置：标题“演讲计时器设置”、类名 `Window Class`、915×687。
+
+两个 Timer HWND 的扩展样式均包含 `WS_EX_TOOLWINDOW`、`WS_EX_NOACTIVATE`、`WS_EX_LAYERED`，且不含 `WS_EX_APPWINDOW`；实测 DPI 120/144 时客户区仍为 100×35。设置窗口保留普通任务栏窗口样式。
+
+使用 Release 的 headless capture 检查了 Remote 两页，`remote-connection.png` 与 `remote-presentation.png` 均正常绘制；演示文稿页包含文稿列表、完整路径、规则时长/模式/启用状态、添加/删除/刷新/清空和现有放映控制按钮。
 
 ## 7. 留给用户的下一步手测
 
-请先拉取本分支最新提交后重新构建一个测试副本，再验证：
+- 从 Timer 右键打开设置和远程控制，确认真实托盘入口下不出现可见空白轮廓；
+- 关闭后再次打开两个窗口，确认没有闪退或重复闪烁；
+- 确认 Timer、overlay 和时间到覆盖窗口不出现在任务栏，设置/远程控制正常出现在任务栏；
+- 在实际不同 DPI 显示器之间拖动 Timer，确认绘制和圆角保持正常。
 
-- 从 Timer 右键打开设置：只出现一个完整设置窗口，进程不退出；
-- 从 Timer 右键打开远程控制：只出现一个完整远程控制窗口，进程不退出；
-- 关闭后再次打开两个窗口，不出现空白轮廓或重复闪烁；
-- Timer、overlay 和时间到覆盖窗口不出现在任务栏，设置/远程控制正常出现在任务栏。
-
-本轮没有创建 Release 或 Tag。
-
-最终提交 SHA：`93f8f3a2f10714efd0751d3d73f7630c4be1dbae`。
+本轮没有创建 Release 或 Tag，也没有上传 EXE/ZIP/Installer。
 
 ## 8. 1.9.0 测试版本编号
 
-源码包版本已从 1.8.0 递增为 1.9.0（`Cargo.toml` 与 `Cargo.lock` 已同步）。本机没有生成新的 EXE；`v1.08` 文件仍是旧构建，不能用于验证本轮修复。
+源码包版本已从 1.8.0 递增为 1.9.0（`Cargo.toml` 与 `Cargo.lock` 已同步）。本轮 Release 已在本机生成并完成启动、窗口样式和截图验证。
 
 ## 9. 当前 review 分支提交
 
-当前 review 分支 tip 为 `d9493d84dcd0e7ac6d65b621bbdbdb833201b0e1`。其中包含源码版本 1.9.0（`Cargo.toml` 与 `Cargo.lock`）以及本轮窗口入口修复；实际代码修复提交为 `93f8f3a2f10714efd0751d3d73f7630c4be1dbae`。
+本次报告更新后将提交并推送到 `codex/v1-06-manual-test`；不创建 Release 或 Tag。
