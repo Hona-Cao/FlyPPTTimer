@@ -72,3 +72,7 @@ Timer/overlay/时间到覆盖窗口继续使用 ToolWindow/Popup 样式，不应
 本轮没有创建 Release 或 Tag。
 
 最终提交 SHA：`93f8f3a2f10714efd0751d3d73f7630c4be1dbae`。
+
+## 8. 1.9.0 测试版本编号
+
+源码包版本已从 1.8.0 递增为 1.9.0（`Cargo.toml` 与 `Cargo.lock` 已同步）。本机没有生成新的 EXE；`v1.08` 文件仍是旧构建，不能用于验证本轮修复。
