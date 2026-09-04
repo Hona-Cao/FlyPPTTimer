@@ -2109,20 +2109,31 @@ fn set_window_visible(window: &AppWindow, visible: bool) {
 }
 
 fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformError> {
-    window.show()?;
-    // Let Slint build its first frame while the native window is hidden. The
-    // caller then exposes only the fully initialized settings surface.
+    // Create the native window hidden and reveal it on the next event-loop turn.
+    // Keeping this callback asynchronous avoids re-entering Slint from the
+    // desktop-event polling timer, which previously caused a process exit.
     window::set_visible(window.window(), false);
-    slint::platform::update_timers_and_animations();
-    window::set_visible(window.window(), true);
+    window.show()?;
+    window::set_visible(window.window(), false);
+    let weak = window.as_weak();
+    slint::Timer::single_shot(Duration::from_millis(1), move || {
+        if let Some(window) = weak.upgrade() {
+            window::set_visible(window.window(), true);
+        }
+    });
     Ok(())
 }
 
 fn show_presentation_ready(window: &PresentationWindow) -> Result<(), slint::PlatformError> {
+    window::set_visible(window.window(), false);
     window.show()?;
     window::set_visible(window.window(), false);
-    slint::platform::update_timers_and_animations();
-    window::set_visible(window.window(), true);
+    let weak = window.as_weak();
+    slint::Timer::single_shot(Duration::from_millis(1), move || {
+        if let Some(window) = weak.upgrade() {
+            window::set_visible(window.window(), true);
+        }
+    });
     Ok(())
 }
 
