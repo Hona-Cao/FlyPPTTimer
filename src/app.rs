@@ -557,20 +557,39 @@ fn handle_desktop_event(
             {
                 eprintln!("failed to hide settings: {error}");
             }
-            if let Some(control) = presentation_window.borrow().as_ref() {
+            let existing_visible = presentation_window
+                .borrow()
+                .as_ref()
+                .is_some_and(|control| window::is_visible(control.window()));
+            if existing_visible && let Some(control) = presentation_window.borrow().as_ref() {
                 let (width, height) =
                     window::remote_window_size(&config.borrow().remote_control.window);
-                if let Err(error) = show_presentation_ready(control, width, height) {
+                if let Err(error) = show_presentation_ready(
+                    control,
+                    width,
+                    height,
+                    config.borrow().remote_control.window.clone(),
+                ) {
                     eprintln!("failed to show presentation control: {error}");
                 }
                 populate_remote_connection_window(control, remote, &config.borrow(), true);
                 return;
             }
+            // A closed Slint window can retain a hidden adapter whose backing
+            // surface is no longer drawable.  Drop that hidden instance and
+            // create the next remote window afresh; the saved placement is
+            // restored by `create_presentation_window`.
+            presentation_window.borrow_mut().take();
             match create_presentation_window(config, presentation, remote, config_path) {
                 Ok(control) => {
                     let (width, height) =
                         window::remote_window_size(&config.borrow().remote_control.window);
-                    if let Err(error) = show_presentation_ready(&control, width, height) {
+                    if let Err(error) = show_presentation_ready(
+                        &control,
+                        width,
+                        height,
+                        config.borrow().remote_control.window.clone(),
+                    ) {
                         eprintln!("failed to show presentation control: {error}");
                     }
                     *presentation_window.borrow_mut() = Some(control);
@@ -2166,6 +2185,7 @@ fn show_presentation_ready(
     window: &PresentationWindow,
     logical_width: i32,
     logical_height: i32,
+    placement: crate::config::RemoteWindowPlacement,
 ) -> Result<(), slint::PlatformError> {
     if window::is_visible(window.window()) {
         window::set_visible(window.window(), true);
@@ -2179,14 +2199,24 @@ fn show_presentation_ready(
                 return;
             }
             window::set_visible(window.window(), false);
+            window::restore_remote_window_position(window.window(), &placement);
+            // Remote placement is stored in 96-DPI logical pixels.  Submit
+            // the corresponding physical client size after the HWND knows
+            // its monitor DPI; sending LogicalSize here would apply the
+            // monitor scale a second time.
+            let physical_size =
+                window::logical_size_to_physical(window.window(), logical_width, logical_height);
+            window.window().set_size(physical_size);
+            window::set_settings_client_size(window.window(), physical_size);
+            window::install_settings_dpi_stabilizer(window.window());
+            window::set_visible(window.window(), true);
+            window.window().request_redraw();
             let weak = window.as_weak();
             slint::Timer::single_shot(Duration::from_millis(1), move || {
                 if let Some(window) = weak.upgrade() {
-                    window.window().set_size(LogicalSize::new(
-                        logical_width as f32,
-                        logical_height as f32,
-                    ));
-                    window::set_visible(window.window(), true);
+                    window.window().set_size(physical_size);
+                    window::set_settings_client_size(window.window(), physical_size);
+                    window.window().request_redraw();
                 }
             });
         }

@@ -29,6 +29,21 @@ pub fn settings_client_size(window: &slint::Window) -> Option<PhysicalSize> {
     Some(PhysicalSize::new(width, height))
 }
 
+pub fn logical_size_to_physical(
+    window: &slint::Window,
+    logical_width: i32,
+    logical_height: i32,
+) -> PhysicalSize {
+    let dpi = hwnd(window)
+        .map(|hwnd| unsafe { GetDpiForWindow(hwnd) }.max(96))
+        .unwrap_or(96);
+    let width =
+        ((logical_width.max(1) as u64 * u64::from(dpi) + 48) / 96).clamp(1, u32::MAX as u64) as u32;
+    let height = ((logical_height.max(1) as u64 * u64::from(dpi) + 48) / 96)
+        .clamp(1, u32::MAX as u64) as u32;
+    PhysicalSize::new(width, height)
+}
+
 pub fn set_settings_client_size(window: &slint::Window, size: PhysicalSize) {
     let Some(hwnd) = hwnd(window) else {
         return;
@@ -325,7 +340,16 @@ pub fn restore_remote_window(window: &slint::Window, placement: &RemoteWindowPla
     // The presentation page includes the rule editor and its full control
     // group. Keep legacy 510-DIP placements usable without clipping it.
     window.set_size(slint::LogicalSize::new(width as f32, height as f32));
-    let size = window.size();
+    restore_remote_window_position(window, placement);
+}
+
+pub fn restore_remote_window_position(window: &slint::Window, placement: &RemoteWindowPlacement) {
+    let (width, height) = remote_window_size(placement);
+    // Before the first show Slint reports the requested DIP dimensions as if
+    // they were physical pixels.  Use the monitor DPI to calculate the real
+    // client size for placement, otherwise a saved bottom/center ratio is
+    // applied with the smaller pre-show size and the window reopens off-screen.
+    let size = logical_size_to_physical(window, width, height);
     let work = monitor_work_area(&placement.screen_device_name).unwrap_or_else(primary_work_area);
     let available_x = (work.right - work.left - size.width as i32).max(0);
     let available_y = (work.bottom - work.top - size.height as i32).max(0);
