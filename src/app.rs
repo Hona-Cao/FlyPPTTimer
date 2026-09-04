@@ -2109,29 +2109,43 @@ fn set_window_visible(window: &AppWindow, visible: bool) {
 }
 
 fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformError> {
-    // Create the native window hidden and reveal it on the next event-loop turn.
-    // Keeping this callback asynchronous avoids re-entering Slint from the
-    // desktop-event polling timer, which previously caused a process exit.
-    window::set_visible(window.window(), false);
-    window.show()?;
-    window::set_visible(window.window(), false);
+    // Defer native creation until the current desktop-event callback returns.
+    // The first frame is created hidden, then revealed on a later turn so the
+    // settings window cannot flash or re-enter the polling timer.
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
         if let Some(window) = weak.upgrade() {
-            window::set_visible(window.window(), true);
+            if let Err(error) = window.show() {
+                eprintln!("failed to show settings: {error}");
+                return;
+            }
+            window::set_visible(window.window(), false);
+            let weak = window.as_weak();
+            slint::Timer::single_shot(Duration::from_millis(1), move || {
+                if let Some(window) = weak.upgrade() {
+                    window::set_visible(window.window(), true);
+                }
+            });
         }
     });
     Ok(())
 }
 
 fn show_presentation_ready(window: &PresentationWindow) -> Result<(), slint::PlatformError> {
-    window::set_visible(window.window(), false);
-    window.show()?;
-    window::set_visible(window.window(), false);
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
         if let Some(window) = weak.upgrade() {
-            window::set_visible(window.window(), true);
+            if let Err(error) = window.show() {
+                eprintln!("failed to show remote control: {error}");
+                return;
+            }
+            window::set_visible(window.window(), false);
+            let weak = window.as_weak();
+            slint::Timer::single_shot(Duration::from_millis(1), move || {
+                if let Some(window) = weak.upgrade() {
+                    window::set_visible(window.window(), true);
+                }
+            });
         }
     });
     Ok(())
