@@ -2112,6 +2112,10 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
     // Defer native creation until the current desktop-event callback returns.
     // The first frame is created hidden, then revealed on a later turn so the
     // settings window cannot flash or re-enter the polling timer.
+    if window::is_visible(window.window()) {
+        window::set_visible(window.window(), true);
+        return Ok(());
+    }
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
         if let Some(window) = weak.upgrade() {
@@ -2132,6 +2136,10 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
 }
 
 fn show_presentation_ready(window: &PresentationWindow) -> Result<(), slint::PlatformError> {
+    if window::is_visible(window.window()) {
+        window::set_visible(window.window(), true);
+        return Ok(());
+    }
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
         if let Some(window) = weak.upgrade() {
