@@ -615,19 +615,6 @@ export component SettingsWindow inherits Window {
                 }
 
                 if root.current-page == 0: Rectangle {
-                    height: 48px;
-                    background: transparent;
-                    HorizontalLayout {
-                        alignment: end;
-                        spacing: 8px;
-                        Button { text: root.rule-add-text; clicked => { root.rule-action(0); } }
-                        Button { text: root.rule-delete-text; enabled: root.selected-rule-count > 0; clicked => { root.rule-action(1); } }
-                        Button { text: root.rule-clear-text; enabled: root.rules.length > 0; clicked => { root.rule-action(2); } }
-                        Button { text: root.rule-batch-text; enabled: root.selected-rule-count > 0; clicked => { root.rule-action(3); } }
-                    }
-                }
-
-                if root.current-page == 0: Rectangle {
                     height: root.rules.length > 0 ? max(120px, root.rules.length * 48px + 12px) : 92px;
                     background: #ffffff;
                     border-radius: 8px;
@@ -662,6 +649,19 @@ export component SettingsWindow inherits Window {
                             }
                             TouchArea { x: 32px; width: parent.width - 32px; clicked => { root.rule-selected(index); } }
                         }
+                    }
+                }
+
+                if root.current-page == 0: Rectangle {
+                    height: 48px;
+                    background: transparent;
+                    HorizontalLayout {
+                        alignment: end;
+                        spacing: 8px;
+                        Button { text: root.rule-add-text; clicked => { root.rule-action(0); } }
+                        Button { text: root.rule-delete-text; enabled: root.selected-rule-count > 0; clicked => { root.rule-action(1); } }
+                        Button { text: root.rule-clear-text; enabled: root.rules.length > 0; clicked => { root.rule-action(2); } }
+                        Button { text: root.rule-batch-text; enabled: root.selected-rule-count > 0; clicked => { root.rule-action(3); } }
                     }
                 }
 

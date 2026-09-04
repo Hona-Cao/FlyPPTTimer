@@ -1186,7 +1186,7 @@ checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 
 [[package]]
 name = "flyppttimer"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "clipboard-win",
  "png",
