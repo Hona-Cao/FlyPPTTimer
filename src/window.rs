@@ -18,6 +18,119 @@ use windows_sys::Win32::{
 
 use crate::config::RemoteWindowPlacement;
 
+pub fn settings_client_size(window: &slint::Window) -> Option<PhysicalSize> {
+    let hwnd = hwnd(window)?;
+    let mut client = RECT::default();
+    if unsafe { GetClientRect(hwnd, &mut client) } == 0 {
+        return None;
+    }
+    let width = (client.right - client.left).max(1) as u32;
+    let height = (client.bottom - client.top).max(1) as u32;
+    Some(PhysicalSize::new(width, height))
+}
+
+pub fn set_settings_client_size(window: &slint::Window, size: PhysicalSize) {
+    let Some(hwnd) = hwnd(window) else {
+        return;
+    };
+    let mut outer = RECT::default();
+    let mut client = RECT::default();
+    if unsafe { GetWindowRect(hwnd, &mut outer) } == 0
+        || unsafe { GetClientRect(hwnd, &mut client) } == 0
+    {
+        return;
+    }
+    let frame_width = (outer.right - outer.left - (client.right - client.left)).max(0);
+    let frame_height = (outer.bottom - outer.top - (client.bottom - client.top)).max(0);
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            outer.left,
+            outer.top,
+            size.width as i32 + frame_width,
+            size.height as i32 + frame_height,
+            SWP_NOACTIVATE | SWP_NOZORDER,
+        );
+    }
+}
+
+pub fn install_settings_dpi_stabilizer(window: &slint::Window) {
+    if let Some(hwnd) = hwnd(window) {
+        unsafe {
+            windows_sys::Win32::UI::Shell::SetWindowSubclass(hwnd, Some(settings_dpi_proc), 2, 0);
+        }
+    }
+}
+
+unsafe extern "system" fn settings_dpi_proc(
+    hwnd: HWND,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+    id: usize,
+    _: usize,
+) -> isize {
+    use windows_sys::Win32::UI::{
+        Shell::{DefSubclassProc, RemoveWindowSubclass},
+        WindowsAndMessaging::{WM_DPICHANGED, WM_NCDESTROY},
+    };
+
+    if message == WM_DPICHANGED {
+        let old_dpi = unsafe { GetDpiForWindow(hwnd) }.max(96);
+        let mut old_client = RECT::default();
+        let old_client_ok = unsafe { GetClientRect(hwnd, &mut old_client) } != 0;
+        let old_width = (old_client.right - old_client.left).max(1) as u64;
+        let old_height = (old_client.bottom - old_client.top).max(1) as u64;
+        let new_dpi = ((wparam as u32) & 0xffff).max(96);
+        // Winit can deliver a second DPI message while a decorated window is
+        // straddling two monitors.  If Windows reports the same DPI on both
+        // sides, there is no scale transition to apply; forwarding it would
+        // make Winit alternate between its stale scale factors and resize the
+        // client area on every drag step.
+        if new_dpi == old_dpi {
+            return 0;
+        }
+
+        // Let Winit update its scale factor and monitor placement first.  Its
+        // internal old scale can be stale while a decorated Slint window is
+        // being dragged, so correct only the physical client size afterwards
+        // using the native DPI values from this message.
+        let result = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
+        let mut outer = RECT::default();
+        let mut client = RECT::default();
+        if old_client_ok
+            && unsafe { GetWindowRect(hwnd, &mut outer) } != 0
+            && unsafe { GetClientRect(hwnd, &mut client) } != 0
+        {
+            let frame_width = (outer.right - outer.left - (client.right - client.left)).max(0);
+            let frame_height = (outer.bottom - outer.top - (client.bottom - client.top)).max(0);
+            let client_width = ((old_width * u64::from(new_dpi) + u64::from(old_dpi / 2))
+                / u64::from(old_dpi))
+            .clamp(1, i32::MAX as u64) as i32;
+            let client_height = ((old_height * u64::from(new_dpi) + u64::from(old_dpi / 2))
+                / u64::from(old_dpi))
+            .clamp(1, i32::MAX as u64) as i32;
+            unsafe {
+                SetWindowPos(
+                    hwnd,
+                    std::ptr::null_mut(),
+                    outer.left,
+                    outer.top,
+                    client_width + frame_width,
+                    client_height + frame_height,
+                    SWP_NOACTIVATE | SWP_NOZORDER,
+                );
+            }
+        }
+        return result;
+    }
+    if message == WM_NCDESTROY {
+        unsafe { RemoveWindowSubclass(hwnd, Some(settings_dpi_proc), id) };
+    }
+    unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+}
+
 pub fn handle_timer_frame_paint(window: &slint::Window) {
     if let Some(hwnd) = hwnd(window) {
         unsafe {

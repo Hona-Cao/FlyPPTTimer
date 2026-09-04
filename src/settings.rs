@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::BTreeSet, fs, path::PathBuf, rc::Rc};
 
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, ModelRc, PhysicalSize, SharedString, VecModel};
 
 use crate::{
     app::{RuleItem, SettingItem, SettingsWindow},
@@ -443,6 +443,10 @@ pub fn create(
     remote: Rc<RemoteServer>,
 ) -> Result<SettingsWindow, slint::PlatformError> {
     let window = SettingsWindow::new()?;
+    // Mark the initial size explicit before binding the settings model.  Slint
+    // otherwise schedules a preferred-layout resize after all those bindings,
+    // which can overwrite a native resize while the window is being shown.
+    window.window().set_size(PhysicalSize::new(900, 650));
     let draft = Rc::new(RefCell::new(applied.borrow().clone()));
     let ui_language = Language::from_config(&applied.borrow().language);
     let page = Rc::new(RefCell::new(0usize));

@@ -2120,6 +2120,11 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
         window::set_visible(window.window(), true);
         return Ok(());
     }
+    // Keep the actual client pixels when reopening a resized window.  Using
+    // Slint's cached size here would apply the monitor scale factor twice on
+    // mixed-DPI desktops, so this path deliberately stays in physical pixels.
+    let physical_size = window::settings_client_size(window.window())
+        .unwrap_or_else(|| slint::PhysicalSize::new(900, 650));
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
         if let Some(window) = weak.upgrade() {
@@ -2131,11 +2136,25 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
             let weak = window.as_weak();
             slint::Timer::single_shot(Duration::from_millis(1), move || {
                 if let Some(window) = weak.upgrade() {
-                    // The first Slint size is stored before the native window
-                    // knows its monitor scale factor. Re-apply the logical
-                    // client size immediately before the first reveal.
-                    window.window().set_size(LogicalSize::new(900.0, 650.0));
+                    // Mark the size explicit in Slint/Winit, then correct the
+                    // native client area directly.  The backend otherwise
+                    // re-applies the component's preferred layout size on its
+                    // first shown frame.
+                    window.window().set_size(physical_size);
+                    window::set_settings_client_size(window.window(), physical_size);
+                    // Install after the first native size is in place.  Window
+                    // creation can emit a transient DPI message while Winit
+                    // is attaching the HWND; that message must not alter the
+                    // initial client dimensions.
+                    window::install_settings_dpi_stabilizer(window.window());
                     window::set_visible(window.window(), true);
+                    let weak = window.as_weak();
+                    slint::Timer::single_shot(Duration::from_millis(1), move || {
+                        if let Some(window) = weak.upgrade() {
+                            window.window().set_size(physical_size);
+                            window::set_settings_client_size(window.window(), physical_size);
+                        }
+                    });
                 }
             });
         }

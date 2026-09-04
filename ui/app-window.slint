@@ -538,8 +538,13 @@ export component SettingsWindow inherits Window {
     callback apply();
 
     title: root.settings-title;
-    width: 900px;
-    height: 650px;
+    // Keep the initial size comfortable while allowing the native decorated
+    // settings window to be resized.  The minimum is large enough to keep the
+    // six-page navigation and the form rows readable at the narrowest layout.
+    preferred-width: 900px;
+    preferred-height: 650px;
+    min-width: 760px;
+    min-height: 520px;
     background: #f6f8fb;
 
     Rectangle {

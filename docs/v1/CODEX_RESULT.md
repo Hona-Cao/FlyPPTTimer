@@ -132,3 +132,37 @@ Timer/overlay/时间到覆盖窗口继续使用 ToolWindow/Popup 样式，不应
 - `cargo build --release`：通过；
 - Release EXE：`E:\快传\计时器\v1.0\target\release\FlyPPTTimer.exe`，16,837,632 字节；
 - 版本：`1.11.0`（`Cargo.toml` 与 `Cargo.lock` 已同步）。
+
+## 1.12.0 设置窗口可调整大小与混合 DPI 跨屏修复
+
+日期：2026-09-04
+分支：`codex/v1-06-manual-test`
+
+### 修改内容
+
+- 设置窗口改为 `preferred-width/height: 900px/650px`，并设置最小尺寸 `760px/520px`；保留原生装饰窗口的 `WS_THICKFRAME`，因此支持鼠标拖拽调整大小。
+- 创建设置窗口时先提交明确的初始物理客户区尺寸，避免绑定设置模型后 Slint 的 preferred layout 异步调整覆盖原生尺寸。
+- 重开设置窗口时读取当前 HWND 客户区物理尺寸并恢复，避免混合 DPI 下重复缩放。
+- 增加轻量的设置窗口 `WM_DPICHANGED` 处理：忽略 Windows/Winit 在跨屏拖动时重复发送的同 DPI 消息；真实 DPI 切换时按 `旧物理尺寸 × 新 DPI / 旧 DPI` 调整客户区，同时保留 Winit 的窗口位置和原生边框。
+
+### 实测结果
+
+使用 Per-Monitor DPI aware 的 Win32 只读诊断和桌面拖动验证：
+
+- 主屏：客户区 `900×650 @ 144 DPI`；
+- 完全移到扩展屏：客户区 `750×541 @ 120 DPI`；
+- 移回主屏：恢复为 `900×650 @ 144 DPI`；
+- 未再出现此前跨屏反复拖动导致的客户区递增（曾复现到约 `2270×1700`）。
+- 通过原生边框拖拽完成了尺寸变化测试；调整后的尺寸按用户设置在跨 DPI 屏幕间保持等比例，符合 Windows Per-Monitor DPI 逻辑。
+
+本轮未修改 v0.30.2 或 `agent/v4-foundation`，未添加额外校验、哈希或测试基础设施。当前只在本机现有的 150% 主屏与 125% 扩展屏组合上人工验证，未声称覆盖所有 DPI 组合及热插拔场景。
+
+### 构建结果
+
+- `cargo fmt --check`：通过；
+- `cargo clippy --all-targets -- -D warnings`：通过；
+- `cargo test`：33 passed、1 ignored（既有 Office 真机 smoke test）；
+- `cargo build --release`：通过；
+- Release EXE：`E:\快传\计时器\v1.0\target\release\FlyPPTTimer.exe`，16,860,672 字节；
+- 版本：`1.12.0`（`Cargo.toml` 与 `Cargo.lock` 已同步）；
+- Release 配置已恢复 `RemoteControl.Enabled=true`，临时测试备份已清理。
