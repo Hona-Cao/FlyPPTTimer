@@ -98,3 +98,37 @@ Timer/overlay/时间到覆盖窗口继续使用 ToolWindow/Popup 样式，不应
 后续手工复核发现，设置页“文件规则”的【添加文件】【删除】【清空】【批量设置】操作栏位于列表框上方。已将四个按钮移动到文件列表框下方，保持按钮顺序、启用条件和回调行为不变；选中规则的编辑区域仍位于操作栏之后。
 
 本次测试版本递增为 `1.10.0`。Release 构建和设置页 headless 截图均已重新验证，截图显示列表框后紧接四个操作按钮。
+
+## 11.1.0 设置窗口跨屏缩放修正
+
+日期：2026-09-04
+分支：`codex/v1-06-manual-test`
+
+### 实际复现
+
+在 1.10.0 Release 的真实双屏桌面上，设置窗口首次创建时客户区为 900×650；拖到低 DPI 屏后，Winit/Windows 会依据创建前的旧缩放状态重新换算尺寸，出现客户区变大、内容看起来被放大的现象。跨屏过程中窗口内容会被截断，容易误判为空白或布局损坏。
+
+### 修正
+
+- 设置窗口 `show()` 创建原生 HWND 后先保持隐藏；在下一次 Slint 定时器回调中重新提交 900×650 的逻辑客户区尺寸，再显示首帧。
+- Remote 窗口沿用已有的 `WidthDip`/`HeightDip`（最小 700×620）计算，并在同一首帧时序中重新提交逻辑尺寸。
+- 没有增加新的 DPI 抽象、固定物理像素或校验体系；Timer 核心、配置模型和现有多屏逻辑不变。
+
+### 1.11.0 实测
+
+使用 `target/release/FlyPPTTimer.exe --show-settings` 启动并拖动设置窗口经过主屏与低 DPI 扩展屏：
+
+- 主屏首帧完整绘制，客户区 900×650；
+- 完全移入扩展屏后仍完整绘制，截图保持约 900×650 的逻辑尺寸，Win32 客户区仍为 900×650、窗口 DPI 120；
+- 返回/跨越边界过程中没有出现空白、比例跳变或内容遮挡。
+
+测试时仅临时关闭 Release 配置中的 Remote 服务以避免 Windows 防火墙系统提示，测试结束后已恢复 `RemoteControl.Enabled=true`；没有修改用户源码、v0.30.2 或 `agent/v4-foundation`。
+
+### 构建结果
+
+- `cargo fmt --check`：通过；
+- `cargo clippy --all-targets -- -D warnings`：通过；
+- `cargo test`：33 passed、1 ignored（既有 Office 真机 smoke test）；
+- `cargo build --release`：通过；
+- Release EXE：`E:\快传\计时器\v1.0\target\release\FlyPPTTimer.exe`，16,837,632 字节；
+- 版本：`1.11.0`（`Cargo.toml` 与 `Cargo.lock` 已同步）。

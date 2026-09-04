@@ -208,11 +208,10 @@ pub fn is_visible(window: &slint::Window) -> bool {
 }
 
 pub fn restore_remote_window(window: &slint::Window, placement: &RemoteWindowPlacement) {
-    let width = placement.width_dip.max(700) as f32;
+    let (width, height) = remote_window_size(placement);
     // The presentation page includes the rule editor and its full control
     // group. Keep legacy 510-DIP placements usable without clipping it.
-    let height = placement.height_dip.max(620) as f32;
-    window.set_size(slint::LogicalSize::new(width, height));
+    window.set_size(slint::LogicalSize::new(width as f32, height as f32));
     let size = window.size();
     let work = monitor_work_area(&placement.screen_device_name).unwrap_or_else(primary_work_area);
     let available_x = (work.right - work.left - size.width as i32).max(0);
@@ -230,6 +229,10 @@ pub fn restore_remote_window(window: &slint::Window, placement: &RemoteWindowPla
         work.top + (available_y as f64 * top_ratio).round() as i32,
     ));
     window.set_maximized(placement.maximized);
+}
+
+pub fn remote_window_size(placement: &RemoteWindowPlacement) -> (i32, i32) {
+    (placement.width_dip.max(700), placement.height_dip.max(620))
 }
 
 pub fn capture_remote_window(window: &slint::Window, placement: &mut RemoteWindowPlacement) {

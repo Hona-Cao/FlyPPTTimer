@@ -558,7 +558,9 @@ fn handle_desktop_event(
                 eprintln!("failed to hide settings: {error}");
             }
             if let Some(control) = presentation_window.borrow().as_ref() {
-                if let Err(error) = show_presentation_ready(control) {
+                let (width, height) =
+                    window::remote_window_size(&config.borrow().remote_control.window);
+                if let Err(error) = show_presentation_ready(control, width, height) {
                     eprintln!("failed to show presentation control: {error}");
                 }
                 populate_remote_connection_window(control, remote, &config.borrow(), true);
@@ -566,7 +568,9 @@ fn handle_desktop_event(
             }
             match create_presentation_window(config, presentation, remote, config_path) {
                 Ok(control) => {
-                    if let Err(error) = show_presentation_ready(&control) {
+                    let (width, height) =
+                        window::remote_window_size(&config.borrow().remote_control.window);
+                    if let Err(error) = show_presentation_ready(&control, width, height) {
                         eprintln!("failed to show presentation control: {error}");
                     }
                     *presentation_window.borrow_mut() = Some(control);
@@ -2127,6 +2131,10 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
             let weak = window.as_weak();
             slint::Timer::single_shot(Duration::from_millis(1), move || {
                 if let Some(window) = weak.upgrade() {
+                    // The first Slint size is stored before the native window
+                    // knows its monitor scale factor. Re-apply the logical
+                    // client size immediately before the first reveal.
+                    window.window().set_size(LogicalSize::new(900.0, 650.0));
                     window::set_visible(window.window(), true);
                 }
             });
@@ -2135,7 +2143,11 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
     Ok(())
 }
 
-fn show_presentation_ready(window: &PresentationWindow) -> Result<(), slint::PlatformError> {
+fn show_presentation_ready(
+    window: &PresentationWindow,
+    logical_width: i32,
+    logical_height: i32,
+) -> Result<(), slint::PlatformError> {
     if window::is_visible(window.window()) {
         window::set_visible(window.window(), true);
         return Ok(());
@@ -2151,6 +2163,10 @@ fn show_presentation_ready(window: &PresentationWindow) -> Result<(), slint::Pla
             let weak = window.as_weak();
             slint::Timer::single_shot(Duration::from_millis(1), move || {
                 if let Some(window) = weak.upgrade() {
+                    window.window().set_size(LogicalSize::new(
+                        logical_width as f32,
+                        logical_height as f32,
+                    ));
                     window::set_visible(window.window(), true);
                 }
             });
