@@ -196,4 +196,6 @@ Timer/overlay/时间到覆盖窗口继续使用 ToolWindow/Popup 样式，不应
 
 - 主要修改：`src/app.rs`、`src/window.rs`、`Cargo.toml`、`Cargo.lock`、本报告。
 - 测试版本递增为 `1.13.0`；Release 可执行文件：`E:\快传\计时器\v1.0\target\release\FlyPPTTimer.exe`。
+- Release EXE 大小：`16,866,304` 字节。
 - 本轮最终检查继续执行 `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test` 和 `cargo build --release`；未创建 Release 或 Tag。
+- 修复提交：`8a39205`。
