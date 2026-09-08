@@ -2,11 +2,13 @@
 
 Before changing V1 code, read these files in order:
 
-1. `docs/v1/V1_BASELINE_CHECKLIST.md` — permanent product baseline.
-2. `docs/v1/CODEX_TASK.md` — current task from ChatGPT; this is the only current implementation instruction.
-3. The actual `v0.30.2` code and assets.
-4. `agent/v4-foundation` only for proven technical lessons.
-5. The current V1 implementation.
+1. `docs/v1/HANDOFF.md` — current project status and new-session handoff.
+2. `docs/v1/V1_BASELINE_CHECKLIST.md` — permanent product baseline.
+3. `docs/v1/CODEX_TASK.md` — current task from ChatGPT; this is the only current implementation instruction.
+4. `docs/v1/CODEX_RESULT.md` — latest implementation/result report.
+5. The actual `v0.30.2` code and assets.
+6. `agent/v4-foundation` only for proven technical lessons.
+7. The current V1 implementation.
 
 After completing the current task, update `docs/v1/CODEX_RESULT.md`, commit all source/document changes, and push the review branch so ChatGPT can audit the exact result from GitHub.
 
