@@ -193,6 +193,7 @@ component RemoteButton inherits Rectangle {
     in property <bool> primary: false;
     in property <bool> danger: false;
     callback clicked();
+    forward-focus: keyboard;
 
     border-radius: 7px;
     border-width: 1px;
@@ -213,6 +214,28 @@ component RemoteButton inherits Rectangle {
         horizontal-alignment: center;
         vertical-alignment: center;
         wrap: word-wrap;
+    }
+
+    if keyboard.has-focus && root.enabled: Rectangle {
+        x: 3px; y: 3px; width: parent.width - 6px; height: parent.height - 6px;
+        background: transparent; border-radius: 4px; border-width: 2px;
+        border-color: root.primary ? DesktopTheme.surface : DesktopTheme.accent;
+    }
+
+    keyboard := FocusScope {
+        width: 0;
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if event.text == " " || event.text == "\n" { return accept; }
+            return reject;
+        }
+        key-released(event) => {
+            if event.text == " " || event.text == "\n" {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
     }
 
     hit := TouchArea {
@@ -307,8 +330,8 @@ export component PresentationWindow inherits Window {
         }
         Text { x: 0; width: parent.width / 2; height: parent.height; text: root.connection-page-text; color: DesktopTheme.text; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
         Text { x: parent.width / 2; width: parent.width / 2; height: parent.height; text: root.presentation-page-text; color: DesktopTheme.text; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-        TouchArea { x: 0; width: parent.width / 2; clicked => { root.current-page = 0; } }
-        TouchArea { x: parent.width / 2; width: parent.width / 2; clicked => { root.current-page = 1; } }
+        TouchArea { enabled: !root.confirm-exit; x: 0; width: parent.width / 2; clicked => { root.current-page = 0; } }
+        TouchArea { enabled: !root.confirm-exit; x: parent.width / 2; width: parent.width / 2; clicked => { root.current-page = 1; } }
     }
 
     Text {
@@ -340,25 +363,25 @@ export component PresentationWindow inherits Window {
                 HorizontalLayout {
                     height: 36px; spacing: 12px;
                     Text { width: 120px; text: root.next-port-label; color: DesktopTheme.secondary; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
-                    LineEdit { width: 96px; text <=> root.next-port; }
-                    CheckBox { text: root.random-port-text; checked <=> root.random-port; }
+                    LineEdit { enabled: !root.confirm-exit; width: 96px; text <=> root.next-port; }
+                    CheckBox { enabled: !root.confirm-exit; text: root.random-port-text; checked <=> root.random-port; }
                 }
-                RemoteButton { height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, root.random-port); } }
+                RemoteButton { enabled: !root.confirm-exit; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, root.random-port); } }
                 HorizontalLayout {
                     height: 36px; spacing: 12px;
-                    RemoteButton { text: root.service-toggle-text; clicked => { root.remote-action(7, "", false); } }
-                    RemoteButton { text: root.restart-service-text; clicked => { root.remote-action(0, "", false); } }
+                    RemoteButton { enabled: !root.confirm-exit; text: root.service-toggle-text; clicked => { root.remote-action(7, "", false); } }
+                    RemoteButton { enabled: !root.confirm-exit; text: root.restart-service-text; clicked => { root.remote-action(0, "", false); } }
                 }
                 HorizontalLayout {
                     height: 36px; spacing: 12px;
-                    RemoteButton { text: root.regenerate-token-text; clicked => { root.remote-action(2, "", false); } }
-                    RemoteButton { text: root.disconnect-text; clicked => { root.remote-action(3, "", false); } }
+                    RemoteButton { enabled: !root.confirm-exit; text: root.regenerate-token-text; clicked => { root.remote-action(2, "", false); } }
+                    RemoteButton { enabled: !root.confirm-exit; text: root.disconnect-text; clicked => { root.remote-action(3, "", false); } }
                 }
                 HorizontalLayout {
                     height: 40px; spacing: 12px;
-                    RemoteButton { text: root.copy-address-text; clicked => { root.remote-action(4, "", false); } }
-                    RemoteButton { text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
-                    RemoteButton { text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
+                    RemoteButton { enabled: !root.confirm-exit; text: root.copy-address-text; clicked => { root.remote-action(4, "", false); } }
+                    RemoteButton { enabled: !root.confirm-exit; text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
+                    RemoteButton { enabled: !root.confirm-exit; text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
                 }
                 Text { text: root.firewall-text; color: DesktopTheme.muted; font-size: 12px; wrap: word-wrap; }
             }
@@ -390,46 +413,47 @@ export component PresentationWindow inherits Window {
                     Text { x: parent.width - 208px; y: 4px; width: 80px; height: 22px; text: item.duration; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
                     Text { x: parent.width - 120px; y: 4px; width: 110px; height: 22px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
                     Text { x: parent.width - 240px; y: 50px; width: 230px; height: 20px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? DesktopTheme.success : DesktopTheme.warning; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
-                    TouchArea { clicked => { root.selected-presentation = index; root.presentation-selected(index); } }
+                    TouchArea { enabled: !root.confirm-exit; clicked => { root.selected-presentation = index; root.presentation-selected(index); } }
                 }
             }
         }
     }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: root.height - 348px; width: (parent.width - 64px) / 4; height: 34px; text: root.add-file-text; clicked => { root.rule-action(0, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 4; y: root.height - 348px; width: (parent.width - 64px) / 4; height: 34px; text: root.delete-file-text; enabled: root.selected-presentation >= 0; clicked => { root.rule-action(1, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 4; y: root.height - 348px; width: (parent.width - 64px) / 4; height: 34px; text: root.refresh-list-text; clicked => { root.rule-action(2, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 48px + 3 * (parent.width - 64px) / 4; y: root.height - 348px; width: (parent.width - 64px) / 4; height: 34px; text: root.clear-list-text; clicked => { root.rule-action(3, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 24px; y: root.height - 348px; width: (parent.width - 64px) / 4; height: 34px; text: root.add-file-text; clicked => { root.rule-action(0, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 4; y: root.height - 348px; width: (parent.width - 64px) / 4; height: 34px; text: root.delete-file-text; enabled: (root.selected-presentation >= 0) && !root.confirm-exit; clicked => { root.rule-action(1, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 4; y: root.height - 348px; width: (parent.width - 64px) / 4; height: 34px; text: root.refresh-list-text; clicked => { root.rule-action(2, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 48px + 3 * (parent.width - 64px) / 4; y: root.height - 348px; width: (parent.width - 64px) / 4; height: 34px; text: root.clear-list-text; clicked => { root.rule-action(3, ""); } }
 
     Rectangle { visible: root.current-page == 1 && root.selected-presentation >= 0 && root.presentations[root.selected-presentation].is-rule; x: 24px; y: root.height - 308px; width: parent.width - 48px; height: 50px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
         Text { x: 12px; y: 7px; width: 46px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.secondary; font-size: 12px; vertical-alignment: center; }
-        LineEdit { x: 56px; y: 8px; width: 104px; height: 32px; text <=> root.rule-duration; }
+        LineEdit { enabled: !root.confirm-exit; x: 56px; y: 8px; width: 104px; height: 32px; text <=> root.rule-duration; }
         Text { x: 176px; y: 7px; width: 46px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.secondary; font-size: 12px; vertical-alignment: center; }
-        ComboBox { x: 220px; y: 8px; width: 118px; height: 32px; model: root.timer-modes; current-index <=> root.rule-mode; }
-        CheckBox { x: 354px; y: 8px; width: 130px; height: 32px; text: root.rule-enabled-text; checked <=> root.rule-enabled; }
-        RemoteButton { x: parent.width - 98px; y: 8px; width: 86px; height: 32px; text: root.save-rule-text; primary: true; clicked => { root.rule-action(4, root.rule-duration); } }
+        ComboBox { enabled: !root.confirm-exit; x: 220px; y: 8px; width: 118px; height: 32px; model: root.timer-modes; current-index <=> root.rule-mode; }
+        CheckBox { enabled: !root.confirm-exit; x: 354px; y: 8px; width: 130px; height: 32px; text: root.rule-enabled-text; checked <=> root.rule-enabled; }
+        RemoteButton { enabled: !root.confirm-exit; x: parent.width - 98px; y: 8px; width: 86px; height: 32px; text: root.save-rule-text; primary: true; clicked => { root.rule-action(4, root.rule-duration); } }
     }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: root.height - 248px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-text; enabled: root.selected-presentation >= 0; clicked => { root.command(0, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: root.height - 248px; width: (parent.width - 64px) / 3; height: 36px; text: root.beginning-text; clicked => { root.command(1, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: root.height - 248px; width: (parent.width - 64px) / 3; height: 36px; text: root.current-text; clicked => { root.command(2, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 24px; y: root.height - 248px; width: (parent.width - 64px) / 3; height: 36px; text: root.open-text; enabled: (root.selected-presentation >= 0) && !root.confirm-exit; clicked => { root.command(0, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: root.height - 248px; width: (parent.width - 64px) / 3; height: 36px; text: root.beginning-text; clicked => { root.command(1, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: root.height - 248px; width: (parent.width - 64px) / 3; height: 36px; text: root.current-text; clicked => { root.command(2, ""); } }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: root.height - 206px; width: (parent.width - 64px) / 3; height: 36px; text: root.previous-text; clicked => { root.command(3, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: root.height - 206px; width: (parent.width - 64px) / 3; height: 36px; text: root.next-text; clicked => { root.command(4, ""); } }
-    LineEdit { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: root.height - 206px; width: (parent.width - 64px) / 3 - 58px; height: 36px; text <=> root.goto-page; }
-    RemoteButton { visible: root.current-page == 1; x: parent.width - 82px; y: root.height - 206px; width: 58px; height: 36px; text: root.goto-text; clicked => { root.command(5, root.goto-page); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 24px; y: root.height - 206px; width: (parent.width - 64px) / 3; height: 36px; text: root.previous-text; clicked => { root.command(3, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: root.height - 206px; width: (parent.width - 64px) / 3; height: 36px; text: root.next-text; clicked => { root.command(4, ""); } }
+    LineEdit { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: root.height - 206px; width: (parent.width - 64px) / 3 - 58px; height: 36px; text <=> root.goto-page; }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: parent.width - 82px; y: root.height - 206px; width: 58px; height: 36px; text: root.goto-text; clicked => { root.command(5, root.goto-page); } }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: root.height - 152px; width: (parent.width - 64px) / 3; height: 36px; text: root.black-text; clicked => { root.command(6, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: root.height - 152px; width: (parent.width - 64px) / 3; height: 36px; text: root.white-text; clicked => { root.command(7, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: root.height - 152px; width: (parent.width - 64px) / 3; height: 36px; text: root.restore-text; clicked => { root.command(8, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 24px; y: root.height - 152px; width: (parent.width - 64px) / 3; height: 36px; text: root.black-text; clicked => { root.command(6, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: root.height - 152px; width: (parent.width - 64px) / 3; height: 36px; text: root.white-text; clicked => { root.command(7, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: root.height - 152px; width: (parent.width - 64px) / 3; height: 36px; text: root.restore-text; clicked => { root.command(8, ""); } }
 
-    RemoteButton { visible: root.current-page == 1; x: 24px; y: root.height - 104px; width: (parent.width - 64px) / 3; height: 36px; text: root.end-text; clicked => { root.command(9, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: root.height - 104px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-active-text; clicked => { root.command(10, ""); } }
-    RemoteButton { visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: root.height - 104px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-managed-text; clicked => { root.command(11, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 24px; y: root.height - 104px; width: (parent.width - 64px) / 3; height: 36px; text: root.end-text; clicked => { root.command(9, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 32px + (parent.width - 64px) / 3; y: root.height - 104px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-active-text; clicked => { root.command(10, ""); } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 40px + 2 * (parent.width - 64px) / 3; y: root.height - 104px; width: (parent.width - 64px) / 3; height: 36px; text: root.close-managed-text; clicked => { root.command(11, ""); } }
 
-    RemoteButton { visible: root.current-page == 1; x: parent.width - 238px; y: root.height - 54px; width: 214px; height: 38px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = true; } }
+    RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: parent.width - 238px; y: root.height - 54px; width: 214px; height: 38px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = true; } }
 
     if root.confirm-exit && root.current-page == 1: Rectangle {
+        init => { exit-cancel.focus(); }
         background: DesktopTheme.scrim;
         TouchArea { }
         Rectangle {
@@ -437,7 +461,7 @@ export component PresentationWindow inherits Window {
             width: 460px; height: 220px; background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
             Text { x: 24px; y: 22px; width: parent.width - 48px; height: 30px; text: root.confirm-title; color: DesktopTheme.danger; font-size: 19px; font-weight: 700; vertical-alignment: center; }
             Text { x: 24px; y: 64px; width: parent.width - 48px; height: 76px; text: root.confirm-message; color: DesktopTheme.secondary; font-size: 13px; wrap: word-wrap; vertical-alignment: center; }
-            RemoteButton { x: 244px; y: 162px; width: 88px; height: 36px; text: root.cancel-command-text; clicked => { root.confirm-exit = false; } }
+            exit-cancel := RemoteButton { x: 244px; y: 162px; width: 88px; height: 36px; text: root.cancel-command-text; clicked => { root.confirm-exit = false; } }
             RemoteButton { x: 342px; y: 162px; width: 94px; height: 36px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = false; root.command(13, ""); } }
         }
     }
@@ -445,6 +469,7 @@ export component PresentationWindow inherits Window {
 component FieldRow inherits Rectangle {
     in property <SettingItem> item;
     in property <int> row-index;
+    in property <bool> interactive: true;
     callback edited(int, string, bool, int);
     callback action(int);
 
@@ -493,7 +518,7 @@ component FieldRow inherits Rectangle {
         height: 32px;
         checked: item.checked;
         text: item.button-text;
-        enabled: item.enabled;
+        enabled: item.enabled && root.interactive;
         toggled => { root.edited(row-index, "", self.checked, 0); }
     }
 
@@ -504,7 +529,7 @@ component FieldRow inherits Rectangle {
         height: 32px;
         text: item.value;
         read-only: item.read-only;
-        enabled: item.enabled;
+        enabled: item.enabled && root.interactive;
         edited(value) => { root.edited(row-index, value, false, 0); }
     }
 
@@ -515,7 +540,7 @@ component FieldRow inherits Rectangle {
         height: 32px;
         model: item.options;
         current-index: item.selected;
-        enabled: item.enabled;
+        enabled: item.enabled && root.interactive;
         selected(value) => { root.edited(row-index, value, false, self.current-index); }
     }
 
@@ -525,7 +550,7 @@ component FieldRow inherits Rectangle {
         width: root.control-width;
         height: 34px;
         text: item.button-text;
-        enabled: item.enabled;
+        enabled: item.enabled && root.interactive;
         clicked => { root.action(row-index); }
     }
 
@@ -639,7 +664,7 @@ export component SettingsWindow inherits Window {
                 font-size: 14px;
                 vertical-alignment: center;
             }
-            TouchArea { clicked => { root.navigate(index); } }
+            TouchArea { enabled: !root.batch-open; clicked => { root.navigate(index); } }
         }
     }
 
@@ -674,6 +699,7 @@ export component SettingsWindow inherits Window {
                 for item[index] in root.items: FieldRow {
                     width: parent.width;
                     item: item;
+                    interactive: !root.batch-open;
                     row-index: index;
                     edited(index, value, checked, selected) => { root.field-edited(index, value, checked, selected); }
                     action(index) => { root.field-action(index); }
@@ -691,7 +717,7 @@ export component SettingsWindow inherits Window {
                             height: 52px;
                             border-radius: 6px;
                             background: rule.selected ? DesktopTheme.selected : transparent;
-                            CheckBox {
+                            CheckBox { enabled: !root.batch-open;
                                 x: 8px; y: 12px; width: 24px;
                                 checked: rule.enabled;
                                 toggled => { root.rule-edited(index, "enabled", self.checked, 0); }
@@ -712,7 +738,7 @@ export component SettingsWindow inherits Window {
                                 x: parent.width - 112px; y: 4px; width: 104px; height: 20px;
                                 text: root.timer-modes[rule.mode]; color: DesktopTheme.secondary; vertical-alignment: center;
                             }
-                            TouchArea { x: 32px; width: parent.width - 32px; clicked => { root.rule-selected(index); } }
+                            TouchArea { enabled: !root.batch-open; x: 32px; width: parent.width - 32px; clicked => { root.rule-selected(index); } }
                         }
                     }
                 }
@@ -723,10 +749,10 @@ export component SettingsWindow inherits Window {
                     HorizontalLayout {
                         alignment: end;
                         spacing: 8px;
-                        Button { text: root.rule-add-text; clicked => { root.rule-action(0); } }
-                        Button { text: root.rule-delete-text; enabled: root.selected-rule-count > 0; clicked => { root.rule-action(1); } }
-                        Button { text: root.rule-clear-text; enabled: root.rules.length > 0; clicked => { root.rule-action(2); } }
-                        Button { text: root.rule-batch-text; enabled: root.selected-rule-count > 0; clicked => { root.rule-action(3); } }
+                        Button { enabled: !root.batch-open; text: root.rule-add-text; clicked => { root.rule-action(0); } }
+                        Button { text: root.rule-delete-text; enabled: (root.selected-rule-count > 0) && !root.batch-open; clicked => { root.rule-action(1); } }
+                        Button { text: root.rule-clear-text; enabled: (root.rules.length > 0) && !root.batch-open; clicked => { root.rule-action(2); } }
+                        Button { text: root.rule-batch-text; enabled: (root.selected-rule-count > 0) && !root.batch-open; clicked => { root.rule-action(3); } }
                     }
                 }
 
@@ -741,19 +767,19 @@ export component SettingsWindow inherits Window {
                     Text { x: 14px; y: 52px; width: 116px; text: root.rule-path-label; color: DesktopTheme.secondary; vertical-alignment: top; }
                     Text { x: 144px; y: 52px; width: parent.width - 160px; text: root.rules[root.selected-rule].file-path; color: DesktopTheme.text; overflow: elide; vertical-alignment: top; }
                     Text { x: 14px; y: 94px; width: 116px; text: root.rule-duration-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-                    LineEdit {
+                    LineEdit { enabled: !root.batch-open;
                         x: 144px; y: 86px; width: parent.width - 160px; height: 34px;
                         text: root.rules[root.selected-rule].duration;
                         edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
                     }
                     Text { x: 14px; y: 136px; width: 116px; text: root.rule-mode-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-                    ComboBox {
+                    ComboBox { enabled: !root.batch-open;
                         x: 144px; y: 128px; width: parent.width - 160px; height: 34px;
                         model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
                         selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
                     }
                     Text { x: 14px; y: 178px; width: 116px; text: root.rule-status-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-                    CheckBox {
+                    CheckBox { enabled: !root.batch-open;
                         x: 144px; y: 172px; checked: root.rules[root.selected-rule].enabled;
                         toggled => { root.rule-edited(root.selected-rule, "enabled", self.checked, 0); }
                     }
@@ -783,13 +809,14 @@ export component SettingsWindow inherits Window {
             width: 290px;
             height: 36px;
             spacing: 6px;
-            Button { text: root.ok-text; clicked => { root.accept(); } }
-            Button { text: root.cancel-text; clicked => { root.cancel(); } }
-            Button { text: root.apply-text; enabled: root.dirty; clicked => { root.apply(); } }
+            Button { enabled: !root.batch-open; text: root.ok-text; clicked => { root.accept(); } }
+            Button { enabled: !root.batch-open; text: root.cancel-text; clicked => { root.cancel(); } }
+            Button { text: root.apply-text; enabled: (root.dirty) && !root.batch-open; clicked => { root.apply(); } }
         }
     }
 
     if root.batch-open: Rectangle {
+        init => { batch-input.focus(); }
         x: 0; y: 0; width: parent.width; height: parent.height;
         background: DesktopTheme.scrim;
         TouchArea { }
@@ -801,7 +828,7 @@ export component SettingsWindow inherits Window {
             Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.batch-title; color: DesktopTheme.text; font-size: 20px; font-weight: 700; vertical-alignment: top; }
             Text { x: 24px; y: 58px; width: parent.width - 48px; text: root.batch-count-text; color: DesktopTheme.muted; font-size: 13px; vertical-alignment: top; }
             Text { x: 24px; y: 102px; width: 118px; text: root.batch-duration-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-            LineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
+            batch-input := LineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
             Text { x: 24px; y: 150px; width: 118px; text: root.batch-mode-label; color: DesktopTheme.secondary; vertical-alignment: top; }
             ComboBox { x: 148px; y: 140px; width: 258px; height: 34px; model: root.timer-modes; current-index <=> root.batch-mode; }
             Button { x: 222px; y: 202px; width: 88px; height: 36px; text: root.cancel-text; clicked => { root.batch-open = false; } }
