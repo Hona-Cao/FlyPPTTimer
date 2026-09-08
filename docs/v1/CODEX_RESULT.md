@@ -37,3 +37,14 @@ Timer、大屏和时间到窗口的配置颜色、六套配色、文字、尺寸
 4. 标准控件外观是否仍有明显割裂，作为后续 UX-03/04 任务依据。
 
 当前用户手中的 `v1.13.0-review-06fa440` 测试包仍是优化前的已审核版本；本轮没有生成新的测试包。程序版本未递增。下一轮由 ChatGPT 审核确定范围后再继续。
+
+## UX-01 本地手测包交付
+
+用户随后要求提供手测版，本次进入本地打包阶段，按既有策略统一执行一次：
+
+- `cargo fmt --check`：通过。
+- `cargo clippy --all-targets --all-features -- -D warnings`：通过。
+- `cargo test`：37 passed，0 failed，1 ignored（既有 Office 真机测试）。
+- `cargo build --release`：通过。
+
+手测包：`E:/快传/计时器/tests/FlyPPTTimer-v1.13.0-UX01-c11553e-win-x64.zip`，同名目录内可直接运行 EXE。程序内部版本仍为 1.13.0，测试包标识为 v1.13.0-UX01-c11553e，包含本轮配色修改。未创建 GitHub Release 或 Tag。等待用户手测与 ChatGPT 审核。
