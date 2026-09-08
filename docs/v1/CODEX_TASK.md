@@ -1,126 +1,79 @@
 # FlyPPTTimer V1 — 当前 Codex 任务
 
-状态：**上一轮审核未完全通过，执行定向整改**  
+状态：**本轮 Remote parity 定向整改已审核通过，暂停代码修改，等待用户手测**  
 当前分支：`codex/v1-06-manual-test`
 
-## 任务原则
+## 当前结论
 
-先读根目录 `AGENTS.md`、`docs/v1/HANDOFF.md`、`docs/v1/V1_BASELINE_CHECKLIST.md`、最新 `docs/v1/CODEX_RESULT.md` 和当前源码。
+上一轮审核整改已按当前源码确认完成，以下修改可保留，不要重复处理：
 
-上一轮关于以下内容的实现经源码审核可保留，不要重做：
+- `timer.setDuration`：正 `durationMs` 优先；否则使用文本时长；最终规范化到 1～86399 秒并保存为 `HH:mm:ss`；
+- `timer.setMode`：仅 `countup` / `正计时` 为 CountUp，其余按旧协议回落 Countdown；
+- `timer.restart`：恢复命中规则与未命中规则的旧版用户可见返回消息；
+- Remote 规则匹配排除空白 `presentationId` / 空白规则路径；
+- `AppConfig::save()` 已删除对刚序列化 JSON 的重复反序列化自校验；
+- 上一轮设置页、提示音、主屏幕切换、Remote Stop+Reset、规则同步和 `state.get` 修复继续保留。
 
-- 行为设置“计时结束”区去除 `end.before`，恢复“到时...”文案；
-- 三个提示音路径只读；
-- 提示音导入到 `alert-sounds/`；
-- 设置页修改全局时长时询问是否同步全部规则；
-- 主屏幕选择清空旧 device name，以及单屏/大屏下拉启用关系；
-- Remote `timer.stop` 的 Stop + Reset；
-- `presentationId` / `syncAllRules` 的规则同步主体；
-- `state.get` 已进入允许路径。
+当前没有新的编码任务。用户完成下一轮真机手测并反馈具体问题前，不要主动重构、清理或扩大范围。
 
-本轮只修下面审核确认的问题。不要顺手修改 Web 静态资源、DPI/窗口时序、音频播放优先级、更新器、发布脚本或做 UI 美化。
-
-## 强制编码约束：禁止过度防御
-
-继续执行以下约束：
+## 强制原则：禁止过度防御
 
 - 不增加 SHA / Hash / checksum / 文件完整性验证；
 - 不重复验证同一事实；
 - 不增加无必要重试、双重读取、备用路径、静默 fallback、备份/恢复链或额外状态机；
-- 测试只锁定实际用户可观察行为和必要纯逻辑，不做完整性快照；
 - 不为了覆盖率制造测试矩阵；
-- 不额外运行没有要求的“保险检查”。本轮交付只执行任务末尾列出的四个 Cargo 命令，不再附加 `git diff --check`、Hash、产物复核等额外 gate。
+- 不增加与当前改动无直接关系的“保险检查”或验证 gate；
+- 外部输入只做满足现有契约和 v0.30.2 语义所需的最小校验；
+- 错误应直接暴露或按既有路径返回，不建立多层兜底。
 
-必要的 Remote 外部输入处理只做到 v0.30.2 已有语义，不自行强化协议。
+目标始终是：**最少必要逻辑 + 明确行为 + 明确失败**。
 
-## 1. 修正 `timer.setDuration` 尚未对齐的 v0.30.2 语义
+## 强制测试策略：按风险分层，不做每改一处四连跑
 
-当前 `src/app.rs::execute_remote_timer_command()` 仍有明确 parity 问题。
+测试强度由本次改动风险决定。禁止把 `fmt + clippy + 全量 test + release build` 当成每次修改后的固定流程。
 
-v0.30.2 `AppCommandService.ExecuteRemoteCommandCore()` 的规则是：
+### 1. 小改动 / 定向修 Bug
 
-1. **`durationMs > 0` 时优先使用 `durationMs`。**
-2. 只有 `durationMs` 不大于 0 时，才尝试文本 `duration`。
-3. 最终时长按旧版 `SetDuration()` 处理为整秒，并限制到 **1 秒 ~ 23:59:59**。
-4. 保存到配置的文本应是规范化 `HH:mm:ss`。
+例如：
 
-当前 Rust 的问题：
+- 文案；
+- 单个 UI 字段绑定；
+- 小范围显示修正；
+- 已知条件下的一处逻辑分支；
+- 不改变公共协议、配置格式或计时核心的局部修复。
 
-- 先取 `duration`，再取 `durationMs`，优先级反了；
-- `duration_ms: i64` 被直接 `as u64`，负数会变成巨大正数；
-- 没有恢复旧版 24 小时以内的上限；
-- 毫秒转整秒当前直接截断，而旧版是按整秒处理后再限制范围。
+要求：
 
-整改要求：
+- 只运行和改动直接相关的最小测试；
+- 没有对应自动测试且源码改动足够局部时，可以不额外运行 `cargo check`；
+- 不因为“保险”再跑全量测试、clippy 或 release build。
 
-- `durationMs` 为正数时必须覆盖/忽略同时传入的 `duration`；
-- `durationMs <= 0` 时不要 cast 成 `u64`，直接进入文本 duration 分支；
-- 正常化为整秒后 clamp 到 `1..=86399`；
-- 配置统一保存 `HH:mm:ss`；
-- Timer、全局配置、`syncAllRules`、`presentationId` 的现有同步逻辑保留；
-- 不增加第二套 parser、fallback 链或复杂输入恢复机制。沿用现有 duration 解析能力即可，只把旧版明确的优先级、负数处理、整秒化和范围恢复正确。
+### 2. 中高风险逻辑改动
 
-## 2. 修正 `timer.setMode` 的旧协议兼容
+以下类型属于需要定向模块测试的改动：
 
-v0.30.2 的实际代码是：
+- 计时核心；
+- 配置读写 / 配置格式；
+- Remote 协议与命令语义；
+- 文件规则同步逻辑；
+- 会影响多个入口共享行为的核心函数。
 
-- `mode == "countup"` 或 `mode == "正计时"` => `CountUp`；
-- **其他任何值，包括空值/未知值，均按 `Countdown`。**
+要求：
 
-当前 Rust 对未知值返回“模式无效”，这不是 v0.30.2 语义。
+- 只跑对应模块 / 对应行为的测试，确认目标逻辑没有被本次修改破坏；
+- 优先使用现有测试筛选，例如针对 timer、config、remote parity 的具体测试；
+- 不自动追加全量 `cargo test`、clippy 或 release build。
 
-请恢复旧行为，不新增 mode 白名单层：
+### 3. 一次任务完成，准备交给 ChatGPT / 用户手测
 
-- 只有两个 CountUp 值特殊判断；
-- 其余直接 Countdown；
-- 保留现有全局模式、匹配规则模式、当前 Timer mode 和配置保存逻辑。
+- 最多运行一次 `cargo test`；
+- 如果本轮已经通过足够的定向测试，而且风险和范围不要求全量测试，可以不重复跑；
+- 不在这一阶段自动跑 `cargo fmt --check`、全量 clippy、`cargo build --release`；
+- `CODEX_RESULT.md` 只记录实际运行过的验证，不为了看起来完整而补跑命令。
 
-## 3. 恢复 `timer.restart` 的旧版 Remote 返回消息
+### 4. 准备合并、打包或正式发布
 
-v0.30.2 的 `Restart(presentationId)` 会设置可见消息：
-
-- 未匹配规则：`已按全局时长重新计时`
-- 匹配规则：`已按 {FileName} 的规则时长重新计时`
-
-Remote 对 `timer.restart` 会把这个消息返回给网页端。
-
-当前 Rust 无论是否命中规则都返回 `已重新计时`，丢失了旧版用户可见反馈。
-
-请在现有 restart 逻辑上直接恢复这两个返回值，不建立额外消息状态对象。
-
-规则匹配保持旧版 `FindRule` 语义：空 `presentationId` 不匹配；空 `file_path` 的规则不参与匹配。
-
-## 4. 删除 `AppConfig::save()` 中明确的重复自校验
-
-当前 `src/config.rs::AppConfig::save()`：
-
-1. 从强类型 `AppConfig` 序列化为 JSON；
-2. 随后立刻又 `serde_json::from_slice::<AppConfig>(&json)?` 反序列化一次；
-3. 然后才写文件。
-
-这一步反序列化只是对刚由同一强类型序列化器产生的数据再次验证，属于本项目明确禁止的重复防御性校验。
-
-请删除这一行重复验证。
-
-本轮**不要顺手重写整个配置保存机制**；临时文件/替换写入保持现状，避免扩大任务。只删除这次审核确认的无意义自校验。
-
-## 5. 最小回归测试
-
-只补本轮缺失语义，不建立输入矩阵。
-
-在现有 Remote parity 测试中最小覆盖：
-
-- 同时传 `duration="00:01:00"` 与正 `durationMs=120000` 时，最终必须使用 2 分钟；
-- `durationMs <= 0` 不得发生负数转巨大正数；可用一个代表值锁住即可；
-- 超过 24 小时的正 `durationMs` 最终为 `23:59:59`；
-- 未知 `timer.setMode` 最终为 Countdown；
-- restart 命中规则与未命中规则的返回消息各确认一次。
-
-不要为每个边界值再复制多组测试；不要做 Hash、文件字节复核、配置快照或重复断言。
-
-## 6. 验证与交付
-
-只运行：
+只有进入明确的 merge / package / release 收口阶段时，才统一执行完整发布 gate：
 
 ```powershell
 cargo fmt --check
@@ -129,10 +82,30 @@ cargo test
 cargo build --release
 ```
 
-然后：
+这一组命令在发布收口阶段统一跑一次即可。不要在前面的每个小任务里反复预跑。
 
-- 更新 `docs/v1/CODEX_RESULT.md`，只写本轮整改内容、上述四项验证结果和仍需用户手测的事项；
-- 提交并 push 到 `codex/v1-06-manual-test`；
-- 不修改本任务范围；
-- 不创建 Release / Tag；
-- 不附加 SHA/Hash/完整性证明或额外验证步骤。
+## 真机行为必须由手测验收
+
+以下行为不得用自动测试、截图脚本、模拟状态或纯逻辑测试宣称“已验收”：
+
+- PowerPoint / WPS 实际控制；
+- 多屏、跨 DPI、窗口位置和任务栏行为；
+- 实际提示音 / 语音播放；
+- Slint 窗口真实显示、闪烁、焦点和交互；
+- 手机浏览器 Remote 的真实连接和操作体验。
+
+自动测试只能证明对应纯逻辑没有明显回归，不能替代这些真机结果。
+
+如果用户手测发现问题，下一轮只根据具体症状修改并选择与风险相匹配的最小验证范围。
+
+## 下一步手测重点
+
+当前等待用户直接手测：
+
+- 手机 Remote 修改时长 / 模式，确认 Timer、规则和保存结果；
+- Remote 选择受管演示文稿后重新计时，确认规则命中反馈；未命中时确认全局反馈；
+- 设置页行为区、提示音选择与清除；
+- 多屏主屏 / 副屏切换；
+- PowerPoint / WPS、声音和 Slint 实际显示体验。
+
+用户未反馈新的具体问题前，Codex 停止修改。
