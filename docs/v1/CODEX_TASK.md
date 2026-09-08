@@ -1,3 +1,15 @@
+# 当前任务：UX-01 桌面视觉统一
+
+用户于 2026-09-08 明确授权将优化计划同步 GitHub 并启动实施，后续继续由 ChatGPT 审核。此授权替代下文此前的暂停状态，已通过的 parity 结论继续保留。
+
+详细计划：[UX_OPTIMIZATION_PLAN.md](UX_OPTIMIZATION_PLAN.md)。本轮只执行 UX-01：统一设置与 PC Remote 的语义配色、浅色导航选中态、自绘按钮状态对比度。保留文字、选项、默认值、布局尺寸、标准输入控件、回调、Timer 配色和 Web 资源。
+
+完成后更新 CODEX_RESULT，提交推送本 review 分支，停止等待审核。只运行一次 cargo check 验证 Slint 编译；真实观感等待用户手测。后续 UX-02～UX-05 不在本轮实施。
+
+---
+
+## 之前审核结论与持续约束（归档保留）
+
 # FlyPPTTimer V1 — 当前 Codex 任务
 
 状态：**本轮 Remote parity 定向整改已审核通过，暂停代码修改，等待用户手测**  
