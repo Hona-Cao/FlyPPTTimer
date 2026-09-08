@@ -291,8 +291,10 @@ export component PresentationWindow inherits Window {
     callback presentation-selected(int);
 
     title: root.window-title;
-    width: 700px;
-    height: 620px;
+    preferred-width: 700px;
+    preferred-height: 620px;
+    min-width: 700px;
+    min-height: 620px;
     background: DesktopTheme.canvas;
 
     Rectangle {
@@ -428,16 +430,24 @@ component FieldRow inherits Rectangle {
     callback edited(int, string, bool, int);
     callback action(int);
 
-    height: item.kind == 5 ? (item.row-height > 0 ? item.row-height * 1.3px : 56px) : item.kind == 0 ? 40px : item.row-height > 0 ? item.row-height * 1px : 44px;
-    background: item.kind == 0 ? DesktopTheme.subtle : DesktopTheme.surface;
-    border-radius: 8px;
-    border-width: item.kind == 0 ? 0px : 1px;
-    border-color: item.kind == 0 ? transparent : DesktopTheme.border;
+    property <length> control-x: min(260px, self.width * 0.44);
+    property <length> control-width: self.width - self.control-x - 16px;
+    height: item.kind == 0 ? (row-index == 0 ? 40px : 56px)
+        : item.kind == 5 ? max(item.row-height > 0 ? item.row-height * 1.3px : 56px, info-value.preferred-height + 44px)
+        : max(item.row-height > 0 ? item.row-height * 1px : 48px, field-label.preferred-height + 20px);
+    background: item.kind == 0 ? DesktopTheme.canvas : DesktopTheme.surface;
+
+    if item.kind != 0: Rectangle {
+        x: 16px; y: parent.height - 1px;
+        width: parent.width - 32px; height: 1px;
+        background: DesktopTheme.border;
+    }
 
     if item.kind == 0: Text {
-        x: 14px;
-        width: parent.width - 28px;
-        height: parent.height;
+        x: 16px;
+        y: root.row-index == 0 ? 0px : 16px;
+        width: parent.width - 32px;
+        height: 40px;
         text: item.label;
         color: DesktopTheme.text;
         font-size: 14px;
@@ -445,10 +455,12 @@ component FieldRow inherits Rectangle {
         vertical-alignment: center;
     }
 
-    if item.kind == 1 || item.kind == 2 || item.kind == 3 || item.kind == 4: Text {
-        x: 14px;
-        width: parent.width - 286px;
-        height: parent.height;
+    field-label := Text {
+        visible: item.kind >= 1 && item.kind <= 4;
+        x: 16px;
+        y: (parent.height - self.height) / 2;
+        width: root.control-x - 32px;
+        height: self.preferred-height;
         text: item.label;
         color: DesktopTheme.secondary;
         font-size: 13px;
@@ -457,9 +469,9 @@ component FieldRow inherits Rectangle {
     }
 
     if item.kind == 1: CheckBox {
-        x: parent.width - 258px;
+        x: root.control-x;
         y: (parent.height - 32px) / 2;
-        width: 244px;
+        width: root.control-width;
         height: 32px;
         checked: item.checked;
         text: item.button-text;
@@ -468,9 +480,9 @@ component FieldRow inherits Rectangle {
     }
 
     if item.kind == 2: LineEdit {
-        x: parent.width - 258px;
+        x: root.control-x;
         y: (parent.height - 32px) / 2;
-        width: 244px;
+        width: item.read-only || item.key == "" ? root.control-width : min(200px, root.control-width);
         height: 32px;
         text: item.value;
         read-only: item.read-only;
@@ -479,9 +491,9 @@ component FieldRow inherits Rectangle {
     }
 
     if item.kind == 3: ComboBox {
-        x: parent.width - 258px;
+        x: root.control-x;
         y: (parent.height - 32px) / 2;
-        width: 244px;
+        width: root.control-width;
         height: 32px;
         model: item.options;
         current-index: item.selected;
@@ -490,9 +502,9 @@ component FieldRow inherits Rectangle {
     }
 
     if item.kind == 4: Button {
-        x: parent.width - 258px;
+        x: root.control-x;
         y: (parent.height - 34px) / 2;
-        width: 244px;
+        width: root.control-width;
         height: 34px;
         text: item.button-text;
         enabled: item.enabled;
@@ -511,7 +523,8 @@ component FieldRow inherits Rectangle {
         vertical-alignment: center;
     }
 
-    if item.kind == 5: Text {
+    info-value := Text {
+        visible: item.kind == 5;
         x: 14px;
         y: 28px;
         width: parent.width - 28px;
@@ -637,7 +650,7 @@ export component SettingsWindow inherits Window {
 
             VerticalLayout {
                 width: parent.width;
-                spacing: 5px;
+                spacing: 0px;
                 padding-bottom: 12px;
 
                 for item[index] in root.items: FieldRow {
@@ -649,7 +662,7 @@ export component SettingsWindow inherits Window {
                 }
 
                 if root.current-page == 0: Rectangle {
-                    height: root.rules.length > 0 ? max(120px, root.rules.length * 48px + 12px) : 92px;
+                    height: root.rules.length > 0 ? max(120px, root.rules.length * 56px + 12px) : 92px;
                     background: DesktopTheme.surface;
                     border-radius: 8px;
                     border-width: 1px;
@@ -657,7 +670,7 @@ export component SettingsWindow inherits Window {
                     VerticalLayout {
                         padding: 6px;
                         for rule[index] in root.rules: Rectangle {
-                            height: 44px;
+                            height: 52px;
                             border-radius: 6px;
                             background: rule.selected ? DesktopTheme.selected : transparent;
                             CheckBox {
@@ -666,19 +679,19 @@ export component SettingsWindow inherits Window {
                                 toggled => { root.rule-edited(index, "enabled", self.checked, 0); }
                             }
                             Text {
-                                x: 40px; y: 4px; width: parent.width - 210px; height: 20px;
+                                x: 40px; y: 4px; width: parent.width - 250px; height: 20px;
                                 text: rule.file-name; color: DesktopTheme.text; font-size: 13px; overflow: elide;
                             }
                             Text {
-                                x: 40px; y: 23px; width: parent.width - 210px; height: 17px;
-                                text: rule.file-path; color: DesktopTheme.muted; font-size: 11px; overflow: elide;
+                                x: 40px; y: 29px; width: parent.width - 52px; height: 19px;
+                                text: rule.file-path; color: DesktopTheme.muted; font-size: 12px; overflow: elide;
                             }
                             Text {
-                                x: parent.width - 160px; width: 72px; height: parent.height;
+                                x: parent.width - 200px; y: 4px; width: 80px; height: 20px;
                                 text: rule.duration; color: DesktopTheme.secondary; vertical-alignment: center;
                             }
                             Text {
-                                x: parent.width - 84px; width: 76px; height: parent.height;
+                                x: parent.width - 112px; y: 4px; width: 104px; height: 20px;
                                 text: root.timer-modes[rule.mode]; color: DesktopTheme.secondary; vertical-alignment: center;
                             }
                             TouchArea { x: 32px; width: parent.width - 32px; clicked => { root.rule-selected(index); } }
@@ -705,25 +718,25 @@ export component SettingsWindow inherits Window {
                     border-radius: 8px;
                     border-width: 1px;
                     border-color: DesktopTheme.border;
-                    Text { x: 14px; y: 10px; width: 220px; text: root.rule-file-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-                    Text { x: 248px; y: 10px; width: parent.width - 262px; text: root.rules[root.selected-rule].file-name; color: DesktopTheme.text; overflow: elide; vertical-alignment: top; }
-                    Text { x: 14px; y: 52px; width: 220px; text: root.rule-path-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-                    Text { x: 248px; y: 52px; width: parent.width - 262px; text: root.rules[root.selected-rule].file-path; color: DesktopTheme.text; overflow: elide; vertical-alignment: top; }
-                    Text { x: 14px; y: 94px; width: 220px; text: root.rule-duration-label; color: DesktopTheme.secondary; vertical-alignment: top; }
+                    Text { x: 14px; y: 10px; width: 116px; text: root.rule-file-label; color: DesktopTheme.secondary; vertical-alignment: top; }
+                    Text { x: 144px; y: 10px; width: parent.width - 160px; text: root.rules[root.selected-rule].file-name; color: DesktopTheme.text; overflow: elide; vertical-alignment: top; }
+                    Text { x: 14px; y: 52px; width: 116px; text: root.rule-path-label; color: DesktopTheme.secondary; vertical-alignment: top; }
+                    Text { x: 144px; y: 52px; width: parent.width - 160px; text: root.rules[root.selected-rule].file-path; color: DesktopTheme.text; overflow: elide; vertical-alignment: top; }
+                    Text { x: 14px; y: 94px; width: 116px; text: root.rule-duration-label; color: DesktopTheme.secondary; vertical-alignment: top; }
                     LineEdit {
-                        x: 248px; y: 86px; width: parent.width - 262px; height: 34px;
+                        x: 144px; y: 86px; width: parent.width - 160px; height: 34px;
                         text: root.rules[root.selected-rule].duration;
                         edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
                     }
-                    Text { x: 14px; y: 136px; width: 220px; text: root.rule-mode-label; color: DesktopTheme.secondary; vertical-alignment: top; }
+                    Text { x: 14px; y: 136px; width: 116px; text: root.rule-mode-label; color: DesktopTheme.secondary; vertical-alignment: top; }
                     ComboBox {
-                        x: 248px; y: 128px; width: parent.width - 262px; height: 34px;
+                        x: 144px; y: 128px; width: parent.width - 160px; height: 34px;
                         model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
                         selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
                     }
-                    Text { x: 14px; y: 178px; width: 220px; text: root.rule-status-label; color: DesktopTheme.secondary; vertical-alignment: top; }
+                    Text { x: 14px; y: 178px; width: 116px; text: root.rule-status-label; color: DesktopTheme.secondary; vertical-alignment: top; }
                     CheckBox {
-                        x: 248px; y: 172px; checked: root.rules[root.selected-rule].enabled;
+                        x: 144px; y: 172px; checked: root.rules[root.selected-rule].enabled;
                         toggled => { root.rule-edited(root.selected-rule, "enabled", self.checked, 0); }
                     }
                 }
@@ -741,7 +754,8 @@ export component SettingsWindow inherits Window {
         border-color: DesktopTheme.border;
 
         Text {
-            x: 20px; width: 250px; height: parent.height;
+            x: 20px; width: parent.width - 340px; height: parent.height;
+            wrap: word-wrap;
             text: root.dirty ? root.dirty-text : "";
             color: DesktopTheme.warning; font-size: 13px; vertical-alignment: center;
         }
