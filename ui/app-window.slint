@@ -501,9 +501,9 @@ component FieldRow inherits Rectangle {
     field-label := Text {
         visible: item.kind >= 1 && item.kind <= 4;
         x: 16px;
-        y: (parent.height - self.height) / 2;
+        y: 8px;
         width: root.control-x - 32px;
-        height: self.preferred-height;
+        height: parent.height - 16px;
         text: item.label;
         color: DesktopTheme.secondary;
         font-size: 13px;

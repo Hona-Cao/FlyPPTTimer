@@ -2190,8 +2190,7 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
     // Keep the actual client pixels when reopening a resized window.  Using
     // Slint's cached size here would apply the monitor scale factor twice on
     // mixed-DPI desktops, so this path deliberately stays in physical pixels.
-    let physical_size = window::settings_client_size(window.window())
-        .unwrap_or_else(|| slint::PhysicalSize::new(900, 650));
+    let previous_size = window::settings_client_size(window.window());
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
         if let Some(window) = weak.upgrade() {
@@ -2203,6 +2202,9 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
             let weak = window.as_weak();
             slint::Timer::single_shot(Duration::from_millis(1), move || {
                 if let Some(window) = weak.upgrade() {
+                    let physical_size = previous_size.unwrap_or_else(|| {
+                        window::logical_size_to_physical(window.window(), 900, 650)
+                    });
                     // Mark the size explicit in Slint/Winit, then correct the
                     // native client area directly.  The backend otherwise
                     // re-applies the component's preferred layout size on its
@@ -2215,11 +2217,13 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
                     // initial client dimensions.
                     window::install_settings_dpi_stabilizer(window.window());
                     window::set_visible(window.window(), true);
+                    window.window().request_redraw();
                     let weak = window.as_weak();
                     slint::Timer::single_shot(Duration::from_millis(1), move || {
                         if let Some(window) = weak.upgrade() {
                             window.window().set_size(physical_size);
                             window::set_settings_client_size(window.window(), physical_size);
+                            window.window().request_redraw();
                         }
                     });
                 }

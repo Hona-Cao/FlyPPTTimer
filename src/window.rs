@@ -73,7 +73,12 @@ pub fn set_settings_client_size(window: &slint::Window, size: PhysicalSize) {
 pub fn install_settings_dpi_stabilizer(window: &slint::Window) {
     if let Some(hwnd) = hwnd(window) {
         unsafe {
-            windows_sys::Win32::UI::Shell::SetWindowSubclass(hwnd, Some(settings_dpi_proc), 2, 0);
+            windows_sys::Win32::UI::Shell::SetWindowSubclass(
+                hwnd,
+                Some(settings_dpi_proc),
+                2,
+                GetDpiForWindow(hwnd).max(96) as usize,
+            );
         }
     }
 }
@@ -84,37 +89,39 @@ unsafe extern "system" fn settings_dpi_proc(
     wparam: usize,
     lparam: isize,
     id: usize,
-    _: usize,
+    previous_dpi: usize,
 ) -> isize {
     use windows_sys::Win32::UI::{
-        Shell::{DefSubclassProc, RemoveWindowSubclass},
-        WindowsAndMessaging::{WM_DPICHANGED, WM_NCDESTROY},
+        Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
+        WindowsAndMessaging::{IsZoomed, WM_DPICHANGED, WM_NCDESTROY},
     };
 
     if message == WM_DPICHANGED {
-        let old_dpi = unsafe { GetDpiForWindow(hwnd) }.max(96);
+        // GetDpiForWindow already reports the destination DPI in this message.
+        // Keep the last handled DPI in the existing subclass's reference data.
+        let old_dpi = (previous_dpi as u32).max(96);
         let mut old_client = RECT::default();
         let old_client_ok = unsafe { GetClientRect(hwnd, &mut old_client) } != 0;
         let old_width = (old_client.right - old_client.left).max(1) as u64;
         let old_height = (old_client.bottom - old_client.top).max(1) as u64;
         let new_dpi = ((wparam as u32) & 0xffff).max(96);
-        // Winit can deliver a second DPI message while a decorated window is
-        // straddling two monitors.  If Windows reports the same DPI on both
-        // sides, there is no scale transition to apply; forwarding it would
-        // make Winit alternate between its stale scale factors and resize the
-        // client area on every drag step.
+        // Winit must receive every message so its renderer can synchronize.
+        // It already ignores duplicates using its own last scale factor.
         if new_dpi == old_dpi {
-            return 0;
+            return unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
         }
+        unsafe { SetWindowSubclass(hwnd, Some(settings_dpi_proc), id, new_dpi as usize) };
+        let maximized = unsafe { IsZoomed(hwnd) } != 0;
 
         // Let Winit update its scale factor and monitor placement first.  Its
         // internal old scale can be stale while a decorated Slint window is
         // being dragged, so correct only the physical client size afterwards
-        // using the native DPI values from this message.
+        // using the previously handled DPI and this message's destination DPI.
         let result = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
         let mut outer = RECT::default();
         let mut client = RECT::default();
-        if old_client_ok
+        if !maximized
+            && old_client_ok
             && unsafe { GetWindowRect(hwnd, &mut outer) } != 0
             && unsafe { GetClientRect(hwnd, &mut client) } != 0
         {
