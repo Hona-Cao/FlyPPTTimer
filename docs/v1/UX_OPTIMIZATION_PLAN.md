@@ -119,5 +119,5 @@
 
 ## 当前进度
 
-- UX-01：启动，等待本轮实现结果与 ChatGPT 审核。
+- UX-01：配色实现与 cargo check 已完成，见 CODEX_RESULT；等待 ChatGPT 审核和用户视觉手测。
 - UX-02～UX-05：计划阶段，每轮由 ChatGPT 审核确认具体范围后继续。

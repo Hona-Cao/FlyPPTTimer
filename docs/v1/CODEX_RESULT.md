@@ -1,28 +1,39 @@
-# V1 Remote parity 定向整改结果
+# UX-01 桌面配色统一结果
 
 日期：2026-09-08
 
-分支：`codex/v1-06-manual-test`
+Review 分支：`codex/v1-06-manual-test`
 
-本轮基于 `70fef2e` 的最新任务，仅处理本轮审核指出的问题。
+状态：第一轮实现完成，推送后等待 ChatGPT 审核及用户视觉手测。
 
-## 整改内容
+## 授权与计划
 
-- `src/app.rs`：`timer.setDuration` 优先取正数 `durationMs`，否则使用现有文本时长解析；毫秒按 C# `Math.Round` 的中点取偶规则转整秒，限制到 1～86399 秒，并统一保存为 `HH:mm:ss`。保留全局、Timer 和文件规则同步。
-- `src/app.rs`：`timer.setMode` 仅将 `countup` 和 `正计时` 解释为 CountUp，其余值（包括缺失值）直接使用 Countdown；保留原有规则同步和保存逻辑。
-- `src/app.rs`：Restart 未匹配规则返回“已按全局时长重新计时”，匹配规则返回“已按 {FileName} 的规则时长重新计时”。Remote 规则匹配排除空白 ID 和空白文件路径，沿用旧版 FindRule 语义。
-- `src/config.rs`：删除保存前对刚序列化 JSON 的重复反序列化；临时文件与替换写入保持原状。现有 `parse_duration` 改为 crate 内可见，供 Remote 直接复用，没有新增解析器。
-- 在现有 Remote parity 测试内补入双参数优先级、一个负毫秒代表值、超过 24 小时的上限、中点取偶舍入、未知模式，以及命中/未命中规则的消息断言。
+用户明确要求将详细优化计划同步 GitHub 并启动优化，后续仍由 ChatGPT 审核。详细计划见 [UX_OPTIMIZATION_PLAN.md](UX_OPTIMIZATION_PLAN.md)，计划提交 d758d1a。本轮只执行 UX-01；UX-02～UX-05 尚未开始。
 
-## 四项验证
+## 本轮修改
 
-- `cargo fmt --check`：通过。
-- `cargo clippy --all-targets --all-features -- -D warnings`：通过。
-- `cargo test`：37 passed，0 failed，1 ignored（既有 Office COM 真机测试）。
-- `cargo build --release`：通过。
+- `ui/app-window.slint`：增加一个仅供桌面管理窗口使用的 DesktopTheme 颜色集合，集中设置与 PC Remote 自绘区域的背景、文本、边框、选中、成功/警告/危险、禁用和遮罩颜色。
+- 设置侧栏使用白色底、深色标题、浅蓝选中背景与蓝色选中文字；两窗口的相近灰蓝色统一为同组语义颜色。
+- Remote 主按钮按普通/悬停/按下使用蓝色/深蓝/更深蓝，保留白字，修正原来 hover/pressed 浅底配白字的问题。危险按钮使用红字与浅红背景，禁用按钮使用中性灰边框和背景。
+- `docs/v1/CODEX_TASK.md`：记录用户授权后的第一轮具体任务，保留之前审核结论和按风险验证策略。
+- `docs/v1/UX_OPTIMIZATION_PLAN.md`：详细记录五轮范围、候选视觉规范、每轮验收与验证方式、后续审核安排。
+- `docs/v1/HANDOFF.md`：增加新计划入口，便于 ChatGPT 新会话找到本轮上下文。
 
-## 仍需用户手测
+本轮没有替换标准 Button/LineEdit/ComboBox，也没有重写键盘交互。标准控件仍使用原有平台风格；完整控件外观协调在后续具体任务中评估。本轮不包含设置分组布局、字号放大或规则列表重排，不声称整个体验优化计划已经完成。
 
-- 在实际手机 Remote 上确认设置时长/模式后的 Timer、规则与保存结果。
-- 选择受管演示文稿重新计时，确认返回文稿名称；无匹配规则时确认显示全局时长提示。
-- 实际桌面、声音、PowerPoint/WPS 与多屏体验仍需用户验收，本轮纯逻辑测试不替代这些手测。
+Timer、大屏和时间到窗口的配置颜色、六套配色、文字、尺寸、默认值不变；设置与 Remote 的现有尺寸、控件顺序、回调和业务逻辑不变。手机 Web、DPI 时序、声音与发布流程未修改。
+
+## 实际验证
+
+- `cargo check`：通过；验证本轮 Slint 语法及生成绑定可编译。
+- 本轮纯配色修改未新增测试，未运行全量测试、Clippy 或 Release 构建。
+- 未进行真实窗口视觉验收。编译通过不代表中英文、多屏或真实交互效果通过。
+
+## 用户与 ChatGPT 审核重点
+
+1. 确认浅色设置导航与 Remote 的整体观感是否符合预期。
+2. 检查 Remote 主按钮普通、悬停、按下三种状态的文字可读性；危险与禁用状态是否易辨。
+3. 检查两种语言下标题、辅助信息和选中项在真实屏幕上的对比与辨认度。
+4. 标准控件外观是否仍有明显割裂，作为后续 UX-03/04 任务依据。
+
+当前用户手中的 `v1.13.0-review-06fa440` 测试包仍是优化前的已审核版本；本轮没有生成新的测试包。程序版本未递增。下一轮由 ChatGPT 审核确定范围后再继续。
