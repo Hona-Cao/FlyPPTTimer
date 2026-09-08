@@ -113,10 +113,6 @@ impl<C: MonotonicClock> Timer<C> {
         self.duration
     }
 
-    pub fn mode(&self) -> TimerMode {
-        self.mode
-    }
-
     pub fn start(&mut self) {
         self.accumulated = Duration::ZERO;
         self.run_started_at = Some(self.clock.now());
@@ -388,7 +384,7 @@ mod tests {
         timer.set_continue_overtime(false);
 
         assert_eq!(timer.duration(), Duration::from_secs(20));
-        assert_eq!(timer.mode(), TimerMode::CountUp);
+        assert_eq!(timer.snapshot().mode, TimerMode::CountUp);
         assert_eq!(timer.snapshot().display, Duration::ZERO);
     }
 }

@@ -1342,85 +1342,10 @@ fn execute_remote_command(
     config_path: &std::path::Path,
 ) -> Result<String, String> {
     let name = command.command.as_str();
+    if name.starts_with("timer.") || name == "state.get" {
+        return execute_remote_timer_command(command, timer, config, alerts, config_path);
+    }
     match name {
-        "timer.start" => {
-            let mut timer = timer.borrow_mut();
-            timer.start();
-            alerts.borrow_mut().reset();
-            Ok("已开始".to_owned())
-        }
-        "timer.pause" => {
-            timer.borrow_mut().pause();
-            Ok("已暂停".to_owned())
-        }
-        "timer.resume" => {
-            timer.borrow_mut().resume();
-            Ok("已继续".to_owned())
-        }
-        "timer.stop" => {
-            timer.borrow_mut().stop();
-            Ok("已停止".to_owned())
-        }
-        "timer.reset" => {
-            let mut timer = timer.borrow_mut();
-            timer.stop_and_reset();
-            alerts.borrow_mut().reset();
-            Ok("已重置".to_owned())
-        }
-        "timer.restart" => {
-            let mut timer = timer.borrow_mut();
-            let path = presentation.state().presentation_path.clone();
-            let (duration, mode) = if path.is_empty() {
-                (timer.duration(), timer.mode())
-            } else {
-                let (duration, mode) =
-                    crate::presentation::timer_settings_for(&config.borrow(), &path);
-                (duration, timer_mode(mode))
-            };
-            let _ = timer.set_duration(duration);
-            timer.set_mode(mode);
-            timer.restart();
-            alerts.borrow_mut().reset();
-            Ok("已重新计时".to_owned())
-        }
-        "timer.setDuration" => {
-            let duration: String = command
-                .duration
-                .clone()
-                .or_else(|| {
-                    command.duration_ms.map(|ms| {
-                        let d = Duration::from_millis(ms as u64);
-                        let total = d.as_secs();
-                        format!(
-                            "{:02}:{:02}:{:02}",
-                            total / 3600,
-                            (total % 3600) / 60,
-                            total % 60
-                        )
-                    })
-                })
-                .ok_or("缺少时长参数")?;
-            if !crate::config::is_valid_duration(&duration) {
-                return Err("计时时长无效".to_owned());
-            }
-            let mut config = config.borrow_mut();
-            config.timer.default_duration = duration.to_owned();
-            let _ = timer.borrow_mut().set_duration(config.timer.duration());
-            save_config(&config, config_path);
-            Ok("时长已设置".to_owned())
-        }
-        "timer.setMode" => {
-            let mode = match command.mode.as_deref() {
-                Some("倒计时") | Some("countdown") => TimerMode::Countdown,
-                Some("正计时") | Some("countup") => TimerMode::CountUp,
-                _ => return Err("模式无效".to_owned()),
-            };
-            let mut config = config.borrow_mut();
-            config.timer.mode = mode;
-            timer.borrow_mut().set_mode(timer_mode(mode));
-            save_config(&config, config_path);
-            Ok("模式已设置".to_owned())
-        }
         "window.show" => {
             if let Some(w) = window.upgrade() {
                 set_window_visible(&w, true);
@@ -1518,6 +1443,127 @@ fn flash_prompt_from_config(config: &AppConfig) -> crate::config::PromptSettings
         flash_off_ms: config.appearance.flash_off_ms,
         flash_seconds: 3,
         ..crate::config::PromptSettings::default()
+    }
+}
+
+fn execute_remote_timer_command(
+    command: &crate::remote::RemoteCommand,
+    timer: &Rc<RefCell<Timer<SystemClock>>>,
+    config: &Rc<RefCell<AppConfig>>,
+    alerts: &Rc<RefCell<AlertTracker>>,
+    config_path: &std::path::Path,
+) -> Result<String, String> {
+    match command.command.as_str() {
+        "timer.start" => {
+            let mut timer = timer.borrow_mut();
+            timer.start();
+            alerts.borrow_mut().reset();
+            Ok("已开始".to_owned())
+        }
+        "timer.pause" => {
+            timer.borrow_mut().pause();
+            Ok("已暂停".to_owned())
+        }
+        "timer.resume" => {
+            timer.borrow_mut().resume();
+            Ok("已继续".to_owned())
+        }
+        "timer.stop" => {
+            timer.borrow_mut().stop_and_reset();
+            alerts.borrow_mut().reset();
+            Ok("已停止".to_owned())
+        }
+        "timer.reset" => {
+            let mut timer = timer.borrow_mut();
+            timer.stop_and_reset();
+            alerts.borrow_mut().reset();
+            Ok("已重置".to_owned())
+        }
+        "timer.restart" => {
+            let mut timer = timer.borrow_mut();
+            let config = config.borrow();
+            let rule = command.presentation_id.as_deref().and_then(|id| {
+                config
+                    .rules
+                    .iter()
+                    .find(|rule| crate::remote::id_for_path(&rule.file_path) == id)
+            });
+            let mut settings = config.timer.clone();
+            if let Some(rule) = rule {
+                settings.default_duration = rule.duration.clone();
+                settings.mode = rule.mode;
+            }
+            timer
+                .set_duration(settings.duration())
+                .map_err(|error| error.to_string())?;
+            timer.set_mode(timer_mode(settings.mode));
+            timer.restart();
+            alerts.borrow_mut().reset();
+            Ok("已重新计时".to_owned())
+        }
+        "timer.setDuration" => {
+            let duration: String = command
+                .duration
+                .clone()
+                .or_else(|| {
+                    command.duration_ms.map(|ms| {
+                        let d = Duration::from_millis(ms as u64);
+                        let total = d.as_secs();
+                        format!(
+                            "{:02}:{:02}:{:02}",
+                            total / 3600,
+                            (total % 3600) / 60,
+                            total % 60
+                        )
+                    })
+                })
+                .ok_or("缺少时长参数")?;
+            if !crate::config::is_valid_duration(&duration) {
+                return Err("计时时长无效".to_owned());
+            }
+            let mut config = config.borrow_mut();
+            config.timer.default_duration = duration.clone();
+            for rule in &mut config.rules {
+                if command.sync_all_rules == Some(true)
+                    || command.presentation_id.as_deref()
+                        == Some(crate::remote::id_for_path(&rule.file_path).as_str())
+                {
+                    rule.duration = duration.clone();
+                }
+            }
+            timer
+                .borrow_mut()
+                .set_duration(config.timer.duration())
+                .map_err(|error| error.to_string())?;
+            config
+                .save(config_path)
+                .map_err(|error| error.to_string())?;
+            Ok("时长已设置".to_owned())
+        }
+        "timer.setMode" => {
+            let mode = match command.mode.as_deref() {
+                Some("倒计时") | Some("countdown") => TimerMode::Countdown,
+                Some("正计时") | Some("countup") => TimerMode::CountUp,
+                _ => return Err("模式无效".to_owned()),
+            };
+            let mut config = config.borrow_mut();
+            config.timer.mode = mode;
+            if let Some(rule) = command.presentation_id.as_deref().and_then(|id| {
+                config
+                    .rules
+                    .iter_mut()
+                    .find(|rule| crate::remote::id_for_path(&rule.file_path) == id)
+            }) {
+                rule.mode = mode;
+            }
+            timer.borrow_mut().set_mode(timer_mode(mode));
+            config
+                .save(config_path)
+                .map_err(|error| error.to_string())?;
+            Ok("模式已设置".to_owned())
+        }
+        "state.get" => Ok(String::new()),
+        _ => Err("命令不被允许".to_owned()),
     }
 }
 
@@ -2312,4 +2358,143 @@ fn config_path() -> Result<PathBuf, std::io::Error> {
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
         .join("FlyPPTTimer.config.json"))
+}
+
+#[cfg(test)]
+mod remote_parity_tests {
+    use super::*;
+    use crate::{config::FileRule, remote::RemoteCommand};
+
+    #[test]
+    fn remote_timer_commands_apply_selected_rules_and_reset_alerts() {
+        let root =
+            std::env::temp_dir().join(format!("flyppttimer-remote-parity-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("config.json");
+        let initial = AppConfig {
+            rules: vec![
+                FileRule {
+                    file_path: r"C:\Talk.pptx".into(),
+                    duration: "00:03:00".into(),
+                    ..FileRule::default()
+                },
+                FileRule {
+                    file_path: r"C:\Other.pptx".into(),
+                    duration: "00:05:00".into(),
+                    ..FileRule::default()
+                },
+            ],
+            ..AppConfig::default()
+        };
+        let id = crate::remote::id_for_path(&initial.rules[0].file_path);
+        let timer = Rc::new(RefCell::new(
+            Timer::new(
+                SystemClock::new(),
+                initial.timer.duration(),
+                timer_mode(initial.timer.mode),
+                true,
+            )
+            .unwrap(),
+        ));
+        let config = Rc::new(RefCell::new(initial));
+        let alerts = Rc::new(RefCell::new(AlertTracker::default()));
+        let execute = |command| {
+            execute_remote_timer_command(&command, &timer, &config, &alerts, &path).unwrap()
+        };
+        execute(RemoteCommand {
+            command: "timer.setDuration".into(),
+            duration: Some("00:02:00".into()),
+            presentation_id: Some(id.clone()),
+            ..RemoteCommand::default()
+        });
+        let saved = AppConfig::load(&path).unwrap();
+        assert_eq!(saved.timer.default_duration, "00:02:00");
+        assert_eq!(
+            saved
+                .rules
+                .iter()
+                .map(|rule| rule.duration.as_str())
+                .collect::<Vec<_>>(),
+            ["00:02:00", "00:05:00"]
+        );
+        assert_eq!(timer.borrow().duration(), Duration::from_secs(120));
+        execute(RemoteCommand {
+            command: "timer.setMode".into(),
+            mode: Some("countup".into()),
+            presentation_id: Some(id.clone()),
+            ..RemoteCommand::default()
+        });
+        let saved = AppConfig::load(&path).unwrap();
+        assert_eq!(saved.timer.mode, TimerMode::CountUp);
+        assert_eq!(
+            saved.rules.iter().map(|rule| rule.mode).collect::<Vec<_>>(),
+            [TimerMode::CountUp, TimerMode::Countdown]
+        );
+        assert_eq!(
+            timer.borrow().snapshot().mode,
+            crate::timer::TimerMode::CountUp
+        );
+        execute(RemoteCommand {
+            command: "timer.setDuration".into(),
+            duration_ms: Some(240000),
+            sync_all_rules: Some(true),
+            ..RemoteCommand::default()
+        });
+        assert!(
+            AppConfig::load(&path)
+                .unwrap()
+                .rules
+                .iter()
+                .all(|rule| rule.duration == "00:04:00")
+        );
+        // Restart chooses the requested rule even when disabled, as the legacy command does.
+        config.borrow_mut().rules[0].duration = "00:01:00".into();
+        config.borrow_mut().rules[0].enabled = false;
+        alerts
+            .borrow_mut()
+            .end(&timer.borrow().snapshot(), &config.borrow())
+            .unwrap();
+        execute(RemoteCommand {
+            command: "timer.restart".into(),
+            presentation_id: Some(id),
+            ..RemoteCommand::default()
+        });
+        assert_eq!(timer.borrow().duration(), Duration::from_secs(60));
+        assert_eq!(timer.borrow().state(), TimerState::Running);
+        assert!(
+            alerts
+                .borrow_mut()
+                .end(&timer.borrow().snapshot(), &config.borrow())
+                .is_some()
+        );
+        execute(RemoteCommand {
+            command: "timer.stop".into(),
+            ..RemoteCommand::default()
+        });
+        let snapshot = timer.borrow().snapshot();
+        assert_eq!(snapshot.state, TimerState::Stopped);
+        assert_eq!(snapshot.elapsed, Duration::ZERO);
+        assert!(
+            alerts
+                .borrow_mut()
+                .end(&snapshot, &config.borrow())
+                .is_some()
+        );
+        config.borrow_mut().timer.mode = TimerMode::Countdown;
+        execute(RemoteCommand {
+            command: "timer.restart".into(),
+            presentation_id: Some("unknown".into()),
+            ..RemoteCommand::default()
+        });
+        assert_eq!(timer.borrow().duration(), Duration::from_secs(240));
+        assert_eq!(
+            timer.borrow().snapshot().mode,
+            crate::timer::TimerMode::Countdown
+        );
+        execute(RemoteCommand {
+            command: "state.get".into(),
+            ..RemoteCommand::default()
+        });
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

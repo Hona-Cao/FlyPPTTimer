@@ -83,6 +83,18 @@ fn localize(lang: Language, value: &str) -> &str {
         "到时提示音" => "Time-up sound",
         "选择到时提示音" => "Choose time-up sound",
         "清除到时提示音" => "Clear time-up sound",
+        "提示1闪烁样式" => "Alert 1 flash style",
+        "提示1闪现时长（毫秒）" => "Alert 1 visible interval (ms)",
+        "提示1隐藏时长（毫秒）" => "Alert 1 hidden interval (ms)",
+        "提示1闪烁持续（秒）" => "Alert 1 flash duration (seconds)",
+        "提示2闪烁样式" => "Alert 2 flash style",
+        "提示2闪现时长（毫秒）" => "Alert 2 visible interval (ms)",
+        "提示2隐藏时长（毫秒）" => "Alert 2 hidden interval (ms)",
+        "提示2闪烁持续（秒）" => "Alert 2 flash duration (seconds)",
+        "计时结束闪烁样式" => "Time Up flash style",
+        "计时结束闪现时长（毫秒）" => "Time Up visible interval (ms)",
+        "计时结束隐藏时长（毫秒）" => "Time Up hidden interval (ms)",
+        "计时结束闪烁持续（秒）" => "Time Up flash duration (seconds)",
         "无" => "None",
         "闪烁文字" => "Flash text",
         "闪烁背景" => "Flash background",
@@ -235,6 +247,7 @@ struct Row {
     options: Vec<String>,
     selected: i32,
     enabled: bool,
+    read_only: bool,
     button: String,
     row_height: i32,
 }
@@ -304,9 +317,14 @@ impl Row {
             options: vec![],
             selected: 0,
             enabled: true,
+            read_only: false,
             button: String::new(),
             row_height: 0,
         }
+    }
+    fn read_only(mut self) -> Self {
+        self.read_only = true;
+        self
     }
     fn disabled(mut self) -> Self {
         self.enabled = false;
@@ -336,6 +354,7 @@ impl Row {
             )),
             selected: self.selected,
             enabled: self.enabled,
+            read_only: self.read_only,
             button_text: localize(lang, &self.button).into(),
             row_height: self.row_height,
         }
@@ -516,7 +535,10 @@ pub fn create(
                         value.as_str()
                     };
                     update_field(&mut draft.borrow_mut(), &row.key, value, checked, selected);
-                    if row.key == "appearance.scheme" {
+                    if matches!(
+                        row.key.as_str(),
+                        "appearance.scheme" | "placement.all_screens" | "placement.big"
+                    ) {
                         refresh(
                             &w,
                             &draft.borrow(),
@@ -849,6 +871,26 @@ pub fn create(
                 native::message(&message, "FlyPPTTimer", false);
                 return;
             }
+            let sync = draft.borrow().timer.default_duration != applied.borrow().timer.default_duration
+                && !draft.borrow().rules.is_empty()
+                && weak.upgrade().is_some_and(|window| {
+                    let c = draft.borrow();
+                    let duration = &c.timer.default_duration;
+                    let count = c.rules.len();
+                    let message = if lang.english() {
+                        format!("The global default duration will change to {duration}.\n\nApply it to all {count} managed presentations?\n\nChoose No to keep each rule's current duration.")
+                    } else {
+                        format!("全局默认时长将改为 {duration}。\n\n是否同步应用到全部 {count} 个待控演示文稿？\n\n选择“否”将保留各文件规则原来的时长。")
+                    };
+                    native::yes_no_for_window(window.window(), &message, t(lang, "同步文件规则时长", "Sync presentation-rule durations"))
+                });
+            if sync {
+                let mut c = draft.borrow_mut();
+                let duration = c.timer.default_duration.clone();
+                for rule in &mut c.rules {
+                    rule.duration = duration.clone();
+                }
+            }
             if let Err(error) = draft.borrow().save(&path) {
                 native::message(&error.to_string(), "FlyPPTTimer", false);
                 return;
@@ -1168,13 +1210,14 @@ fn prompt_rows(
     let enabled_key = format!("{prefix}.enabled");
     let before_key = format!("{prefix}.before");
     let speak_key = format!("{prefix}.speak");
-    let speak_label = format!("{label}语音播报");
+    let sound_label_prefix = if prefix == "end" { "到时" } else { label };
+    let speak_label = format!("{sound_label_prefix}语音播报");
     let sound_key = format!("{prefix}.sound");
-    let sound_label = format!("{label}提示音");
+    let sound_label = format!("{sound_label_prefix}提示音");
     let choose_key = format!("{prefix}.choose");
-    let choose_label = format!("选择{label}提示音");
+    let choose_label = format!("选择{sound_label_prefix}提示音");
     let clear_key = format!("{prefix}.clear");
-    let clear_label = format!("清除{label}提示音");
+    let clear_label = format!("清除{sound_label_prefix}提示音");
     let flash_style_key = format!("{prefix}.flash_style");
     let flash_style_label = format!("{label}闪烁样式");
     let flash_on_key = format!("{prefix}.flash_on");
@@ -1183,16 +1226,20 @@ fn prompt_rows(
     let flash_off_label = format!("{label}隐藏时长（毫秒）");
     let flash_seconds_key = format!("{prefix}.flash_seconds");
     let flash_seconds_label = format!("{label}闪烁持续（秒）");
-    vec![
+    let mut rows = vec![
         Row::section(section),
         Row::check(enabled_key, label, prompt.enabled),
-        Row::text(
+    ];
+    if prefix != "end" {
+        rows.push(Row::text(
             before_key,
             "距离预设时间还剩（秒）",
             prompt.trigger_before_end_seconds.to_string(),
-        ),
+        ));
+    }
+    rows.extend([
         Row::check(speak_key, speak_label, prompt.speak),
-        Row::text(sound_key, sound_label, &prompt.sound_file),
+        Row::text(sound_key, sound_label, &prompt.sound_file).read_only(),
         Row::action(choose_key, choose_label, "选择文件"),
         Row::action(clear_key, clear_label, "恢复默认"),
         Row::combo(
@@ -1212,7 +1259,8 @@ fn prompt_rows(
             flash_seconds_label,
             prompt.flash_seconds.to_string(),
         ),
-    ]
+    ]);
+    rows
 }
 
 fn flash_style_index(style: &str) -> i32 {
@@ -1307,7 +1355,8 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             "单屏显示屏幕",
             single_screens,
             single_selected,
-        ),
+        )
+        .available(!c.placement.show_on_all_screens),
         Row::section("大屏计时模式"),
         Row::check(
             "placement.big",
@@ -1325,7 +1374,7 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             },
             big_screen_selected,
         )
-        .available(has_extended),
+        .available(has_extended && c.placement.big_screen_enabled),
         Row::section("默认位置"),
         Row::combo(
             "placement.anchor",
@@ -1617,7 +1666,6 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
         "p1.enabled" => c.behavior.prompt1.enabled = checked,
         "p1.before" => c.behavior.prompt1.trigger_before_end_seconds = int(),
         "p1.speak" => c.behavior.prompt1.speak = checked,
-        "p1.sound" => c.behavior.prompt1.sound_file = value.into(),
         "p1.flash_style" => {
             c.behavior.prompt1.flash_style = if selected == 4 {
                 "边框+背景".into()
@@ -1633,7 +1681,6 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
         "p2.enabled" => c.behavior.prompt2.enabled = checked,
         "p2.before" => c.behavior.prompt2.trigger_before_end_seconds = int(),
         "p2.speak" => c.behavior.prompt2.speak = checked,
-        "p2.sound" => c.behavior.prompt2.sound_file = value.into(),
         "p2.flash_style" => {
             c.behavior.prompt2.flash_style = if selected == 4 {
                 "边框+背景".into()
@@ -1648,7 +1695,6 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
         "p2.flash_seconds" => c.behavior.prompt2.flash_seconds = int(),
         "end.enabled" => c.behavior.end_prompt.enabled = checked,
         "end.speak" => c.behavior.end_prompt.speak = checked,
-        "end.sound" => c.behavior.end_prompt.sound_file = value.into(),
         "end.flash_style" => {
             c.behavior.end_prompt.flash_style = if selected == 4 {
                 "边框+背景".into()
@@ -1681,9 +1727,11 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
         "placement.visible" => c.placement.visible = checked,
         "placement.all_screens" => c.placement.show_on_all_screens = checked,
         "placement.target" => {
-            if value != "主屏幕" {
-                c.placement.target_screen_device_name = value.into();
-            }
+            c.placement.target_screen_device_name = if value == "主屏幕" {
+                String::new()
+            } else {
+                value.into()
+            };
         }
         "placement.big" => c.placement.big_screen_enabled = checked,
         "placement.bigscreen" => c.placement.big_screen_device_name = value.into(),
@@ -1753,7 +1801,7 @@ fn apply_scheme(c: &mut AppConfig, scheme: &str) {
 fn handle_action(key: &str, c: &mut AppConfig, config_path: &std::path::Path) {
     match key {
         "p1.choose" => {
-            if let Some(path) = native_choose_sound() {
+            if let Some(path) = choose_imported_sound("prompt1") {
                 c.behavior.prompt1.sound_file = path;
                 c.behavior.prompt1.play_sound = true;
             }
@@ -1763,7 +1811,7 @@ fn handle_action(key: &str, c: &mut AppConfig, config_path: &std::path::Path) {
             c.behavior.prompt1.play_sound = false;
         }
         "p2.choose" => {
-            if let Some(path) = native_choose_sound() {
+            if let Some(path) = choose_imported_sound("prompt2") {
                 c.behavior.prompt2.sound_file = path;
                 c.behavior.prompt2.play_sound = true;
             }
@@ -1773,7 +1821,7 @@ fn handle_action(key: &str, c: &mut AppConfig, config_path: &std::path::Path) {
             c.behavior.prompt2.play_sound = false;
         }
         "end.choose" => {
-            if let Some(path) = native_choose_sound() {
+            if let Some(path) = choose_imported_sound("end") {
                 c.behavior.end_prompt.sound_file = path;
                 c.behavior.end_prompt.play_sound = true;
             }
@@ -1876,11 +1924,56 @@ pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
         .map(|name| directory.join(name))
         .collect()
 }
+fn import_sound(
+    source: &std::path::Path,
+    slot: &str,
+    directory: &std::path::Path,
+) -> std::io::Result<PathBuf> {
+    let extension = source
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !matches!(extension.as_str(), "mp3" | "wav" | "wma" | "m4a") {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "请选择 MP3、WAV、WMA 或 M4A 音频文件。",
+        ));
+    }
+    fs::create_dir_all(directory)?;
+    let destination = directory.join(format!("{slot}.{extension}"));
+    if !source
+        .to_string_lossy()
+        .eq_ignore_ascii_case(&destination.to_string_lossy())
+    {
+        fs::copy(source, &destination)?;
+    }
+    Ok(destination)
+}
+
+fn choose_imported_sound(slot: &str) -> Option<String> {
+    let source = native_choose_sound()?;
+    let result = std::env::current_exe().and_then(|exe| {
+        import_sound(
+            std::path::Path::new(&source),
+            slot,
+            &exe.parent().unwrap().join("alert-sounds"),
+        )
+    });
+    match result {
+        Ok(path) => Some(path.to_string_lossy().into_owned()),
+        Err(error) => {
+            native::message(&error.to_string(), "FlyPPTTimer", true);
+            None
+        }
+    }
+}
+
 fn native_choose_sound() -> Option<String> {
     use windows_sys::Win32::UI::Controls::Dialogs::{
         GetOpenFileNameW, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_HIDEREADONLY, OPENFILENAMEW,
     };
-    let mut filter = wide("音频文件 (*.mp3;*.wav;*.wma;*.m4a)|*.mp3;*.wav;*.wma;*.m4a\0");
+    let mut filter = wide("音频文件 (*.mp3;*.wav;*.wma;*.m4a)\0*.mp3;*.wav;*.wma;*.m4a\0");
     let mut file = [0u16; 2048];
     let mut ofn = unsafe { std::mem::zeroed::<OPENFILENAMEW>() };
     ofn.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
@@ -1960,4 +2053,86 @@ fn native_open_path(path: &std::path::Path) -> std::io::Result<()> {
 
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
+}
+
+#[cfg(test)]
+mod parity_tests {
+    use super::*;
+
+    #[test]
+    fn prompt_rows_preserve_time_up_labels_and_read_only_paths() {
+        let rows = behavior_rows(&AppConfig::default());
+        assert!(!rows.iter().any(|row| row.key == "end.before"));
+        for key in ["p1.before", "p2.before"] {
+            assert!(rows.iter().any(|row| row.key == key));
+        }
+        for (key, label, english) in [
+            ("end.speak", "到时语音播报", "Time-up voice announcement"),
+            ("end.sound", "到时提示音", "Time-up sound"),
+            ("end.choose", "选择到时提示音", "Choose time-up sound"),
+            ("end.clear", "清除到时提示音", "Clear time-up sound"),
+        ] {
+            let row = rows.iter().find(|row| row.key == key).unwrap();
+            assert_eq!(row.label, label);
+            assert_eq!(localize(Language(true), &row.label), english);
+        }
+        for key in ["p1.sound", "p2.sound", "end.sound"] {
+            let row = rows.iter().find(|row| row.key == key).unwrap();
+            assert!(row.read_only && row.enabled);
+        }
+    }
+
+    #[test]
+    fn primary_display_clears_previous_target_and_controls_follow_switches() {
+        let mut config = AppConfig::default();
+        update_field(&mut config, "placement.target", r"\\.\DISPLAY2", false, 1);
+        assert_eq!(config.placement.target_screen_device_name, r"\\.\DISPLAY2");
+        update_field(&mut config, "placement.target", "主屏幕", false, 0);
+        assert!(config.placement.target_screen_device_name.is_empty());
+        assert!(
+            !appearance_rows(&config)
+                .iter()
+                .find(|row| row.key == "placement.target")
+                .unwrap()
+                .enabled
+        );
+        update_field(&mut config, "placement.all_screens", "", false, 0);
+        assert!(
+            appearance_rows(&config)
+                .iter()
+                .find(|row| row.key == "placement.target")
+                .unwrap()
+                .enabled
+        );
+        assert!(
+            !appearance_rows(&config)
+                .iter()
+                .find(|row| row.key == "placement.bigscreen")
+                .unwrap()
+                .enabled
+        );
+    }
+
+    #[test]
+    fn sound_import_copies_overwrites_same_slot_and_rejects_unsupported_extension() {
+        let root =
+            std::env::temp_dir().join(format!("flyppttimer-sound-parity-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("chosen.WAV");
+        fs::write(&source, b"sound").unwrap();
+        let destination = root.join("alert-sounds");
+        let imported = import_sound(&source, "prompt1", &destination).unwrap();
+        assert_eq!(imported, destination.join("prompt1.wav"));
+        assert!(imported.is_file());
+        fs::write(&imported, b"previous slot content").unwrap();
+        import_sound(&source, "prompt1", &destination).unwrap();
+        assert_eq!(fs::metadata(&imported).unwrap().len(), 5);
+        assert_eq!(
+            import_sound(&root.join("chosen.txt"), "prompt1", &destination)
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidInput
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
 }

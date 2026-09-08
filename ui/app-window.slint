@@ -9,6 +9,7 @@ export struct SettingItem {
     options: [string],
     selected: int,
     enabled: bool,
+    read-only: bool,
     button-text: string,
     row-height: int,
 }
@@ -445,6 +446,7 @@ component FieldRow inherits Rectangle {
         width: 244px;
         height: 32px;
         text: item.value;
+        read-only: item.read-only;
         enabled: item.enabled;
         edited(value) => { root.edited(row-index, value, false, 0); }
     }
