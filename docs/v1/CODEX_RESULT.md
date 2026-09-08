@@ -35,3 +35,9 @@ Review 分支：`codex/v1-06-manual-test`
 6. UX-01～UX-03 的配色、布局和窗口缩放效果没有回退。
 
 编译通过不代表真实键盘、焦点和窗口交互已经验收。本轮未生成新手测包，未创建 Release/Tag。推送后停止等待审核，不进入 UX-05。
+
+## UX-04 本地手测包交付
+
+用户要求提供手测版，进入本地打包阶段后统一执行一次：`cargo fmt --check`、`cargo clippy --all-targets --all-features -- -D warnings`、`cargo test`、`cargo build --release`，均通过；测试为 37 passed、0 failed、1 ignored（既有 Office 真机测试）。
+
+手测包：`E:/快传/计时器/tests/FlyPPTTimer-v1.13.0-UX04-401f650-win-x64.zip`；同名目录内可直接运行 EXE。程序内部版本仍为 1.13.0，包标识为 v1.13.0-UX04-401f650，包含 UX-01～UX-04。附版本和手测说明。等待真实手测与审核，未创建 GitHub Release/Tag。
