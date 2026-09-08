@@ -1,4 +1,4 @@
-# 当前任务：UX-04 源码审核通过，等待真机交互手测；UX-05 等待真实复现
+# 当前任务：UX-04 源码审核通过，手测包已就绪；UX-05 等待真实复现
 
 当前分支：`codex/v1-06-manual-test`
 
@@ -19,11 +19,24 @@ UX-04“已有交互可用性”源码审核通过，当前实现可以保留，
 - 只读路径继续使用原有 `read-only`，没有新增复制按钮、Tooltip、弹窗或菜单；
 - Remote 命令编号、参数和 Rust 业务逻辑未修改。
 
-本轮实际只运行一次 `cargo check`，验证强度符合当前风险分层策略。不要追加全量测试、Clippy、Release build、焦点快照或视觉测试矩阵。
+UX-04 实现阶段实际只运行一次 `cargo check`，验证强度符合当前风险分层策略。
+
+随后用户要求提供本地手测版，进入明确的 package 阶段后统一执行了一次：
+
+```powershell
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test
+cargo build --release
+```
+
+Codex 记录四项均通过，`cargo test` 为 37 passed、0 failed、1 ignored（既有 Office 真机测试）。这次完整验证属于本地手测包打包阶段，不代表后续每轮都需要重复四项命令。
+
+当前本地手测包：`E:/快传/计时器/tests/FlyPPTTimer-v1.13.0-UX04-401f650-win-x64.zip`。程序内部版本仍为 1.13.0；这是 review 手测包，不是正式 Release。
 
 ## 仍需用户真机手测
 
-源码审核不能替代以下真实交互验收：
+请使用最新 UX-04 本地手测包验证：
 
 1. PC Remote 用 Tab / Shift+Tab 移动时，焦点是否清晰，顺序是否基本符合视觉顺序；
 2. 聚焦 `RemoteButton` 后 Enter / Space 是否只触发一次正确命令；
@@ -96,7 +109,8 @@ PowerPoint / WPS、多屏 / 跨 DPI、实际声音、Slint 真实显示和交互
 ## 当前动作
 
 - UX-01：用户已确认配色；
-- Remote 可缩放补充、UX-02、UX-03、UX-04：源码审核通过，仍保留对应真机手测项；
+- Remote 可缩放补充、UX-02、UX-03、UX-04：源码审核通过；
+- UX-04 本地手测包已就绪，等待用户真实键盘/焦点/窗口交互验收；
 - UX-05：等待用户提供真实 Timer / 多屏复现条件，不做预防性修改；
 - Codex 当前停止修改，等待用户新的具体手测反馈；
 - 不创建 Release / Tag，不生成正式发布包。
