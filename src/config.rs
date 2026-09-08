@@ -109,7 +109,6 @@ impl AppConfig {
         let mut saved = self.clone();
         saved.version = V1_CONFIG_VERSION.to_owned();
         let json = serde_json::to_vec_pretty(&saved)?;
-        serde_json::from_slice::<AppConfig>(&json)?;
 
         let temporary_path = path.with_extension("json.tmp");
         let mut temporary = File::create(&temporary_path)?;
@@ -555,7 +554,7 @@ impl Default for FileRule {
     }
 }
 
-fn parse_duration(value: &str) -> Option<Duration> {
+pub(crate) fn parse_duration(value: &str) -> Option<Duration> {
     let mut fields = value.split(':');
     let hours: u64 = fields.next()?.parse().ok()?;
     let minutes: u64 = fields.next()?.parse().ok()?;

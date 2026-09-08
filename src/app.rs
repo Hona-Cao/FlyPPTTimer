@@ -1453,6 +1453,10 @@ fn execute_remote_timer_command(
     alerts: &Rc<RefCell<AlertTracker>>,
     config_path: &std::path::Path,
 ) -> Result<String, String> {
+    let presentation_id = command
+        .presentation_id
+        .as_deref()
+        .filter(|id| !id.trim().is_empty());
     match command.command.as_str() {
         "timer.start" => {
             let mut timer = timer.borrow_mut();
@@ -1482,11 +1486,11 @@ fn execute_remote_timer_command(
         "timer.restart" => {
             let mut timer = timer.borrow_mut();
             let config = config.borrow();
-            let rule = command.presentation_id.as_deref().and_then(|id| {
-                config
-                    .rules
-                    .iter()
-                    .find(|rule| crate::remote::id_for_path(&rule.file_path) == id)
+            let rule = presentation_id.and_then(|id| {
+                config.rules.iter().find(|rule| {
+                    !rule.file_path.trim().is_empty()
+                        && crate::remote::id_for_path(&rule.file_path) == id
+                })
             });
             let mut settings = config.timer.clone();
             if let Some(rule) = rule {
@@ -1499,34 +1503,33 @@ fn execute_remote_timer_command(
             timer.set_mode(timer_mode(settings.mode));
             timer.restart();
             alerts.borrow_mut().reset();
-            Ok("已重新计时".to_owned())
+            Ok(match rule {
+                Some(rule) => format!("已按 {} 的规则时长重新计时", rule.file_name),
+                None => "已按全局时长重新计时".to_owned(),
+            })
         }
         "timer.setDuration" => {
-            let duration: String = command
-                .duration
-                .clone()
-                .or_else(|| {
-                    command.duration_ms.map(|ms| {
-                        let d = Duration::from_millis(ms as u64);
-                        let total = d.as_secs();
-                        format!(
-                            "{:02}:{:02}:{:02}",
-                            total / 3600,
-                            (total % 3600) / 60,
-                            total % 60
-                        )
-                    })
-                })
-                .ok_or("缺少时长参数")?;
-            if !crate::config::is_valid_duration(&duration) {
-                return Err("计时时长无效".to_owned());
-            }
+            let seconds = if let Some(ms) = command.duration_ms.filter(|ms| *ms > 0) {
+                (ms as f64 / 1000.0).round_ties_even()
+            } else {
+                crate::config::parse_duration(command.duration.as_deref().ok_or("缺少时长参数")?)
+                    .ok_or("计时时长无效")?
+                    .as_secs_f64()
+            };
+            let total = seconds.clamp(1.0, 86399.0) as u64;
+            let duration = format!(
+                "{:02}:{:02}:{:02}",
+                total / 3600,
+                (total % 3600) / 60,
+                total % 60
+            );
             let mut config = config.borrow_mut();
             config.timer.default_duration = duration.clone();
             for rule in &mut config.rules {
                 if command.sync_all_rules == Some(true)
-                    || command.presentation_id.as_deref()
-                        == Some(crate::remote::id_for_path(&rule.file_path).as_str())
+                    || (!rule.file_path.trim().is_empty()
+                        && presentation_id
+                            == Some(crate::remote::id_for_path(&rule.file_path).as_str()))
                 {
                     rule.duration = duration.clone();
                 }
@@ -1542,17 +1545,16 @@ fn execute_remote_timer_command(
         }
         "timer.setMode" => {
             let mode = match command.mode.as_deref() {
-                Some("倒计时") | Some("countdown") => TimerMode::Countdown,
                 Some("正计时") | Some("countup") => TimerMode::CountUp,
-                _ => return Err("模式无效".to_owned()),
+                _ => TimerMode::Countdown,
             };
             let mut config = config.borrow_mut();
             config.timer.mode = mode;
-            if let Some(rule) = command.presentation_id.as_deref().and_then(|id| {
-                config
-                    .rules
-                    .iter_mut()
-                    .find(|rule| crate::remote::id_for_path(&rule.file_path) == id)
+            if let Some(rule) = presentation_id.and_then(|id| {
+                config.rules.iter_mut().find(|rule| {
+                    !rule.file_path.trim().is_empty()
+                        && crate::remote::id_for_path(&rule.file_path) == id
+                })
             }) {
                 rule.mode = mode;
             }
@@ -2375,6 +2377,7 @@ mod remote_parity_tests {
             rules: vec![
                 FileRule {
                     file_path: r"C:\Talk.pptx".into(),
+                    file_name: "Talk.pptx".into(),
                     duration: "00:03:00".into(),
                     ..FileRule::default()
                 },
@@ -2403,7 +2406,8 @@ mod remote_parity_tests {
         };
         execute(RemoteCommand {
             command: "timer.setDuration".into(),
-            duration: Some("00:02:00".into()),
+            duration: Some("00:01:00".into()),
+            duration_ms: Some(120000),
             presentation_id: Some(id.clone()),
             ..RemoteCommand::default()
         });
@@ -2454,11 +2458,14 @@ mod remote_parity_tests {
             .borrow_mut()
             .end(&timer.borrow().snapshot(), &config.borrow())
             .unwrap();
-        execute(RemoteCommand {
-            command: "timer.restart".into(),
-            presentation_id: Some(id),
-            ..RemoteCommand::default()
-        });
+        assert_eq!(
+            execute(RemoteCommand {
+                command: "timer.restart".into(),
+                presentation_id: Some(id),
+                ..RemoteCommand::default()
+            }),
+            "已按 Talk.pptx 的规则时长重新计时"
+        );
         assert_eq!(timer.borrow().duration(), Duration::from_secs(60));
         assert_eq!(timer.borrow().state(), TimerState::Running);
         assert!(
@@ -2480,12 +2487,20 @@ mod remote_parity_tests {
                 .end(&snapshot, &config.borrow())
                 .is_some()
         );
-        config.borrow_mut().timer.mode = TimerMode::Countdown;
         execute(RemoteCommand {
-            command: "timer.restart".into(),
-            presentation_id: Some("unknown".into()),
+            command: "timer.setMode".into(),
+            mode: Some("unknown".into()),
             ..RemoteCommand::default()
         });
+        assert_eq!(config.borrow().timer.mode, TimerMode::Countdown);
+        assert_eq!(
+            execute(RemoteCommand {
+                command: "timer.restart".into(),
+                presentation_id: Some("unknown".into()),
+                ..RemoteCommand::default()
+            }),
+            "已按全局时长重新计时"
+        );
         assert_eq!(timer.borrow().duration(), Duration::from_secs(240));
         assert_eq!(
             timer.borrow().snapshot().mode,
@@ -2495,6 +2510,25 @@ mod remote_parity_tests {
             command: "state.get".into(),
             ..RemoteCommand::default()
         });
+        execute(RemoteCommand {
+            command: "timer.setDuration".into(),
+            duration_ms: Some(-1),
+            duration: Some("0:1:2".into()),
+            ..RemoteCommand::default()
+        });
+        assert_eq!(config.borrow().timer.default_duration, "00:01:02");
+        execute(RemoteCommand {
+            command: "timer.setDuration".into(),
+            duration_ms: Some(90000000),
+            ..RemoteCommand::default()
+        });
+        assert_eq!(config.borrow().timer.default_duration, "23:59:59");
+        execute(RemoteCommand {
+            command: "timer.setDuration".into(),
+            duration_ms: Some(2500),
+            ..RemoteCommand::default()
+        });
+        assert_eq!(config.borrow().timer.default_duration, "00:00:02");
         std::fs::remove_dir_all(root).unwrap();
     }
 }
