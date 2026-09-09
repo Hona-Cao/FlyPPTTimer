@@ -18,17 +18,6 @@ use windows_sys::Win32::{
 
 use crate::config::RemoteWindowPlacement;
 
-pub fn settings_client_size(window: &slint::Window) -> Option<PhysicalSize> {
-    let hwnd = hwnd(window)?;
-    let mut client = RECT::default();
-    if unsafe { GetClientRect(hwnd, &mut client) } == 0 {
-        return None;
-    }
-    let width = (client.right - client.left).max(1) as u32;
-    let height = (client.bottom - client.top).max(1) as u32;
-    Some(PhysicalSize::new(width, height))
-}
-
 pub fn logical_size_to_physical(
     window: &slint::Window,
     logical_width: i32,

@@ -566,7 +566,14 @@ fn handle_desktop_event(
             let previous_settings_geometry = settings_window.borrow().as_ref().map(|settings| {
                 (
                     settings.window().position(),
-                    window::settings_client_size(settings.window()),
+                    // `Window::size()` is already reported by Slint/winit in
+                    // physical pixels.  Reading the HWND client rectangle
+                    // here is unsafe on a mixed-DPI desktop because a
+                    // non-per-monitor-aware caller can receive a DPI-
+                    // virtualized (smaller) value; feeding that value back
+                    // into `set_size(PhysicalSize)` shrinks the window on
+                    // every close/reopen cycle.
+                    Some(settings.window().size()),
                 )
             });
             // A hidden settings adapter can retain a stale native surface after
@@ -2304,8 +2311,8 @@ fn show_settings_ready_at(
     geometry: Option<(slint::PhysicalPosition, Option<slint::PhysicalSize>)>,
 ) -> Result<(), slint::PlatformError> {
     // Defer native creation until the current desktop-event callback returns.
-    // The first frame is created hidden, then revealed on a later turn so the
-    // settings window cannot flash or re-enter the polling timer.
+    // Keep one Slint show/hide lifecycle for the native surface: nested
+    // show/hide timers can leave a stale white surface after a close/reopen.
     if window::is_visible(window.window()) {
         if let Err(error) = window.show() {
             eprintln!("failed to refresh settings: {error}");
@@ -2327,15 +2334,19 @@ fn show_settings_ready_at(
                 eprintln!("failed to show settings: {error}");
                 return;
             }
-            window::set_visible(window.window(), false);
+            // Wait for Winit to deliver the initial resize/DPI event before
+            // applying saved geometry. Otherwise the first reopen uses a
+            // fallback scale and the window drifts on every cycle.
             let weak = window.as_weak();
-            slint::Timer::single_shot(Duration::from_millis(1), move || {
+            slint::Timer::single_shot(Duration::from_millis(50), move || {
                 if let Some(window) = weak.upgrade() {
+                    // The HWND has received its DPI by this turn, so reuse
+                    // the saved physical client size directly. Converting it
+                    // through Slint's logical scale here would apply DPI a
+                    // second time and shrink on every reopen.
                     let physical_size = previous_size.unwrap_or_else(|| {
                         window::logical_size_to_physical(window.window(), 900, 650)
                     });
-                    // Mark the size explicit in Slint/Winit before revealing
-                    // the window so its preferred size cannot replace it.
                     window.window().set_size(physical_size);
                     if let Some(position) = position {
                         window.window().set_position(position);
@@ -2343,10 +2354,7 @@ fn show_settings_ready_at(
                         window::center_window_on_cursor(window.window(), physical_size);
                     }
                     window::install_settings_dpi_stabilizer(window.window());
-                    if let Err(error) = window.show() {
-                        eprintln!("failed to reveal settings: {error}");
-                        return;
-                    }
+                    window::set_visible(window.window(), true);
                     window::foreground(window.window());
                     window.window().request_redraw();
                 }

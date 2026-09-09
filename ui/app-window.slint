@@ -658,7 +658,10 @@ export component SettingsWindow inherits Window {
     Rectangle {
         x: 196px;
         width: parent.width - 196px;
-        height: parent.height - 58px;
+        // Leave a clear breathing room between the scroll viewport and the
+        // fixed action buttons.  The footer remains transparent, so the
+        // content surface must end before its buttons begin.
+        height: parent.height - 76px;
         background: DesktopTheme.canvas;
         // The footer is a sibling below this content surface.  Clip the
         // scroll viewport at the surface boundary so its rows can never
@@ -682,7 +685,7 @@ export component SettingsWindow inherits Window {
             // Keep the scroll viewport above the fixed action bar.  Refer to
             // the window height explicitly so it cannot extend under the
             // footer when the settings content grows.
-            height: root.height - 128px;
+            height: root.height - 148px;
             viewport-y <=> root.preview-scroll-y;
 
             VerticalLayout {
