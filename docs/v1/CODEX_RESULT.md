@@ -192,7 +192,7 @@ Review 分支：`codex/v1-06-manual-test`
 
 Review 分支：`codex/v1-06-manual-test`
 
-源码提交：`887f051`
+源码提交：`cbc140d`
 
 ## 本轮触发
 
