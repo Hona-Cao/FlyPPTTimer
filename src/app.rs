@@ -87,6 +87,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(error) = remote.start(&mut cfg) {
             eprintln!("{error}");
         }
+        save_config(&cfg, &config_path);
     }
 
     // Optional startup update check.
@@ -140,6 +141,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         slint::TimerMode::Repeated,
         Duration::from_millis(100),
         move || {
+            if let Some((old, port)) = remote_for_updates.take_port_change() {
+                let english = crate::config::ui_is_english(&config_for_updates.borrow().language);
+                desktop_for_updates.notify(&if english {
+                    format!("Port {old} is unavailable. Remote now uses port {port}; this port is saved for future starts.")
+                } else {
+                    format!("端口 {old} 不可用，远程服务已切换到 {port}，下次启动将继续使用此端口。")
+                }, 10000);
+            }
             while let Some(event) = desktop_for_updates.try_recv() {
                 handle_desktop_event(
                     event,
@@ -514,6 +523,14 @@ fn handle_desktop_event(
         DesktopEvent::Command(command) => {
             handle_command(&command, window, timer, config, alerts, flash, config_path)
         }
+        DesktopEvent::CloseBigScreen => {
+            config.borrow_mut().placement.big_screen_enabled = false;
+            save_config(&config.borrow(), config_path);
+            if let Some(settings) = settings_window.borrow().as_ref() {
+                settings.invoke_big_screen_disabled();
+            }
+            display_rebuild.set(true);
+        }
         DesktopEvent::ResetPosition => {
             let mut config = config.borrow_mut();
             config.placement.has_custom_placement = false;
@@ -674,14 +691,6 @@ fn create_presentation_window(
             "Port on next start"
         } else {
             "下次服务端口"
-        }
-        .into(),
-    );
-    window.set_random_port_text(
-        if english {
-            "Use a random port"
-        } else {
-            "使用随机端口"
         }
         .into(),
     );
@@ -1001,7 +1010,7 @@ fn create_presentation_window(
     let config_for_remote = Rc::clone(config);
     let remote_for_actions = Rc::clone(remote);
     let config_path_for_actions = config_path.to_path_buf();
-    window.on_remote_action(move |action, value, random| {
+    window.on_remote_action(move |action, value, _random| {
         match action {
             0 => {
                 let mut config = config_for_remote.borrow_mut();
@@ -1016,7 +1025,7 @@ fn create_presentation_window(
                 };
                 let mut config = config_for_remote.borrow_mut();
                 config.remote_control.enabled = true;
-                config.remote_control.use_random_port = random;
+                config.remote_control.use_random_port = false;
                 config.remote_control.port = port;
                 if let Err(error) = remote_for_actions.start(&mut config) {
                     eprintln!("{error}");
@@ -1207,7 +1216,6 @@ fn populate_remote_connection_window(
         .into(),
     );
     window.set_next_port(config.remote_control.port.to_string().into());
-    window.set_random_port(config.remote_control.use_random_port);
     window.set_client_count_text(
         if english {
             format!("Connected devices: {}", info.connected_clients)
@@ -1777,6 +1785,10 @@ fn rebuild_display_windows(
             })
             .unwrap_or(extended[0]);
         let big_screen = BigScreenWindow::new()?;
+        big_screen.window().on_close_requested(|| {
+            crate::desktop::request_close_big_screen();
+            slint::CloseRequestResponse::HideWindow
+        });
         update_big_screen(&big_screen, snapshot, config);
         big_screen.show()?;
         let scale = monitor.dpi.max(96) as f32 / 96.0;
@@ -2184,7 +2196,7 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
     // The first frame is created hidden, then revealed on a later turn so the
     // settings window cannot flash or re-enter the polling timer.
     if window::is_visible(window.window()) {
-        window::set_visible(window.window(), true);
+        window::foreground(window.window());
         return Ok(());
     }
     // Keep the actual client pixels when reopening a resized window.  Using
@@ -2205,27 +2217,11 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
                     let physical_size = previous_size.unwrap_or_else(|| {
                         window::logical_size_to_physical(window.window(), 900, 650)
                     });
-                    // Mark the size explicit in Slint/Winit, then correct the
-                    // native client area directly.  The backend otherwise
-                    // re-applies the component's preferred layout size on its
-                    // first shown frame.
+                    // Mark the size explicit in Slint/Winit before revealing
+                    // the window so its preferred size cannot replace it.
                     window.window().set_size(physical_size);
-                    window::set_settings_client_size(window.window(), physical_size);
-                    // Install after the first native size is in place.  Window
-                    // creation can emit a transient DPI message while Winit
-                    // is attaching the HWND; that message must not alter the
-                    // initial client dimensions.
-                    window::install_settings_dpi_stabilizer(window.window());
-                    window::set_visible(window.window(), true);
+                    window::foreground(window.window());
                     window.window().request_redraw();
-                    let weak = window.as_weak();
-                    slint::Timer::single_shot(Duration::from_millis(1), move || {
-                        if let Some(window) = weak.upgrade() {
-                            window.window().set_size(physical_size);
-                            window::set_settings_client_size(window.window(), physical_size);
-                            window.window().request_redraw();
-                        }
-                    });
                 }
             });
         }
@@ -2240,7 +2236,7 @@ fn show_presentation_ready(
     placement: crate::config::RemoteWindowPlacement,
 ) -> Result<(), slint::PlatformError> {
     if window::is_visible(window.window()) {
-        window::set_visible(window.window(), true);
+        window::foreground(window.window());
         return Ok(());
     }
     let weak = window.as_weak();
@@ -2259,18 +2255,8 @@ fn show_presentation_ready(
             let physical_size =
                 window::logical_size_to_physical(window.window(), logical_width, logical_height);
             window.window().set_size(physical_size);
-            window::set_settings_client_size(window.window(), physical_size);
-            window::install_settings_dpi_stabilizer(window.window());
-            window::set_visible(window.window(), true);
+            window::foreground(window.window());
             window.window().request_redraw();
-            let weak = window.as_weak();
-            slint::Timer::single_shot(Duration::from_millis(1), move || {
-                if let Some(window) = weak.upgrade() {
-                    window.window().set_size(physical_size);
-                    window::set_settings_client_size(window.window(), physical_size);
-                    window.window().request_redraw();
-                }
-            });
         }
     });
     Ok(())

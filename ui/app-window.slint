@@ -111,12 +111,12 @@ export component BigScreenWindow inherits Window {
     in property <bool> keep-on-top: true;
     in property <length> timer-font-size: 162px;
 
-    title: "";
+    title: "FlyPPTTimer";
     preferred-width: 960px;
     preferred-height: 540px;
     min-width: 640px;
     min-height: 360px;
-    no-frame: true;
+    no-frame: false;
     always-on-top: root.keep-on-top;
     background: root.surface-color;
 
@@ -292,8 +292,6 @@ export component PresentationWindow inherits Window {
     in property <string> current-port-text;
     in property <string> next-port-label: "下次服务端口";
     in-out property <string> next-port: "4080";
-    in-out property <bool> random-port: false;
-    in property <string> random-port-text: "使用随机端口";
     in property <string> client-count-text;
     in property <string> recommended-url;
     in property <string> address-list-text;
@@ -364,9 +362,8 @@ export component PresentationWindow inherits Window {
                     height: 36px; spacing: 12px;
                     Text { width: 120px; text: root.next-port-label; color: DesktopTheme.secondary; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
                     LineEdit { enabled: !root.confirm-exit; width: 96px; text <=> root.next-port; }
-                    CheckBox { enabled: !root.confirm-exit; text: root.random-port-text; checked <=> root.random-port; }
                 }
-                RemoteButton { enabled: !root.confirm-exit; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, root.random-port); } }
+                RemoteButton { enabled: !root.confirm-exit; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, false); } }
                 HorizontalLayout {
                     height: 36px; spacing: 12px;
                     RemoteButton { enabled: !root.confirm-exit; text: root.service-toggle-text; clicked => { root.remote-action(7, "", false); } }
@@ -476,7 +473,7 @@ component FieldRow inherits Rectangle {
     property <length> control-x: min(260px, self.width * 0.44);
     property <length> control-width: self.width - self.control-x - 16px;
     height: item.kind == 0 ? (row-index == 0 ? 40px : 56px)
-        : item.kind == 5 ? max(item.row-height > 0 ? item.row-height * 1.3px : 56px, info-value.preferred-height + 44px)
+        : item.kind == 5 ? 44px
         : max(item.row-height > 0 ? item.row-height * 1px : 48px, field-label.preferred-height + 20px);
     background: item.kind == 0 ? DesktopTheme.canvas : DesktopTheme.surface;
 
@@ -554,30 +551,13 @@ component FieldRow inherits Rectangle {
         clicked => { root.action(row-index); }
     }
 
-    if item.kind == 5: Text {
-        x: 14px;
-        y: 8px;
-        width: parent.width - 28px;
-        height: 20px;
+    if item.kind == 5: Button {
+        x: 16px; y: 5px; width: parent.width - 32px; height: 34px;
         text: item.label;
-        color: DesktopTheme.secondary;
-        font-size: 13px;
-        font-weight: 600;
-        vertical-alignment: center;
+        enabled: root.interactive;
+        clicked => { root.action(root.row-index); }
     }
 
-    info-value := Text {
-        visible: item.kind == 5;
-        x: 14px;
-        y: 28px;
-        width: parent.width - 28px;
-        height: parent.height - 36px;
-        text: item.value;
-        color: DesktopTheme.muted;
-        font-size: 12px;
-        wrap: word-wrap;
-        vertical-alignment: center;
-    }
 }
 export component SettingsWindow inherits Window {
     in property <string> settings-title: "FlyPPTTimer Settings";
@@ -603,6 +583,13 @@ export component SettingsWindow inherits Window {
     in property <string> rule-status-label;
     in property <[string]> timer-modes;
     in-out property <bool> batch-open: false;
+    in-out property <bool> dialog-open: false;
+    in-out property <bool> dialog-restart: false;
+    in property <string> dialog-title;
+    in property <string> dialog-message;
+    property <bool> modal-open: root.batch-open || root.dialog-open;
+    callback dialog-confirm();
+    callback big-screen-disabled();
     in-out property <string> batch-duration: "00:08:00";
     in-out property <int> batch-mode: 0;
     in property <string> batch-title;
@@ -614,7 +601,7 @@ export component SettingsWindow inherits Window {
     callback navigate(int);
     callback field-edited(int, string, bool, int);
     callback field-action(int);
-    callback rule-selected(int);
+    callback rule-selected(int, bool);
     callback rule-edited(int, string, bool, int);
     callback rule-action(int);
     callback batch-confirm(string, int);
@@ -664,7 +651,7 @@ export component SettingsWindow inherits Window {
                 font-size: 14px;
                 vertical-alignment: center;
             }
-            TouchArea { enabled: !root.batch-open; clicked => { root.navigate(index); } }
+            TouchArea { enabled: !root.modal-open; clicked => { root.navigate(index); } }
         }
     }
 
@@ -699,25 +686,26 @@ export component SettingsWindow inherits Window {
                 for item[index] in root.items: FieldRow {
                     width: parent.width;
                     item: item;
-                    interactive: !root.batch-open;
+                    interactive: !root.modal-open;
                     row-index: index;
                     edited(index, value, checked, selected) => { root.field-edited(index, value, checked, selected); }
                     action(index) => { root.field-action(index); }
                 }
 
                 if root.current-page == 0: Rectangle {
-                    height: root.rules.length > 0 ? max(120px, root.rules.length * 56px + 12px) : 92px;
+                    height: root.rules.length > 0 ? root.rules.length * 56px + 12px : 72px;
                     background: DesktopTheme.surface;
                     border-radius: 8px;
                     border-width: 1px;
                     border-color: DesktopTheme.border;
                     VerticalLayout {
                         padding: 6px;
+                        spacing: 4px;
                         for rule[index] in root.rules: Rectangle {
                             height: 52px;
                             border-radius: 6px;
                             background: rule.selected ? DesktopTheme.selected : transparent;
-                            CheckBox { enabled: !root.batch-open;
+                            CheckBox { enabled: !root.modal-open;
                                 x: 8px; y: 12px; width: 24px;
                                 checked: rule.enabled;
                                 toggled => { root.rule-edited(index, "enabled", self.checked, 0); }
@@ -738,7 +726,7 @@ export component SettingsWindow inherits Window {
                                 x: parent.width - 112px; y: 4px; width: 104px; height: 20px;
                                 text: root.timer-modes[rule.mode]; color: DesktopTheme.secondary; vertical-alignment: center;
                             }
-                            TouchArea { enabled: !root.batch-open; x: 32px; width: parent.width - 32px; clicked => { root.rule-selected(index); } }
+                            TouchArea { enabled: !root.modal-open; x: 32px; width: parent.width - 32px; pointer-event(event) => { if event.kind == PointerEventKind.up && event.button == PointerEventButton.left { root.rule-selected(index, event.modifiers.control); } } }
                         }
                     }
                 }
@@ -747,12 +735,13 @@ export component SettingsWindow inherits Window {
                     height: 48px;
                     background: transparent;
                     HorizontalLayout {
+                        y: 7px; height: 34px;
                         alignment: end;
                         spacing: 8px;
-                        Button { enabled: !root.batch-open; text: root.rule-add-text; clicked => { root.rule-action(0); } }
-                        Button { text: root.rule-delete-text; enabled: (root.selected-rule-count > 0) && !root.batch-open; clicked => { root.rule-action(1); } }
-                        Button { text: root.rule-clear-text; enabled: (root.rules.length > 0) && !root.batch-open; clicked => { root.rule-action(2); } }
-                        Button { text: root.rule-batch-text; enabled: (root.selected-rule-count > 0) && !root.batch-open; clicked => { root.rule-action(3); } }
+                        Button { enabled: !root.modal-open; text: root.rule-add-text; clicked => { root.rule-action(0); } }
+                        Button { text: root.rule-delete-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(1); } }
+                        Button { text: root.rule-clear-text; enabled: (root.rules.length > 0) && !root.modal-open; clicked => { root.rule-action(2); } }
+                        Button { text: root.rule-batch-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(3); } }
                     }
                 }
 
@@ -767,19 +756,19 @@ export component SettingsWindow inherits Window {
                     Text { x: 14px; y: 52px; width: 116px; text: root.rule-path-label; color: DesktopTheme.secondary; vertical-alignment: top; }
                     Text { x: 144px; y: 52px; width: parent.width - 160px; text: root.rules[root.selected-rule].file-path; color: DesktopTheme.text; overflow: elide; vertical-alignment: top; }
                     Text { x: 14px; y: 94px; width: 116px; text: root.rule-duration-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-                    LineEdit { enabled: !root.batch-open;
+                    LineEdit { enabled: !root.modal-open;
                         x: 144px; y: 86px; width: parent.width - 160px; height: 34px;
                         text: root.rules[root.selected-rule].duration;
                         edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
                     }
                     Text { x: 14px; y: 136px; width: 116px; text: root.rule-mode-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-                    ComboBox { enabled: !root.batch-open;
+                    ComboBox { enabled: !root.modal-open;
                         x: 144px; y: 128px; width: parent.width - 160px; height: 34px;
                         model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
                         selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
                     }
                     Text { x: 14px; y: 178px; width: 116px; text: root.rule-status-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-                    CheckBox { enabled: !root.batch-open;
+                    CheckBox { enabled: !root.modal-open;
                         x: 144px; y: 172px; checked: root.rules[root.selected-rule].enabled;
                         toggled => { root.rule-edited(root.selected-rule, "enabled", self.checked, 0); }
                     }
@@ -809,9 +798,9 @@ export component SettingsWindow inherits Window {
             width: 290px;
             height: 36px;
             spacing: 6px;
-            Button { enabled: !root.batch-open; text: root.ok-text; clicked => { root.accept(); } }
-            Button { enabled: !root.batch-open; text: root.cancel-text; clicked => { root.cancel(); } }
-            Button { text: root.apply-text; enabled: (root.dirty) && !root.batch-open; clicked => { root.apply(); } }
+            Button { enabled: !root.modal-open; text: root.ok-text; clicked => { root.accept(); } }
+            Button { enabled: !root.modal-open; text: root.cancel-text; clicked => { root.cancel(); } }
+            Button { text: root.apply-text; enabled: (root.dirty) && !root.modal-open; clicked => { root.apply(); } }
         }
     }
 
@@ -835,4 +824,24 @@ export component SettingsWindow inherits Window {
             Button { x: 318px; y: 202px; width: 88px; height: 36px; text: root.ok-text; clicked => { root.batch-confirm(root.batch-duration, root.batch-mode); } }
         }
     }
+    if root.dialog-open: Rectangle {
+        init => { dialog-ok.focus(); }
+        background: DesktopTheme.scrim;
+        TouchArea { }
+        Rectangle {
+            width: min(540px, parent.width - 48px);
+            height: min(360px, parent.height - 48px);
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: DesktopTheme.surface; border-radius: 12px;
+            Text { x: 24px; y: 18px; width: parent.width - 48px; height: 32px; text: root.dialog-title; font-size: 18px; font-weight: 700; color: DesktopTheme.text; }
+            ScrollView {
+                x: 24px; y: 62px; width: parent.width - 48px; height: parent.height - 130px;
+                Text { width: parent.width; text: root.dialog-message; wrap: word-wrap; color: DesktopTheme.text; font-size: 13px; }
+            }
+            Button { visible: root.dialog-restart; x: parent.width - 214px; y: parent.height - 52px; width: 88px; height: 34px; text: root.cancel-text; clicked => { root.dialog-open = false; } }
+            dialog-ok := Button { x: parent.width - 112px; y: parent.height - 52px; width: 88px; height: 34px; text: root.ok-text; clicked => { root.dialog-open = false; root.dialog-confirm(); } }
+        }
+    }
+
 }

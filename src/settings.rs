@@ -549,6 +549,9 @@ pub fn create(
                     } else {
                         w.set_dirty(true);
                     }
+                    if row.key == "language" {
+                        show_restart_dialog(&w, ui_language);
+                    }
                 }
             }
         });
@@ -571,6 +574,15 @@ pub fn create(
                 &addresses_for_action,
             );
             if let Some(row) = rows.get(index as usize) {
+                if row.kind == 5 {
+                    if let Some(w) = weak.upgrade() {
+                        w.set_dialog_title(localize(ui_language, &row.label).into());
+                        w.set_dialog_message(row.value.clone().into());
+                        w.set_dialog_restart(false);
+                        w.set_dialog_open(true);
+                    }
+                    return;
+                }
                 if row.key == "update.check" {
                     crate::desktop::request_update_check();
                     return;
@@ -667,9 +679,12 @@ pub fn create(
         let addresses_for_rule = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
         let selected_rules = selected_rules.clone();
-        window.on_rule_selected(move |index| {
+        window.on_rule_selected(move |index, additive| {
             let index_usize = index as usize;
             let mut selected = selected_rules.borrow_mut();
+            if !additive {
+                selected.clear();
+            }
             if !selected.insert(index_usize) {
                 selected.remove(&index_usize);
             }
@@ -850,7 +865,34 @@ pub fn create(
         });
     }
 
+    {
+        let weak = window.as_weak();
+        let draft = draft.clone();
+        let page = page.clone();
+        let selected_rule = selected_rule.clone();
+        let selected_rules = selected_rules.clone();
+        let remote = remote.clone();
+        let addresses = addresses.clone();
+        window.on_big_screen_disabled(move || {
+            draft.borrow_mut().placement.big_screen_enabled = false;
+            if let Some(w) = weak.upgrade() {
+                refresh(
+                    &w,
+                    &draft.borrow(),
+                    *page.borrow(),
+                    *selected_rule.borrow(),
+                    &selected_rules.borrow(),
+                    w.get_dirty(),
+                    ui_language,
+                    &remote,
+                    &addresses,
+                );
+            }
+        });
+    }
+    let restart_confirmed = Rc::new(std::cell::Cell::new(false));
     let apply_now: ApplyCallback = {
+        let restart_confirmed = restart_confirmed.clone();
         let draft = draft.clone();
         let applied = applied.clone();
         let on_applied = on_applied.clone();
@@ -862,6 +904,13 @@ pub fn create(
         let selected_rules = selected_rules.clone();
         Rc::new(move |weak, close| {
             let lang = ui_language;
+            let language_changed = applied.borrow().language != draft.borrow().language;
+            if language_changed && !restart_confirmed.replace(false) {
+                if let Some(w) = weak.upgrade() {
+                    show_restart_dialog(&w, lang);
+                }
+                return;
+            }
             normalize_before_save(&mut draft.borrow_mut());
             if let Err(message) = validate(&draft.borrow(), lang) {
                 native::message(&message, "FlyPPTTimer", false);
@@ -895,25 +944,27 @@ pub fn create(
             commit_draft(&mut applied.borrow_mut(), &draft.borrow());
             let updated = applied.borrow().clone();
             on_applied(&updated);
-            let restart_now = language_changed
-                && weak.upgrade().is_some_and(|window| native::yes_no_for_window(
-                    window.window(),
-                    t(
-                        lang,
-                        "界面语言已更改。是否立即重启 FlyPPTTimer 以应用更改？\r\n\r\n选择“否”将在下次启动时应用。",
-                        "The display language has changed. Restart FlyPPTTimer now to apply it?\r\n\r\nChoose No to apply it the next time the app starts.",
-                    ),
-                    t(lang, "需要重启", "Restart required"),
-                ));
-            if restart_now {
-                if let Ok(exe) = std::env::current_exe() {
-                    let _ = std::process::Command::new(exe)
+            if language_changed {
+                let result = std::env::current_exe().and_then(|exe| {
+                    std::process::Command::new(exe)
                         .arg("--restart-after")
                         .arg(std::process::id().to_string())
                         .arg("--show-settings")
-                        .spawn();
+                        .spawn()
+                });
+                match result {
+                    Ok(_) => {
+                        let _ = slint::quit_event_loop();
+                    }
+                    Err(error) => {
+                        if let Some(w) = weak.upgrade() {
+                            w.set_dialog_title("FlyPPTTimer".into());
+                            w.set_dialog_message(error.to_string().into());
+                            w.set_dialog_restart(false);
+                            w.set_dialog_open(true);
+                        }
+                    }
                 }
-                let _ = slint::quit_event_loop();
                 return;
             }
             if let Some(w) = weak.upgrade() {
@@ -937,6 +988,18 @@ pub fn create(
             }
         })
     };
+    {
+        let weak = window.as_weak();
+        let apply = apply_now.clone();
+        window.on_dialog_confirm(move || {
+            if weak.upgrade().is_some_and(|w| w.get_dialog_restart()) {
+                restart_confirmed.set(true);
+                let weak = weak.clone();
+                let apply = apply.clone();
+                slint::Timer::single_shot(std::time::Duration::ZERO, move || apply(&weak, false));
+            }
+        });
+    }
     {
         let weak = window.as_weak();
         let f = apply_now.clone();
@@ -978,6 +1041,13 @@ pub fn create(
         });
     }
     Ok(window)
+}
+
+fn show_restart_dialog(window: &SettingsWindow, lang: Language) {
+    window.set_dialog_title(t(lang, "需要重启", "Restart required").into());
+    window.set_dialog_message(t(lang, "语言更改需要重启生效。点击确定将保存当前设置并自动重启。", "The language change requires a restart. OK saves the current settings and restarts the app.").into());
+    window.set_dialog_restart(true);
+    window.set_dialog_open(true);
 }
 
 type ApplyCallback = Rc<dyn Fn(&slint::Weak<SettingsWindow>, bool)>;
@@ -1429,8 +1499,8 @@ fn remote_rows(
 ) -> Vec<Row> {
     let note = t(
         lang,
-        "服务运行中端口会保持固定。修改端口或随机端口设置后，请点击“重启远程服务并应用端口”，或下次启动后生效。",
-        "The port remains fixed while the service is running. After changing the port or random-port option, restart the remote service or restart the app.",
+        "优先使用已保存的固定端口。只有端口不可用时才自动切换并保存新端口，同时提示地址变化。手动修改端口后重启服务生效。",
+        "The saved port is reused. If unavailable, a free port is selected and saved, and the address change is reported. Restart the service after editing the port.",
     );
     let firewall = t(
         lang,
@@ -1491,7 +1561,6 @@ fn remote_rows(
         Row::text("", "当前服务状态", status).disabled(),
         Row::text("", "本次启动端口", current_port).disabled(),
         Row::text("remote.port", "下次服务端口", c.remote_control.port.to_string()),
-        Row::check("remote.random", "使用随机端口", c.remote_control.use_random_port),
         Row::info("端口生效说明", note),
         Row::text("", "连接设备数量", client_count).disabled(),
         Row::section("访问地址"),
@@ -1765,7 +1834,6 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
                 c.remote_control.port = port;
             }
         }
-        "remote.random" => c.remote_control.use_random_port = checked,
         "language" => {
             c.language = match selected {
                 1 => "en".to_owned(),

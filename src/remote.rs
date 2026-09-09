@@ -158,6 +158,7 @@ pub struct RemoteInfo {
     pub running: bool,
     pub status: String,
     pub current_port: u16,
+    pub replaced_port: u16,
     pub connected_clients: usize,
     pub error: String,
 }
@@ -193,17 +194,32 @@ impl RemoteServer {
     pub fn start(&self, config: &mut AppConfig) -> Result<u16, String> {
         self.stop();
         *self.token.lock().unwrap() = config.remote_control.token.clone();
+        // The legacy field remains readable for config compatibility, but the
+        // service always operates on one saved fixed port.
+        config.remote_control.use_random_port = false;
         if !config.remote_control.enabled {
             self.info.lock().unwrap().status = "未启动".to_owned();
             return Ok(0);
         }
-        let requested = if config.remote_control.use_random_port || config.remote_control.port == 0
-        {
-            0
+        let requested = if config.remote_control.port == 0 {
+            4080
         } else {
             config.remote_control.port
         };
-        let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, requested)).map_err(|error| {
+        // Bind directly so the availability check cannot race with another process.
+        let listener = match TcpListener::bind((Ipv4Addr::UNSPECIFIED, requested)) {
+            Ok(listener) => Ok(listener),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::AddrInUse | std::io::ErrorKind::PermissionDenied
+                ) =>
+            {
+                TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
+            }
+            Err(error) => Err(error),
+        }
+        .map_err(|error| {
             let mut info = self.info.lock().unwrap();
             info.running = false;
             info.status = "启动失败".to_owned();
@@ -234,6 +250,7 @@ impl RemoteServer {
                 running: true,
                 status: "已启动".to_owned(),
                 current_port: port,
+                replaced_port: if port != requested { requested } else { 0 },
                 connected_clients: 0,
                 error: String::new(),
             };
@@ -281,6 +298,12 @@ impl RemoteServer {
             thread: worker,
         });
         Ok(port)
+    }
+
+    pub fn take_port_change(&self) -> Option<(u16, u16)> {
+        let mut info = self.info.lock().unwrap();
+        let old = std::mem::take(&mut info.replaced_port);
+        (old != 0).then_some((old, info.current_port))
     }
 
     pub fn stop(&self) {
@@ -939,15 +962,23 @@ mod tests {
         assert!(image.size().width > 0);
     }
     #[test]
-    fn random_port_binds_and_is_saved_for_this_start() {
+    fn occupied_fixed_port_is_replaced_and_reused() {
         let (sender, _receiver) = mpsc::channel();
         let server = RemoteServer::new(sender);
         let mut config = AppConfig::default();
         config.remote_control.token = generate_token();
-        config.remote_control.use_random_port = true;
+        let occupied = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
+        config.remote_control.port = occupied.local_addr().unwrap().port();
+        let old = config.remote_control.port;
+        config.remote_control.use_random_port = true; // legacy configuration is ignored
         let port = server.start(&mut config).unwrap();
         assert!(port > 0);
         assert_eq!(config.remote_control.port, port);
+        assert_ne!(old, port);
+        assert!(!config.remote_control.use_random_port);
+        assert_eq!(server.take_port_change(), Some((old, port)));
+        assert_eq!(server.start(&mut config).unwrap(), port);
+        assert_eq!(server.take_port_change(), None);
         server.stop();
     }
 }

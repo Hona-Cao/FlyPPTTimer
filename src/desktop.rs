@@ -50,6 +50,7 @@ static TRAY_ICON: OnceLock<Mutex<isize>> = OnceLock::new();
 pub enum DesktopEvent {
     Command(String),
     ResetPosition,
+    CloseBigScreen,
     OpenSettings,
     Remote,
     CheckUpdate,
@@ -272,6 +273,10 @@ fn send(event: DesktopEvent) {
     {
         let _ = sender.send(event);
     }
+}
+
+pub fn request_close_big_screen() {
+    send(DesktopEvent::CloseBigScreen);
 }
 
 pub fn request_update_check() {
