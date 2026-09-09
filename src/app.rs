@@ -1,5 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
+    collections::BTreeSet,
     path::PathBuf,
     rc::Rc,
     time::{Duration, Instant},
@@ -41,6 +42,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     let config_path = config_path()?;
     let config = Rc::new(RefCell::new(load_config(&config_path)?));
+    // A new process opens management windows on the monitor where the user
+    // invokes the tray command. Keep the saved size, but treat the previous
+    // position as this-run state so a stale monitor never wins on startup.
+    {
+        let mut startup_config = config.borrow_mut();
+        startup_config.remote_control.window.has_value = false;
+        startup_config
+            .remote_control
+            .window
+            .screen_device_name
+            .clear();
+    }
     crate::log::info("FlyPPTTimer starting");
 
     let timer = Rc::new(RefCell::new(timer_from_config(&config.borrow())?));
@@ -550,6 +563,12 @@ fn handle_desktop_event(
                 }
                 return;
             }
+            let previous_settings_geometry = settings_window.borrow().as_ref().map(|settings| {
+                (
+                    settings.window().position(),
+                    window::settings_client_size(settings.window()),
+                )
+            });
             // A hidden settings adapter can retain a stale native surface after
             // repeated close/reopen cycles. Recreate only a clean, non-dirty
             // hidden instance so an in-progress edit is never discarded.
@@ -561,15 +580,23 @@ fn handle_desktop_event(
                 settings_window.borrow_mut().take();
             }
             if let Some(settings) = settings_window.borrow().as_ref() {
-                if let Err(error) = show_settings_ready(settings) {
+                if let Err(error) = show_settings_ready_at(settings, previous_settings_geometry) {
                     eprintln!("failed to show settings: {error}");
                 }
                 return;
             }
-            if let Some(control) = presentation_window.borrow().as_ref()
-                && let Err(error) = control.hide()
-            {
-                eprintln!("failed to hide presentation control: {error}");
+            if let Some(control) = presentation_window.borrow().as_ref() {
+                if window::is_visible(control.window()) {
+                    let mut current = config.borrow_mut();
+                    window::capture_remote_window(
+                        control.window(),
+                        &mut current.remote_control.window,
+                    );
+                    save_config(&current, config_path);
+                }
+                if let Err(error) = control.hide() {
+                    eprintln!("failed to hide presentation control: {error}");
+                }
             }
             match create_settings(
                 Rc::clone(config),
@@ -582,7 +609,9 @@ fn handle_desktop_event(
                 false,
             ) {
                 Ok(settings) => {
-                    if let Err(error) = show_settings_ready(&settings) {
+                    if let Err(error) =
+                        show_settings_ready_at(&settings, previous_settings_geometry)
+                    {
                         eprintln!("failed to show settings: {error}");
                     }
                     *settings_window.borrow_mut() = Some(settings);
@@ -618,6 +647,11 @@ fn handle_desktop_event(
             // surface is no longer drawable.  Drop that hidden instance and
             // create the next remote window afresh; the saved placement is
             // restored by `create_presentation_window`.
+            if let Some(control) = presentation_window.borrow().as_ref() {
+                let mut current = config.borrow_mut();
+                window::capture_remote_window(control.window(), &mut current.remote_control.window);
+                save_config(&current, config_path);
+            }
             presentation_window.borrow_mut().take();
             match create_presentation_window(config, presentation, remote, config_path) {
                 Ok(control) => {
@@ -877,11 +911,51 @@ fn create_presentation_window(
     let config_for_rules = Rc::clone(config);
     let service_for_rules = Rc::clone(service);
     let config_path_for_rules = config_path.to_path_buf();
-    window.on_presentation_selected(move |index| {
+    let selection_anchor = Rc::new(Cell::new(-1_i32));
+    let selection_anchor_for_click = Rc::clone(&selection_anchor);
+    let service_for_selection = Rc::clone(service);
+    let config_for_selection = Rc::clone(config);
+    window.on_presentation_selected(move |index, control, shift| {
         let Some(window) = weak.upgrade() else {
             return;
         };
-        let Some(item) = window.get_presentations().row_data(index as usize) else {
+        if index < 0 {
+            return;
+        }
+        let index = index as usize;
+        let mut selected = presentation_selection(&window);
+        let anchor = selection_anchor_for_click.get();
+        if shift && anchor >= 0 {
+            if !control {
+                selected.clear();
+            }
+            let anchor = anchor as usize;
+            let start = anchor.min(index);
+            let end = anchor.max(index);
+            selected.extend(start..=end);
+        } else if control {
+            if !selected.insert(index) {
+                selected.remove(&index);
+            }
+            selection_anchor_for_click.set(index as i32);
+        } else {
+            selected.clear();
+            selected.insert(index);
+            selection_anchor_for_click.set(index as i32);
+        }
+        window.set_selected_presentation(if selected.is_empty() {
+            -1
+        } else {
+            index as i32
+        });
+        let config = config_for_selection.borrow();
+        update_presentation_window_with_selection(
+            &window,
+            &service_for_selection.state(),
+            &config,
+            &selected,
+        );
+        let Some(item) = window.get_presentations().row_data(index) else {
             return;
         };
         if item.is_rule {
@@ -891,6 +965,7 @@ fn create_presentation_window(
         }
     });
     let weak = window.as_weak();
+    let selection_anchor_for_actions = Rc::clone(&selection_anchor);
     window.on_rule_action(move |action, value| {
         let Some(window) = weak.upgrade() else {
             return;
@@ -934,21 +1009,36 @@ fn create_presentation_window(
                 update_presentation_window(&window, &service_for_rules.state(), &config);
             }
             1 => {
-                let Some(item) = window
-                    .get_presentations()
-                    .row_data(window.get_selected_presentation().max(0) as usize)
+                let mut paths = presentation_selection(&window)
+                    .into_iter()
+                    .filter_map(|index| window.get_presentations().row_data(index))
                     .filter(|item| item.is_rule)
-                else {
+                    .map(|item| item.path.to_lowercase())
+                    .collect::<BTreeSet<_>>();
+                if paths.is_empty()
+                    && let Some(item) = window
+                        .get_presentations()
+                        .row_data(window.get_selected_presentation().max(0) as usize)
+                        .filter(|item| item.is_rule)
+                {
+                    paths.insert(item.path.to_lowercase());
+                }
+                if paths.is_empty() {
                     return;
-                };
-                let key = item.path.to_lowercase();
+                }
                 let mut config = config_for_rules.borrow_mut();
                 config
                     .rules
-                    .retain(|rule| rule.file_path.to_lowercase() != key);
+                    .retain(|rule| !paths.contains(&rule.file_path.to_lowercase()));
                 save_config(&config, &config_path_for_rules);
                 window.set_selected_presentation(-1);
-                update_presentation_window(&window, &service_for_rules.state(), &config);
+                selection_anchor_for_actions.set(-1);
+                update_presentation_window_with_selection(
+                    &window,
+                    &service_for_rules.state(),
+                    &config,
+                    &BTreeSet::new(),
+                );
             }
             2 => {
                 let _ = service_for_rules.queue(PresentationCommand::Refresh);
@@ -958,25 +1048,40 @@ fn create_presentation_window(
                 config.rules.clear();
                 save_config(&config, &config_path_for_rules);
                 window.set_selected_presentation(-1);
-                update_presentation_window(&window, &service_for_rules.state(), &config);
+                selection_anchor_for_actions.set(-1);
+                update_presentation_window_with_selection(
+                    &window,
+                    &service_for_rules.state(),
+                    &config,
+                    &BTreeSet::new(),
+                );
             }
             4 => {
-                let Some(item) = window
-                    .get_presentations()
-                    .row_data(window.get_selected_presentation().max(0) as usize)
-                    .filter(|item| item.is_rule)
-                else {
-                    return;
-                };
                 if !crate::config::is_valid_duration(value.as_str()) {
                     return;
                 }
-                let key = item.path.to_lowercase();
+                let mut paths = presentation_selection(&window)
+                    .into_iter()
+                    .filter_map(|index| window.get_presentations().row_data(index))
+                    .filter(|item| item.is_rule)
+                    .map(|item| item.path.to_lowercase())
+                    .collect::<BTreeSet<_>>();
+                if paths.is_empty()
+                    && let Some(item) = window
+                        .get_presentations()
+                        .row_data(window.get_selected_presentation().max(0) as usize)
+                        .filter(|item| item.is_rule)
+                {
+                    paths.insert(item.path.to_lowercase());
+                }
+                if paths.is_empty() {
+                    return;
+                }
                 let mut config = config_for_rules.borrow_mut();
-                if let Some(rule) = config
+                for rule in config
                     .rules
                     .iter_mut()
-                    .find(|rule| rule.file_path.to_lowercase() == key)
+                    .filter(|rule| paths.contains(&rule.file_path.to_lowercase()))
                 {
                     rule.duration = value.to_string();
                     rule.mode = if window.get_rule_mode() == 0 {
@@ -1129,6 +1234,29 @@ fn update_presentation_window(
     _state: &crate::presentation::PresentationState,
     config: &AppConfig,
 ) {
+    let selected = presentation_selection(window);
+    update_presentation_window_with_selection(window, _state, config, &selected);
+}
+
+fn presentation_selection(window: &PresentationWindow) -> BTreeSet<usize> {
+    let model = window.get_presentations();
+    let mut selected = BTreeSet::new();
+    let mut index = 0;
+    while let Some(item) = model.row_data(index) {
+        if item.selected {
+            selected.insert(index);
+        }
+        index += 1;
+    }
+    selected
+}
+
+fn update_presentation_window_with_selection(
+    window: &PresentationWindow,
+    _state: &crate::presentation::PresentationState,
+    config: &AppConfig,
+    selected: &BTreeSet<usize>,
+) {
     // The PC remote page mirrors the settings file-rule list. Runtime
     // presentation state is intentionally kept out of this editor so that
     // selecting a row always edits the same persisted rule.
@@ -1136,7 +1264,8 @@ fn update_presentation_window(
         .rules
         .iter()
         .filter(|rule| !rule.file_path.trim().is_empty())
-        .map(|rule| PresentationItem {
+        .enumerate()
+        .map(|(index, rule)| PresentationItem {
             name: rule.file_name.clone().into(),
             path: rule.file_path.clone().into(),
             duration: rule.duration.clone().into(),
@@ -1146,6 +1275,7 @@ fn update_presentation_window(
             },
             enabled: rule.enabled,
             is_rule: true,
+            selected: selected.contains(&index),
         })
         .collect::<Vec<_>>();
     window.set_presentations(ModelRc::new(VecModel::from(items)));
@@ -2167,6 +2297,13 @@ fn set_window_visible(window: &AppWindow, visible: bool) {
 }
 
 fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformError> {
+    show_settings_ready_at(window, None)
+}
+
+fn show_settings_ready_at(
+    window: &SettingsWindow,
+    geometry: Option<(slint::PhysicalPosition, Option<slint::PhysicalSize>)>,
+) -> Result<(), slint::PlatformError> {
     // Defer native creation until the current desktop-event callback returns.
     // The first frame is created hidden, then revealed on a later turn so the
     // settings window cannot flash or re-enter the polling timer.
@@ -2182,7 +2319,8 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
     // Keep the actual client pixels when reopening a resized window.  Using
     // Slint's cached size here would apply the monitor scale factor twice on
     // mixed-DPI desktops, so this path deliberately stays in physical pixels.
-    let previous_size = window::settings_client_size(window.window());
+    let previous_size = geometry.as_ref().and_then(|(_, size)| *size);
+    let position = geometry.map(|(position, _)| position);
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
         if let Some(window) = weak.upgrade() {
@@ -2200,6 +2338,11 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
                     // Mark the size explicit in Slint/Winit before revealing
                     // the window so its preferred size cannot replace it.
                     window.window().set_size(physical_size);
+                    if let Some(position) = position {
+                        window.window().set_position(position);
+                    } else {
+                        window::center_window_on_cursor(window.window(), physical_size);
+                    }
                     window::install_settings_dpi_stabilizer(window.window());
                     if let Err(error) = window.show() {
                         eprintln!("failed to reveal settings: {error}");

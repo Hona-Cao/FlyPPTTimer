@@ -102,6 +102,7 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
         mode: 0,
         enabled: true,
         is_rule: true,
+        selected: false,
     });
     control.set_presentations(slint::ModelRc::new(items));
     control.show()?;

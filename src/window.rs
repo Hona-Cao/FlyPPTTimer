@@ -303,6 +303,16 @@ pub fn set_visible(window: &slint::Window, visible: bool) {
     }
 }
 
+pub fn center_window_on_cursor(window: &slint::Window, size: PhysicalSize) {
+    let work = cursor_work_area();
+    let available_x = (work.right - work.left - size.width as i32).max(0);
+    let available_y = (work.bottom - work.top - size.height as i32).max(0);
+    window.set_position(PhysicalPosition::new(
+        work.left + available_x / 2,
+        work.top + available_y / 2,
+    ));
+}
+
 pub fn is_minimized(window: &slint::Window) -> bool {
     hwnd(window).is_some_and(|hwnd| unsafe { IsIconic(hwnd) != 0 })
 }
@@ -352,7 +362,11 @@ pub fn restore_remote_window_position(window: &slint::Window, placement: &Remote
     // client size for placement, otherwise a saved bottom/center ratio is
     // applied with the smaller pre-show size and the window reopens off-screen.
     let size = logical_size_to_physical(window, width, height);
-    let work = monitor_work_area(&placement.screen_device_name).unwrap_or_else(primary_work_area);
+    let work = if placement.has_value {
+        monitor_work_area(&placement.screen_device_name).unwrap_or_else(primary_work_area)
+    } else {
+        cursor_work_area()
+    };
     let available_x = (work.right - work.left - size.width as i32).max(0);
     let available_y = (work.bottom - work.top - size.height as i32).max(0);
     let (left_ratio, top_ratio) = if placement.has_value {
@@ -525,6 +539,21 @@ fn primary_work_area() -> RECT {
     } else {
         area
     }
+}
+
+fn cursor_work_area() -> RECT {
+    let Some(cursor) = cursor_position() else {
+        return primary_work_area();
+    };
+    monitor_entries()
+        .into_iter()
+        .find(|(_, work)| {
+            cursor.x >= work.left
+                && cursor.x < work.right
+                && cursor.y >= work.top
+                && cursor.y < work.bottom
+        })
+        .map_or_else(primary_work_area, |(_, work)| work)
 }
 
 #[cfg(test)]

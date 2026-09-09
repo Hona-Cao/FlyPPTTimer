@@ -30,6 +30,7 @@ export struct PresentationItem {
     mode: int,
     enabled: bool,
     is-rule: bool,
+    selected: bool,
 }
 
 export component AppWindow inherits Window {
@@ -306,7 +307,7 @@ export component PresentationWindow inherits Window {
     callback command(int, string);
     callback remote-action(int, string, bool);
     callback rule-action(int, string);
-    callback presentation-selected(int);
+    callback presentation-selected(int, bool, bool);
 
     title: root.window-title;
     preferred-width: 700px;
@@ -393,8 +394,8 @@ export component PresentationWindow inherits Window {
                 spacing: 4px;
                 for item[index] in root.presentations: Rectangle {
                     height: 72px; border-radius: 8px;
-                    background: root.selected-presentation == index ? DesktopTheme.selected : transparent;
-                    border-width: root.selected-presentation == index ? 1px : 0px;
+                    background: item.selected ? DesktopTheme.selected : transparent;
+                    border-width: item.selected ? 1px : 0px;
                     border-color: DesktopTheme.accent;
                     Text { x: 10px; y: 4px; width: parent.width - 228px; height: 22px; text: item.name; color: DesktopTheme.text; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
                     Text { x: 10px; y: 28px; width: parent.width - 20px; height: 20px; text: item.path; color: DesktopTheme.muted; font-size: 12px; vertical-alignment: center; overflow: elide; }
@@ -407,7 +408,7 @@ export component PresentationWindow inherits Window {
                         pointer-event(event) => {
                             if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
                                 root.selected-presentation = index;
-                                root.presentation-selected(index);
+                                root.presentation-selected(index, event.modifiers.control, event.modifiers.shift);
                             }
                         }
                     }
@@ -417,11 +418,14 @@ export component PresentationWindow inherits Window {
     }
 
     Rectangle { visible: root.current-page == 1 && root.selected-presentation >= 0; x: 24px; y: root.height - 162px; width: parent.width - 48px; height: 58px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
-        Text { x: 12px; y: 7px; width: 42px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.secondary; font-size: 12px; vertical-alignment: center; }
-        LineEdit { enabled: !root.confirm-exit; x: 58px; y: 8px; width: 112px; height: 32px; text <=> root.rule-duration; }
-        Text { x: 184px; y: 7px; width: 42px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.secondary; font-size: 12px; vertical-alignment: center; }
-        ComboBox { enabled: !root.confirm-exit; x: 230px; y: 8px; width: 132px; height: 32px; model: root.timer-modes; current-index <=> root.rule-mode; }
-        RemoteButton { enabled: !root.confirm-exit; x: parent.width - 98px; y: 8px; width: 86px; height: 32px; text: root.save-rule-text; primary: true; clicked => { root.rule-action(4, root.rule-duration); } }
+        HorizontalLayout {
+            y: 8px; width: parent.width; height: 34px; alignment: center; spacing: 8px;
+            Text { width: 42px; text: root.rule-duration-text; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+            LineEdit { enabled: !root.confirm-exit; width: 112px; text <=> root.rule-duration; }
+            Text { width: 42px; text: root.rule-mode-text; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+            ComboBox { enabled: !root.confirm-exit; width: 132px; model: root.timer-modes; current-index <=> root.rule-mode; }
+            RemoteButton { enabled: !root.confirm-exit; width: 86px; text: root.save-rule-text; primary: true; clicked => { root.rule-action(4, root.rule-duration); } }
+        }
     }
 
     RemoteButton { enabled: !root.confirm-exit; visible: root.current-page == 1; x: 24px; y: root.height - 78px; width: (parent.width - 64px) / 3; height: 36px; text: root.add-file-text; clicked => { root.rule-action(0, ""); } }
@@ -769,19 +773,12 @@ export component SettingsWindow inherits Window {
         y: parent.height - 58px;
         width: parent.width - 196px;
         height: 58px;
-        background: DesktopTheme.surface;
+        background: transparent;
         border-radius: 0px;
-        border-width: 1px;
-        border-color: DesktopTheme.border;
+        border-width: 0px;
 
-        Text {
-            x: 20px; width: parent.width - 340px; height: parent.height;
-            wrap: word-wrap;
-            text: root.dirty ? root.dirty-text : "";
-            color: DesktopTheme.warning; font-size: 13px; vertical-alignment: center;
-        }
         HorizontalLayout {
-            x: parent.width - 310px;
+            x: parent.width - 290px;
             y: 10px;
             width: 290px;
             height: 36px;
