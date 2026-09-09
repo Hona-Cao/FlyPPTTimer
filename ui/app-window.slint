@@ -660,6 +660,10 @@ export component SettingsWindow inherits Window {
         width: parent.width - 196px;
         height: parent.height - 58px;
         background: DesktopTheme.canvas;
+        // The footer is a sibling below this content surface.  Clip the
+        // scroll viewport at the surface boundary so its rows can never
+        // paint through the fixed action area while scrolling.
+        clip: true;
 
         Text {
             x: 22px;
@@ -678,12 +682,12 @@ export component SettingsWindow inherits Window {
             // Keep the scroll viewport above the fixed action bar.  Refer to
             // the window height explicitly so it cannot extend under the
             // footer when the settings content grows.
-            height: root.height - 122px;
+            height: root.height - 128px;
             viewport-y <=> root.preview-scroll-y;
 
             VerticalLayout {
                 width: parent.width;
-                spacing: 0px;
+                spacing: 6px;
                 padding-bottom: 12px;
 
                 for item[index] in root.items: FieldRow {
@@ -735,34 +739,34 @@ export component SettingsWindow inherits Window {
                 }
 
                 if root.current-page == 0: Rectangle {
-                    height: 48px;
+                    height: 42px;
                     background: transparent;
                     HorizontalLayout {
-                        y: 7px; height: 34px;
+                        y: 5px; height: 32px;
                         alignment: end;
-                        spacing: 8px;
-                        Button { width: 72px; height: 34px; enabled: !root.modal-open; text: root.rule-add-text; clicked => { root.rule-action(0); } }
-                        Button { width: 56px; height: 34px; text: root.rule-delete-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(1); } }
-                        Button { width: 56px; height: 34px; text: root.rule-clear-text; enabled: (root.rules.length > 0) && !root.modal-open; clicked => { root.rule-action(2); } }
-                        Button { width: 72px; height: 34px; text: root.rule-batch-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(3); } }
+                        spacing: 6px;
+                        Button { width: 68px; height: 32px; enabled: !root.modal-open; text: root.rule-add-text; clicked => { root.rule-action(0); } }
+                        Button { width: 52px; height: 32px; text: root.rule-delete-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(1); } }
+                        Button { width: 52px; height: 32px; text: root.rule-clear-text; enabled: (root.rules.length > 0) && !root.modal-open; clicked => { root.rule-action(2); } }
+                        Button { width: 68px; height: 32px; text: root.rule-batch-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(3); } }
                     }
                 }
 
                 if root.current-page == 0 && root.selected-rule >= 0: Rectangle {
-                    height: 64px;
+                    height: 60px;
                     background: DesktopTheme.surface;
                     border-radius: 8px;
                     border-width: 1px;
                     border-color: DesktopTheme.border;
-                    Text { x: 14px; y: 16px; width: 116px; text: root.rule-duration-label; color: DesktopTheme.secondary; vertical-alignment: center; }
+                    Text { x: 14px; y: 14px; width: 116px; text: root.rule-duration-label; color: DesktopTheme.secondary; vertical-alignment: center; }
                     LineEdit { enabled: !root.modal-open;
-                        x: 144px; y: 8px; width: parent.width - 160px; height: 34px;
+                        x: 144px; y: 6px; width: parent.width - 160px; height: 34px;
                         text: root.rules[root.selected-rule].duration;
                         edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
                     }
-                    Text { x: parent.width / 2 + 14px; y: 16px; width: 116px; text: root.rule-mode-label; color: DesktopTheme.secondary; vertical-alignment: center; }
+                    Text { x: parent.width / 2 + 14px; y: 14px; width: 116px; text: root.rule-mode-label; color: DesktopTheme.secondary; vertical-alignment: center; }
                     ComboBox { enabled: !root.modal-open;
-                        x: parent.width / 2 + 144px; y: 8px; width: parent.width / 2 - 160px; height: 34px;
+                        x: parent.width / 2 + 144px; y: 6px; width: parent.width / 2 - 160px; height: 34px;
                         model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
                         selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
                     }
