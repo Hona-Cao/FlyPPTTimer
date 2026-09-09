@@ -295,6 +295,23 @@ impl Row {
             ..Self::new(key, label, 4)
         }
     }
+    fn action_group(actions: Vec<(&'static str, &'static str)>) -> Self {
+        let keys = actions
+            .iter()
+            .map(|(key, _)| *key)
+            .collect::<Vec<_>>()
+            .join("\u{1f}");
+        let buttons = actions
+            .into_iter()
+            .map(|(_, button)| button.to_owned())
+            .collect::<Vec<_>>();
+        Self {
+            key: keys,
+            kind: 6,
+            options: buttons,
+            ..Self::new("", "", 6)
+        }
+    }
     fn info(label: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
             value: value.into(),
@@ -509,6 +526,7 @@ pub fn create(
         let addresses_for_field = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
         let selected_rules = selected_rules.clone();
+        let applied_for_field = Rc::clone(&applied);
         window.on_field_edited(move |index, value, checked, selected| {
             if let Some(w) = weak.upgrade() {
                 let rows = rows_for(
@@ -527,6 +545,7 @@ pub fn create(
                         value.as_str()
                     };
                     update_field(&mut draft.borrow_mut(), &row.key, value, checked, selected);
+                    let dirty = !configs_equal(&draft.borrow(), &applied_for_field.borrow());
                     if matches!(
                         row.key.as_str(),
                         "appearance.scheme" | "placement.all_screens" | "placement.big"
@@ -537,15 +556,15 @@ pub fn create(
                             *page.borrow(),
                             *selected_rule.borrow(),
                             &selected_rules.borrow(),
-                            true,
+                            dirty,
                             ui_language,
                             &remote_for_field,
                             &addresses_for_field,
                         );
                     } else {
-                        w.set_dirty(true);
+                        w.set_dirty(dirty);
                     }
-                    if row.key == "language" {
+                    if row.key == "language" && dirty {
                         show_restart_dialog(&w, ui_language);
                     }
                 }
@@ -562,6 +581,8 @@ pub fn create(
         let action_config_path = config_path.clone();
         let applied_for_action = applied.clone();
         window.on_field_action(move |index| {
+            let row_index = (index / 100) as usize;
+            let action_index = (index % 100) as usize;
             let rows = rows_for(
                 &draft.borrow(),
                 ui_language,
@@ -569,7 +590,7 @@ pub fn create(
                 &remote_for_action,
                 &addresses_for_action,
             );
-            if let Some(row) = rows.get(index as usize) {
+            if let Some(row) = rows.get(row_index) {
                 if row.kind == 5 {
                     if let Some(w) = weak.upgrade() {
                         w.set_dialog_title(localize(ui_language, &row.label).into());
@@ -579,15 +600,23 @@ pub fn create(
                     }
                     return;
                 }
-                if row.key == "update.check" {
+                let action_key = if row.kind == 6 {
+                    row.key
+                        .split('\u{1f}')
+                        .nth(action_index)
+                        .unwrap_or_default()
+                } else {
+                    row.key.as_str()
+                };
+                if action_key == "update.check" {
                     crate::desktop::request_update_check();
                     return;
                 }
-                if row.key.starts_with("remote.") {
+                if action_key.starts_with("remote.") {
                     let Some(w) = weak.upgrade() else {
                         return;
                     };
-                    if row.key == "remote.restart" {
+                    if action_key == "remote.restart" {
                         w.invoke_apply();
                         let mut active = applied_for_action.borrow_mut();
                         if let Err(error) = remote_for_action.start(&mut active) {
@@ -595,8 +624,8 @@ pub fn create(
                         }
                         let _ = active.save(&action_config_path);
                         draft.borrow_mut().remote_control = active.remote_control.clone();
-                    } else if matches!(row.key.as_str(), "remote.token" | "remote.disconnect") {
-                        let token = if row.key == "remote.token" {
+                    } else if matches!(action_key, "remote.token" | "remote.disconnect") {
+                        let token = if action_key == "remote.token" {
                             remote_for_action.regenerate_token()
                         } else {
                             remote_for_action.disconnect_all()
@@ -617,7 +646,7 @@ pub fn create(
                             "http://127.0.0.1:{port}/?token={}",
                             active.remote_control.token
                         );
-                        match row.key.as_str() {
+                        match action_key {
                             "remote.open" => {
                                 let _ = crate::remote::open_url(&url);
                             }
@@ -650,20 +679,21 @@ pub fn create(
                     );
                     return;
                 }
-                handle_action(&row.key, &mut draft.borrow_mut(), &action_config_path);
-            }
-            if let Some(w) = weak.upgrade() {
-                refresh(
-                    &w,
-                    &draft.borrow(),
-                    *page.borrow(),
-                    w.get_selected_rule(),
-                    &selected_rules.borrow(),
-                    true,
-                    ui_language,
-                    &remote_for_action,
-                    &addresses_for_action,
-                );
+                handle_action(action_key, &mut draft.borrow_mut(), &action_config_path);
+                let dirty = !configs_equal(&draft.borrow(), &applied_for_action.borrow());
+                if let Some(w) = weak.upgrade() {
+                    refresh(
+                        &w,
+                        &draft.borrow(),
+                        *page.borrow(),
+                        w.get_selected_rule(),
+                        &selected_rules.borrow(),
+                        dirty,
+                        ui_language,
+                        &remote_for_action,
+                        &addresses_for_action,
+                    );
+                }
             }
         });
     }
@@ -721,23 +751,34 @@ pub fn create(
     {
         let weak = window.as_weak();
         let draft = draft.clone();
+        let applied_for_rule_edit = Rc::clone(&applied);
         window.on_rule_edited(move |index, value, checked, code| {
+            let mut changed = false;
             if let Some(rule) = draft.borrow_mut().rules.get_mut(index as usize) {
                 match code {
-                    0 => rule.enabled = checked,
-                    1 => rule.duration = value.into(),
+                    0 => {
+                        changed = rule.enabled != checked;
+                        rule.enabled = checked;
+                    }
                     2.. => {
-                        rule.mode = if code == 2 {
+                        let mode = if code == 2 {
                             TimerMode::Countdown
                         } else {
                             TimerMode::CountUp
-                        }
+                        };
+                        changed = rule.mode != mode;
+                        rule.mode = mode;
+                    }
+                    1 => {
+                        changed = rule.duration != value.as_str();
+                        rule.duration = value.into();
                     }
                     _ => {}
                 }
             }
-            if let Some(w) = weak.upgrade() {
-                w.set_dirty(true);
+            if changed && let Some(w) = weak.upgrade() {
+                let dirty = !configs_equal(&draft.borrow(), &applied_for_rule_edit.borrow());
+                w.set_dirty(dirty);
             }
         });
     }
@@ -749,6 +790,7 @@ pub fn create(
         let addresses_for_rule_action = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
         let selected_rules = selected_rules.clone();
+        let applied_for_rule_action = Rc::clone(&applied);
         window.on_rule_action(move |action| {
             match action {
                 0 => {
@@ -818,13 +860,14 @@ pub fn create(
                 _ => {}
             }
             if let Some(w) = weak.upgrade() {
+                let dirty = !configs_equal(&draft.borrow(), &applied_for_rule_action.borrow());
                 refresh(
                     &w,
                     &draft.borrow(),
                     *page.borrow(),
                     *selected_rule.borrow(),
                     &selected_rules.borrow(),
-                    true,
+                    dirty,
                     ui_language,
                     &remote_for_rule_action,
                     &addresses_for_rule_action,
@@ -840,6 +883,7 @@ pub fn create(
         let addresses_for_batch = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
         let selected_rules = selected_rules.clone();
+        let applied_for_batch = Rc::clone(&applied);
         window.on_batch_confirm(move |duration, mode| {
             if crate::config::is_valid_duration(duration.as_str()) {
                 for (index, rule) in draft
@@ -859,13 +903,14 @@ pub fn create(
                 }
                 if let Some(w) = weak.upgrade() {
                     w.set_batch_open(false);
+                    let dirty = !configs_equal(&draft.borrow(), &applied_for_batch.borrow());
                     refresh(
                         &w,
                         &draft.borrow(),
                         *page.borrow(),
                         *selected_rule.borrow(),
                         &selected_rules.borrow(),
-                        true,
+                        dirty,
                         ui_language,
                         &remote_for_batch,
                         &addresses_for_batch,
@@ -883,16 +928,18 @@ pub fn create(
         let selected_rules = selected_rules.clone();
         let remote = remote.clone();
         let addresses = addresses.clone();
+        let applied_for_big_screen = Rc::clone(&applied);
         window.on_big_screen_disabled(move || {
             draft.borrow_mut().placement.big_screen_enabled = false;
             if let Some(w) = weak.upgrade() {
+                let dirty = !configs_equal(&draft.borrow(), &applied_for_big_screen.borrow());
                 refresh(
                     &w,
                     &draft.borrow(),
                     *page.borrow(),
                     *selected_rule.borrow(),
                     &selected_rules.borrow(),
-                    w.get_dirty(),
+                    dirty,
                     ui_language,
                     &remote,
                     &addresses,
@@ -1606,11 +1653,15 @@ fn remote_rows(
         Row::text("", "推荐访问地址", recommended).disabled(),
         Row::info("手机可用局域网地址", all_addresses).tall(150),
         Row::section("操作"),
-        Row::action("remote.restart", "重启远程服务", "重启远程服务并应用端口"),
-        Row::action("remote.token", "重新生成令牌", "重新生成令牌"),
-        Row::action("remote.disconnect", "断开所有设备", "断开所有远程设备"),
-        Row::action("remote.copy", "复制访问地址", "复制推荐 URL"),
-        Row::action("remote.open", "打开本机控制页", "打开本机控制页"),
+        Row::action_group(vec![
+            ("remote.restart", "重启远程服务并应用端口"),
+            ("remote.token", "重新生成令牌"),
+        ]),
+        Row::action_group(vec![
+            ("remote.disconnect", "断开所有远程设备"),
+            ("remote.copy", "复制推荐 URL"),
+            ("remote.open", "打开本机控制页"),
+        ]),
         Row::section("防火墙排障"),
         Row::info("防火墙说明", firewall).tall(110),
         Row::info(
@@ -1662,12 +1713,16 @@ fn other_rows(c: &AppConfig, lang: Language) -> Vec<Row> {
         ),
         Row::action("update.check", "手动检测", "立即检测新版本"),
         Row::section("配置管理"),
-        Row::action("config.import", "配置导入", "配置导入"),
-        Row::action("config.export", "配置导出", "配置导出"),
-        Row::action("config.reset", "恢复默认", "恢复默认"),
+        Row::action_group(vec![
+            ("config.import", "配置导入"),
+            ("config.export", "配置导出"),
+            ("config.reset", "恢复默认"),
+        ]),
         Row::section("文件位置"),
-        Row::action("path.config", "配置文件", "打开配置文件位置"),
-        Row::action("path.logs", "日志文件", "打开日志文件位置"),
+        Row::action_group(vec![
+            ("path.config", "打开配置文件位置"),
+            ("path.logs", "打开日志文件位置"),
+        ]),
         Row::section("关于 FlyPPTTimer"),
         Row::text("", "当前版本", format!("FlyPPTTimer {} · Windows x64", env!("CARGO_PKG_VERSION"))).disabled(),
         Row::info(
@@ -1690,17 +1745,11 @@ fn other_rows(c: &AppConfig, lang: Language) -> Vec<Row> {
         )
         .tall(210),
         Row::text("", "联系邮箱", "caohunan@smail.nju.edu.cn").disabled(),
-        Row::action(
-            "url.github",
-            "GitHub 项目主页",
-            "打开 GitHub（可能需要网络工具）",
-        ),
-        Row::action(
-            "url.gitee",
-            "Gitee 项目主页",
-            "打开 Gitee（中国大陆可直接访问）",
-        ),
-        Row::action("url.mail", "联系作者", "发送邮件"),
+        Row::action_group(vec![
+            ("url.github", "打开 GitHub（可能需要网络工具）"),
+            ("url.gitee", "打开 Gitee（中国大陆可直接访问）"),
+            ("url.mail", "发送邮件"),
+        ]),
     ]
 }
 
@@ -1741,6 +1790,10 @@ fn normalize_before_save(c: &mut AppConfig) {
     c.placement.offset_y_percent = c.placement.offset_y_percent.clamp(-50.0, 50.0);
     c.remote_control.port = c.remote_control.port.clamp(1, 65535);
     c.controls.hotkeys.remove("openSettings");
+}
+
+fn configs_equal(left: &AppConfig, right: &AppConfig) -> bool {
+    serde_json::to_vec(left).ok() == serde_json::to_vec(right).ok()
 }
 
 fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, selected: i32) {
@@ -2214,6 +2267,28 @@ mod parity_tests {
                 .unwrap()
                 .enabled
         );
+    }
+
+    #[test]
+    fn unchanged_setting_value_does_not_make_draft_dirty() {
+        let applied = AppConfig::default();
+        let mut draft = applied.clone();
+        update_field(
+            &mut draft,
+            "timer.mode",
+            "倒计时",
+            false,
+            applied.timer.mode as i32,
+        );
+        assert!(configs_equal(&draft, &applied));
+    }
+
+    #[test]
+    fn action_groups_keep_same_level_commands_together() {
+        let rows = other_rows(&AppConfig::default(), Language(false));
+        let groups = rows.iter().filter(|row| row.kind == 6).count();
+        assert_eq!(groups, 3);
+        assert!(rows.iter().any(|row| row.key.contains("config.import")));
     }
 
     #[test]

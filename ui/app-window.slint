@@ -310,9 +310,9 @@ export component PresentationWindow inherits Window {
 
     title: root.window-title;
     preferred-width: 700px;
-    preferred-height: 620px;
-    min-width: 700px;
-    min-height: 620px;
+    preferred-height: 510px;
+    min-width: 560px;
+    min-height: 460px;
     background: DesktopTheme.canvas;
 
     Rectangle {
@@ -401,17 +401,26 @@ export component PresentationWindow inherits Window {
                     Text { x: parent.width - 208px; y: 4px; width: 80px; height: 22px; text: item.duration; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
                     Text { x: parent.width - 120px; y: 4px; width: 110px; height: 22px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
                     Text { x: parent.width - 240px; y: 50px; width: 230px; height: 20px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? DesktopTheme.success : DesktopTheme.warning; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
-                    TouchArea { enabled: !root.confirm-exit; x: 0px; y: 0px; width: parent.width; height: parent.height; clicked => { root.selected-presentation = index; root.presentation-selected(index); } }
+                    TouchArea {
+                        enabled: !root.confirm-exit;
+                        x: 0px; y: 0px; width: parent.width; height: parent.height;
+                        pointer-event(event) => {
+                            if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                                root.selected-presentation = index;
+                                root.presentation-selected(index);
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    Rectangle { visible: root.current-page == 1 && root.selected-presentation >= 0; x: 24px; y: root.height - 162px; width: parent.width - 48px; height: 74px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
-        Text { x: 12px; y: 7px; width: 46px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.secondary; font-size: 12px; vertical-alignment: center; }
-        LineEdit { enabled: !root.confirm-exit; x: 56px; y: 8px; width: 104px; height: 32px; text <=> root.rule-duration; }
-        Text { x: 176px; y: 7px; width: 46px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.secondary; font-size: 12px; vertical-alignment: center; }
-        ComboBox { enabled: !root.confirm-exit; x: 220px; y: 8px; width: 118px; height: 32px; model: root.timer-modes; current-index <=> root.rule-mode; }
+    Rectangle { visible: root.current-page == 1 && root.selected-presentation >= 0; x: 24px; y: root.height - 162px; width: parent.width - 48px; height: 58px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
+        Text { x: 12px; y: 7px; width: 42px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.secondary; font-size: 12px; vertical-alignment: center; }
+        LineEdit { enabled: !root.confirm-exit; x: 58px; y: 8px; width: 112px; height: 32px; text <=> root.rule-duration; }
+        Text { x: 184px; y: 7px; width: 42px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.secondary; font-size: 12px; vertical-alignment: center; }
+        ComboBox { enabled: !root.confirm-exit; x: 230px; y: 8px; width: 132px; height: 32px; model: root.timer-modes; current-index <=> root.rule-mode; }
         RemoteButton { enabled: !root.confirm-exit; x: parent.width - 98px; y: 8px; width: 86px; height: 32px; text: root.save-rule-text; primary: true; clicked => { root.rule-action(4, root.rule-duration); } }
     }
 
@@ -445,6 +454,7 @@ component FieldRow inherits Rectangle {
     property <length> control-width: self.width - self.control-x - 16px;
     height: item.kind == 0 ? (row-index == 0 ? 40px : 56px)
         : item.kind == 5 ? 44px
+        : item.kind == 6 ? 44px
         : max(item.row-height > 0 ? item.row-height * 1px : 48px, field-label.preferred-height + 20px);
     background: item.kind == 0 ? DesktopTheme.canvas : DesktopTheme.surface;
     border-radius: 8px;
@@ -476,7 +486,7 @@ component FieldRow inherits Rectangle {
         width: root.control-x - 32px;
         height: parent.height - 16px;
         text: item.label;
-        color: DesktopTheme.secondary;
+        color: !item.enabled ? DesktopTheme.muted : DesktopTheme.secondary;
         font-size: 13px;
         vertical-alignment: center;
         wrap: word-wrap;
@@ -501,6 +511,7 @@ component FieldRow inherits Rectangle {
         text: item.value;
         read-only: item.read-only;
         enabled: item.enabled && root.interactive;
+        opacity: item.read-only ? 0.72 : 1;
         edited(value) => { root.edited(row-index, value, false, 0); }
     }
 
@@ -530,6 +541,14 @@ component FieldRow inherits Rectangle {
         text: item.label;
         enabled: root.interactive;
         clicked => { root.action(root.row-index); }
+    }
+
+    if item.kind == 6: HorizontalLayout {
+        x: 16px; y: 5px; width: parent.width - 32px; height: 34px; spacing: 8px;
+        for action[index] in item.options: Button {
+            text: action;
+            clicked => { root.action(root.row-index * 100 + index); }
+        }
     }
 
 }
@@ -598,7 +617,7 @@ export component SettingsWindow inherits Window {
         width: 196px;
         height: parent.height;
         background: DesktopTheme.surface;
-        border-radius: 12px;
+        border-radius: 0px;
         border-width: 1px;
         border-color: DesktopTheme.border;
 
@@ -616,7 +635,7 @@ export component SettingsWindow inherits Window {
             y: 74px + index * 44px;
             width: 172px;
             height: 36px;
-            border-radius: 8px;
+            border-radius: 0px;
             background: root.current-page == index ? DesktopTheme.selected : transparent;
 
             Text {
@@ -723,7 +742,7 @@ export component SettingsWindow inherits Window {
                 }
 
                 if root.current-page == 0 && root.selected-rule >= 0: Rectangle {
-                    height: 132px;
+                    height: 76px;
                     background: DesktopTheme.surface;
                     border-radius: 8px;
                     border-width: 1px;
@@ -734,9 +753,9 @@ export component SettingsWindow inherits Window {
                         text: root.rules[root.selected-rule].duration;
                         edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
                     }
-                    Text { x: 14px; y: 78px; width: 116px; text: root.rule-mode-label; color: DesktopTheme.secondary; vertical-alignment: center; }
+                    Text { x: parent.width / 2 + 14px; y: 20px; width: 116px; text: root.rule-mode-label; color: DesktopTheme.secondary; vertical-alignment: center; }
                     ComboBox { enabled: !root.modal-open;
-                        x: 144px; y: 68px; width: parent.width - 160px; height: 34px;
+                        x: parent.width / 2 + 144px; y: 10px; width: parent.width / 2 - 160px; height: 34px;
                         model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
                         selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
                     }
@@ -751,7 +770,7 @@ export component SettingsWindow inherits Window {
         width: parent.width - 196px;
         height: 58px;
         background: DesktopTheme.surface;
-        border-radius: 12px;
+        border-radius: 0px;
         border-width: 1px;
         border-color: DesktopTheme.border;
 

@@ -339,8 +339,8 @@ pub fn is_visible(window: &slint::Window) -> bool {
 
 pub fn restore_remote_window(window: &slint::Window, placement: &RemoteWindowPlacement) {
     let (width, height) = remote_window_size(placement);
-    // The presentation page includes the rule editor and its full control
-    // group. Keep legacy 510-DIP placements usable without clipping it.
+    // Preserve the saved/default dimensions; the UI's lower minimum keeps the
+    // rule editor usable without forcing every reopen to a larger floor.
     window.set_size(slint::LogicalSize::new(width as f32, height as f32));
     restore_remote_window_position(window, placement);
 }
@@ -371,7 +371,11 @@ pub fn restore_remote_window_position(window: &slint::Window, placement: &Remote
 }
 
 pub fn remote_window_size(placement: &RemoteWindowPlacement) -> (i32, i32) {
-    (placement.width_dip.max(700), placement.height_dip.max(620))
+    // Keep the v0.30.2 default at 700×510 DIP while allowing a user-resized
+    // Remote window to reopen at its actual dimensions. The Slint minimum is
+    // intentionally lower than the preferred size, so resizing never jumps
+    // through a hidden 700×620 floor first.
+    (placement.width_dip.max(560), placement.height_dip.max(460))
 }
 
 pub fn capture_remote_window(window: &slint::Window, placement: &mut RemoteWindowPlacement) {
@@ -401,8 +405,8 @@ pub fn capture_remote_window(window: &slint::Window, placement: &mut RemoteWindo
         ((position.y - work.top) as f64 / available_y as f64).clamp(0.0, 1.0)
     };
     let scale = window.scale_factor().max(0.1);
-    placement.width_dip = ((size.width as f32 / scale).round() as i32).max(700);
-    placement.height_dip = ((size.height as f32 / scale).round() as i32).max(510);
+    placement.width_dip = ((size.width as f32 / scale).round() as i32).max(560);
+    placement.height_dip = ((size.height as f32 / scale).round() as i32).max(460);
     placement.maximized = maximized;
 }
 
@@ -553,6 +557,16 @@ mod tests {
         assert_eq!((restored.left_ratio, restored.top_ratio), (0.25, 0.75));
         assert_eq!((restored.width_dip, restored.height_dip), (760, 540));
         assert!(restored.maximized);
+    }
+
+    #[test]
+    fn remote_window_size_preserves_resized_dimensions_above_minimum() {
+        let placement = RemoteWindowPlacement {
+            width_dip: 600,
+            height_dip: 480,
+            ..RemoteWindowPlacement::default()
+        };
+        assert_eq!(remote_window_size(&placement), (600, 480));
     }
 }
 
