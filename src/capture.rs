@@ -94,9 +94,6 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
     control.set_recommended_url("http://192.168.1.100:4080/?token=••••••".into());
     control.set_address_list_text("192.168.1.100\n192.168.1.101".into());
     control.set_firewall_text("如果手机无法连接，请在 Windows 防火墙中允许 TCP 端口 4080。FlyPPTTimer 只提供修复命令，不会主动提权修改防火墙。\nnetsh advfirewall firewall add rule name=\"FlyPPTTimer Remote\" dir=in action=allow protocol=TCP localport=4080".into());
-    control.set_status_text("演示软件已运行".into());
-    control.set_document_text("演示文稿.pptx".into());
-    control.set_slide_text("3/20".into());
     let items = slint::VecModel::<crate::app::PresentationItem>::default();
     items.push(crate::app::PresentationItem {
         name: "演示文稿.pptx".into(),

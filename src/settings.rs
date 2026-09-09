@@ -233,10 +233,6 @@ fn localize(lang: Language, value: &str) -> &str {
     }
 }
 
-pub(crate) fn ui_text(value: &str, english: bool) -> &str {
-    localize(Language(english), value)
-}
-
 #[derive(Clone)]
 struct Row {
     key: String,
@@ -679,19 +675,33 @@ pub fn create(
         let addresses_for_rule = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
         let selected_rules = selected_rules.clone();
-        window.on_rule_selected(move |index, additive| {
+        window.on_rule_selected(move |index, additive, range| {
             let index_usize = index as usize;
             let mut selected = selected_rules.borrow_mut();
-            if !additive {
+            let anchor = (*selected_rule.borrow()).max(0) as usize;
+            if range && !selected.is_empty() {
+                let start = anchor.min(index_usize);
+                let end = anchor.max(index_usize);
+                if !additive {
+                    selected.clear();
+                }
+                for value in start..=end {
+                    selected.insert(value);
+                }
+            } else if !additive {
                 selected.clear();
-            }
-            if !selected.insert(index_usize) {
+                selected.insert(index_usize);
+            } else if !selected.insert(index_usize) {
                 selected.remove(&index_usize);
             }
-            *selected_rule.borrow_mut() = selected
-                .iter()
-                .next_back()
-                .map_or(-1, |value| *value as i32);
+            *selected_rule.borrow_mut() = if selected.contains(&index_usize) {
+                index
+            } else {
+                selected
+                    .iter()
+                    .next_back()
+                    .map_or(-1, |value| *value as i32)
+            };
             drop(selected);
             if let Some(w) = weak.upgrade() {
                 refresh(

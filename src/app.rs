@@ -1104,75 +1104,28 @@ fn create_presentation_window(
 
 fn update_presentation_window(
     window: &PresentationWindow,
-    state: &crate::presentation::PresentationState,
+    _state: &crate::presentation::PresentationState,
     config: &AppConfig,
 ) {
-    let english = crate::config::ui_is_english(&config.language);
-    let status = if !state.operation.message.is_empty() {
-        state.operation.message.clone()
-    } else if !state.error.is_empty() {
-        state.error.clone()
-    } else if !state.message.is_empty() {
-        state.message.clone()
-    } else if state.slide_show_running {
-        if english {
-            "Presenting"
-        } else {
-            "正在放映"
-        }
-        .to_owned()
-    } else if state.running {
-        if english {
-            "Presentation software is running"
-        } else {
-            "演示软件已运行"
-        }
-        .to_owned()
-    } else {
-        if english { "Not started" } else { "未启动" }.to_owned()
-    };
-    window.set_status_text(settings::ui_text(&status, english).into());
-    window.set_document_text(state.presentation_name.clone().into());
-    window.set_slide_text(
-        if state.total_slides > 0 {
-            format!("{}/{}", state.current_slide, state.total_slides)
-        } else {
-            String::new()
-        }
-        .into(),
-    );
-    let mut seen = std::collections::HashSet::new();
-    let mut items = Vec::new();
-    for presentation in &state.presentations {
-        seen.insert(presentation.path.to_lowercase());
-        items.push(PresentationItem {
-            name: presentation.name.clone().into(),
-            path: presentation.path.clone().into(),
-            duration: String::new().into(),
-            mode: 0,
-            enabled: true,
-            is_rule: false,
-        });
-    }
-    for rule in config
+    // The PC remote page mirrors the settings file-rule list. Runtime
+    // presentation state is intentionally kept out of this editor so that
+    // selecting a row always edits the same persisted rule.
+    let items = config
         .rules
         .iter()
         .filter(|rule| !rule.file_path.trim().is_empty())
-    {
-        if seen.insert(rule.file_path.to_lowercase()) {
-            items.push(PresentationItem {
-                name: rule.file_name.clone().into(),
-                path: rule.file_path.clone().into(),
-                duration: rule.duration.clone().into(),
-                mode: match rule.mode {
-                    TimerMode::Countdown => 0,
-                    TimerMode::CountUp => 1,
-                },
-                enabled: rule.enabled,
-                is_rule: true,
-            });
-        }
-    }
+        .map(|rule| PresentationItem {
+            name: rule.file_name.clone().into(),
+            path: rule.file_path.clone().into(),
+            duration: rule.duration.clone().into(),
+            mode: match rule.mode {
+                TimerMode::Countdown => 0,
+                TimerMode::CountUp => 1,
+            },
+            enabled: rule.enabled,
+            is_rule: true,
+        })
+        .collect::<Vec<_>>();
     window.set_presentations(ModelRc::new(VecModel::from(items)));
 }
 
@@ -2220,6 +2173,7 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
                     // Mark the size explicit in Slint/Winit before revealing
                     // the window so its preferred size cannot replace it.
                     window.window().set_size(physical_size);
+                    window::install_settings_dpi_stabilizer(window.window());
                     window::foreground(window.window());
                     window.window().request_redraw();
                 }
@@ -2255,6 +2209,7 @@ fn show_presentation_ready(
             let physical_size =
                 window::logical_size_to_physical(window.window(), logical_width, logical_height);
             window.window().set_size(physical_size);
+            window::install_settings_dpi_stabilizer(window.window());
             window::foreground(window.window());
             window.window().request_redraw();
         }

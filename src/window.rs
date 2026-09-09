@@ -62,6 +62,92 @@ pub fn foreground(window: &slint::Window) {
     }
 }
 
+/// Keep decorated Slint windows at the same logical size when Windows sends
+/// `WM_DPICHANGED` while the pointer crosses a monitor boundary. Winit handles
+/// the message first; this only corrects a measurable mismatch and therefore
+/// does not create a second resize on the normal path.
+pub fn install_settings_dpi_stabilizer(window: &slint::Window) {
+    if let Some(hwnd) = hwnd(window) {
+        unsafe {
+            windows_sys::Win32::UI::Shell::SetWindowSubclass(
+                hwnd,
+                Some(settings_dpi_proc),
+                2,
+                GetDpiForWindow(hwnd).max(96) as usize,
+            );
+        }
+    }
+}
+
+unsafe extern "system" fn settings_dpi_proc(
+    hwnd: HWND,
+    message: u32,
+    wparam: usize,
+    lparam: isize,
+    id: usize,
+    previous_dpi: usize,
+) -> isize {
+    use windows_sys::Win32::UI::{
+        Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
+        WindowsAndMessaging::{IsZoomed, WM_DPICHANGED, WM_NCDESTROY},
+    };
+
+    if message == WM_DPICHANGED {
+        let old_dpi = (previous_dpi as u32).max(96);
+        let new_dpi = ((wparam as u32) & 0xffff).max(96);
+        let mut old_client = RECT::default();
+        let old_client_ok = unsafe { GetClientRect(hwnd, &mut old_client) } != 0;
+        let old_width = (old_client.right - old_client.left).max(1) as u64;
+        let old_height = (old_client.bottom - old_client.top).max(1) as u64;
+        unsafe { SetWindowSubclass(hwnd, Some(settings_dpi_proc), id, new_dpi as usize) };
+
+        // Winit still needs every DPI message to update Slint's scale factor.
+        let result = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
+        if old_dpi == new_dpi || unsafe { IsZoomed(hwnd) } != 0 || !old_client_ok {
+            return result;
+        }
+
+        let expected_width = ((old_width * u64::from(new_dpi) + u64::from(old_dpi / 2))
+            / u64::from(old_dpi))
+        .clamp(1, i32::MAX as u64) as i32;
+        let expected_height = ((old_height * u64::from(new_dpi) + u64::from(old_dpi / 2))
+            / u64::from(old_dpi))
+        .clamp(1, i32::MAX as u64) as i32;
+        let mut outer = RECT::default();
+        let mut client = RECT::default();
+        if unsafe { GetWindowRect(hwnd, &mut outer) } == 0
+            || unsafe { GetClientRect(hwnd, &mut client) } == 0
+        {
+            return result;
+        }
+
+        let actual_width = client.right - client.left;
+        let actual_height = client.bottom - client.top;
+        if actual_width == expected_width && actual_height == expected_height {
+            return result;
+        }
+
+        let frame_width = (outer.right - outer.left - actual_width).max(0);
+        let frame_height = (outer.bottom - outer.top - actual_height).max(0);
+        unsafe {
+            SetWindowPos(
+                hwnd,
+                std::ptr::null_mut(),
+                outer.left,
+                outer.top,
+                expected_width + frame_width,
+                expected_height + frame_height,
+                SWP_NOACTIVATE | SWP_NOZORDER,
+            );
+        }
+        return result;
+    }
+    if message == WM_NCDESTROY {
+        unsafe { RemoveWindowSubclass(hwnd, Some(settings_dpi_proc), id) };
+    }
+    unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+}
+
 pub fn handle_timer_frame_paint(window: &slint::Window) {
     if let Some(hwnd) = hwnd(window) {
         unsafe {
