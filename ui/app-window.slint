@@ -165,9 +165,9 @@ export component TimeUpWindow inherits Window {
 
 // Desktop management windows only. Timer colors remain driven by user configuration.
 global DesktopTheme {
-    out property <color> canvas: #f6f8fb;
+    out property <color> canvas: #eef2f7;
     out property <color> surface: #ffffff;
-    out property <color> subtle: #f1f5f9;
+    out property <color> subtle: #f3f6fa;
     out property <color> text: #1e293b;
     out property <color> secondary: #475569;
     out property <color> muted: #64748b;
@@ -195,7 +195,7 @@ component RemoteButton inherits Rectangle {
     callback clicked();
     forward-focus: keyboard;
 
-    border-radius: 7px;
+    border-radius: 8px;
     border-width: 1px;
     border-color: !root.enabled ? DesktopTheme.border : root.primary ? DesktopTheme.accent : root.danger ? DesktopTheme.danger : DesktopTheme.border;
     background: !root.enabled ? DesktopTheme.subtle
@@ -317,11 +317,11 @@ export component PresentationWindow inherits Window {
 
     Rectangle {
         x: 24px; y: 16px; width: parent.width - 48px; height: 40px;
-        background: DesktopTheme.subtle; border-radius: 9px;
+        background: DesktopTheme.subtle; border-radius: 8px;
         Rectangle {
             x: root.current-page == 0 ? 4px : parent.width / 2;
             y: 4px; width: parent.width / 2 - 4px; height: 32px;
-            background: DesktopTheme.surface; border-radius: 7px;
+            background: DesktopTheme.surface; border-radius: 8px;
         }
         Text { x: 0; width: parent.width / 2; height: parent.height; text: root.connection-page-text; color: DesktopTheme.text; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
         Text { x: parent.width / 2; width: parent.width / 2; height: parent.height; text: root.presentation-page-text; color: DesktopTheme.text; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
@@ -392,14 +392,16 @@ export component PresentationWindow inherits Window {
                 width: parent.width;
                 spacing: 4px;
                 for item[index] in root.presentations: Rectangle {
-                    height: 72px; border-radius: 6px;
+                    height: 72px; border-radius: 8px;
                     background: root.selected-presentation == index ? DesktopTheme.selected : transparent;
+                    border-width: root.selected-presentation == index ? 1px : 0px;
+                    border-color: DesktopTheme.accent;
                     Text { x: 10px; y: 4px; width: parent.width - 228px; height: 22px; text: item.name; color: DesktopTheme.text; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
                     Text { x: 10px; y: 28px; width: parent.width - 20px; height: 20px; text: item.path; color: DesktopTheme.muted; font-size: 12px; vertical-alignment: center; overflow: elide; }
                     Text { x: parent.width - 208px; y: 4px; width: 80px; height: 22px; text: item.duration; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
                     Text { x: parent.width - 120px; y: 4px; width: 110px; height: 22px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
                     Text { x: parent.width - 240px; y: 50px; width: 230px; height: 20px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? DesktopTheme.success : DesktopTheme.warning; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
-                    TouchArea { enabled: !root.confirm-exit; clicked => { root.selected-presentation = index; root.presentation-selected(index); } }
+                    TouchArea { enabled: !root.confirm-exit; x: 0px; y: 0px; width: parent.width; height: parent.height; clicked => { root.selected-presentation = index; root.presentation-selected(index); } }
                 }
             }
         }
@@ -445,6 +447,9 @@ component FieldRow inherits Rectangle {
         : item.kind == 5 ? 44px
         : max(item.row-height > 0 ? item.row-height * 1px : 48px, field-label.preferred-height + 20px);
     background: item.kind == 0 ? DesktopTheme.canvas : DesktopTheme.surface;
+    border-radius: 8px;
+    border-width: item.kind == 0 ? 0px : 1px;
+    border-color: DesktopTheme.border;
 
     if item.kind != 0: Rectangle {
         x: 16px; y: parent.height - 1px;
@@ -593,6 +598,9 @@ export component SettingsWindow inherits Window {
         width: 196px;
         height: parent.height;
         background: DesktopTheme.surface;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: DesktopTheme.border;
 
         Text {
             x: 24px;
@@ -672,7 +680,7 @@ export component SettingsWindow inherits Window {
                         spacing: 4px;
                         for rule[index] in root.rules: Rectangle {
                             height: 52px;
-                            border-radius: 6px;
+                            border-radius: 8px;
                             background: rule.selected ? DesktopTheme.selected : transparent;
                             CheckBox { enabled: !root.modal-open;
                                 x: 8px; y: 12px; width: 24px;
@@ -743,6 +751,7 @@ export component SettingsWindow inherits Window {
         width: parent.width - 196px;
         height: 58px;
         background: DesktopTheme.surface;
+        border-radius: 12px;
         border-width: 1px;
         border-color: DesktopTheme.border;
 

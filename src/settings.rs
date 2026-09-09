@@ -573,7 +573,7 @@ pub fn create(
                 if row.kind == 5 {
                     if let Some(w) = weak.upgrade() {
                         w.set_dialog_title(localize(ui_language, &row.label).into());
-                        w.set_dialog_message(row.value.clone().into());
+                        w.set_dialog_message(format_dialog_message(&row.value).into());
                         w.set_dialog_restart(false);
                         w.set_dialog_open(true);
                     }
@@ -1055,9 +1055,38 @@ pub fn create(
 
 fn show_restart_dialog(window: &SettingsWindow, lang: Language) {
     window.set_dialog_title(t(lang, "需要重启", "Restart required").into());
-    window.set_dialog_message(t(lang, "语言更改需要重启生效。点击确定将保存当前设置并自动重启。", "The language change requires a restart. OK saves the current settings and restarts the app.").into());
+    window.set_dialog_message(
+        format_dialog_message(t(
+            lang,
+            "语言更改需要重启生效。点击确定将保存当前设置并自动重启。",
+            "The language change requires a restart. OK saves the current settings and restarts the app.",
+        ))
+        .into(),
+    );
     window.set_dialog_restart(true);
     window.set_dialog_open(true);
+}
+
+fn format_dialog_message(message: &str) -> String {
+    let normalized = message.replace("\r\n", "\n");
+    normalized
+        .split("\n\n")
+        .map(|paragraph| {
+            paragraph
+                .lines()
+                .enumerate()
+                .map(|(line, text)| {
+                    if line == 0 {
+                        format!("    {}", text.trim_start())
+                    } else {
+                        text.to_owned()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 type ApplyCallback = Rc<dyn Fn(&slint::Weak<SettingsWindow>, bool)>;
@@ -1509,13 +1538,13 @@ fn remote_rows(
 ) -> Vec<Row> {
     let note = t(
         lang,
-        "优先使用已保存的固定端口。只有端口不可用时才自动切换并保存新端口，同时提示地址变化。手动修改端口后重启服务生效。",
-        "The saved port is reused. If unavailable, a free port is selected and saved, and the address change is reported. Restart the service after editing the port.",
+        "优先使用已保存的固定端口。\n\n只有端口不可用时才自动切换并保存新端口，同时提示地址变化。\n\n手动修改端口后重启服务生效。",
+        "The saved port is reused.\n\nIf unavailable, a free port is selected and saved, and the address change is reported.\n\nRestart the service after editing the port.",
     );
     let firewall = t(
         lang,
-        "手机无法访问时，常见原因是 Windows 防火墙、IP 选错、端口被占用、手机和电脑不在同一网络。不要关闭防火墙；只为当前程序和当前端口添加入站规则。",
-        "If a phone cannot connect, common causes include Windows Firewall, a wrong IP address, an occupied port, or devices being on different networks. Do not disable the firewall; add an inbound rule only for this app and port.",
+        "手机无法访问时，常见原因是 Windows 防火墙、IP 选错、端口被占用、手机和电脑不在同一网络。\n\n不要关闭防火墙；只为当前程序和当前端口添加入站规则。",
+        "If a phone cannot connect, common causes include Windows Firewall, a wrong IP address, an occupied port, or devices being on different networks.\n\nDo not disable the firewall; add an inbound rule only for this app and port.",
     );
     let info = remote.info();
     let status = if info.status.is_empty() {
@@ -1621,8 +1650,8 @@ fn other_rows(c: &AppConfig, lang: Language) -> Vec<Row> {
             "下次启动生效",
             t(
                 lang,
-                "更改界面语言后，请退出并重新启动 FlyPPTTimer。安装版和便携版均会记住此选项。",
-                "After changing the display language, exit and restart FlyPPTTimer. Both installed and portable editions remember this setting.",
+                "更改界面语言后，请退出并重新启动 FlyPPTTimer。\n\n安装版和便携版均会记住此选项。",
+                "After changing the display language, exit and restart FlyPPTTimer.\n\nBoth installed and portable editions remember this setting.",
             ),
         ),
         Row::section("软件更新"),
@@ -1645,8 +1674,8 @@ fn other_rows(c: &AppConfig, lang: Language) -> Vec<Row> {
             "项目介绍",
             t(
                 lang,
-                "FlyPPTTimer 是一款面向演讲、教学和会议场景的 Windows 演示计时工具，提供倒计时、正计时、多显示器悬浮显示、演示文稿规则，以及手机或浏览器局域网远程控制功能。软件配置、规则和日志默认保存在本机；远程控制仅在本地网络中运行，不依赖云端账户，也不会主动上传演示文稿内容。",
-                "FlyPPTTimer is a Windows presentation timer for talks, teaching, and meetings. It provides countdown and count-up modes, multi-display overlays, presentation-specific rules, and LAN remote control from a phone or browser. Configuration, rules, and logs stay on this computer. Remote control runs only on the local network, requires no cloud account, and never uploads presentation content.",
+                "FlyPPTTimer 是一款面向演讲、教学和会议场景的 Windows 演示计时工具，提供倒计时、正计时、多显示器悬浮显示、演示文稿规则，以及手机或浏览器局域网远程控制功能。\n\n软件配置、规则和日志默认保存在本机；远程控制仅在本地网络中运行，不依赖云端账户，也不会主动上传演示文稿内容。",
+                "FlyPPTTimer is a Windows presentation timer for talks, teaching, and meetings. It provides countdown and count-up modes, multi-display overlays, presentation-specific rules, and LAN remote control from a phone or browser.\n\nConfiguration, rules, and logs stay on this computer. Remote control runs only on the local network, requires no cloud account, and never uploads presentation content.",
             ),
         )
         .tall(190),
@@ -1655,8 +1684,8 @@ fn other_rows(c: &AppConfig, lang: Language) -> Vec<Row> {
             "作者的话",
             t(
                 lang,
-                "FlyPPTTimer 由曹虎男发起并从零开发。作者毕业于南京大学医学院护理专业，目前就职于江苏省人民医院宿迁医院。在工作实践中发现了演讲计时、演示控制和台下远程调整的实际需求，因此将这个想法逐步实现为本项目。希望它能让大家的演讲、教学和会议更加从容，也欢迎有兴趣的朋友参与测试、提出建议或共同开发。祝大家使用愉快！",
-                "FlyPPTTimer was created and built from scratch by Hunan Cao, a nursing graduate of Nanjing University Medical School who currently works at Suqian Hospital of Jiangsu Province Hospital. Practical needs around talk timing, presentation control, and off-stage adjustments inspired the project. Contributions, testing, and suggestions are welcome.",
+                "FlyPPTTimer 由曹虎男发起并从零开发。作者毕业于南京大学医学院护理专业，目前就职于江苏省人民医院宿迁医院。\n\n在工作实践中发现了演讲计时、演示控制和台下远程调整的实际需求，因此将这个想法逐步实现为本项目。\n\n希望它能让大家的演讲、教学和会议更加从容，也欢迎有兴趣的朋友参与测试、提出建议或共同开发。祝大家使用愉快！",
+                "FlyPPTTimer was created and built from scratch by Hunan Cao, a nursing graduate of Nanjing University Medical School who currently works at Suqian Hospital of Jiangsu Province Hospital.\n\nPractical needs around talk timing, presentation control, and off-stage adjustments inspired the project.\n\nContributions, testing, and suggestions are welcome.",
             ),
         )
         .tall(210),

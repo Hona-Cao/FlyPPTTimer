@@ -538,6 +538,28 @@ fn handle_desktop_event(
             display_rebuild.set(true);
         }
         DesktopEvent::OpenSettings => {
+            let existing_visible = settings_window
+                .borrow()
+                .as_ref()
+                .is_some_and(|settings| window::is_visible(settings.window()));
+            if existing_visible {
+                if let Some(settings) = settings_window.borrow().as_ref()
+                    && let Err(error) = show_settings_ready(settings)
+                {
+                    eprintln!("failed to show settings: {error}");
+                }
+                return;
+            }
+            // A hidden settings adapter can retain a stale native surface after
+            // repeated close/reopen cycles. Recreate only a clean, non-dirty
+            // hidden instance so an in-progress edit is never discarded.
+            let can_recreate = settings_window
+                .borrow()
+                .as_ref()
+                .is_some_and(|settings| !settings.get_dirty());
+            if can_recreate {
+                settings_window.borrow_mut().take();
+            }
             if let Some(settings) = settings_window.borrow().as_ref() {
                 if let Err(error) = show_settings_ready(settings) {
                     eprintln!("failed to show settings: {error}");
@@ -2149,7 +2171,12 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
     // The first frame is created hidden, then revealed on a later turn so the
     // settings window cannot flash or re-enter the polling timer.
     if window::is_visible(window.window()) {
+        if let Err(error) = window.show() {
+            eprintln!("failed to refresh settings: {error}");
+            return Ok(());
+        }
         window::foreground(window.window());
+        window.window().request_redraw();
         return Ok(());
     }
     // Keep the actual client pixels when reopening a resized window.  Using
@@ -2174,6 +2201,10 @@ fn show_settings_ready(window: &SettingsWindow) -> Result<(), slint::PlatformErr
                     // the window so its preferred size cannot replace it.
                     window.window().set_size(physical_size);
                     window::install_settings_dpi_stabilizer(window.window());
+                    if let Err(error) = window.show() {
+                        eprintln!("failed to reveal settings: {error}");
+                        return;
+                    }
                     window::foreground(window.window());
                     window.window().request_redraw();
                 }
@@ -2190,7 +2221,12 @@ fn show_presentation_ready(
     placement: crate::config::RemoteWindowPlacement,
 ) -> Result<(), slint::PlatformError> {
     if window::is_visible(window.window()) {
+        if let Err(error) = window.show() {
+            eprintln!("failed to refresh remote control: {error}");
+            return Ok(());
+        }
         window::foreground(window.window());
+        window.window().request_redraw();
         return Ok(());
     }
     let weak = window.as_weak();
@@ -2210,6 +2246,10 @@ fn show_presentation_ready(
                 window::logical_size_to_physical(window.window(), logical_width, logical_height);
             window.window().set_size(physical_size);
             window::install_settings_dpi_stabilizer(window.window());
+            if let Err(error) = window.show() {
+                eprintln!("failed to reveal remote control: {error}");
+                return;
+            }
             window::foreground(window.window());
             window.window().request_redraw();
         }
