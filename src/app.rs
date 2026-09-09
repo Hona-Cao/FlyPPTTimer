@@ -980,17 +980,16 @@ fn create_presentation_window(
                 let default_duration = config.timer.default_duration.clone();
                 let default_mode = config.timer.mode;
                 for path in paths {
-                    let full = path
-                        .canonicalize()
-                        .unwrap_or(path)
-                        .to_string_lossy()
-                        .into_owned();
-                    let key = full.to_lowercase();
-                    if config
-                        .rules
-                        .iter()
-                        .any(|rule| rule.file_path.to_lowercase() == key)
-                    {
+                    if !settings::is_supported_presentation_path(&path) {
+                        continue;
+                    }
+                    let full_path = path.canonicalize().unwrap_or(path);
+                    let identity = settings::presentation_identity(&full_path);
+                    let full = full_path.to_string_lossy().into_owned();
+                    if config.rules.iter().any(|rule| {
+                        settings::presentation_identity(std::path::Path::new(&rule.file_path))
+                            == identity
+                    }) {
                         continue;
                     }
                     config.rules.push(crate::config::FileRule {

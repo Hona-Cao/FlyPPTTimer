@@ -1,4 +1,10 @@
-use std::{cell::RefCell, collections::BTreeSet, fs, path::PathBuf, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::BTreeSet,
+    fs,
+    path::{Path, PathBuf},
+    rc::Rc,
+};
 
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 
@@ -805,15 +811,19 @@ pub fn create(
                         drop(cfg);
                         let mut added = Vec::new();
                         for path in paths {
-                            let full = path.to_string_lossy().to_string();
+                            if !is_supported_presentation_path(&path) {
+                                continue;
+                            }
+                            let identity = presentation_identity(&path);
                             if draft
                                 .borrow()
                                 .rules
                                 .iter()
-                                .any(|r| r.file_path.eq_ignore_ascii_case(&full))
+                                .any(|r| presentation_identity(Path::new(&r.file_path)) == identity)
                             {
                                 continue;
                             }
+                            let full = path.to_string_lossy().to_string();
                             draft.borrow_mut().rules.push(FileRule {
                                 file_name: path
                                     .file_name()
@@ -2050,8 +2060,7 @@ pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
         GetOpenFileNameW, OFN_ALLOWMULTISELECT, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_HIDEREADONLY,
         OPENFILENAMEW,
     };
-    let mut filter =
-        wide("演示文稿 (*.ppt;*.pptx;*.pptm)|*.ppt;*.pptx;*.pptm|所有文件 (*.*)|*.*\0");
+    let mut filter = wide("演示文稿和 PDF (*.ppt;*.pptx;*.pptm;*.pdf)|*.ppt;*.pptx;*.pptm;*.pdf\0");
     let mut file = [0u16; 32768];
     let mut ofn = unsafe { std::mem::zeroed::<OPENFILENAMEW>() };
     ofn.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
@@ -2074,14 +2083,36 @@ pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
         }
     }
     if parts.len() <= 1 {
-        return parts.into_iter().map(PathBuf::from).collect();
+        return parts
+            .into_iter()
+            .map(PathBuf::from)
+            .filter(|path| is_supported_presentation_path(path))
+            .collect();
     }
     let directory = PathBuf::from(&parts[0]);
     parts
         .into_iter()
         .skip(1)
         .map(|name| directory.join(name))
+        .filter(|path| is_supported_presentation_path(path))
         .collect()
+}
+
+pub(crate) fn is_supported_presentation_path(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.to_ascii_lowercase())
+            .as_deref(),
+        Some("ppt" | "pptx" | "pptm" | "pdf")
+    )
+}
+
+pub(crate) fn presentation_identity(path: &Path) -> String {
+    path.canonicalize()
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .to_ascii_lowercase()
 }
 fn import_sound(
     source: &std::path::Path,
@@ -2315,5 +2346,15 @@ mod parity_tests {
             std::io::ErrorKind::InvalidInput
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn presentation_file_filter_accepts_slides_and_pdf_only() {
+        for path in ["deck.ppt", "deck.PPTX", "deck.pptm", "handout.pdf"] {
+            assert!(is_supported_presentation_path(Path::new(path)));
+        }
+        for path in ["notes.docx", "image.png", "audio.mp3", "deck"] {
+            assert!(!is_supported_presentation_path(Path::new(path)));
+        }
     }
 }
