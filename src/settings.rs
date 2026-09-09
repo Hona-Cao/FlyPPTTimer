@@ -581,8 +581,11 @@ pub fn create(
         let action_config_path = config_path.clone();
         let applied_for_action = applied.clone();
         window.on_field_action(move |index| {
-            let row_index = (index / 100) as usize;
-            let action_index = (index % 100) as usize;
+            let (row_index, action_index) = if index >= 100 {
+                ((index / 100) as usize, (index % 100) as usize)
+            } else {
+                (index as usize, 0)
+            };
             let rows = rows_for(
                 &draft.borrow(),
                 ui_language,
