@@ -909,6 +909,48 @@ fn create_presentation_window(
     window.set_rule_enabled_text(if english { "Enabled" } else { "启用规则" }.into());
     window.set_rule_disabled_text(if english { "Disabled" } else { "禁用规则" }.into());
     window.set_save_rule_text(if english { "Save" } else { "保存" }.into());
+    window.set_batch_rule_text(
+        if english {
+            "Batch edit"
+        } else {
+            "批量设置"
+        }
+        .into(),
+    );
+    window.set_batch_cancel_text(if english { "Cancel" } else { "取消" }.into());
+    window.set_batch_confirm_text(if english { "Apply" } else { "应用" }.into());
+    window.set_batch_title(
+        if english {
+            "Batch edit"
+        } else {
+            "批量设置"
+        }
+        .into(),
+    );
+    window.set_batch_count_text(
+        if english {
+            "Selected 0 rules"
+        } else {
+            "已选择 0 条规则"
+        }
+        .into(),
+    );
+    window.set_batch_duration_text(
+        if english {
+            "Set duration"
+        } else {
+            "统一时长"
+        }
+        .into(),
+    );
+    window.set_batch_mode_text(
+        if english {
+            "Set timer mode"
+        } else {
+            "统一计时方式"
+        }
+        .into(),
+    );
     window.set_timer_modes(ModelRc::new(VecModel::from(vec![
         SharedString::from(if english { "Countdown" } else { "倒计时" }),
         SharedString::from(if english { "Count up" } else { "正计时" }),
@@ -1100,8 +1142,75 @@ fn create_presentation_window(
                 save_config(&config, &config_path_for_rules);
                 update_presentation_window(&window, &service_for_rules.state(), &config);
             }
+            5 => {
+                let selected = presentation_selection(&window);
+                if selected.is_empty() {
+                    return;
+                }
+                if let Some(item) = selected
+                    .iter()
+                    .filter_map(|index| window.get_presentations().row_data(*index))
+                    .find(|item| item.is_rule)
+                {
+                    window.set_batch_duration(item.duration);
+                    window.set_batch_mode(item.mode);
+                }
+                window.set_batch_count_text(
+                    if config_for_rules.borrow().language == "en" {
+                        format!("Selected {} rules", selected.len())
+                    } else {
+                        format!("已选择 {} 条规则", selected.len())
+                    }
+                    .into(),
+                );
+                window.set_batch_open(true);
+            }
             _ => {}
         }
+    });
+    let weak = window.as_weak();
+    let config_for_batch = Rc::clone(config);
+    let service_for_batch = Rc::clone(service);
+    let config_path_for_batch = config_path.to_path_buf();
+    window.on_batch_confirm(move |duration, mode| {
+        if !crate::config::is_valid_duration(duration.as_str()) {
+            return;
+        }
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let selected = presentation_selection(&window);
+        if selected.is_empty() {
+            window.set_batch_open(false);
+            return;
+        }
+        let paths = selected
+            .iter()
+            .filter_map(|index| window.get_presentations().row_data(*index))
+            .filter(|item| item.is_rule)
+            .map(|item| item.path.to_lowercase())
+            .collect::<BTreeSet<_>>();
+        let mut config = config_for_batch.borrow_mut();
+        for rule in config
+            .rules
+            .iter_mut()
+            .filter(|rule| paths.contains(&rule.file_path.to_lowercase()))
+        {
+            rule.duration = duration.to_string();
+            rule.mode = if mode == 0 {
+                TimerMode::Countdown
+            } else {
+                TimerMode::CountUp
+            };
+        }
+        save_config(&config, &config_path_for_batch);
+        update_presentation_window_with_selection(
+            &window,
+            &service_for_batch.state(),
+            &config,
+            &selected,
+        );
+        window.set_batch_open(false);
     });
     let weak = window.as_weak();
     let service = Rc::clone(service);
