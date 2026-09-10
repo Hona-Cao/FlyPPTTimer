@@ -1,28 +1,26 @@
-# RC-1 放映窗口目标文稿匹配
+# RC-1.1 多放映状态误判收口
 
-日期：2026-09-10
+日期：2026-09-11
 
 Review 分支：`codex/v1-06-manual-test`
 
-起始 HEAD：`40d6e81 docs: update handoff for RC1 review stage`
+审核基点：`988358cef27c93b696fb65915fc7e86ecd7c0fe8`
 
 ## 本轮修改
 
-- `read_application_state()` 与所有放映视图命令共用目标窗口选择器：优先读取 `ActivePresentation.FullName`，遍历 `SlideShowWindows` 并按现有 `same_path` 比较；无目标且只有一个窗口时安全回退，多窗口无法匹配时返回明确错误，删除了任意 `Item(1)` 选择。
-- 保留 `start_show` 的重复启动忽略、打开/归属/关闭/强制退出逻辑，以及 `APPROVED_PRODUCT_DEVIATIONS.md` 中 Remote 端口和 PC Remote 规则页行为。
-- 增加三个纯逻辑测试，覆盖 `[B, A]` 目标匹配、单窗口空目标回退、多窗口无匹配报错。
-- 增加 [RC_MANUAL_TEST.md](RC_MANUAL_TEST.md)，列出 10 个真实 Windows 验收场景。
+- `read_application_state()` 先记录 `SlideShowWindows.Count > 0`，再解析目标窗口；多窗口目标不明确时返回 `slide_show_running=true`、清晰错误和空的当前文稿/页码，不再让状态层把放映误报为已停止。
+- `with_show_view()` 继续在目标不明确时直接返回错误，因此 Previous/Next/Goto/黑屏/白屏/恢复/结束命令不会发送到任意窗口。
+- 增加纯逻辑状态回归，覆盖 0 窗口、唯一窗口回退、乱序目标匹配、多窗口歧义保持运行事实；未修改 Timer、Remote、UI、DPI、配置、发布脚本或 Office ownership/退出逻辑。
 
 ## 验证
 
-- `cargo fmt --all -- --check` 通过；`cargo clippy --locked --all-targets --all-features -- -D warnings` 通过；`cargo test --locked` 为 **51 passed、0 failed、1 ignored**（既有 Office COM 手测）。
-- `cargo build --locked --release` 与 `scripts/build-release.ps1` 均通过；当前版本 `1.13.0`。安装器资源为 ProductVersion `1.13.0` / FileVersion `1.13.0.0`；Portable ZIP 与安装器位于 `artifacts/release/v1.13.0/`。
-- 使用当前 Release 执行可靠的 headless capture：截图输出在 `docs/v1/rc-review/`，共 5 张 PNG（`timer-window.png`、`remote-connection.png`、`remote-presentation.png`、`settings-timer.png`、`settings-remote.png`），未包含私人桌面内容。
-- RC 静态审阅未发现新的 P0/P1；PowerPoint/WPS 真机、多窗口放映、手机局域网、混合 DPI、声音/TTS 与安装升级仍由 [RC_MANUAL_TEST.md](RC_MANUAL_TEST.md) 手工完成。
+- `cargo fmt --all -- --check` 通过；`cargo clippy --locked --all-targets --all-features -- -D warnings` 通过；`cargo test --locked` 为 **55 passed、0 failed、1 ignored**（既有 Office COM 手测）。
+- `cargo build --locked --release` 通过，程序版本仍为 `1.13.0`；按任务要求未重复 Inno Setup、未重新生成截图。
+- RC-1.1 定向静态审阅未发现新的 P0/P1；真实 PowerPoint/WPS 多窗口、手机局域网、混合 DPI、声音/TTS 与安装升级仍由 [RC_MANUAL_TEST.md](RC_MANUAL_TEST.md) 手工完成。
 
 ## 待用户手测
 
-本轮完成源码、单元测试、Release 构建、Portable/Installer 打包和可靠截图；未执行真实安装器，不创建 Release/Tag。请按 [RC_MANUAL_TEST.md](RC_MANUAL_TEST.md) 在目标 Windows 机器上完成 PowerPoint/WPS 多窗口、手机连接、双屏 DPI、声音/TTS 及安装升级验收。
+本轮仅收口多放映状态误判，完成定向单元测试和 Release 构建。请按 [RC_MANUAL_TEST.md](RC_MANUAL_TEST.md) 在目标 Windows 机器上完成最终人工验收；不创建 Release/Tag。
 
 ---
 
