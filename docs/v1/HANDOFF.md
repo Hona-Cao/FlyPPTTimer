@@ -2,113 +2,157 @@
 
 ## 产品目标
 
-V1 是对 FlyPPTTimer v0.30.2 的 Rust + Slint 重构。目标不是继续扩张功能，而是把当前软件做稳定、做漂亮、做小、做快。
+V1 是对 FlyPPTTimer v0.30.2 的 Rust + Slint 重构。当前已经进入候选版冻结阶段，不再扩展功能。
 
 用户最终要求：
 
 - 当前全部既有功能稳定运行；
-- 不因为重构削减用户需要的功能；
+- 不因为重构削减需要的功能；
 - 当前整体排版和体验方向基本满意，不做无目的的大规模 UI 重做；
 - 最终界面美观、配合舒服、风格统一和谐；
-- 后续优先消灭真实 Bug、行为不一致和发布阻断。
+- 稳定性优先于架构纯洁和新增功能；
+- 用户尽量只承担最终真实体验确认，不承担反复 Debug。
 
 ## 当前工作分支
 
 `codex/v1-06-manual-test`
 
-新会话必须先 fetch / pull 最新 HEAD，不要依赖旧聊天中的提交号。
+新会话必须 fetch / pull 最新 HEAD，不要依赖旧聊天里的 commit。
 
 ## 必读顺序
 
 以根目录 `AGENTS.md` 为准。
 
-特别注意 `docs/v1/APPROVED_PRODUCT_DEVIATIONS.md`：该文件记录用户在 v0.30.2 基线之后明确批准的产品变化；与旧 `V1_BASELINE_CHECKLIST.md` 冲突时，以批准变化文件为准。
+特别注意：
 
-当前已记录两项重要覆盖：
+`docs/v1/APPROVED_PRODUCT_DEVIATIONS.md`
 
-1. Remote 设置不再暴露“使用随机端口”，改为固定端口优先、不可用时自动切换并保存；
+其中记录用户在 v0.30.2 基线之后明确批准的产品调整。与旧 `V1_BASELINE_CHECKLIST.md` 冲突时，以该文件为准。
+
+当前重要覆盖：
+
+1. Remote 设置不再暴露“使用随机端口”，固定端口优先，不可用时自动切换并保存；
 2. PC Remote“演示文稿”页只做文件规则管理，不恢复 PPT/WPS 放映控制按钮；手机 / 浏览器 Web Remote 仍保留完整演示控制。
 
-## 当前实现状态
+## 已通过 ChatGPT 源码审核的主要收口
 
-主体功能已经完成到候选版本阶段：
+截至提交：
 
-- Rust + Slint 单程序主体；
-- 倒计时 / 正计时 / Pause / Resume / Restart / 超时；
-- 六页设置窗口；
-- 文件规则与批量设置；
-- 中英文 UI；
-- 提醒、闪烁、自定义声音、TTS、系统静音；
-- F3/F4/F5 及 v0.30.2 内部快捷键；
-- 托盘与 Timer 右键菜单；
-- PowerPoint / WPS COM 控制与自动计时；
-- 手机 / 浏览器 Remote HTTP 与原协议；
-- PC Remote 连接页与规则页；
-- 多显示器、大屏、九宫格定位；
-- 更新模块；
-- Portable / Inno Setup Installer；
-- v0.30.2 配置读取与 V1 保存。
+`72b7a42e9be1598e671c6a67e40799a4b3235118`
 
-## 已通过 ChatGPT 源码审核的近期修复
-
-已通过：
+以下修复已经通过源码复审，除真实验收重新稳定复现问题外不要重做：
 
 - F3：Running→Pause、Paused→Resume、Stopped/Finished→Start；
-- Settings baseline/draft 字段合并；
-- PC Remote 端口编辑、多选、批量与 editor 一致性；
-- Release 版本号从 Cargo package version 获取；
-- 配置导入 / 恢复默认立即应用并保持运行态、磁盘、draft/baseline 一致；
-- rules 按规范化完整路径逐规则、逐字段合并；
-- Remote start/apply 保证非空 token，空 token 请求拒绝；
+- Settings baseline/draft 合并，不用完整旧草稿覆盖其他入口已经保存的配置；
+- Settings / PC Remote rules 按规范化完整路径逐规则、逐字段合并；
+- 配置 Import / Reset 立即同步磁盘、shared config、Timer / Remote / Display 与 Settings draft/baseline；
+- PC Remote 端口输入不再被周期刷新覆盖；
+- PC Remote 普通/Ctrl/Shift 选择、batch 与 editor 一致性；
+- 普通规则 Save 不再误改不可见的 enabled；
+- Remote start/apply 确保非空 token，空 token 请求明确拒绝；
+- Release / Installer 版本统一来自 Cargo package version；
 - `rust-toolchain.toml` 固定 Rust 1.92.0；
-- RC-1 多放映命令不再任意控制 `SlideShowWindows.Item(1)`，改为优先根据 `ActivePresentation.FullName` 匹配目标放映窗口；单窗口可 fallback，多窗口目标不明时命令安全失败。
+- 多放映窗口命令不再任意控制 `SlideShowWindows.Item(1)`，而是优先按 `ActivePresentation.FullName` 匹配目标；
+- 多放映目标歧义时，状态仍保留 `slide_show_running=true`，不会误触发自动计时的离开放映 Stop / Reset，同时具体命令继续安全失败。
 
-RC-1 提交：`988358cef27c93b696fb65915fc7e86ecd7c0fe8`。
+RC-1.1 Codex 报告：
 
-Codex 报告 RC-1：51 passed、0 failed、1 ignored；Release build 与 `scripts/build-release.ps1` 通过，版本仍为 1.13.0；已生成 `docs/v1/RC_MANUAL_TEST.md` 和 5 张 review PNG。真实 PowerPoint/WPS、手机、声音、混合 DPI、安装升级仍未被自动结果替代。
+- `cargo test --locked`：55 passed、0 failed、1 ignored；
+- clippy / fmt 通过；
+- Release build 通过；
+- 版本仍为 1.13.0。
 
-## 当前唯一实现任务：RC-1.1
+ChatGPT 已核对该修复核心实现与任务目标一致。
 
-读取最新：
+## 当前任务：RC-2 最终集成验收与候选版冻结
+
+最新唯一实现指令：
 
 `docs/v1/CODEX_TASK.md`
 
-ChatGPT 在 RC-1 复审中确认一个与目标窗口修复直接相关的 P1：
+本轮**没有预先批准的源码修改**。
 
-> 当存在多个 SlideShowWindows，但 `ActivePresentation` 不属于任何正在放映的文稿时，目标选择器会返回错误；当前 `Session::read_state()` 的错误分支随后构造默认状态，使 `slide_show_running=false`。这把“有放映但目标不明确”错误表示成“没有放映”，可能让自动计时误触发离开放映 Stop / Reset。
+Codex 应尽可能在当前新电脑上直接运行 Release / Portable，替用户完成：
 
-v0.30.2 在同样情形下会保留 `IsSlideShowRunning=true`，同时报告“未能按目标文稿匹配放映窗口”。
+- 应用生命周期与 Timer；
+- Settings / PC Remote；
+- 真实 Remote HTTP 鉴权和 Timer 命令；
+- 在保护用户文稿的前提下完成 PowerPoint/WPS 临时文稿实测；
+- 双屏基础实测；
+- 声音 / TTS 非主观部分；
+- Portable 持久化；
+- 安全条件允许时的 Installer 隔离验证。
 
-RC-1.1 只修这一点：
+只有稳定复现的 P0/P1 才允许最小源码修复；否则不要继续主动找可改之处。
 
-- 状态层把“是否存在放映”与“是否能确定目标窗口”分开；
-- `SlideShowWindows.Count > 0` 时必须保留 `slide_show_running=true`；
-- 多窗口目标不明时记录错误、不虚构当前文稿/页码、不误控第一窗口；
-- 命令路径继续安全失败；
-- 不修改 Timer、Remote、UI、DPI、配置、发布脚本或其他模块。
+本轮完成后应：
 
-本轮通过后默认进入最终 RC 人工验收，不再主动扩大代码整改范围。
+1. 更新 `CODEX_RESULT.md`；
+2. 把 `RC_MANUAL_TEST.md` 压缩到用户真正还需做的 3～5 个短场景；
+3. 无剩余已知 P0/P1 时创建 `RC_CANDIDATE.md`；
+4. 标记“代码冻结候选版，除最终验收发现 P0/P1 外不再修改源码”；
+5. commit + push；
+6. 停止，等待 ChatGPT 最终审核。
+
+## 当前实现范围
+
+主体功能已经进入候选版阶段：
+
+- Rust + Slint 单程序；
+- 倒计时 / 正计时 / Pause / Resume / Restart / 超时；
+- 六页设置；
+- 文件规则与批量设置；
+- 中英文；
+- 提醒、闪烁、声音、TTS、系统静音；
+- F3/F4/F5 及原有快捷键；
+- 托盘和 Timer 右键菜单；
+- PowerPoint/WPS 控制和自动计时；
+- 手机 / 浏览器 Remote HTTP；
+- PC Remote 连接页和规则页；
+- 多显示器、大屏、九宫格定位；
+- 更新模块；
+- Portable / Inno Setup Installer；
+- v0.30.2 配置读取兼容。
 
 ## 新电脑环境
 
-当前电脑已确认：Rust 1.92.0、Visual Studio/MSVC、Windows SDK、PowerPoint、WPS、双屏、Inno Setup、ffmpeg 均存在。手机真实局域网和混合 DPI 体验仍需要真实设备确认。
+已经确认存在：
+
+- Rust 1.92.0；
+- Visual Studio / MSVC；
+- Windows SDK / rc.exe；
+- PowerPoint；
+- WPS；
+- 双屏；
+- Inno Setup；
+- ffmpeg。
+
+手机真实同局域网和主观声音/视觉体验仍可能需要用户最后确认。
 
 不要因为环境变化升级 Slint 或 Cargo 依赖。
 
-## 当前开发原则
+## RC 阶段原则
 
-- 不继续增加 V1 新功能；
-- 不做 V5 或再次重写；
-- 不为了架构纯洁重构稳定模块；
-- P0/P1 才允许在 RC 阶段继续改代码；
-- 没有稳定复现或明确源码证据，不修改；
-- 不建立庞大的 GUI 自动化/设备矩阵；
-- 不创建 Release / Tag，除非用户明确要求。
+- 不增加 V1 新功能；
+- 不做 V5 / 再次重写；
+- 不为架构洁癖重构稳定模块；
+- 不恢复用户已经批准删除的 PC Remote PPT 控制 UI；
+- 没有稳定复现或明确源码证据，不改代码；
+- 不建立庞大 GUI 自动化 / Office mock / 设备矩阵；
+- 不增加 SHA256 artifact 流程；
+- 不创建 Release / Tag，除非用户明确要求；
+- 当前目标是结束 Debug 循环，而不是制造下一轮开发任务。
 
 ## 工作方式
 
-ChatGPT 负责读取 GitHub 最新成果、做源码/行为审查、直接更新 `CODEX_TASK.md`，并决定何时停止继续改代码。
+### ChatGPT
 
-Codex 负责 pull 最新 review 分支、严格执行最新 `CODEX_TASK.md`、最小实现与定向测试、更新 `CODEX_RESULT.md`、commit + push 后停止。
+读取 GitHub 最新成果，做源码/行为审查，直接更新 `CODEX_TASK.md`，并决定候选版是否可进入用户最终验收。
 
-用户尽量只承担最终真实体验验收，而不是反复手工 debug。
+### Codex
+
+pull 最新 review 分支，严格执行唯一 `CODEX_TASK.md`，尽量自行完成真实验证，只修稳定复现 P0/P1，更新结果、commit + push 后停止。
+
+### 用户
+
+只进行当前电脑无法可靠替代的最终体验确认，不再承担反复 Debug。
