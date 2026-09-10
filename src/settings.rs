@@ -588,6 +588,7 @@ pub fn create(
         let action_config_path = config_path.clone();
         let applied_for_action = applied.clone();
         let baseline_for_action = baseline.clone();
+        let on_applied_for_action = on_applied.clone();
         window.on_field_action(move |index| {
             let (row_index, action_index) = if index >= 100 {
                 ((index / 100) as usize, (index % 100) as usize)
@@ -619,6 +620,53 @@ pub fn create(
                 } else {
                     row.key.as_str()
                 };
+                if matches!(action_key, "config.import" | "config.reset") {
+                    let candidate = if action_key == "config.import" {
+                        let Some(result) = native_import_config() else {
+                            return;
+                        };
+                        match result {
+                            Ok(config) => config,
+                            Err(error) => {
+                                native::message(&error.to_string(), "FlyPPTTimer", true);
+                                return;
+                            }
+                        }
+                    } else {
+                        AppConfig::default()
+                    };
+                    let final_config = match apply_immediate_config(
+                        candidate,
+                        ui_language,
+                        &action_config_path,
+                        &applied_for_action,
+                        &draft,
+                        &baseline_for_action,
+                        &on_applied_for_action,
+                    ) {
+                        Ok(config) => config,
+                        Err(message) => {
+                            native::message(&message, "FlyPPTTimer", true);
+                            return;
+                        }
+                    };
+                    selected_rules.borrow_mut().clear();
+                    if let Some(w) = weak.upgrade() {
+                        w.set_selected_rule(-1);
+                        refresh(
+                            &w,
+                            &final_config,
+                            *page.borrow(),
+                            -1,
+                            &selected_rules.borrow(),
+                            false,
+                            ui_language,
+                            &remote_for_action,
+                            &addresses_for_action,
+                        );
+                    }
+                    return;
+                }
                 if action_key == "update.check" {
                     crate::desktop::request_update_check();
                     return;
@@ -2027,11 +2075,9 @@ fn handle_action(key: &str, c: &mut AppConfig, config_path: &std::path::Path) {
         "placement.resetpos" => {
             c.placement.has_custom_placement = false;
         }
-        "config.import" => native_import_config(c, config_path),
+        "config.import" => {}
         "config.export" => native_export_config(c),
-        "config.reset" => {
-            *c = AppConfig::default();
-        }
+        "config.reset" => {}
         "path.config" => {
             let _ = native_open_path(config_path);
         }
@@ -2076,6 +2122,34 @@ fn validate(c: &AppConfig, lang: Language) -> Result<(), String> {
     Ok(())
 }
 
+fn prepare_immediate_config(mut config: AppConfig, lang: Language) -> Result<AppConfig, String> {
+    normalize_before_save(&mut config);
+    validate(&config, lang)?;
+    crate::remote::ensure_token(&mut config);
+    Ok(config)
+}
+
+fn apply_immediate_config(
+    config: AppConfig,
+    lang: Language,
+    path: &Path,
+    applied: &Rc<RefCell<AppConfig>>,
+    draft: &Rc<RefCell<AppConfig>>,
+    baseline: &Rc<RefCell<AppConfig>>,
+    on_applied: &Rc<dyn Fn(&AppConfig)>,
+) -> Result<AppConfig, String> {
+    let config = prepare_immediate_config(config, lang)?;
+    // Validate and write before touching shared runtime state. The existing
+    // callback then updates Timer, Desktop, Display and Remote in one path.
+    config.save(path).map_err(|error| error.to_string())?;
+    *applied.borrow_mut() = config.clone();
+    on_applied(&config);
+    let final_config = applied.borrow().clone();
+    *draft.borrow_mut() = final_config.clone();
+    *baseline.borrow_mut() = final_config.clone();
+    Ok(final_config)
+}
+
 // Objects merge at field granularity; lists (including file rules) are edited
 // as a domain. Unchanged fields always come from the latest applied config.
 fn merge_draft(
@@ -2097,6 +2171,12 @@ fn merge_draft(
             after.as_object(),
         ) {
             for (key, value) in after {
+                // Rules are merged below by their normalized full path. An
+                // array-level replacement would discard Remote edits made
+                // while this Settings session was open.
+                if key == "Rules" {
+                    continue;
+                }
                 merge(
                     current
                         .entry(key.clone())
@@ -2124,7 +2204,83 @@ fn merge_draft(
         &serde_json::to_value(&baseline)?,
         &serde_json::to_value(&draft)?,
     );
-    serde_json::from_value(current)
+    let mut merged: AppConfig = serde_json::from_value(current)?;
+    merged.rules = merge_rules(&applied.rules, &baseline.rules, &draft.rules);
+    Ok(merged)
+}
+
+fn merge_rules(applied: &[FileRule], baseline: &[FileRule], draft: &[FileRule]) -> Vec<FileRule> {
+    let baseline_by_id = baseline
+        .iter()
+        .map(|rule| (presentation_identity(Path::new(&rule.file_path)), rule))
+        .collect::<std::collections::HashMap<_, _>>();
+    let draft_by_id = draft
+        .iter()
+        .map(|rule| (presentation_identity(Path::new(&rule.file_path)), rule))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut result = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    // Keep the latest applied order and values for rules that were not
+    // touched by Settings. Rules removed from draft are removed from the
+    // result, while edited fields are overlaid on the latest applied rule.
+    for current in applied {
+        let id = presentation_identity(Path::new(&current.file_path));
+        let Some(before) = baseline_by_id.get(&id) else {
+            if draft_by_id.contains_key(&id) {
+                // The same identity was newly added in this Settings
+                // session; let the explicit local addition win.
+                continue;
+            }
+            if seen.insert(id) {
+                result.push(current.clone());
+            }
+            continue;
+        };
+        let Some(after) = draft_by_id.get(&id) else {
+            continue;
+        };
+        let mut merged = current.clone();
+        merge_rule_fields(&mut merged, before, after);
+        if seen.insert(id) {
+            result.push(merged);
+        }
+    }
+
+    // A rule added in Settings is appended unless an external entry with the
+    // same identity already exists; in that case the local added rule wins
+    // without creating a duplicate path.
+    for rule in draft {
+        let id = presentation_identity(Path::new(&rule.file_path));
+        if !baseline_by_id.contains_key(&id) && seen.insert(id) {
+            result.push(rule.clone());
+        }
+    }
+    result
+}
+
+fn merge_rule_fields(current: &mut FileRule, before: &FileRule, after: &FileRule) {
+    if before.file_name != after.file_name {
+        current.file_name = after.file_name.clone();
+    }
+    if before.file_path != after.file_path {
+        current.file_path = after.file_path.clone();
+    }
+    if before.duration != after.duration {
+        current.duration = after.duration.clone();
+    }
+    if before.mode != after.mode {
+        current.mode = after.mode;
+    }
+    if before.enabled != after.enabled {
+        current.enabled = after.enabled;
+    }
+    if before.title_pattern != after.title_pattern {
+        current.title_pattern = after.title_pattern.clone();
+    }
+    if before.feature != after.feature {
+        current.feature = after.feature.clone();
+    }
 }
 
 pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
@@ -2252,7 +2408,7 @@ fn native_choose_sound() -> Option<String> {
     }
 }
 
-fn native_import_config(c: &mut AppConfig, config_path: &std::path::Path) {
+fn native_import_config() -> Option<Result<AppConfig, crate::config::ConfigError>> {
     use windows_sys::Win32::UI::Controls::Dialogs::{
         GetOpenFileNameW, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_HIDEREADONLY, OPENFILENAMEW,
     };
@@ -2265,17 +2421,11 @@ fn native_import_config(c: &mut AppConfig, config_path: &std::path::Path) {
     ofn.nMaxFile = file.len() as u32;
     ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
     if unsafe { GetOpenFileNameW(&mut ofn) } == 0 {
-        return;
+        return None;
     }
     let end = file.iter().position(|c| *c == 0).unwrap_or(file.len());
     let path = PathBuf::from(String::from_utf16_lossy(&file[..end]));
-    match AppConfig::load(&path) {
-        Ok(imported) => {
-            *c = imported;
-            let _ = c.save(config_path);
-        }
-        Err(_) => native::message("配置导入失败：文件格式无效。", "FlyPPTTimer", true),
-    }
+    Some(AppConfig::load(&path))
 }
 
 fn native_export_config(c: &AppConfig) {
@@ -2400,6 +2550,144 @@ mod parity_tests {
             &merge_draft(&applied, &baseline, &baseline).unwrap(),
             &applied
         ));
+    }
+
+    #[test]
+    fn rules_merge_preserves_external_rule_changes_by_path_and_field() {
+        let root = std::env::temp_dir().join(format!("flyppttimer-rules-{}", std::process::id()));
+        let path_a = root.join("A.pptx");
+        let path_b = root.join("B.pptx");
+        let path_c = root.join("C.pptx");
+        let path_d = root.join("D.pptx");
+        let rule = |path: &Path, duration: &str, mode: TimerMode, enabled: bool| FileRule {
+            file_name: path.file_name().unwrap().to_string_lossy().into_owned(),
+            file_path: path.to_string_lossy().into_owned(),
+            duration: duration.into(),
+            mode,
+            enabled,
+            ..FileRule::default()
+        };
+        let baseline = vec![
+            rule(&path_a, "00:08:00", TimerMode::Countdown, true),
+            rule(&path_b, "00:05:00", TimerMode::Countdown, true),
+        ];
+        let mut draft = baseline.clone();
+        draft[0].duration = "00:10:00".into();
+        draft.remove(1); // Settings deletes B.
+        draft.push(rule(&path_c, "00:03:00", TimerMode::CountUp, true));
+
+        let mut applied = baseline.clone();
+        applied[0].enabled = false; // Remote edits A.enabled.
+        applied[1].duration = "00:06:00".into(); // Remote edits B, but Settings deletes B.
+        applied.push(rule(&path_c, "00:04:00", TimerMode::Countdown, false)); // Same-path external add.
+        applied.push(rule(&path_d, "00:02:00", TimerMode::Countdown, true));
+
+        let merged = merge_rules(&applied, &baseline, &draft);
+        let merged_ids = merged
+            .iter()
+            .map(|item| presentation_identity(Path::new(&item.file_path)))
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(merged.len(), 3);
+        assert!(merged_ids.contains(&presentation_identity(&path_a)));
+        assert!(merged_ids.contains(&presentation_identity(&path_c)));
+        assert!(merged_ids.contains(&presentation_identity(&path_d)));
+        let a = merged
+            .iter()
+            .find(|item| item.file_path == path_a.to_string_lossy())
+            .unwrap();
+        assert_eq!(a.duration, "00:10:00");
+        assert!(!a.enabled);
+        let c = merged
+            .iter()
+            .find(|item| item.file_path == path_c.to_string_lossy())
+            .unwrap();
+        assert_eq!(c.duration, "00:03:00"); // Existing external identity is replaced without duplication.
+        assert!(c.enabled);
+
+        // If both sides edit one field, Settings' value wins; unrelated
+        // Remote fields remain intact.
+        let mut applied = baseline.clone();
+        applied[0].duration = "00:09:00".into();
+        applied[0].enabled = false;
+        let merged = merge_rules(&applied, &baseline, &draft);
+        let a = merged
+            .iter()
+            .find(|item| item.file_path == path_a.to_string_lossy())
+            .unwrap();
+        assert_eq!(a.duration, "00:10:00");
+        assert!(!a.enabled);
+    }
+
+    #[test]
+    fn immediate_config_prepare_validates_before_generating_token_or_writing() {
+        let mut invalid = AppConfig::default();
+        invalid.timer.default_duration = "invalid".into();
+        assert!(prepare_immediate_config(invalid, Language(false)).is_err());
+        let prepared = prepare_immediate_config(AppConfig::default(), Language(false)).unwrap();
+        assert!(!prepared.remote_control.token.is_empty());
+    }
+
+    #[test]
+    fn immediate_config_apply_updates_runtime_state_and_disk_atomically() {
+        let root =
+            std::env::temp_dir().join(format!("flyppttimer-immediate-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("config.json");
+        let initial = AppConfig::default();
+        initial.save(&path).unwrap();
+        let applied = Rc::new(RefCell::new(initial.clone()));
+        let draft = Rc::new(RefCell::new(initial.clone()));
+        let baseline = Rc::new(RefCell::new(initial.clone()));
+        let runtime = Rc::new(RefCell::new(None::<AppConfig>));
+        let runtime_for_callback = runtime.clone();
+        let callback: Rc<dyn Fn(&AppConfig)> = Rc::new(move |config| {
+            *runtime_for_callback.borrow_mut() = Some(config.clone());
+        });
+        let before = fs::read(&path).unwrap();
+        let mut invalid = initial.clone();
+        invalid.timer.default_duration = "bad".into();
+        assert!(
+            apply_immediate_config(
+                invalid,
+                Language(false),
+                &path,
+                &applied,
+                &draft,
+                &baseline,
+                &callback,
+            )
+            .is_err()
+        );
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(applied.borrow().timer.default_duration, "00:08:00");
+        assert!(runtime.borrow().is_none());
+
+        let mut imported = initial.clone();
+        imported.appearance.width = 177;
+        imported.rules.push(FileRule {
+            file_path: root.join("A.pptx").to_string_lossy().into_owned(),
+            duration: "00:03:00".into(),
+            ..FileRule::default()
+        });
+        let final_config = apply_immediate_config(
+            imported,
+            Language(false),
+            &path,
+            &applied,
+            &draft,
+            &baseline,
+            &callback,
+        )
+        .unwrap();
+        assert_eq!(final_config.appearance.width, 177);
+        assert_eq!(final_config.rules.len(), 1);
+        assert_eq!(AppConfig::load(&path).unwrap().appearance.width, 177);
+        assert_eq!(applied.borrow().appearance.width, 177);
+        assert_eq!(draft.borrow().appearance.width, 177);
+        assert_eq!(baseline.borrow().appearance.width, 177);
+        assert_eq!(runtime.borrow().as_ref().unwrap().appearance.width, 177);
+        assert!(!final_config.remote_control.token.is_empty());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -193,6 +193,7 @@ impl RemoteServer {
 
     pub fn start(&self, config: &mut AppConfig) -> Result<u16, String> {
         self.stop();
+        ensure_token(config);
         *self.token.lock().unwrap() = config.remote_control.token.clone();
         // The legacy field remains readable for config compatibility, but the
         // service always operates on one saved fixed port.
@@ -320,6 +321,7 @@ impl RemoteServer {
     }
 
     pub fn apply_enabled(&self, config: &mut AppConfig) -> Result<(), String> {
+        ensure_token(config);
         *self.token.lock().unwrap() = config.remote_control.token.clone();
         let running = self.info().running;
         if config.remote_control.enabled && !running {
@@ -604,6 +606,9 @@ fn find_bytes(data: &[u8], needle: &[u8]) -> Option<usize> {
         .position(|window| window == needle)
 }
 fn fixed_time_token_equals(left: &str, right: &str) -> bool {
+    if left.is_empty() || right.is_empty() {
+        return false;
+    }
     let left = left.as_bytes();
     let right = right.as_bytes();
     let mut difference = left.len() ^ right.len();
@@ -611,6 +616,14 @@ fn fixed_time_token_equals(left: &str, right: &str) -> bool {
         difference |= usize::from(*left.get(index).unwrap_or(&0) ^ *right.get(index).unwrap_or(&0));
     }
     difference == 0
+}
+
+/// Keep the persisted and in-memory Remote token non-empty at every service
+/// boundary.  Empty tokens are never valid credentials, even during startup.
+pub(crate) fn ensure_token(config: &mut AppConfig) {
+    if config.remote_control.token.trim().is_empty() {
+        config.remote_control.token = generate_token();
+    }
 }
 fn prune_clients(clients: &Arc<Mutex<HashMap<IpAddr, Instant>>>) {
     clients
@@ -928,6 +941,52 @@ mod tests {
         assert!(fixed_time_token_equals("abc", "abc"));
         assert!(!fixed_time_token_equals("abc", "abd"));
         assert!(!fixed_time_token_equals("abc", "abc0"));
+        assert!(!fixed_time_token_equals("", ""));
+        assert!(!fixed_time_token_equals("abc", ""));
+    }
+
+    #[test]
+    fn empty_token_is_replaced_and_requests_require_it() {
+        let (sender, _receiver) = mpsc::channel();
+        let server = RemoteServer::new(sender);
+        let mut config = AppConfig::default();
+        let port = server.start(&mut config).unwrap();
+        assert!(!config.remote_control.token.is_empty());
+        config.remote_control.token.clear();
+        server.apply_enabled(&mut config).unwrap();
+        assert!(!config.remote_control.token.is_empty());
+
+        let context = ConnectionContext {
+            state: Arc::clone(&server.shared_state),
+            token: Arc::clone(&server.token),
+            clients: Arc::clone(&server.clients),
+            revision: Arc::clone(&server.revision),
+            sender: server.sender.clone(),
+        };
+        let address = SocketAddr::from(([127, 0, 0, 1], port));
+        let unauthorized = route(
+            HttpRequest {
+                method: "GET".into(),
+                raw_url: "/state?token=".into(),
+                body: Vec::new(),
+            },
+            address,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(unauthorized.status, 403);
+        let authorized = route(
+            HttpRequest {
+                method: "GET".into(),
+                raw_url: format!("/state?token={}", config.remote_control.token),
+                body: Vec::new(),
+            },
+            address,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(authorized.status, 200);
+        server.stop();
     }
     #[test]
     fn parses_duration_and_mode_command() {
