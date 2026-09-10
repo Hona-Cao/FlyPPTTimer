@@ -20,44 +20,32 @@ V1 是对 v0.30.2 的 Rust + Slint 重构，不是功能升级。
 
 新会话开始时先读取该分支最新 HEAD，不要依赖旧聊天中的版本号或提交号。
 
-## 2026-09-10 UX13 审核后的当前状态
+## 2026-09-10 最新审核状态
 
-UX13 已完成设置说明弹窗、设置规则布局、PC Remote 规则列表和批量设置等视觉/交互调整，整体 UI 方向继续保留。
+Codex 已完成上一轮 UX13 稳定性整改，源码提交为：
 
-ChatGPT 对 UX13 提交 `007f4dc2aab1c9e5c6e81cfa53961263c013f2e5` 做了源码审核后，确认还有几项需要在候选版本前修正：
+`8e8b9cd972b3aef3f32cda5ce903274bd678986d`
 
-1. F3 Start/Pause 在 Paused 状态错误调用 `start()`，会从头重新计时，而不是 `resume()`；
-2. Settings 长期保留的完整 draft 可能覆盖 PC Remote 等其他入口已经保存的新配置；
-3. PC Remote 的“下次服务端口”输入会被周期状态刷新写回旧值；
-4. PC Remote 规则多选 / 单项 editor / batch editor 的选中和保存状态存在一致性问题；
-5. `scripts/build-release.ps1` 的版本号仍硬编码旧值，需要改为以 Rust `Cargo.toml` package version 为唯一来源。
+ChatGPT 已复审并接受以下修复，不要重做：
 
-详细修复边界、复现路径和验收标准全部写在最新的 `docs/v1/CODEX_TASK.md`。**CODEX_TASK 是当前唯一实现指令。**
+- F3 Start/Pause：Paused 状态恢复为 `resume()`，不再从头重新计时；
+- PC Remote 端口输入不再被周期刷新覆盖；
+- PC Remote 规则多选、batch、单项 editor 的本轮一致性修复；
+- Settings 对一般配置对象改用 baseline→draft 差异合并到最新 applied；
+- 发布脚本版本改为从 Cargo package version 读取，Installer 版本同步为 1.13.0。
 
-## 新电脑环境说明
+上一轮环境预检也已完成：新电脑原 Rust 1.86 无法构建 Slint 1.17.1，安装 Rust 1.92.0 后 `cargo check --locked`、测试、Release build 和本地 Installer 打包均可执行；PowerPoint、WPS、双屏、Inno Setup、ffmpeg 均检测到，真实 Office / 手机 / 混合 DPI 体验仍待后续手测。
 
-用户现在使用一台新的电脑，本地开发和手测环境可能暂缺。
+## 当前仍需修复的 RC 阻断项
 
-因此本轮 Codex 开始编码前必须先完成环境预检：
+ChatGPT 在 `8e8b9cd` 上继续复审后确认：
 
-- Git / 当前分支 / HEAD；
-- Rust / Cargo / rustup；
-- MSVC Windows 构建环境；
-- Windows SDK / `rc.exe`；
-- 当前锁定依赖下的 `cargo check`；
-- PowerPoint、WPS、双屏、Inno Setup、ffmpeg 等真实手测/发布工具当前是否可用。
+1. 当前配置导入会直接写真实配置文件，但只修改 Settings draft，运行中的 shared applied / Timer / Remote / Display 等没有同步，可能出现磁盘和运行态不一致；v0.30.2 的导入 / 恢复默认属于立即 Apply 的配置操作，应恢复一致语义。
+2. Remote token 默认可为空，`RemoteServer::start()` / `apply_enabled()` 当前直接复制该值，而空 token 与缺省请求可比较为相等；恢复默认或导入空 token 配置后存在无鉴权访问风险。Remote enabled/start/apply 时必须确保非空 token，空 token 请求必须拒绝。
+3. Settings 的通用 JSON merge 对 `rules` 数组仍是整表替换。若 Settings 修改规则 A，同时 PC Remote 修改规则 B 或新增 C，Settings 后续 Apply 仍可能丢掉外部 B/C 修改。Rules 需要按完整路径身份做轻量字段级合并。
+4. 新电脑环境已经证明项目实际需要 Rust 1.92.0；本轮增加最小 `rust-toolchain.toml` 固定项目工具链，避免下一台电脑再次由系统默认 Rust 版本触发同一构建失败，不升级任何 Cargo 依赖。
 
-原则：
-
-- 构建工具链缺失时先准备环境，不通过修改产品源码绕过；
-- Office / WPS / 双屏等真实测试条件缺失不阻止纯源码修复，但必须记录为待用户手测；
-- 不因新电脑环境擅自升级 Rust 项目依赖或重做技术实现。
-
-## 2026-09-08 用户授权的体验优化
-
-Remote parity 整改已经审核通过。用户随后明确要求同步详细优化计划并启动执行，继续由 ChatGPT 逐轮审核。
-
-计划入口：[UX_OPTIMIZATION_PLAN.md](UX_OPTIMIZATION_PLAN.md)。UX-01～UX13 已进行了多轮真实问题驱动的优化。当前不再按 UX 阶段扩展，进入稳定性收口。
+完整边界、测试场景和禁止事项已写入最新 `docs/v1/CODEX_TASK.md`。**CODEX_TASK 是当前唯一实现指令。**
 
 ## 当前实现状态
 
@@ -79,35 +67,34 @@ Remote parity 整改已经审核通过。用户随后明确要求同步详细优
 
 当前阶段是“候选版本稳定性收口”，不是继续增加新功能。
 
-## 最近已解决的问题
+## 已稳定方向
 
-### Timer 右键后遮罩/残影
+### Timer 与基础交互
 
-通过真实桌面右键并监测 Win32 消息定位：右键菜单切换 foreground 时，Windows 触发非客户区重绘，导致无框 Timer 出现主题标题栏残影。当前分支已通过 Timer HWND 的轻量消息处理修正。
+Timer 使用单调时间，F3 暂停/恢复路径已修正。不要再为已通过的状态转换进行无目的重构。
 
-### 设置 / Remote 打开时闪窗或退出
+### Settings / Remote 界面
 
-原因包括 Slint 事件循环重入和首帧 HWND 尚未稳定就显示。当前分支已改为非重入、延后首帧显示并复用已存在窗口。
+当前视觉方向、配色、规则列表层次、说明弹窗、批量设置等整体可以保留。后续只修真实交互 Bug，不重新设计整套 UI。
 
 ### 混合 DPI / 跨屏
 
-设置窗口、Remote 窗口和 Timer 已经过多轮定向修正。此前已经在 150% 与 125% 双屏组合上做过基本跨屏验证；新电脑若暂时没有相同双屏环境，不要把缺失条件当成代码失败。
+设置窗口、Remote 窗口和 Timer 已经过多轮定向修正。此前在 150% 与 125% 双屏组合上做过基本跨屏验证；新电脑当前检测到双屏，但实际缩放和混合 DPI 体验仍需真机复核。
 
 ## 下一阶段重点
 
 不要再按“大阶段”增加新功能。后续重点是：
 
-1. 执行最新 `CODEX_TASK.md` 中的 UX13 审核后稳定性修复；
+1. 执行最新 `CODEX_TASK.md` 中的配置生命周期 / Remote 鉴权 / Rules merge 收口；
 2. 用户手工测试发现的真实 Bug；
 3. 与 v0.30.2 的功能、选项、文字、默认值和行为差异清零；
 4. PowerPoint / WPS、手机 Remote、声音/TTS、多屏的真实使用验收；
-5. 发布收口：统一 Rust V1 的 Portable / Installer 路径，清理旧开发期或旧 C# 发布残留。
+5. 最终 RC 发布收口。
 
-## 当前需要特别复核的收口项
+## 当前仍需后续复核的发布项
 
-- `scripts/build-release.ps1` 的版本处理必须跟随 Rust package version，而不是长期硬编码旧测试版本；
-- 仓库旧 `package_release.ps1` 属于旧发布路径，最终 V1 不应同时维护两套发布流程；
-- `src/capture.rs` 和 `--capture-settings` / `--capture-windows` 是开发期辅助入口，正式 V1 前评估删除；
+- 仓库旧 `package_release.ps1` 属于旧发布路径，最终 V1 不应长期同时维护两套发布流程；
+- `src/capture.rs` 和 `--capture-settings` / `--capture-windows` 是开发期辅助入口，正式 V1 前评估是否保留；
 - 更新模块只需与 v0.30.2 行为对齐，不扩展成新的更新产品；
 - `V1_BASELINE_CHECKLIST.md` 需要在 RC 阶段逐项做最终 parity 复核。
 
@@ -132,8 +119,8 @@ ChatGPT 负责：审查现状、判断下一项真实问题、更新 `CODEX_TASK
 Codex 负责：
 
 1. 拉取 `codex/v1-06-manual-test` 最新 HEAD；
-2. 按最新 `CODEX_TASK.md` 先完成新电脑环境预检；
-3. 只执行当前任务，不扩大修改范围；
+2. 严格执行最新 `CODEX_TASK.md`；
+3. 不扩大为 UI 重做、架构重构或新功能；
 4. 完成后更新 `docs/v1/CODEX_RESULT.md`；
 5. commit 并 push 到 review 分支；
 6. 停止继续编码，等待 ChatGPT 再审核。
