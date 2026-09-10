@@ -1,136 +1,154 @@
 # FlyPPTTimer V1 — 新会话交接
 
-## 目标
+## 产品目标
 
-V1 是对 v0.30.2 的 Rust + Slint 重构，不是功能升级。
+V1 是对 FlyPPTTimer v0.30.2 的 Rust + Slint 重构。目标不是继续扩张功能，而是把当前软件做稳定、做漂亮、做小、做快。
 
-最终要求：功能、用户可见选项、默认值、行为、中英文文字、Remote 协议、PowerPoint/WPS 行为与 v0.30.2 对齐；允许改进视觉、性能、稳定性和代码实现。
+用户最终要求：
 
-用户最终要求进一步明确为：
-
-- 当前全部既有功能必须稳定运行；
-- 不因为重构削减功能；
-- 当前整体排版和体验方向基本满意，不再进行无目的的大规模 UI 重做；
-- 最终界面应美观、配合舒服、风格统一和谐；
-- 后续优先消灭真实 Bug、交互不一致和发布阻断项。
+- 当前全部既有功能稳定运行；
+- 不因为重构削减用户需要的功能；
+- 当前整体排版和体验方向基本满意，不做无目的的大规模 UI 重做；
+- 最终界面美观、配合舒服、风格统一和谐；
+- 后续优先消灭真实 Bug、行为不一致和发布阻断。
 
 ## 当前工作分支
 
 `codex/v1-06-manual-test`
 
-新会话开始时先读取该分支最新 HEAD，不要依赖旧聊天中的版本号或提交号。
+新会话必须先 fetch / pull 最新 HEAD，不要依赖旧聊天中的提交号。
 
-## 2026-09-10 最新审核状态
+## 必读顺序
 
-Codex 已完成上一轮 UX13 稳定性整改，源码提交为：
+以根目录 `AGENTS.md` 为准。
 
-`8e8b9cd972b3aef3f32cda5ce903274bd678986d`
+特别注意 `docs/v1/APPROVED_PRODUCT_DEVIATIONS.md`：该文件记录用户在 v0.30.2 基线之后明确批准的产品变化；与旧 `V1_BASELINE_CHECKLIST.md` 冲突时，以批准变化文件为准。
 
-ChatGPT 已复审并接受以下修复，不要重做：
+当前已记录两项重要覆盖：
 
-- F3 Start/Pause：Paused 状态恢复为 `resume()`，不再从头重新计时；
-- PC Remote 端口输入不再被周期刷新覆盖；
-- PC Remote 规则多选、batch、单项 editor 的本轮一致性修复；
-- Settings 对一般配置对象改用 baseline→draft 差异合并到最新 applied；
-- 发布脚本版本改为从 Cargo package version 读取，Installer 版本同步为 1.13.0。
-
-上一轮环境预检也已完成：新电脑原 Rust 1.86 无法构建 Slint 1.17.1，安装 Rust 1.92.0 后 `cargo check --locked`、测试、Release build 和本地 Installer 打包均可执行；PowerPoint、WPS、双屏、Inno Setup、ffmpeg 均检测到，真实 Office / 手机 / 混合 DPI 体验仍待后续手测。
-
-## 当前仍需修复的 RC 阻断项
-
-ChatGPT 在 `8e8b9cd` 上继续复审后确认：
-
-1. 当前配置导入会直接写真实配置文件，但只修改 Settings draft，运行中的 shared applied / Timer / Remote / Display 等没有同步，可能出现磁盘和运行态不一致；v0.30.2 的导入 / 恢复默认属于立即 Apply 的配置操作，应恢复一致语义。
-2. Remote token 默认可为空，`RemoteServer::start()` / `apply_enabled()` 当前直接复制该值，而空 token 与缺省请求可比较为相等；恢复默认或导入空 token 配置后存在无鉴权访问风险。Remote enabled/start/apply 时必须确保非空 token，空 token 请求必须拒绝。
-3. Settings 的通用 JSON merge 对 `rules` 数组仍是整表替换。若 Settings 修改规则 A，同时 PC Remote 修改规则 B 或新增 C，Settings 后续 Apply 仍可能丢掉外部 B/C 修改。Rules 需要按完整路径身份做轻量字段级合并。
-4. 新电脑环境已经证明项目实际需要 Rust 1.92.0；本轮增加最小 `rust-toolchain.toml` 固定项目工具链，避免下一台电脑再次由系统默认 Rust 版本触发同一构建失败，不升级任何 Cargo 依赖。
-
-完整边界、测试场景和禁止事项已写入最新 `docs/v1/CODEX_TASK.md`。**CODEX_TASK 是当前唯一实现指令。**
+1. Remote 设置不再暴露“使用随机端口”，改为固定端口优先、不可用时自动切换并保存；
+2. PC Remote“演示文稿”页只做文件规则管理，不恢复 PPT/WPS 放映控制按钮；手机 / 浏览器 Web Remote 仍保留完整演示控制。
 
 ## 当前实现状态
 
-主体功能已经基本完成：
+主体功能已经完成到候选版本阶段：
 
-- Rust + Slint 单程序主体
-- Timer：倒计时、正计时、暂停/恢复、Restart、超时
-- 六页设置窗口与配置编辑
-- 文件规则
-- 中英文 UI
-- 提醒、闪烁、声音、TTS、静音
-- 全局快捷键、托盘、Timer 右键菜单
-- PowerPoint / WPS 演示控制与自动计时
-- Remote HTTP、原 v0.30.2 Web Remote、PC Remote 两页
-- Remote 演示文稿列表与规则管理
-- 多显示器、大屏计时、九宫格定位
-- 更新模块
-- Portable / Installer 基础脚本
+- Rust + Slint 单程序主体；
+- 倒计时 / 正计时 / Pause / Resume / Restart / 超时；
+- 六页设置窗口；
+- 文件规则与批量设置；
+- 中英文 UI；
+- 提醒、闪烁、自定义声音、TTS、系统静音；
+- F3/F4/F5 及 v0.30.2 内部快捷键；
+- 托盘与 Timer 右键菜单；
+- PowerPoint / WPS COM 控制与自动计时；
+- 手机 / 浏览器 Remote HTTP 与原协议；
+- PC Remote 连接页与规则页；
+- 多显示器、大屏、九宫格定位；
+- 更新模块；
+- Portable / Inno Setup Installer；
+- v0.30.2 配置读取与 V1 保存。
 
-当前阶段是“候选版本稳定性收口”，不是继续增加新功能。
+## 已通过 ChatGPT 源码审核的近期修复
 
-## 已稳定方向
+### UX13 后稳定性
 
-### Timer 与基础交互
+已通过：
 
-Timer 使用单调时间，F3 暂停/恢复路径已修正。不要再为已通过的状态转换进行无目的重构。
+- F3：Running→Pause、Paused→Resume、Stopped/Finished→Start；
+- Settings baseline/draft 字段合并，不再整份旧草稿覆盖外部配置；
+- PC Remote 周期刷新不再覆盖正在输入的端口；
+- PC Remote 普通/Ctrl/Shift 多选、当前 editor、批量保存一致性；
+- 普通规则保存不再意外统一 enabled；
+- Release 版本号从 Cargo package version 获取。
 
-### Settings / Remote 界面
+### RC 配置 / 鉴权收口
 
-当前视觉方向、配色、规则列表层次、说明弹窗、批量设置等整体可以保留。后续只修真实交互 Bug，不重新设计整套 UI。
+提交 `829c8c79b430d92bbd1e7e37fa6d301d07ad40cb` 已完成并通过 ChatGPT 源码复审：
 
-### 混合 DPI / 跨屏
+- 配置导入 / 恢复默认走立即应用路径，运行态、shared config、磁盘、Settings draft/baseline 同步；
+- Settings 与 PC Remote 对 rules 按规范化完整路径进行逐规则、逐字段合并；
+- Remote start/apply 保证非空 token，空 token 请求明确拒绝；
+- 增加 `rust-toolchain.toml` 固定 Rust 1.92.0，不升级 Cargo 依赖。
 
-设置窗口、Remote 窗口和 Timer 已经过多轮定向修正。此前在 150% 与 125% 双屏组合上做过基本跨屏验证；新电脑当前检测到双屏，但实际缩放和混合 DPI 体验仍需真机复核。
+Codex 报告该轮：48 passed、0 failed、1 ignored，Release build 通过。ChatGPT 已核对主要源码实现与报告一致；真实 Office、手机 Remote、多屏、声音和视觉仍不能仅凭自动测试宣告验收。
 
-## 下一阶段重点
+## 当前唯一实现任务：RC-1
 
-不要再按“大阶段”增加新功能。后续重点是：
+读取最新：
 
-1. 执行最新 `CODEX_TASK.md` 中的配置生命周期 / Remote 鉴权 / Rules merge 收口；
-2. 用户手工测试发现的真实 Bug；
-3. 与 v0.30.2 的功能、选项、文字、默认值和行为差异清零；
-4. PowerPoint / WPS、手机 Remote、声音/TTS、多屏的真实使用验收；
-5. 最终 RC 发布收口。
+`docs/v1/CODEX_TASK.md`
 
-## 当前仍需后续复核的发布项
+ChatGPT 当前完整 RC 静态抽查只确认一个需要继续修改的明确代码差异：
 
-- 仓库旧 `package_release.ps1` 属于旧发布路径，最终 V1 不应长期同时维护两套发布流程；
-- `src/capture.rs` 和 `--capture-settings` / `--capture-windows` 是开发期辅助入口，正式 V1 前评估是否保留；
-- 更新模块只需与 v0.30.2 行为对齐，不扩展成新的更新产品；
-- `V1_BASELINE_CHECKLIST.md` 需要在 RC 阶段逐项做最终 parity 复核。
+> Rust `src/presentation.rs` 在存在多个 SlideShowWindow 时直接使用 `SlideShowWindows.Item(1)`；而 v0.30.2 会读取活动文稿路径，并遍历放映窗口按 `Presentation.FullName` 找到目标窗口。
+
+因此 RC-1 只预先批准：
+
+- 多放映窗口按目标文稿路径选择的最小 parity 修复；
+- 修复后做有限 RC 静态复核；
+- 尽量利用当前新电脑完成真实 Release 冒烟；
+- 生成少量不含私人信息的应用窗口截图供 ChatGPT 继续审查整体观感；
+- 生成一份很短的 `RC_MANUAL_TEST.md`，把最终人工验收限制在真正需要真实设备/Office/视觉判断的场景。
+
+不要重新打开已经通过的 F3、配置 merge、Remote token、端口、规则 UI、发布版本等修复。
+
+## 新电脑环境
+
+当前电脑上一轮已经确认：
+
+- 系统原 Rust 1.86 过低；项目现用 Rust 1.92.0；
+- 已加入 `rust-toolchain.toml`，后续仓库内普通 Cargo 命令应自动选择 1.92.0；
+- Visual Studio / MSVC 可用；
+- Windows SDK / rc.exe 可用；
+- PowerPoint 已安装；
+- WPS 已安装；
+- 检测到双屏；
+- Inno Setup 6 可用；
+- ffmpeg 可用；
+- 手机同局域网真实连接仍需要实际设备确认。
+
+不要因为环境变化升级 Slint 或 Cargo 依赖。
+
+## 当前开发原则
+
+- 不继续增加 V1 新功能；
+- 不做 V5 或再次重写；
+- 不为了架构纯洁重构稳定模块；
+- P0/P1 才允许在 RC 阶段继续改代码；
+- 没有稳定复现或明确源码证据，不修改；
+- 真实视觉、PPT/WPS、手机 Remote、声音、多屏问题优先以真实使用验证；
+- 不建立庞大的 GUI 自动化/设备矩阵；
+- 不创建 SHA Artifact 流程；
+- 不创建 Release / Tag，除非用户明确要求。
 
 ## 工作方式
 
-### 新 ChatGPT 会话
+### ChatGPT
 
-先读取：
+负责：
 
-1. `docs/v1/HANDOFF.md`
-2. `docs/v1/V1_BASELINE_CHECKLIST.md`
-3. `docs/v1/CODEX_RESULT.md`
-4. `docs/v1/CODEX_TASK.md`
-5. 当前 V1 相关源码
+- 从 GitHub 读取 Codex 最新成果；
+- 做源码/行为审查；
+- 区分确认 Bug、真实风险和非必要重构；
+- 直接更新 `CODEX_TASK.md`；
+- 接近发布时审核少量真实界面证据；
+- 决定何时停止继续改代码并进入人工验收。
 
-ChatGPT 负责：审查现状、判断下一项真实问题、更新 `CODEX_TASK.md`、审核 Codex 推送结果。
+### Codex
 
-### 新 Codex 会话
+负责：
 
-先读取根目录 `AGENTS.md`，再按其中顺序读取交接、基线和当前任务。
+1. pull review 分支最新 HEAD；
+2. 按 `AGENTS.md` 顺序读取资料；
+3. 只执行最新 `CODEX_TASK.md`；
+4. 最小实现、最小定向测试；
+5. 完成后更新 `CODEX_RESULT.md`；
+6. commit + push review 分支；
+7. 停止编码等待 ChatGPT 再审核。
 
-Codex 负责：
+### 用户
 
-1. 拉取 `codex/v1-06-manual-test` 最新 HEAD；
-2. 严格执行最新 `CODEX_TASK.md`；
-3. 不扩大为 UI 重做、架构重构或新功能；
-4. 完成后更新 `docs/v1/CODEX_RESULT.md`；
-5. commit 并 push 到 review 分支；
-6. 停止继续编码，等待 ChatGPT 再审核。
+尽量只承担最终真实体验验收，而不是反复手工 debug。
 
-真实视觉、PPT/WPS、手机 Remote、声音和多屏体验优先由用户手工测试；不要为了这些体验另建复杂测试系统。
-
-## 产品方向
-
-用户最看重：
-
-**美观、小巧、稳定、快速。**
-
-当前实现已经进入稳定性收口阶段。后续 Bug 修复和视觉优化优先解决真实使用问题，保持实现直接，不为了工程形式增加与产品体验无关的复杂度。
+最终人工验收重点是那些难以完全自动替代的场景：PowerPoint/WPS、手机局域网、声音/TTS、双屏/跨 DPI、整体界面观感和安装/便携实际使用。
