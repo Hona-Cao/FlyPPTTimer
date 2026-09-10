@@ -1,28 +1,28 @@
-# RC 配置生命周期 / Remote 鉴权收口 + 工具链固定
+# RC-1 放映窗口目标文稿匹配
 
 日期：2026-09-10
 
 Review 分支：`codex/v1-06-manual-test`
 
-审核基点：`8e8b9cd972b3aef3f32cda5ce903274bd678986d`
+起始 HEAD：`40d6e81 docs: update handoff for RC1 review stage`
 
 ## 本轮修改
 
-- 配置导入和恢复默认改为立即应用操作：先加载、规范化、校验并写入配置文件，再更新 shared applied，复用现有 `on_applied` 路径同步 Timer、Desktop、Display 和 Remote，最后同步 Settings draft/baseline 并清除 dirty。无效配置或写入失败不会修改运行态；取消导入不会改变任何状态。旧 `handle_action` 不再保留只改 draft / 直接写盘的导入与 reset 分支。
-- RemoteServer 的 `start` / `apply_enabled` 公共边界统一确保配置 token 非空并写回；空 token 在配置导入、恢复默认和服务启动时会生成新的随机 token。`fixed_time_token_equals` 对任一空值直接拒绝，作为请求鉴权的最后保护。
-- Settings 的 JSON merge 保留现有对象字段合并；`Rules` 改为按完整路径身份逐条合并。未改规则采用最新 applied，新增/删除按 Settings 草稿处理，已有规则只覆盖 baseline→draft 实际改动字段；Remote 对其他规则、其他字段和新增规则的修改继续保留，冲突字段由 Settings Apply 值优先并避免重复路径。
-- 新增仓库根目录 `rust-toolchain.toml`，固定 Rust 1.92.0、rustfmt、clippy 和 x86_64-pc-windows-msvc target；不改变 Cargo 依赖或系统默认 toolchain。
+- `read_application_state()` 与所有放映视图命令共用目标窗口选择器：优先读取 `ActivePresentation.FullName`，遍历 `SlideShowWindows` 并按现有 `same_path` 比较；无目标且只有一个窗口时安全回退，多窗口无法匹配时返回明确错误，删除了任意 `Item(1)` 选择。
+- 保留 `start_show` 的重复启动忽略、打开/归属/关闭/强制退出逻辑，以及 `APPROVED_PRODUCT_DEVIATIONS.md` 中 Remote 端口和 PC Remote 规则页行为。
+- 增加三个纯逻辑测试，覆盖 `[B, A]` 目标匹配、单窗口空目标回退、多窗口无匹配报错。
+- 增加 [RC_MANUAL_TEST.md](RC_MANUAL_TEST.md)，列出 10 个真实 Windows 验收场景。
 
 ## 验证
 
-- 新增配置立即应用测试：无效配置不写盘；有效导入同步 disk、shared applied、draft、baseline 和 runtime callback，并生成非空 Remote token。
-- 新增 Rules merge 回归：Settings 修改 A、删除 B、新增 C 时，Remote 对 A.enabled、B、同路径 C、外部 D 的变化按规则保留/删除/去重；双方修改同一字段时 Settings 值优先。
-- 新增 Remote 鉴权回归：默认空 token 启动后生成非空 token；空 token 请求返回 403；正确 token 请求返回 200；空值比较始终失败。
-- 运行普通 `cargo check --locked`，仓库 toolchain 自动选择 Rust 1.92.0；`cargo fmt --all -- --check` 通过；`cargo clippy --locked --all-targets --all-features -- -D warnings` 通过；`cargo test --locked` 为 **48 passed、0 failed、1 ignored**（既有 Office COM 手测）；`cargo build --locked --release` 通过。
+- `cargo fmt --all -- --check` 通过；`cargo clippy --locked --all-targets --all-features -- -D warnings` 通过；`cargo test --locked` 为 **51 passed、0 failed、1 ignored**（既有 Office COM 手测）。
+- `cargo build --locked --release` 与 `scripts/build-release.ps1` 均通过；当前版本 `1.13.0`。安装器资源为 ProductVersion `1.13.0` / FileVersion `1.13.0.0`；Portable ZIP 与安装器位于 `artifacts/release/v1.13.0/`。
+- 使用当前 Release 执行可靠的 headless capture：截图输出在 `docs/v1/rc-review/`，共 5 张 PNG（`timer-window.png`、`remote-connection.png`、`remote-presentation.png`、`settings-timer.png`、`settings-remote.png`），未包含私人桌面内容。
+- RC 静态审阅未发现新的 P0/P1；PowerPoint/WPS 真机、多窗口放映、手机局域网、混合 DPI、声音/TTS 与安装升级仍由 [RC_MANUAL_TEST.md](RC_MANUAL_TEST.md) 手工完成。
 
 ## 待用户手测
 
-本轮源码与数据路径已验证，但仍不替代真实 Windows 体验。请复核配置导入/恢复默认后的 Timer、Remote、快捷键、显示窗口和托盘状态，空 token 配置导入后手机 Remote 必须携带新 token，PowerPoint/WPS、手机局域网、混合 DPI 与声音/TTS 仍按既有清单手测。未创建 Release/Tag。
+本轮完成源码、单元测试、Release 构建、Portable/Installer 打包和可靠截图；未执行真实安装器，不创建 Release/Tag。请按 [RC_MANUAL_TEST.md](RC_MANUAL_TEST.md) 在目标 Windows 机器上完成 PowerPoint/WPS 多窗口、手机连接、双屏 DPI、声音/TTS 及安装升级验收。
 
 ---
 

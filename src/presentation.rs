@@ -515,11 +515,11 @@ fn read_application_state(
 ) -> Result<PresentationState, String> {
     let presentations = dispatch(get(app, "Presentations")?)?;
     let running = int(get(&presentations, "Count")?)? > 0;
-    let windows = dispatch(get(app, "SlideShowWindows")?)?;
-    let slide_show_running = int(get(&windows, "Count")?)? > 0;
-    let presentation = if slide_show_running {
-        let window = dispatch(call(&windows, "Item", &[VARIANT::from(1)])?)?;
-        dispatch(get(&window, "Presentation")?)?
+    let active_path = active_presentation_path(app);
+    let show_window = show_window_for_target(app, active_path.as_deref())?;
+    let slide_show_running = show_window.is_some();
+    let presentation = if let Some(window) = show_window.as_ref() {
+        dispatch(get(window, "Presentation")?)?
     } else if running {
         dispatch(get(app, "ActivePresentation")?)?
     } else {
@@ -534,8 +534,10 @@ fn read_application_state(
     let slides = dispatch(get(&presentation, "Slides")?)?;
     let total_slides = int(get(&slides, "Count")?).unwrap_or(0);
     let (current_slide, screen_state) = if slide_show_running {
-        let window = dispatch(call(&windows, "Item", &[VARIANT::from(1)])?)?;
-        let view = dispatch(get(&window, "View")?)?;
+        let window = show_window
+            .as_ref()
+            .expect("show_window is present when slide_show_running is true");
+        let view = dispatch(get(window, "View")?)?;
         let slide = dispatch(get(&view, "Slide")?)?;
         (
             int(get(&slide, "SlideIndex")?).unwrap_or(0),
@@ -743,15 +745,64 @@ fn clsid(prog_id: &str) -> windows::core::Result<windows::core::GUID> {
     unsafe { CLSIDFromProgID(PCWSTR(value.as_ptr())) }
 }
 
+fn active_presentation_path(app: &IDispatch) -> Option<String> {
+    let presentation = get(app, "ActivePresentation").and_then(dispatch).ok()?;
+    let path = string(get(&presentation, "FullName").ok()?).ok()?;
+    (!path.is_empty()).then_some(path)
+}
+
+fn choose_show_window_index(
+    target_path: Option<&str>,
+    window_paths: &[String],
+) -> Result<Option<usize>, String> {
+    if let Some(target_path) = target_path.filter(|path| !path.is_empty())
+        && let Some(index) = window_paths
+            .iter()
+            .position(|path| same_path(path, target_path))
+    {
+        return Ok(Some(index));
+    }
+    match window_paths.len() {
+        0 => Ok(None),
+        1 => Ok(Some(0)),
+        _ => Err("存在多个正在运行的放映，但无法确定当前文稿。".to_owned()),
+    }
+}
+
+fn show_window_for_target(
+    app: &IDispatch,
+    target_path: Option<&str>,
+) -> Result<Option<IDispatch>, String> {
+    let windows = dispatch(get(app, "SlideShowWindows")?)?;
+    let count = int(get(&windows, "Count")?)?;
+    if count <= 0 {
+        return Ok(None);
+    }
+    let mut show_windows = Vec::with_capacity(count as usize);
+    let mut window_paths = Vec::with_capacity(count as usize);
+    for index in 1..=count {
+        let window = dispatch(call(&windows, "Item", &[VARIANT::from(index)])?)?;
+        let path = get(&window, "Presentation")
+            .and_then(dispatch)
+            .and_then(|presentation| get(&presentation, "FullName"))
+            .and_then(string)
+            .unwrap_or_default();
+        show_windows.push(window);
+        window_paths.push(path);
+    }
+    let Some(index) = choose_show_window_index(target_path, &window_paths)? else {
+        return Ok(None);
+    };
+    Ok(show_windows.into_iter().nth(index))
+}
+
 fn with_show_view(
     operation: impl FnOnce(&IDispatch) -> Result<String, String>,
 ) -> Result<String, String> {
     let (_, app) = running_application().ok_or("PowerPoint 或 WPS 演示未运行。")?;
-    let windows = dispatch(get(&app, "SlideShowWindows")?)?;
-    if int(get(&windows, "Count")?)? <= 0 {
-        return Err("当前没有正在运行的 PowerPoint 放映。".to_owned());
-    }
-    let window = dispatch(call(&windows, "Item", &[VARIANT::from(1)])?)?;
+    let target_path = active_presentation_path(&app);
+    let window = show_window_for_target(&app, target_path.as_deref())?
+        .ok_or("当前没有正在运行的 PowerPoint 放映。".to_owned())?;
     let view = dispatch(get(&window, "View")?)?;
     operation(&view)
 }
@@ -1136,6 +1187,27 @@ mod tests {
             lifecycle.observe(false, "", &config),
             PresentationTimerAction::None
         );
+    }
+
+    #[test]
+    fn show_window_selection_prefers_matching_target_path() {
+        let paths = vec![r"C:\Decks\B.pptx".to_owned(), r"C:\Decks\A.pptx".to_owned()];
+        assert_eq!(
+            choose_show_window_index(Some(r"c:\decks\a.pptx"), &paths),
+            Ok(Some(1))
+        );
+    }
+
+    #[test]
+    fn show_window_selection_falls_back_to_the_only_window() {
+        let paths = vec![String::new()];
+        assert_eq!(choose_show_window_index(None, &paths), Ok(Some(0)));
+    }
+
+    #[test]
+    fn show_window_selection_rejects_ambiguous_windows() {
+        let paths = vec![r"C:\Decks\A.pptx".to_owned(), r"C:\Decks\B.pptx".to_owned()];
+        assert!(choose_show_window_index(Some(r"C:\Decks\Missing.pptx"), &paths).is_err());
     }
 
     #[test]
