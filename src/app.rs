@@ -992,11 +992,7 @@ fn create_presentation_window(
             selected.insert(index);
             selection_anchor_for_click.set(index as i32);
         }
-        window.set_selected_presentation(if selected.is_empty() {
-            -1
-        } else {
-            index as i32
-        });
+        window.set_selected_presentation(index as i32);
         let config = config_for_selection.borrow();
         update_presentation_window_with_selection(
             &window,
@@ -1004,14 +1000,7 @@ fn create_presentation_window(
             &config,
             &selected,
         );
-        let Some(item) = window.get_presentations().row_data(index) else {
-            return;
-        };
-        if item.is_rule {
-            window.set_rule_duration(item.duration);
-            window.set_rule_mode(item.mode);
-            window.set_rule_enabled(item.enabled);
-        }
+        sync_presentation_editor(&window);
     });
     let weak = window.as_weak();
     let selection_anchor_for_actions = Rc::clone(&selection_anchor);
@@ -1057,20 +1046,12 @@ fn create_presentation_window(
                 update_presentation_window(&window, &service_for_rules.state(), &config);
             }
             1 => {
-                let mut paths = presentation_selection(&window)
+                let paths = presentation_selection(&window)
                     .into_iter()
                     .filter_map(|index| window.get_presentations().row_data(index))
                     .filter(|item| item.is_rule)
                     .map(|item| item.path.to_lowercase())
                     .collect::<BTreeSet<_>>();
-                if paths.is_empty()
-                    && let Some(item) = window
-                        .get_presentations()
-                        .row_data(window.get_selected_presentation().max(0) as usize)
-                        .filter(|item| item.is_rule)
-                {
-                    paths.insert(item.path.to_lowercase());
-                }
                 if paths.is_empty() {
                     return;
                 }
@@ -1108,20 +1089,12 @@ fn create_presentation_window(
                 if !crate::config::is_valid_duration(value.as_str()) {
                     return;
                 }
-                let mut paths = presentation_selection(&window)
+                let paths = presentation_selection(&window)
                     .into_iter()
                     .filter_map(|index| window.get_presentations().row_data(index))
                     .filter(|item| item.is_rule)
                     .map(|item| item.path.to_lowercase())
                     .collect::<BTreeSet<_>>();
-                if paths.is_empty()
-                    && let Some(item) = window
-                        .get_presentations()
-                        .row_data(window.get_selected_presentation().max(0) as usize)
-                        .filter(|item| item.is_rule)
-                {
-                    paths.insert(item.path.to_lowercase());
-                }
                 if paths.is_empty() {
                     return;
                 }
@@ -1137,7 +1110,6 @@ fn create_presentation_window(
                     } else {
                         TimerMode::CountUp
                     };
-                    rule.enabled = window.get_rule_enabled();
                 }
                 save_config(&config, &config_path_for_rules);
                 update_presentation_window(&window, &service_for_rules.state(), &config);
@@ -1163,6 +1135,7 @@ fn create_presentation_window(
                     }
                     .into(),
                 );
+                window.set_batch_error("".into());
                 window.set_batch_open(true);
             }
             _ => {}
@@ -1173,12 +1146,20 @@ fn create_presentation_window(
     let service_for_batch = Rc::clone(service);
     let config_path_for_batch = config_path.to_path_buf();
     window.on_batch_confirm(move |duration, mode| {
-        if !crate::config::is_valid_duration(duration.as_str()) {
-            return;
-        }
         let Some(window) = weak.upgrade() else {
             return;
         };
+        if !crate::config::is_valid_duration(duration.as_str()) {
+            window.set_batch_error(
+                if crate::config::ui_is_english(&config_for_batch.borrow().language) {
+                    "A presentation rule has an invalid duration."
+                } else {
+                    "文件规则“文件”的计时时长无效。"
+                }
+                .into(),
+            );
+            return;
+        }
         let selected = presentation_selection(&window);
         if selected.is_empty() {
             window.set_batch_open(false);
@@ -1210,6 +1191,8 @@ fn create_presentation_window(
             &config,
             &selected,
         );
+        sync_presentation_editor(&window);
+        window.set_batch_error("".into());
         window.set_batch_open(false);
     });
     let weak = window.as_weak();
@@ -1273,6 +1256,9 @@ fn create_presentation_window(
                     eprintln!("{error}");
                 }
                 save_config(&config, &config_path_for_actions);
+                if let Some(window) = weak.upgrade() {
+                    window.set_next_port(config.remote_control.port.to_string().into());
+                }
             }
             2 => {
                 let token = remote_for_actions.regenerate_token();
@@ -1340,6 +1326,7 @@ fn create_presentation_window(
         }
         slint::CloseRequestResponse::HideWindow
     });
+    window.set_next_port(config.borrow().remote_control.port.to_string().into());
     populate_remote_connection_window(&window, remote, &config.borrow(), true);
     Ok(window)
 }
@@ -1393,7 +1380,40 @@ fn update_presentation_window_with_selection(
             selected: selected.contains(&index),
         })
         .collect::<Vec<_>>();
+    let current = window.get_selected_presentation();
+    let valid_current = current >= 0
+        && items
+            .get(current as usize)
+            .is_some_and(|item| item.selected);
+    let next = if valid_current {
+        current
+    } else {
+        items
+            .iter()
+            .position(|item| item.selected)
+            .map_or(-1, |i| i as i32)
+    };
+    let previous_path = (current >= 0)
+        .then(|| window.get_presentations().row_data(current as usize))
+        .flatten()
+        .map(|item| item.path);
+    let next_path = (next >= 0).then(|| items[next as usize].path.clone());
     window.set_presentations(ModelRc::new(VecModel::from(items)));
+    window.set_selected_presentation(next);
+    // Periodic list updates must not overwrite an unfinished duration edit.
+    if current != next || previous_path != next_path {
+        sync_presentation_editor(window);
+    }
+}
+
+fn sync_presentation_editor(window: &PresentationWindow) {
+    let index = window.get_selected_presentation();
+    if index >= 0
+        && let Some(item) = window.get_presentations().row_data(index as usize)
+    {
+        window.set_rule_duration(item.duration);
+        window.set_rule_mode(item.mode);
+    }
 }
 
 fn update_remote_connection_window(
@@ -1435,7 +1455,6 @@ fn populate_remote_connection_window(
         }
         .into(),
     );
-    window.set_next_port(config.remote_control.port.to_string().into());
     window.set_client_count_text(
         if english {
             format!("Connected devices: {}", info.connected_clients)
@@ -1815,11 +1834,13 @@ fn handle_command(
     match command {
         "startPause" => {
             let mut timer = timer.borrow_mut();
-            if timer.state() == TimerState::Running {
-                timer.pause();
-            } else {
-                alerts.borrow_mut().reset();
-                timer.start();
+            match timer.state() {
+                TimerState::Running => timer.pause(),
+                TimerState::Paused => timer.resume(),
+                TimerState::Stopped | TimerState::Finished => {
+                    alerts.borrow_mut().reset();
+                    timer.start();
+                }
             }
         }
         "start" => {
@@ -2610,6 +2631,261 @@ fn config_path() -> Result<PathBuf, std::io::Error> {
 mod remote_parity_tests {
     use super::*;
     use crate::{config::FileRule, remote::RemoteCommand};
+
+    #[test]
+    fn start_pause_command_resumes_progress_and_keeps_alerts() {
+        let config = Rc::new(RefCell::new(AppConfig::default()));
+        let timer = Rc::new(RefCell::new(
+            Timer::new(
+                SystemClock::new(),
+                Duration::from_secs(60),
+                crate::timer::TimerMode::Countdown,
+                false,
+            )
+            .unwrap(),
+        ));
+        let alerts = Rc::new(RefCell::new(AlertTracker::default()));
+        let flash = Rc::new(RefCell::new(FlashController::new()));
+        let command = || {
+            handle_command(
+                "startPause",
+                &slint::Weak::default(),
+                &timer,
+                &config,
+                &alerts,
+                &flash,
+                std::path::Path::new("unused.json"),
+            )
+        };
+        command();
+        assert_eq!(timer.borrow().state(), TimerState::Running);
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(
+            alerts
+                .borrow_mut()
+                .check(&timer.borrow().snapshot(), &config.borrow())
+                .len(),
+            1
+        );
+        command();
+        let paused = timer.borrow().snapshot();
+        assert_eq!(paused.state, TimerState::Paused);
+        assert!(paused.elapsed > Duration::ZERO);
+        std::thread::sleep(Duration::from_millis(20));
+        assert_eq!(timer.borrow().snapshot().elapsed, paused.elapsed);
+        command();
+        assert_eq!(timer.borrow().state(), TimerState::Running);
+        assert!(timer.borrow().snapshot().elapsed >= paused.elapsed);
+        assert!(
+            alerts
+                .borrow_mut()
+                .check(&timer.borrow().snapshot(), &config.borrow())
+                .is_empty()
+        );
+        std::thread::sleep(Duration::from_millis(20));
+        assert!(timer.borrow().snapshot().elapsed > paused.elapsed);
+        timer
+            .borrow_mut()
+            .set_duration(Duration::from_nanos(1))
+            .unwrap();
+        timer.borrow_mut().update();
+        assert_eq!(timer.borrow().state(), TimerState::Finished);
+        assert!(
+            alerts
+                .borrow_mut()
+                .end(&timer.borrow().snapshot(), &config.borrow())
+                .is_some()
+        );
+        command();
+        assert_eq!(timer.borrow().state(), TimerState::Running);
+        assert!(
+            alerts
+                .borrow_mut()
+                .end(&timer.borrow().snapshot(), &config.borrow())
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn settings_and_remote_callbacks_preserve_edits_and_saved_data() {
+        // Use Slint's existing software window to invoke production callbacks;
+        // this verifies data flow, not native mouse/focus/DPI behavior.
+        struct SoftwarePlatform;
+        impl slint::platform::Platform for SoftwarePlatform {
+            fn create_window_adapter(
+                &self,
+            ) -> Result<Rc<dyn slint::platform::WindowAdapter>, slint::PlatformError> {
+                Ok(
+                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                        slint::platform::software_renderer::RepaintBufferType::NewBuffer,
+                    ),
+                )
+            }
+        }
+        slint::platform::set_platform(Box::new(SoftwarePlatform)).unwrap();
+        let root = std::env::temp_dir().join(format!(
+            "flyppttimer-ux13-regression-{}",
+            std::process::id()
+        ));
+        let path = root.join("config.json");
+        let config = Rc::new(RefCell::new(AppConfig {
+            language: "en".into(),
+            rules: vec![
+                FileRule {
+                    file_path: r"C:\A.pptx".into(),
+                    duration: "00:08:00".into(),
+                    enabled: true,
+                    ..FileRule::default()
+                },
+                FileRule {
+                    file_path: r"C:\B.pptx".into(),
+                    duration: "00:05:00".into(),
+                    enabled: false,
+                    ..FileRule::default()
+                },
+            ],
+            ..AppConfig::default()
+        }));
+        let (sender, _receiver) = std::sync::mpsc::channel();
+        let remote = Rc::new(RemoteServer::new(sender));
+        let service = Rc::new(PresentationService::start().unwrap());
+        let control = create_presentation_window(&config, &service, &remote, &path).unwrap();
+        let settings = settings::create(
+            config.clone(),
+            path.clone(),
+            Rc::new(|_| {}),
+            Rc::new(|| {}),
+            false,
+            remote.clone(),
+        )
+        .unwrap();
+        settings.invoke_navigate(2);
+        let width_row = settings
+            .get_items()
+            .iter()
+            .position(|item| item.key == "appearance.width")
+            .unwrap() as i32;
+        settings.invoke_field_edited(width_row, "150".into(), false, 0);
+        assert!(settings.get_dirty());
+
+        control.invoke_presentation_selected(0, false, false);
+        control.invoke_presentation_selected(1, true, false);
+        control.invoke_presentation_selected(1, true, false);
+        assert_eq!(presentation_selection(&control), BTreeSet::from([0]));
+        assert_eq!(control.get_selected_presentation(), 0);
+        assert_eq!(control.get_rule_duration(), "00:08:00");
+        control.invoke_presentation_selected(1, true, false);
+        control.set_rule_duration("00:09:00".into());
+        control.invoke_rule_action(4, control.get_rule_duration());
+        let saved = AppConfig::load(&path).unwrap();
+        assert_eq!(
+            saved.rules.iter().map(|r| r.enabled).collect::<Vec<_>>(),
+            [true, false]
+        );
+        assert!(saved.rules.iter().all(|r| r.duration == "00:09:00"));
+        control.invoke_rule_action(5, "".into());
+        control.invoke_batch_confirm("00:10:00".into(), 1);
+        assert_eq!(control.get_rule_duration(), "00:10:00");
+        assert_eq!(control.get_rule_mode(), 1);
+        control.invoke_rule_action(4, control.get_rule_duration());
+        let saved = AppConfig::load(&path).unwrap();
+        assert!(
+            saved
+                .rules
+                .iter()
+                .all(|r| r.duration == "00:10:00" && r.mode == TimerMode::CountUp)
+        );
+        assert_eq!(
+            saved.rules.iter().map(|r| r.enabled).collect::<Vec<_>>(),
+            [true, false]
+        );
+        control.invoke_rule_action(5, "".into());
+        let before = std::fs::read(&path).unwrap();
+        control.invoke_batch_confirm("invalid".into(), 0);
+        assert!(control.get_batch_open());
+        assert!(!control.get_batch_error().is_empty());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        assert!(
+            config
+                .borrow()
+                .rules
+                .iter()
+                .all(|r| r.duration == "00:10:00")
+        );
+        control.set_batch_open(false);
+        control.invoke_presentation_selected(1, true, false);
+        control.invoke_presentation_selected(0, true, false);
+        assert_eq!(control.get_selected_presentation(), -1);
+        control.invoke_rule_action(4, "00:01:00".into());
+        control.invoke_rule_action(1, "".into());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+
+        // Neither periodic refresh nor unrelated Remote actions reset input.
+        control.set_next_port("49".into());
+        for _ in 0..5 {
+            update_remote_connection_window(&control, &remote, &config.borrow());
+        }
+        assert_eq!(control.get_next_port(), "49");
+        control.invoke_remote_action(2, "".into(), false);
+        assert_eq!(control.get_next_port(), "49");
+        let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let requested_port = probe.local_addr().unwrap().port();
+        drop(probe);
+        control.set_next_port(requested_port.to_string().into());
+        control.invoke_remote_action(1, control.get_next_port(), false);
+        assert!(remote.info().running);
+        assert_eq!(
+            config.borrow().remote_control.port,
+            remote.info().current_port
+        );
+        assert_eq!(
+            control.get_next_port(),
+            config.borrow().remote_control.port.to_string()
+        );
+        assert_eq!(
+            AppConfig::load(&path).unwrap().remote_control.port,
+            config.borrow().remote_control.port
+        );
+        remote.stop();
+        let token = config.borrow().remote_control.token.clone();
+        config.borrow_mut().remote_control.port = 49123;
+        config.borrow_mut().remote_control.window.width_dip = 810;
+        config.borrow_mut().rules.push(FileRule {
+            file_path: r"C:\New.pptx".into(),
+            ..FileRule::default()
+        });
+        config.borrow().save(&path).unwrap();
+        // Reverting the Settings edit clears dirty despite external changes.
+        settings.invoke_field_edited(width_row, "100".into(), false, 0);
+        assert!(!settings.get_dirty());
+        settings.invoke_field_edited(width_row, "150".into(), false, 0);
+        settings.invoke_apply();
+        assert!(!settings.get_dirty());
+        let saved = AppConfig::load(&path).unwrap();
+        assert_eq!(saved.appearance.width, 150);
+        assert_eq!(saved.rules.len(), 3);
+        assert_eq!(saved.rules[0].duration, "00:10:00");
+        assert_eq!(saved.remote_control.token, token);
+        assert_eq!(saved.remote_control.port, 49123);
+        assert_eq!(saved.remote_control.window.width_dip, 810);
+        // A second Apply must use a refreshed baseline.
+        config.borrow_mut().remote_control.port = 49124;
+        settings.invoke_field_edited(width_row, "160".into(), false, 0);
+        settings.invoke_apply();
+        assert_eq!(AppConfig::load(&path).unwrap().remote_control.port, 49124);
+        assert_eq!(config.borrow().appearance.width, 160);
+        // Reverted edits + Cancel leave the external configuration untouched.
+        settings.invoke_field_edited(width_row, "170".into(), false, 0);
+        settings.invoke_field_edited(width_row, "160".into(), false, 0);
+        assert!(!settings.get_dirty());
+        let before = std::fs::read(&path).unwrap();
+        settings.invoke_cancel();
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        drop(settings);
+        drop(control);
+        drop(service);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn remote_timer_commands_apply_selected_rules_and_reset_alerts() {

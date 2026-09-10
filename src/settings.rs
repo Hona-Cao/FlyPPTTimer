@@ -482,6 +482,7 @@ pub fn create(
 ) -> Result<SettingsWindow, slint::PlatformError> {
     let window = SettingsWindow::new()?;
     let draft = Rc::new(RefCell::new(applied.borrow().clone()));
+    let baseline = Rc::new(RefCell::new(draft.borrow().clone()));
     let ui_language = Language::from_config(&applied.borrow().language);
     let page = Rc::new(RefCell::new(0usize));
     let selected_rule = Rc::new(RefCell::new(-1i32));
@@ -532,7 +533,7 @@ pub fn create(
         let addresses_for_field = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
         let selected_rules = selected_rules.clone();
-        let applied_for_field = Rc::clone(&applied);
+        let baseline_for_field = Rc::clone(&baseline);
         window.on_field_edited(move |index, value, checked, selected| {
             if let Some(w) = weak.upgrade() {
                 let rows = rows_for(
@@ -551,7 +552,7 @@ pub fn create(
                         value.as_str()
                     };
                     update_field(&mut draft.borrow_mut(), &row.key, value, checked, selected);
-                    let dirty = !configs_equal(&draft.borrow(), &applied_for_field.borrow());
+                    let dirty = !configs_equal(&draft.borrow(), &baseline_for_field.borrow());
                     if matches!(
                         row.key.as_str(),
                         "appearance.scheme" | "placement.all_screens" | "placement.big"
@@ -586,6 +587,7 @@ pub fn create(
         let selected_rules = selected_rules.clone();
         let action_config_path = config_path.clone();
         let applied_for_action = applied.clone();
+        let baseline_for_action = baseline.clone();
         window.on_field_action(move |index| {
             let (row_index, action_index) = if index >= 100 {
                 ((index / 100) as usize, (index % 100) as usize)
@@ -633,6 +635,8 @@ pub fn create(
                         }
                         let _ = active.save(&action_config_path);
                         draft.borrow_mut().remote_control = active.remote_control.clone();
+                        baseline_for_action.borrow_mut().remote_control =
+                            active.remote_control.clone();
                     } else if matches!(action_key, "remote.token" | "remote.disconnect") {
                         let token = if action_key == "remote.token" {
                             remote_for_action.regenerate_token()
@@ -641,7 +645,8 @@ pub fn create(
                         };
                         let mut active = applied_for_action.borrow_mut();
                         active.remote_control.token = token.clone();
-                        draft.borrow_mut().remote_control.token = token;
+                        draft.borrow_mut().remote_control.token = token.clone();
+                        baseline_for_action.borrow_mut().remote_control.token = token;
                         let _ = active.save(&action_config_path);
                     } else {
                         let active = applied_for_action.borrow();
@@ -689,7 +694,7 @@ pub fn create(
                     return;
                 }
                 handle_action(action_key, &mut draft.borrow_mut(), &action_config_path);
-                let dirty = !configs_equal(&draft.borrow(), &applied_for_action.borrow());
+                let dirty = !configs_equal(&draft.borrow(), &baseline_for_action.borrow());
                 if let Some(w) = weak.upgrade() {
                     refresh(
                         &w,
@@ -760,7 +765,7 @@ pub fn create(
     {
         let weak = window.as_weak();
         let draft = draft.clone();
-        let applied_for_rule_edit = Rc::clone(&applied);
+        let baseline_for_rule_edit = Rc::clone(&baseline);
         window.on_rule_edited(move |index, value, checked, code| {
             let mut changed = false;
             if let Some(rule) = draft.borrow_mut().rules.get_mut(index as usize) {
@@ -786,7 +791,7 @@ pub fn create(
                 }
             }
             if changed && let Some(w) = weak.upgrade() {
-                let dirty = !configs_equal(&draft.borrow(), &applied_for_rule_edit.borrow());
+                let dirty = !configs_equal(&draft.borrow(), &baseline_for_rule_edit.borrow());
                 w.set_dirty(dirty);
             }
         });
@@ -799,7 +804,7 @@ pub fn create(
         let addresses_for_rule_action = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
         let selected_rules = selected_rules.clone();
-        let applied_for_rule_action = Rc::clone(&applied);
+        let baseline_for_rule_action = Rc::clone(&baseline);
         window.on_rule_action(move |action| {
             match action {
                 0 => {
@@ -873,7 +878,7 @@ pub fn create(
                 _ => {}
             }
             if let Some(w) = weak.upgrade() {
-                let dirty = !configs_equal(&draft.borrow(), &applied_for_rule_action.borrow());
+                let dirty = !configs_equal(&draft.borrow(), &baseline_for_rule_action.borrow());
                 refresh(
                     &w,
                     &draft.borrow(),
@@ -896,7 +901,7 @@ pub fn create(
         let addresses_for_batch = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
         let selected_rules = selected_rules.clone();
-        let applied_for_batch = Rc::clone(&applied);
+        let baseline_for_batch = Rc::clone(&baseline);
         window.on_batch_confirm(move |duration, mode| {
             if crate::config::is_valid_duration(duration.as_str()) {
                 for (index, rule) in draft
@@ -916,7 +921,7 @@ pub fn create(
                 }
                 if let Some(w) = weak.upgrade() {
                     w.set_batch_open(false);
-                    let dirty = !configs_equal(&draft.borrow(), &applied_for_batch.borrow());
+                    let dirty = !configs_equal(&draft.borrow(), &baseline_for_batch.borrow());
                     refresh(
                         &w,
                         &draft.borrow(),
@@ -941,11 +946,11 @@ pub fn create(
         let selected_rules = selected_rules.clone();
         let remote = remote.clone();
         let addresses = addresses.clone();
-        let applied_for_big_screen = Rc::clone(&applied);
+        let baseline_for_big_screen = Rc::clone(&baseline);
         window.on_big_screen_disabled(move || {
             draft.borrow_mut().placement.big_screen_enabled = false;
             if let Some(w) = weak.upgrade() {
-                let dirty = !configs_equal(&draft.borrow(), &applied_for_big_screen.borrow());
+                let dirty = !configs_equal(&draft.borrow(), &baseline_for_big_screen.borrow());
                 refresh(
                     &w,
                     &draft.borrow(),
@@ -963,6 +968,7 @@ pub fn create(
     let restart_confirmed = Rc::new(std::cell::Cell::new(false));
     let apply_now: ApplyCallback = {
         let restart_confirmed = restart_confirmed.clone();
+        let baseline = baseline.clone();
         let draft = draft.clone();
         let applied = applied.clone();
         let on_applied = on_applied.clone();
@@ -974,24 +980,31 @@ pub fn create(
         let selected_rules = selected_rules.clone();
         Rc::new(move |weak, close| {
             let lang = ui_language;
-            let language_changed = applied.borrow().language != draft.borrow().language;
+            let mut updated =
+                match merge_draft(&applied.borrow(), &baseline.borrow(), &draft.borrow()) {
+                    Ok(updated) => updated,
+                    Err(error) => {
+                        native::message(&error.to_string(), "FlyPPTTimer", false);
+                        return;
+                    }
+                };
+            let language_changed = applied.borrow().language != updated.language;
             if language_changed && !restart_confirmed.replace(false) {
                 if let Some(w) = weak.upgrade() {
                     show_restart_dialog(&w, lang);
                 }
                 return;
             }
-            normalize_before_save(&mut draft.borrow_mut());
-            if let Err(message) = validate(&draft.borrow(), lang) {
+            if let Err(message) = validate(&updated, lang) {
                 native::message(&message, "FlyPPTTimer", false);
                 return;
             }
-            let sync = draft.borrow().timer.default_duration != applied.borrow().timer.default_duration
-                && !draft.borrow().rules.is_empty()
+            let sync = draft.borrow().timer.default_duration != baseline.borrow().timer.default_duration
+                && updated.timer.default_duration != applied.borrow().timer.default_duration
+                && !updated.rules.is_empty()
                 && weak.upgrade().is_some_and(|window| {
-                    let c = draft.borrow();
-                    let duration = &c.timer.default_duration;
-                    let count = c.rules.len();
+                    let duration = &updated.timer.default_duration;
+                    let count = updated.rules.len();
                     let message = if lang.english() {
                         format!("The global default duration will change to {duration}.\n\nApply it to all {count} managed presentations?\n\nChoose No to keep each rule's current duration.")
                     } else {
@@ -1000,20 +1013,31 @@ pub fn create(
                     native::yes_no_for_window(window.window(), &message, t(lang, "同步文件规则时长", "Sync presentation-rule durations"))
                 });
             if sync {
-                let mut c = draft.borrow_mut();
-                let duration = c.timer.default_duration.clone();
-                for rule in &mut c.rules {
+                let duration = updated.timer.default_duration.clone();
+                for rule in &mut updated.rules {
                     rule.duration = duration.clone();
                 }
             }
-            if let Err(error) = draft.borrow().save(&path) {
+            if let Err(error) = updated.save(&path) {
                 native::message(&error.to_string(), "FlyPPTTimer", false);
                 return;
             }
-            let language_changed = applied.borrow().language != draft.borrow().language;
-            commit_draft(&mut applied.borrow_mut(), &draft.borrow());
-            let updated = applied.borrow().clone();
+            *applied.borrow_mut() = updated.clone();
             on_applied(&updated);
+            *draft.borrow_mut() = applied.borrow().clone();
+            *baseline.borrow_mut() = draft.borrow().clone();
+            selected_rules
+                .borrow_mut()
+                .retain(|index| *index < draft.borrow().rules.len());
+            if !selected_rules
+                .borrow()
+                .contains(&(*selected_rule.borrow() as usize))
+            {
+                *selected_rule.borrow_mut() = selected_rules
+                    .borrow()
+                    .first()
+                    .map_or(-1, |index| *index as i32);
+            }
             if language_changed {
                 let result = std::env::current_exe().and_then(|exe| {
                     std::process::Command::new(exe)
@@ -1085,6 +1109,7 @@ pub fn create(
         let draft = draft.clone();
         let applied = applied.clone();
         let page = page.clone();
+        let baseline = baseline.clone();
         let remote_for_cancel = Rc::clone(&remote);
         let addresses_for_cancel = Rc::clone(&addresses);
         let selected_rule = selected_rule.clone();
@@ -1095,7 +1120,7 @@ pub fn create(
                 let lang=ui_language;
                 match native::save_discard_cancel(t(lang, "设置中有未应用的更改。是：应用并关闭；否：放弃更改；取消：继续编辑。", "Settings contain unapplied changes. Yes: apply and close; No: discard changes; Cancel: continue editing.")) {
                     native::Choice::Yes => w.invoke_accept(),
-                    native::Choice::No => { *draft.borrow_mut()=applied.borrow().clone(); refresh(&w, &draft.borrow(), *page.borrow(), *selected_rule.borrow(), &selected_rules.borrow(), false, ui_language, &remote_for_cancel, &addresses_for_cancel); let _=w.hide(); if exit_on_close { let _=slint::quit_event_loop(); } },
+                    native::Choice::No => { *draft.borrow_mut()=applied.borrow().clone(); *baseline.borrow_mut()=draft.borrow().clone(); refresh(&w, &draft.borrow(), *page.borrow(), *selected_rule.borrow(), &selected_rules.borrow(), false, ui_language, &remote_for_cancel, &addresses_for_cancel); let _=w.hide(); if exit_on_close { let _=slint::quit_event_loop(); } },
                     native::Choice::Cancel => {}
                 }
             }
@@ -2051,8 +2076,55 @@ fn validate(c: &AppConfig, lang: Language) -> Result<(), String> {
     Ok(())
 }
 
-fn commit_draft(applied: &mut AppConfig, draft: &AppConfig) {
-    *applied = draft.clone();
+// Objects merge at field granularity; lists (including file rules) are edited
+// as a domain. Unchanged fields always come from the latest applied config.
+fn merge_draft(
+    applied: &AppConfig,
+    baseline: &AppConfig,
+    draft: &AppConfig,
+) -> Result<AppConfig, serde_json::Error> {
+    fn merge(
+        current: &mut serde_json::Value,
+        before: &serde_json::Value,
+        after: &serde_json::Value,
+    ) {
+        if before == after {
+            return;
+        }
+        if let (Some(current), Some(before), Some(after)) = (
+            current.as_object_mut(),
+            before.as_object(),
+            after.as_object(),
+        ) {
+            for (key, value) in after {
+                merge(
+                    current
+                        .entry(key.clone())
+                        .or_insert(serde_json::Value::Null),
+                    &before.get(key).cloned().unwrap_or(serde_json::Value::Null),
+                    value,
+                );
+            }
+            for key in before.keys().filter(|key| !after.contains_key(*key)) {
+                current.remove(key);
+            }
+        } else {
+            *current = after.clone();
+        }
+    }
+    // Normalize both session snapshots so legacy cleanup does not turn an
+    // untouched field into a Settings edit and overwrite an external value.
+    let mut baseline = baseline.clone();
+    let mut draft = draft.clone();
+    normalize_before_save(&mut baseline);
+    normalize_before_save(&mut draft);
+    let mut current = serde_json::to_value(applied)?;
+    merge(
+        &mut current,
+        &serde_json::to_value(&baseline)?,
+        &serde_json::to_value(&draft)?,
+    );
+    serde_json::from_value(current)
 }
 
 pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
@@ -2301,6 +2373,33 @@ mod parity_tests {
                 .unwrap()
                 .enabled
         );
+    }
+
+    #[test]
+    fn settings_merge_keeps_external_fields_in_the_same_section() {
+        let baseline = AppConfig::default();
+        let mut draft = baseline.clone();
+        draft.remote_control.enabled = false;
+        draft.appearance.width = 150;
+        let mut applied = baseline.clone();
+        applied.remote_control.port = 49123;
+        applied.remote_control.token = "external-token".into();
+        applied.remote_control.window.width_dip = 810;
+        applied.appearance.height = 50;
+        applied.behavior.prompt1.text = "existing external text".into();
+        let merged = merge_draft(&applied, &baseline, &draft).unwrap();
+        assert!(!merged.remote_control.enabled);
+        assert_eq!(merged.remote_control.port, 49123);
+        assert_eq!(merged.remote_control.token, "external-token");
+        assert_eq!(merged.remote_control.window.width_dip, 810);
+        assert_eq!(merged.appearance.width, 150);
+        assert_eq!(merged.appearance.height, 50);
+        assert_eq!(merged.behavior.prompt1.text, "existing external text");
+        // Reverting all local changes must be a no-op even after external edits.
+        assert!(configs_equal(
+            &merge_draft(&applied, &baseline, &baseline).unwrap(),
+            &applied
+        ));
     }
 
     #[test]

@@ -5,7 +5,7 @@
   #error OutputDir must be supplied with /DOutputDir=...
 #endif
 #ifndef MyVersion
-  #define MyVersion "1.6.0"
+  #error MyVersion must be supplied from Cargo package version with /DMyVersion=...
 #endif
 
 [Setup]

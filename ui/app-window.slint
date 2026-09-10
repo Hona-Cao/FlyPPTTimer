@@ -270,6 +270,7 @@ export component PresentationWindow inherits Window {
     in-out property <bool> confirm-exit: false;
     in-out property <bool> batch-open: false;
     in-out property <string> batch-duration: "00:08:00";
+    in property <string> batch-error;
     in-out property <int> batch-mode: 0;
     in property <string> batch-title: "批量设置";
     in property <string> batch-count-text: "已选择 0 条规则";
@@ -461,6 +462,7 @@ export component PresentationWindow inherits Window {
             batch-input := LineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
             Text { x: 24px; y: 150px; width: 118px; text: root.batch-mode-text; color: DesktopTheme.secondary; vertical-alignment: top; }
             ComboBox { x: 148px; y: 140px; width: 258px; height: 34px; model: root.timer-modes; current-index <=> root.batch-mode; }
+            Text { x: 24px; y: 178px; width: parent.width - 48px; height: 22px; text: root.batch-error; color: DesktopTheme.danger; font-size: 12px; }
             RemoteButton { x: 222px; y: 202px; width: 88px; height: 36px; text: root.batch-cancel-text; clicked => { root.batch-open = false; } }
             RemoteButton { x: 318px; y: 202px; width: 88px; height: 36px; text: root.batch-confirm-text; primary: true; clicked => { root.batch-confirm(root.batch-duration, root.batch-mode); } }
         }

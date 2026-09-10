@@ -4,7 +4,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$version = "1.6.0"
+$manifest = Join-Path $root "Cargo.toml"
+$metadataJson = cargo metadata --no-deps --format-version 1 --manifest-path $manifest
+if ($LASTEXITCODE -ne 0) {
+    throw "cargo metadata failed with exit code $LASTEXITCODE"
+}
+$metadata = ($metadataJson -join "`n") | ConvertFrom-Json
+$package = @($metadata.packages | Where-Object {
+    [IO.Path]::GetFullPath($_.manifest_path) -eq [IO.Path]::GetFullPath($manifest)
+})
+if ($package.Count -ne 1 -or [string]::IsNullOrWhiteSpace($package[0].version)) {
+    throw "Could not determine the root Cargo package version."
+}
+$version = $package[0].version
 $artifacts = Join-Path $root "artifacts\release\v$version"
 $portable = Join-Path $artifacts "FlyPPTTimer-v$version-portable-win-x64"
 $installerSource = Join-Path $artifacts "installer-source"
