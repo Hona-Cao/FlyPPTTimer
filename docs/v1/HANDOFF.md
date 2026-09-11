@@ -1,69 +1,105 @@
 # FlyPPTTimer V1 — 当前交接
 
-## 最新状态：进入 Codex 真实桌面验收优先阶段
+## 最新状态：第二轮用户反馈进入“直接小修 + Codex 深层整合”阶段
 
-日期：2026-09-11。Review 分支：`codex/v1-06-manual-test`。版本 `1.13.0`，Rust `1.92.0`。
+日期：2026-09-11。Review 分支：`codex/v1-06-manual-test`。版本先保持 `1.13.0`，Rust `1.92.0`。
 
-用户希望尽量减少自己承担的手工测试。若 Codex 当前会话具备 computer-use / 真实桌面控制能力，应优先由 Codex 在 Windows 11 上直接操作程序完成可验证项目，再把真正依赖外部手机、现场投影或主观听感的少量项目留给用户。
+唯一当前实现指令：`docs/v1/CODEX_TASK.md`。
+第二轮用户原始结论与产品语义：`docs/v1/USER_FEEDBACK_20260911_2.md`。
 
-唯一当前实现/测试指令：`docs/v1/CODEX_TASK.md`。
+## 用户刚刚真实确认的结果
 
-## 产品源码基点
+基于 `bf00cf0` 反馈整改包，用户确认：
 
-产品源码冻结候选仍为：
-`bf00cf0dc6ccec337141520f385f8e37d5dab639`
+- 跨屏最终尺寸已经稳定，不再累计放大/缩小；
+- 滚动条已不再遮挡控件；
+- “作者的话”弹窗正常；
+- 手机 Remote 已可正常连接和控制；
+- 提示音播放正常；
+- “时间到”全屏黑屏正常。
 
-其后提交主要是绿色包运行库组装和交接文档，不改变产品二进制基点。任何测试包以 `BUILD.txt` 的 product source SHA 判断，不以分支当前文档 HEAD 或相同的 `1.13.0` 版本号猜测。
+不要因为进入新一轮就推倒这些通过项。
 
-`bf00cf0` 已有 Windows 自动验证：66 passed / 0 failed / 3 ignored，并另外执行过真实音频与可丢弃 Office 文稿范围恢复测试。关键整改包括混合 DPI WINDOWPOS 稳定、每屏全屏 TimeUpWindow、Remote 单一主要 LAN 入口、进程内原生音频回退、无 PowerShell 更新交接、Office 临时放映范围恢复和 COM unknown sample 处理。
+仍有一个跨屏细节：鼠标按住跨不同 DPI 屏幕拖动期间偶尔能看到内容/显示瞬时错位，松手即恢复。目标是消除拖动过程视觉不同步，同时保留最终尺寸稳定。
 
-## 当前分工改变
+## ChatGPT 直接处理的局部改动
 
-此前“用户只测四项”的策略被收紧：凡 computer-use 能在电脑上真实完成的项目，不再默认退给用户。
+ChatGPT 已在 GitHub 发起 `Second feedback direct fixes` Windows workflow（run `34586469962`）。该流程先把补丁应用到临时 checkout，只有 fmt/clippy/test/locked release build 全部成功后才会生成并推送产品提交 `fix: streamline blackout audio and remote resilience`；失败半成品不会推入产品源码。
 
-Codex 应直接完成：
-- 主程序、Timer、托盘菜单、F3/F4/F5；
-- Settings 六页、滚动、Apply/Cancel、弹窗、键盘导航；
-- PC Remote 真实鼠标 Ctrl/Shift 多选、批量/普通 Save、端口输入保护；
-- 真实混合 DPI 双屏绕边/跨屏（如果当前电脑具备）；
-- 全屏到时遮罩在真实桌面的覆盖、持续、解除和退出清理；
-- 可丢弃 PowerPoint/WPS 文稿的真实 GUI 放映与联动；
-- 浏览器打开 Remote 页面、LAN URL/token/端口一致性和命令；
-- 提示音/TTS 实际触发、进程链/日志检查、杀软启用状态下是否出现拦截；
-- 最终 fmt/clippy/test/locked Release build。
+直接补丁范围：
 
-一次鼠标自动化失败不等于“无法测试”。应先重新聚焦窗口、重新识别控件、使用键盘导航或其他现有电脑控制方式。不要因为自动化工具不完美就把整项退回用户。
+1. 增大 Settings / PC Remote ScrollView 的内容-滚动条 gutter；
+2. 全屏 TimeUp 遮罩期间检测 ESC 并解除应用遮罩；
+3. 提示音可听播放最多 10 秒；
+4. 提示音复制保持原 basename，用每个 prompt slot 的子目录避免同名互相覆盖；
+5. mobile Web Remote 的主动 `ppt.*` 操作统一在服务端先解除 FlyPPTTimer TimeUp 遮罩，再执行原命令，`ppt.refresh` 不改变状态；
+6. Web Remote 状态轮询容忍短时失败，online / focus / 回前台立即重连；不自动重试可能非幂等的 POST 命令。
 
-同时不得为了测试建立大型 GUI 自动化框架、永久坐标脚本、VM 基础设施或重构 UI。
+Codex 开工前先确认这条 workflow 成功并拉到它产生的产品提交；若失败，按 `CODEX_TASK.md` 先修直接补丁的编译/测试问题，不要在旧基点另写一套相同实现。
 
-## 仍然不能伪报的外部边界
+## Codex 负责的深层整合
 
-没有真实移动设备时，手机热点扫码仍只能留用户确认；同机 LAN 访问不能等价为跨设备通过。
+### 1. 跨屏拖动中瞬时错位
 
-没有真实现场投影时，可以完成单屏/双屏桌面遮罩和真实 Office 放映，但不能宣称所有投影设备均已通过。
+需要真实 Windows 混合 DPI 复现和原生消息/Slint 布局交叉观察。只修 drag-in-progress 视觉同步，不重做已经通过的无累计尺寸漂移逻辑。
 
-如果模型无法客观判断扬声器主观听感，只能确认播放链路、进程、日志、静音恢复等，不得把“听起来舒服/音量合适”写成已通过。
+### 2. 其他文本弹窗真机回归
 
-## 测试安全边界
+“作者的话”已通过。继续覆盖 Settings/PC Remote/更新/错误/确认/Web confirm 等文本弹窗的中英文和可用 DPI，发现具体裁切才改。
 
-所有 Office 操作只使用新建的可丢弃临时文稿。不要打开、保存、关闭、强退用户真实文稿。
+### 3. 文稿切换成为一个串行原子操作
 
-安全软件保持启用，不关闭防火墙、不关闭杀毒、不绕过鉴权。Remote token 不写入提交或截图。
+用户已复现 A 正在 Slide Show 时直接切换 B：B 置顶而 A 仍在放映，timer 仍被 A 占用。
 
-测试发现稳定 P0/P1 前，不修改产品源码；发现问题先记录复现、预期/实际和证据，再做根因+最小修复。不得借机重新设计 UI、换技术栈或升级依赖。
+必须在 Presentation STA worker 中把“结束旧放映 -> 打开/激活目标 -> 可选启动目标放映”做成单个高层操作。不要从 Web 连发 EndShow+Open。切换不能关闭/保存旧文稿，新放映必须让 timer/rule 正常接管。
 
-## 结果交付
+### 4. 手机演示文件列表管理
 
-Codex 完成电脑侧真实验收后更新 `CODEX_RESULT.md`，新增“Codex 真实桌面验收”章节，逐项标记：真实桌面通过 / 自动或源码通过但缺设备 / 未通过 / 环境不具备。
+增加隐藏/恢复、删除规则、添加已打开文稿到规则列表、自定义排序。删除绝不删除磁盘文件；隐藏不等于禁用规则；排序持久化。不得把手机页面变成任意 PC 文件系统浏览器，也不默认加上传协议。
 
-同时更新 `RC_MANUAL_TEST.md`，把 Codex 已经亲自通过的项目从用户清单删除。最终只留下客观上无法由当前电脑环境完成的最少用户体验项。
+### 5. Timer 页码
 
-如果全部电脑侧项目通过，只提交测试结果和精简后的手测清单，停止等待审核；不要因为“顺便优化”继续改源码。
+新增“显示当前页/总页数”设置，默认开启。有效演示状态下主时间下面显示如 `1/23`；无有效页数时不显示 `0/0`。复用现有 PresentationState，不新建 Office 查询线程。
+
+### 6. Timer 内容自适应与 Settings 实时预览
+
+现有 `expand_timer_windows_if_needed` 只扩大并把扩大值写回配置，需收口为真正内容适配，而不是再叠 resize loop。
+
+建议 Width/Height 作为用户最小/基准尺寸；实际窗口可因 time/page 内容自动增大并缩回基准，自动实际尺寸不写磁盘。
+
+Settings 修改 width/height/font size/page-count 开关时立即预览 Timer；Cancel/放弃恢复 applied，Apply 才持久化。只给这些外观字段实时预览，不把 Settings 全部变成立即应用。
+
+### 7. Remote 稳定验证
+
+先验证 ChatGPT 的客户端断线容错是否足够。只有真实复现服务端故障再改 `remote.rs`；不引入 WebSocket/公网/复杂心跳框架，不降低 token 鉴权。
+
+## 流程优化原则
+
+这轮应把“用户明确下一步动作能够安全包含前置清理”的地方合并：
+
+- 任何 mobile Presentation 主动操作可先退出 FlyPPTTimer TimeUp 遮罩；
+- 切换到另一文稿时先结束旧放映；
+- 关闭正在放映的目标文稿时，在确认后先结束其放映再关闭；
+- Start/Restart/Resume 继续沿用已有 TimeUp 清理；
+- Force Quit 仍需危险确认；
+- Previous/Next/Goto 在没有放映时不自作主张启动放映。
+
+原则是减少“先清状态、再点真正想做的操作”的重复步骤，但不能把破坏性动作藏进普通按钮。
+
+## 测试和安全边界
+
+Office 只使用可丢弃临时文稿。不要打开/保存/关闭/强退用户真实文稿。
+
+不要关闭杀软、防火墙或 Remote token。不要为了测试建立大型 GUI 自动化框架。
+
+真实桌面能由 Codex 验证的由 Codex 做，最终只把必须依赖用户手机/现场感受的最少项目留给用户。
+
+完成本轮所有源码后只生成一个最终绿色测试包，不让用户轮流试中间包。
 
 ## 持久约束
 
-`AGENTS.md` 阅读顺序仍有效；`APPROVED_PRODUCT_DEVIATIONS.md` 优先于冲突旧基线。Remote 不恢复随机端口控件；PC Remote 演示文稿页只做规则管理，Web/mobile Remote 保留演示控制。
-
-保留既有 F3 Pause/Resume、Settings 配置合并、Import/Reset、token 防护、端口输入、多选批量、空路径 fullscreen round、多放映目标匹配等修复和测试。
-
-不强推、不合并默认分支、不升级依赖/版本、不创建 Release/Tag。
+- Rust + Slint V1，不重写技术栈；
+- PC Remote “演示文稿”页仍只做规则管理，不恢复已删除的 PC 放映控制按钮；
+- Web/mobile Remote 保留完整演示控制；
+- 保留 F3 Pause/Resume、Settings merge/import/reset、Remote token、端口编辑保护、规则多选、Office range restore、COM unknown sample 等已修行为；
+- 不升级版本/依赖，不创建 Release/Tag，不合并默认分支，未经批准不强推。
