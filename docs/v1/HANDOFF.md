@@ -1,105 +1,125 @@
 # FlyPPTTimer V1 — 当前交接
 
-## 最新状态：第二轮用户反馈进入“直接小修 + Codex 深层整合”阶段
+## 最新状态：第二轮直接小修已绿，进入 Codex 深层整合
 
 日期：2026-09-11。Review 分支：`codex/v1-06-manual-test`。版本先保持 `1.13.0`，Rust `1.92.0`。
 
 唯一当前实现指令：`docs/v1/CODEX_TASK.md`。
-第二轮用户原始结论与产品语义：`docs/v1/USER_FEEDBACK_20260911_2.md`。
+第二轮用户真实结论与产品语义：`docs/v1/USER_FEEDBACK_20260911_2.md`。
 
-## 用户刚刚真实确认的结果
+## 用户真实确认的上一包结果
 
-基于 `bf00cf0` 反馈整改包，用户确认：
+基于 `bf00cf0` 反馈整改包，用户已经确认：
 
-- 跨屏最终尺寸已经稳定，不再累计放大/缩小；
-- 滚动条已不再遮挡控件；
+- 跨屏最终尺寸稳定，不再累计放大/缩小；
+- ScrollView 不再遮挡控件；
 - “作者的话”弹窗正常；
 - 手机 Remote 已可正常连接和控制；
 - 提示音播放正常；
 - “时间到”全屏黑屏正常。
 
-不要因为进入新一轮就推倒这些通过项。
+不要在本轮推倒这些成功项。
 
-仍有一个跨屏细节：鼠标按住跨不同 DPI 屏幕拖动期间偶尔能看到内容/显示瞬时错位，松手即恢复。目标是消除拖动过程视觉不同步，同时保留最终尺寸稳定。
+当前跨屏残余只是在鼠标仍按住、跨不同 DPI 屏幕拖动时偶发内容/显示瞬时错位，松手即恢复。目标是修拖动过程视觉同步，同时保留最终尺寸稳定。
 
-## ChatGPT 直接处理的局部改动
+## ChatGPT 直接小修已经完成并验证
 
-ChatGPT 已在 GitHub 发起 `Second feedback direct fixes` Windows workflow（run `34586469962`）。该流程先把补丁应用到临时 checkout，只有 fmt/clippy/test/locked release build 全部成功后才会生成并推送产品提交 `fix: streamline blackout audio and remote resilience`；失败半成品不会推入产品源码。
+产品提交：
+`fdadde3ba8b4e88799cc2b67b049437001117a20`
 
-直接补丁范围：
+提交信息：`fix: streamline blackout audio and remote resilience`
 
-1. 增大 Settings / PC Remote ScrollView 的内容-滚动条 gutter；
-2. 全屏 TimeUp 遮罩期间检测 ESC 并解除应用遮罩；
-3. 提示音可听播放最多 10 秒；
-4. 提示音复制保持原 basename，用每个 prompt slot 的子目录避免同名互相覆盖；
-5. mobile Web Remote 的主动 `ppt.*` 操作统一在服务端先解除 FlyPPTTimer TimeUp 遮罩，再执行原命令，`ppt.refresh` 不改变状态；
-6. Web Remote 状态轮询容忍短时失败，online / focus / 回前台立即重连；不自动重试可能非幂等的 POST 命令。
+Windows workflow：`Second feedback direct fixes`，run `34586469962`，已成功。
 
-Codex 开工前先确认这条 workflow 成功并拉到它产生的产品提交；若失败，按 `CODEX_TASK.md` 先修直接补丁的编译/测试问题，不要在旧基点另写一套相同实现。
+自动验证：
 
-## Codex 负责的深层整合
+- `cargo fmt --all -- --check` 通过；
+- `cargo clippy --locked --all-targets --all-features -- -D warnings` 通过；
+- `cargo test --locked`：**66 passed / 0 failed / 3 ignored**；
+- `cargo build --locked --release` 通过。
 
-### 1. 跨屏拖动中瞬时错位
+Codex 后续源码工作以 `fdadde3...` 为基点；不要重复实现以下内容，只做真实桌面/手机受影响验证：
 
-需要真实 Windows 混合 DPI 复现和原生消息/Slint 布局交叉观察。只修 drag-in-progress 视觉同步，不重做已经通过的无累计尺寸漂移逻辑。
+1. Settings / PC Remote ScrollView 已进一步增加内容与滚动条 gutter；
+2. FlyPPTTimer TimeUp 全屏遮罩存在时，PC ESC 可解除遮罩；
+3. 提示音实际播放最多 10 秒，短音自然结束，TTS 不截断；
+4. 提示音复制保留原 basename，以 `alert-sounds/<slot>/<原文件名>` 形式隔离三个提示槽；
+5. mobile Web Remote 的主动 `ppt.*` 操作在执行原命令前先解除 FlyPPTTimer TimeUp 遮罩，`ppt.refresh` 不改变状态；
+6. Web Remote 状态轮询对短时失败容错，并在 online/focus/页面回前台时主动重新同步；不会自动重放 Next/Close 等 POST 操作。
 
-### 2. 其他文本弹窗真机回归
+这些是源码+Windows CI 证据，不等于所有真机体验已经通过。
 
-“作者的话”已通过。继续覆盖 Settings/PC Remote/更新/错误/确认/Web confirm 等文本弹窗的中英文和可用 DPI，发现具体裁切才改。
+## Codex 本轮核心职责
 
-### 3. 文稿切换成为一个串行原子操作
+### 1. 跨屏拖动中的瞬时错位
 
-用户已复现 A 正在 Slide Show 时直接切换 B：B 置顶而 A 仍在放映，timer 仍被 A 占用。
+真实混合 DPI Windows 上复现 drag-in-progress 视觉不同步，只修具体原因，不重做已经通过的无累计漂移逻辑；禁止递归 SetWindowPos、延迟循环校正、禁用 DPI/拖动。
 
-必须在 Presentation STA worker 中把“结束旧放映 -> 打开/激活目标 -> 可选启动目标放映”做成单个高层操作。不要从 Web 连发 EndShow+Open。切换不能关闭/保存旧文稿，新放映必须让 timer/rule 正常接管。
+### 2. 其他文本弹窗
+
+“作者的话”已通过。继续检查 Settings、PC Remote、更新、Remote 错误/确认、Web confirm 等中英文长文本，在 125%/150% 条件可用时做真实桌面回归，只修有证据的裁切/覆盖/键盘问题。
+
+### 3. 文稿切换必须成为单个串行操作
+
+用户复现 A 正在 Slide Show 时手机切 B：B 置顶但 A 仍放映，Timer 继续被 A 占用。
+
+在 Presentation STA worker 中完成“结束旧放映 -> 打开/激活目标 -> 可选启动目标放映”的一个高层命令，不要 Web 连发 EndShow + Open。切换不能关闭、保存或改 dirty 状态的旧文稿；新放映必须让目标 FileRule/Timer 正确接管。
+
+关闭当前正在放映的目标文稿时，在既有确认之后可在同一关闭流程先结束该文稿放映再关闭。Force Quit 继续危险确认；Previous/Next/Goto 无放映时不自动启动。
 
 ### 4. 手机演示文件列表管理
 
-增加隐藏/恢复、删除规则、添加已打开文稿到规则列表、自定义排序。删除绝不删除磁盘文件；隐藏不等于禁用规则；排序持久化。不得把手机页面变成任意 PC 文件系统浏览器，也不默认加上传协议。
+支持：隐藏/恢复、删除列表规则、添加已打开但未成为规则的文稿、自定义持久排序。
 
-### 5. Timer 页码
+- 隐藏不等于禁用规则；
+- 删除绝不删除磁盘 PPT/PPTX/PDF，也不自动关闭 Office 文稿；
+- 不把手机变成任意 PC 文件浏览器，不默认增加上传协议；
+- 排序不被每秒状态刷新打乱；
+- 新 FileRule metadata 必须旧配置兼容，并纳入 Settings 逐规则 merge，避免 stale Settings Apply 覆盖手机更改。
 
-新增“显示当前页/总页数”设置，默认开启。有效演示状态下主时间下面显示如 `1/23`；无有效页数时不显示 `0/0`。复用现有 PresentationState，不新建 Office 查询线程。
+### 5. Remote 稳定性
 
-### 6. Timer 内容自适应与 Settings 实时预览
+先验证 `fdadde3` 客户端自动重连策略。真实手机可用时做锁屏、后台、Wi-Fi 短断和约 10 分钟连续操作。token/port 未变时恢复后不应要求重新扫码，POST 命令不能重复执行。
 
-现有 `expand_timer_windows_if_needed` 只扩大并把扩大值写回配置，需收口为真正内容适配，而不是再叠 resize loop。
+只有有服务端复现证据才改 `remote.rs`；不引入 WebSocket/公网/复杂心跳框架，不降低 token 鉴权。
 
-建议 Width/Height 作为用户最小/基准尺寸；实际窗口可因 time/page 内容自动增大并缩回基准，自动实际尺寸不写磁盘。
+### 6. Timer 页码
 
-Settings 修改 width/height/font size/page-count 开关时立即预览 Timer；Cancel/放弃恢复 applied，Apply 才持久化。只给这些外观字段实时预览，不把 Settings 全部变成立即应用。
+新增“显示当前页/总页数”，默认开启。复用 `PresentationState.current_slide/total_slides`。有效时主时间下方显示 `1/23`，页码字号更小且居中，无有效页数时不显示 `0/0`。普通 Timer、多屏镜像、大屏体验保持协调。
 
-### 7. Remote 稳定验证
+### 7. Timer 内容自适应 + Settings 实时预览
 
-先验证 ChatGPT 的客户端断线容错是否足够。只有真实复现服务端故障再改 `remote.rs`；不引入 WebSocket/公网/复杂心跳框架，不降低 token 鉴权。
+收口现有只扩大并写回配置的 `expand_timer_windows_if_needed`，不要叠第二套 resize loop。
 
-## 流程优化原则
+Width/Height 作为用户最小/基准尺寸；实际窗口根据 time-only / time+page 自动增大，并能缩回基准。自动实际尺寸不写磁盘。
 
-这轮应把“用户明确下一步动作能够安全包含前置清理”的地方合并：
+Settings 修改 Width、Height、FontSize、页码显示开关时立即预览 Timer；Cancel/放弃恢复最后 Applied，Apply 才持久化。不要把整个 Settings draft 改成立即应用。
 
-- 任何 mobile Presentation 主动操作可先退出 FlyPPTTimer TimeUp 遮罩；
-- 切换到另一文稿时先结束旧放映；
-- 关闭正在放映的目标文稿时，在确认后先结束其放映再关闭；
-- Start/Restart/Resume 继续沿用已有 TimeUp 清理；
-- Force Quit 仍需危险确认；
-- Previous/Next/Goto 在没有放映时不自作主张启动放映。
+## 操作逻辑原则
 
-原则是减少“先清状态、再点真正想做的操作”的重复步骤，但不能把破坏性动作藏进普通按钮。
+可以把**安全、明确、可逆的前置清理**并入用户真正想执行的动作，以减少多步操作：
+
+- mobile Presentation 主动操作 -> 先解除 FlyPPTTimer TimeUp 遮罩；
+- 切换另一个文稿 -> 先结束旧放映，再切目标；
+- 关闭正在放映的目标文稿 -> 用户确认后先结束该放映，再关闭；
+- Start/Restart/Resume -> 保留既有 TimeUp 清理。
+
+不要把破坏性或语义不确定的动作偷偷合并：切换文稿不关闭旧文稿、不保存旧文稿；Previous/Next/Goto 无放映时不自动启动；Force Quit 必须继续明确确认。
 
 ## 测试和安全边界
 
-Office 只使用可丢弃临时文稿。不要打开/保存/关闭/强退用户真实文稿。
+Office 只使用可丢弃临时文稿，绝不打开/保存/关闭/强退用户真实文稿。
 
-不要关闭杀软、防火墙或 Remote token。不要为了测试建立大型 GUI 自动化框架。
+不关闭杀软、防火墙或 Remote token；不为了测试建立大型 GUI 自动化框架。
 
-真实桌面能由 Codex 验证的由 Codex 做，最终只把必须依赖用户手机/现场感受的最少项目留给用户。
+凡真实桌面/手机当前环境能由 Codex 完成的验收由 Codex 完成。最终只把客观上仍依赖用户现场感受的最少项目留下。
 
-完成本轮所有源码后只生成一个最终绿色测试包，不让用户轮流试中间包。
+本轮全部源码收口后只生成一个最终绿色测试 ZIP，不让用户测试中间包。
 
 ## 持久约束
 
-- Rust + Slint V1，不重写技术栈；
+- Rust + Slint V1，不换技术栈；
 - PC Remote “演示文稿”页仍只做规则管理，不恢复已删除的 PC 放映控制按钮；
 - Web/mobile Remote 保留完整演示控制；
-- 保留 F3 Pause/Resume、Settings merge/import/reset、Remote token、端口编辑保护、规则多选、Office range restore、COM unknown sample 等已修行为；
+- 保留 F3 Pause/Resume、Settings merge/import/reset、Remote token、端口输入保护、规则多选、Office range restore、COM unknown sample、多放映目标匹配等已修行为；
 - 不升级版本/依赖，不创建 Release/Tag，不合并默认分支，未经批准不强推。
