@@ -1,0 +1,119 @@
+name: User feedback fixes
+on:
+  push:
+    branches: [codex/v1-06-manual-test]
+    paths:
+      - scripts/apply-user-feedback.py
+      - scripts/feedback-capture-probe.py
+      - .github/workflows/apply-user-feedback.yml
+permissions:
+  contents: write
+concurrency:
+  group: feedback-fixes-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prepare reviewed changes
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/apply-user-feedback.py
+          if ($LASTEXITCODE -ne 0) { throw 'Reviewed patch did not apply' }
+          python scripts/feedback-capture-probe.py
+          if ($LASTEXITCODE -ne 0) { throw 'Capture patch did not apply' }
+          New-Item -ItemType Directory -Force feedback-evidence | Out-Null
+          git diff --stat
+      - name: Project toolchain
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Toolchain unavailable' }
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\rc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'Windows SDK unavailable' }
+          "RC=$($rc.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Compile and validate
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo fmt --all
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Format check failed' }
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object feedback-evidence/clippy.log
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+          cargo test --locked 2>&1 | Tee-Object feedback-evidence/tests.log
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+          cargo build --locked --release 2>&1 | Tee-Object feedback-evidence/build.log
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          & target/release/FlyPPTTimer.exe --capture-settings feedback-evidence/screenshots
+          if ($LASTEXITCODE -ne 0) { throw 'Settings capture failed' }
+          & target/release/FlyPPTTimer.exe --capture-windows feedback-evidence/screenshots
+          if ($LASTEXITCODE -ne 0) { throw 'Window capture failed' }
+      - name: Commit only verified sources
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $allowed = @('Cargo.toml','src/audio.rs','src/remote.rs','src/capture.rs','ui/app-window.slint')
+          foreach ($path in @(git diff --name-only)) {
+            if ($path -notin $allowed) { throw "Unexpected modification: $path" }
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- Cargo.toml src/audio.rs src/remote.rs src/capture.rs ui/app-window.slint
+          git rm -- scripts/apply-user-feedback.py scripts/feedback-capture-probe.py .github/workflows/apply-user-feedback.yml
+          git commit -m 'fix: feedback layout clipping native audio and assigned LAN address'
+          if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+          git fetch origin codex/v1-06-manual-test
+          if ($LASTEXITCODE -ne 0) { throw 'Fetch failed' }
+          foreach ($path in @(git diff --name-only $env:GITHUB_SHA origin/codex/v1-06-manual-test)) {
+            if (-not $path.StartsWith('docs/v1/')) { throw "Concurrent non-document change: $path" }
+          }
+          git rebase origin/codex/v1-06-manual-test
+          if ($LASTEXITCODE -ne 0) { throw 'Concurrent change: stop without force push' }
+          git push origin HEAD:codex/v1-06-manual-test
+          if ($LASTEXITCODE -ne 0) { throw 'Push rejected: stop without overwriting' }
+          $sha = git rev-parse HEAD
+          "SOURCE_SHA=$sha" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          git show --format=fuller --stat HEAD | Set-Content feedback-evidence/COMMIT.txt
+          git show --format= --patch HEAD | Set-Content feedback-evidence/CHANGE.patch
+          New-Item -ItemType Directory -Force feedback-evidence/source | Out-Null
+          Copy-Item src/audio.rs,src/remote.rs,src/capture.rs,ui/app-window.slint,Cargo.toml feedback-evidence/source
+      - name: Assemble portable test package
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force portable-feedback | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe portable-feedback
+          Copy-Item docs/default-config.json portable-feedback/FlyPPTTimer.config.json
+          Copy-Item LICENSE portable-feedback
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $crt = Get-ChildItem "$vs\VC\Redist\MSVC" -Recurse -Filter vcruntime140.dll | Where-Object { $_.FullName -match '\\x64\\Microsoft\.VC14[0-9]\.CRT\\vcruntime140\.dll$' } | Sort-Object { $_.VersionInfo.FileVersionRaw } -Descending | Select-Object -First 1
+          if (-not $crt) { throw 'Redistributable runtime unavailable' }
+          foreach ($name in @('vcruntime140.dll','vcruntime140_1.dll')) {
+            $dll = Join-Path $crt.DirectoryName $name
+            if (Test-Path $dll) {
+              $signature = Get-AuthenticodeSignature $dll
+              if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Microsoft') { throw "Invalid signature: $name" }
+              Copy-Item $dll portable-feedback
+            }
+          }
+          "Source: $env:SOURCE_SHA`nVersion: 1.13.0`nFeedback layout/audio/LAN candidate; NOT a formal release.`nDPI dragging, full-screen blackout and real hotspot/Office acceptance remain pending.`nKeep runtime DLLs beside EXE. Extract into a new writable directory. Do not overwrite working configuration." | Set-Content portable-feedback/BUILD.txt -Encoding utf8
+          'Unmodified Microsoft Visual C++ x64 redistributable runtime, copied from Visual Studio Redist for app-local deployment. These files are not under the project MIT license. https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution' | Set-Content portable-feedback/THIRD_PARTY_RUNTIME.txt -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feedback-fix-evidence-${{ github.run_id }}
+          path: feedback-evidence/
+          if-no-files-found: warn
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlyPPTTimer-feedback-portable-${{ env.SOURCE_SHA }}
+          path: portable-feedback/
+          if-no-files-found: error
+          retention-days: 7
