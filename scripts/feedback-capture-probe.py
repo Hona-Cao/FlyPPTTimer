@@ -1,5 +1,11 @@
 from pathlib import Path
 import subprocess
+# Slint height is already a fixed constraint; min/max cannot accompany it.
+ui = Path('ui/app-window.slint')
+u = ui.read_text(encoding='utf-8')
+constraint = '                    min-height: 54px;\n                    max-height: 54px;\n'
+assert u.count(constraint) == 1
+ui.write_text(u.replace(constraint, ''), encoding='utf-8', newline='\n')
 p = Path('src/capture.rs')
 if subprocess.check_output(['git','rev-parse','HEAD:src/capture.rs'], text=True).strip() != '751cac8057082eacf2d44b360aece2a8c505e024':
     raise SystemExit('capture source changed')
