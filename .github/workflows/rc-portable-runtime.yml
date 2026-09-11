@@ -16,8 +16,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: FlyPPTTimer-portable-win-x64-96273ddf0e34fe73902f9fcd3ea4a6f356138c18
-          run-id: 34550315848
+          name: FlyPPTTimer-portable-win-x64-bf00cf0dc6ccec337141520f385f8e37d5dab639
+          run-id: 34561559361
           github-token: ${{ github.token }}
           path: portable
       - name: Add signed redistributable runtime and check process loading
@@ -26,7 +26,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $stage = (Resolve-Path portable).Path
           $build = Get-Content "$stage\BUILD.txt" -Raw
-          if (-not $build.Contains('96273ddf0e34fe73902f9fcd3ea4a6f356138c18')) { throw 'Unexpected source artifact' }
+          if (-not $build.Contains('bf00cf0dc6ccec337141520f385f8e37d5dab639')) { throw 'Unexpected source artifact' }
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (-not $vs) { throw 'Visual Studio not found' }
@@ -43,9 +43,7 @@ jobs:
           }
           @'
           Microsoft Visual C++ runtime files are included unmodified from the Visual Studio x64 Redist directory for app-local deployment with this program. They are Microsoft components, not covered by the project MIT license.
-          https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution
-          https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files
-          App-local runtime files must be kept beside FlyPPTTimer.exe. No runtime installer is executed. This is a test package, not a formal release.
+          App-local runtime files must be kept beside FlyPPTTimer.exe. No runtime installer is executed. This is a review test package, not a formal release.
           '@ | Set-Content "$stage\THIRD_PARTY_RUNTIME.txt" -Encoding utf8
           $configPath = "$stage\FlyPPTTimer.config.json"
           $originalConfig = [IO.File]::ReadAllBytes($configPath)
@@ -60,19 +58,19 @@ jobs:
             if ($process.HasExited) { throw "Process exited during loader smoke: $($process.ExitCode)" }
             $loaded = $process.Modules | Where-Object { $_.ModuleName -ieq 'VCRUNTIME140.dll' } | Select-Object -First 1
             if (-not $loaded -or $loaded.FileName -ine "$stage\vcruntime140.dll") { throw 'App-local runtime was not loaded' }
-            Write-Output 'Release process survived loader smoke and loaded the bundled VCRUNTIME140.dll. This is not GUI/Office acceptance.'
+            Write-Output 'Release process survived loader smoke and loaded the bundled VCRUNTIME140.dll.'
           } finally {
             if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
             [IO.File]::WriteAllBytes($configPath, $originalConfig)
           }
-          Add-Content "$stage\BUILD.txt" 'App-local Microsoft-signed x64 VCRUNTIME included. Loader smoke passed on Windows Server 2022; Windows 11 GUI/Office acceptance remains pending.'
+          Add-Content "$stage\BUILD.txt" 'Product source: bf00cf0dc6ccec337141520f385f8e37d5dab639. App-local Microsoft-signed x64 VCRUNTIME included; loader smoke passed.'
           New-Item -ItemType Directory -Force portable-final | Out-Null
           foreach ($name in @('FlyPPTTimer.exe','FlyPPTTimer.config.json','LICENSE','BUILD.txt','vcruntime140.dll','vcruntime140_1.dll','THIRD_PARTY_RUNTIME.txt')) {
             if (Test-Path "$stage\$name") { Copy-Item "$stage\$name" portable-final }
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: FlyPPTTimer-portable-with-runtime-96273dd
+          name: FlyPPTTimer-v1.13.0-feedback-bf00cf0-with-runtime
           path: portable-final/
           if-no-files-found: error
           retention-days: 7
