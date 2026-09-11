@@ -1,53 +1,64 @@
 # FlyPPTTimer V1 — 当前交接
 
-## 最新状态：反馈整改完成，等待用户四项最终体验确认
+## 最新状态：进入 Codex 真实桌面验收优先阶段
 
 日期：2026-09-11。Review 分支：`codex/v1-06-manual-test`。版本 `1.13.0`，Rust `1.92.0`。
 
-产品源码冻结候选为：`bf00cf0dc6ccec337141520f385f8e37d5dab639`。
+用户希望尽量减少自己承担的手工测试。若 Codex 当前会话具备 computer-use / 真实桌面控制能力，应优先由 Codex 在 Windows 11 上直接操作程序完成可验证项目，再把真正依赖外部手机、现场投影或主观听感的少量项目留给用户。
 
-后续提交 `eeb4ed6315d956c1a1e3aeace01abb6894107d59` 只用于把该源码的 Actions 构建加入 Microsoft 签名 app-local VC Runtime；再后的任务/交接文档提交也不改变产品源码。任何绿色包都以 `BUILD.txt` 中的 product source SHA 判断，不以分支当前文档 HEAD 或相同的 1.13.0 版本号猜测。
+唯一当前实现/测试指令：`docs/v1/CODEX_TASK.md`。
 
-## 本轮已经收口
+## 产品源码基点
 
-用户在 96273dd 测试包中反馈 F01～F09。Codex 在接收 ChatGPT 直接修复后完成最终 `bf00cf0`：
+产品源码冻结候选仍为：
+`bf00cf0dc6ccec337141520f385f8e37d5dab639`
 
-- F01：混合 DPI 跨屏尺寸累计漂移改为在 DPI 转换的待应用 WINDOWPOS 中保持最后一次用户主动逻辑客户区尺寸；实现侧在 150%/125% 双屏做了绕边、反向往返、拉伸、最大化/还原和重开验证。
-- F02～F06：底栏留白、紧凑规则编辑卡、滚动条独立通道与裁剪、作者说明完整显示、去掉说明弹窗蓝色顶条以及弹窗键盘/背景禁用状态均完成原生检查。
-- F07：Remote 只使用实际网卡本机单播地址作为主要手机入口，UI/二维码/复制/打开一致；电脑侧 LAN HTTP 与 token 鉴权通过，但真实手机热点仍必须由用户确认。
-- F08：提示音不再启动 PowerShell，MCI 失败改用进程内 Windows Media Player COM；TTS 仍为 SAPI。更新安装等待也改成本 EXE 原生 helper 路径，不再生成/执行 ps1。常用音频格式、中文空格路径、SAPI、静音恢复和无害更新交接已做真实 Windows 验证。
-- F09：“黑屏并显示时间到”改为每个显示器一个 Slint fullscreen 纯黑顶层窗口；实现侧双屏重复测得完整物理覆盖，普通点击/翻页不解除，F4/Remote Reset 可解除，退出清理。
-- B1：放映临时 RangeType/StartingSlide/EndingSlide 在写入或 Run 失败时也尝试完整恢复；恢复不完整不标 Saved=true，原本 dirty 不标 clean。可丢弃 PowerPoint/WPS 文稿的 clean/dirty 验证已记录。
-- B2：COM 读取失败作为 unknown sample，不再直接等同于放映结束；PresentationService Drop 不等待仍阻塞的 COM worker。
+其后提交主要是绿色包运行库组装和交接文档，不改变产品二进制基点。任何测试包以 `BUILD.txt` 的 product source SHA 判断，不以分支当前文档 HEAD 或相同的 `1.13.0` 版本号猜测。
 
-最终普通自动检查：66 passed / 0 failed / 3 ignored；另外显式运行了真实音频测试和可丢弃 Office 文稿范围恢复测试并通过。完整证据和限制见 `CODEX_RESULT.md`。
+`bf00cf0` 已有 Windows 自动验证：66 passed / 0 failed / 3 ignored，并另外执行过真实音频与可丢弃 Office 文稿范围恢复测试。关键整改包括混合 DPI WINDOWPOS 稳定、每屏全屏 TimeUpWindow、Remote 单一主要 LAN 入口、进程内原生音频回退、无 PowerShell 更新交接、Office 临时放映范围恢复和 COM unknown sample 处理。
 
-## 最终绿色测试包
+## 当前分工改变
 
-`RC portable review` 对 `bf00cf0` 成功构建。随后 `RC portable runtime assembly` 从该准确 artifact 组装运行库，验证两个 x64 VC Runtime 文件 Microsoft Authenticode 有效，并实际启动 EXE、确认加载的是同目录 `VCRUNTIME140.dll`。最终包应含：
+此前“用户只测四项”的策略被收紧：凡 computer-use 能在电脑上真实完成的项目，不再默认退给用户。
 
-- `FlyPPTTimer.exe`
-- `FlyPPTTimer.config.json`
-- `vcruntime140.dll`
-- `vcruntime140_1.dll`
-- `LICENSE`
-- `BUILD.txt`
-- `THIRD_PARTY_RUNTIME.txt`
+Codex 应直接完成：
+- 主程序、Timer、托盘菜单、F3/F4/F5；
+- Settings 六页、滚动、Apply/Cancel、弹窗、键盘导航；
+- PC Remote 真实鼠标 Ctrl/Shift 多选、批量/普通 Save、端口输入保护；
+- 真实混合 DPI 双屏绕边/跨屏（如果当前电脑具备）；
+- 全屏到时遮罩在真实桌面的覆盖、持续、解除和退出清理；
+- 可丢弃 PowerPoint/WPS 文稿的真实 GUI 放映与联动；
+- 浏览器打开 Remote 页面、LAN URL/token/端口一致性和命令；
+- 提示音/TTS 实际触发、进程链/日志检查、杀软启用状态下是否出现拦截；
+- 最终 fmt/clippy/test/locked Release build。
 
-`BUILD.txt` 必须明确写：`Product source: bf00cf0dc6ccec337141520f385f8e37d5dab639`。
+一次鼠标自动化失败不等于“无法测试”。应先重新聚焦窗口、重新识别控件、使用键盘导航或其他现有电脑控制方式。不要因为自动化工具不完美就把整项退回用户。
 
-这是 review 绿色包，不是正式 Release/安装版；主 EXE 未做 Authenticode 签名。不要与 96273dd、5c1cfa9 或更早同为 1.13.0 的包混用。
+同时不得为了测试建立大型 GUI 自动化框架、永久坐标脚本、VM 基础设施或重构 UI。
 
-## 用户只需要确认四项
+## 仍然不能伪报的外部边界
 
-以 `RC_MANUAL_TEST.md` 为唯一入口：
+没有真实移动设备时，手机热点扫码仍只能留用户确认；同机 LAN 访问不能等价为跨设备通过。
 
-1. 在用户原来能快速复现问题的真实双屏上，Settings 与 PC Remote 沿两屏边缘按原路径各绕一次；确认不再累计变大/缩小、控件不变形。
-2. 电脑连接真实手机热点/同 LAN 后，用 Remote 的唯一主要二维码/地址在手机打开，试 Start/Pause/Resume/Reset 和一条临时文稿命令。失败只记录超时/拒绝/403/404/页面能开但命令失败，不关闭整个防火墙、不公开 token。
-3. 安全软件保持正常开启，实际听提示音首次+第二次和 TTS；不应再看到产品音频路径启动 PowerShell。如仍拦截，记录安全软件名称、被拦截进程和入口，不要求用户排查代码。
-4. 用可丢弃文稿在真实单屏/投影场景做短计时。“黑屏并显示时间到”必须完整盖住实际输出，普通点击/下一页不能解除；F4 或 Remote Reset 等主持人明确操作解除。另确认“仅提示/退出放映”不误出现该黑屏。
+没有真实现场投影时，可以完成单屏/双屏桌面遮罩和真实 Office 放映，但不能宣称所有投影设备均已通过。
 
-除用户反馈新的稳定 P0/P1 外，当前停止主动编码，不再扩大审查或 UI 重做。
+如果模型无法客观判断扬声器主观听感，只能确认播放链路、进程、日志、静音恢复等，不得把“听起来舒服/音量合适”写成已通过。
+
+## 测试安全边界
+
+所有 Office 操作只使用新建的可丢弃临时文稿。不要打开、保存、关闭、强退用户真实文稿。
+
+安全软件保持启用，不关闭防火墙、不关闭杀毒、不绕过鉴权。Remote token 不写入提交或截图。
+
+测试发现稳定 P0/P1 前，不修改产品源码；发现问题先记录复现、预期/实际和证据，再做根因+最小修复。不得借机重新设计 UI、换技术栈或升级依赖。
+
+## 结果交付
+
+Codex 完成电脑侧真实验收后更新 `CODEX_RESULT.md`，新增“Codex 真实桌面验收”章节，逐项标记：真实桌面通过 / 自动或源码通过但缺设备 / 未通过 / 环境不具备。
+
+同时更新 `RC_MANUAL_TEST.md`，把 Codex 已经亲自通过的项目从用户清单删除。最终只留下客观上无法由当前电脑环境完成的最少用户体验项。
+
+如果全部电脑侧项目通过，只提交测试结果和精简后的手测清单，停止等待审核；不要因为“顺便优化”继续改源码。
 
 ## 持久约束
 
@@ -55,4 +66,4 @@
 
 保留既有 F3 Pause/Resume、Settings 配置合并、Import/Reset、token 防护、端口输入、多选批量、空路径 fullscreen round、多放映目标匹配等修复和测试。
 
-保护用户配置和真实 Office 文稿；不强推、不合并默认分支、不升级依赖/版本、不创建 Release/Tag。用户反馈前不要再次编码。
+不强推、不合并默认分支、不升级依赖/版本、不创建 Release/Tag。
