@@ -995,6 +995,7 @@ fn invoke(
 fn dispatch(value: VARIANT) -> Result<IDispatch, String> {
     IDispatch::try_from(&value).map_err(|error| error.to_string())
 }
+
 fn int(value: VARIANT) -> Result<i32, String> {
     i32::try_from(&value).map_err(|error| error.to_string())
 }
@@ -1400,9 +1401,7 @@ mod direct_fix_regressions {
 
     #[test]
     fn known_target_does_not_match_unreadable_window_identity() {
-        assert!(
-            choose_show_window_index(Some(r"C:\Decks\A.pptx"), &[String::new()]).is_err()
-        );
+        assert!(choose_show_window_index(Some(r"C:\Decks\A.pptx"), &[String::new()]).is_err());
     }
 
     #[test]
