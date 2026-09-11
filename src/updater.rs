@@ -362,28 +362,14 @@ pub fn launch_installer_after_exit(path: &Path) -> Result<(), String> {
     if !path.is_file() {
         return Err("\u{4e0b}\u{8f7d}\u{7684}\u{5b89}\u{88c5}\u{7a0b}\u{5e8f}\u{4e0d}\u{5b58}\u{5728}\u{3002}".into());
     }
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let script = parent.join("install-update.ps1");
-    let escaped = path.to_string_lossy().replace('\'', "''");
-    let process_id = std::process::id();
-    fs::write(
-        &script,
-        format!(
-            "$ErrorActionPreference = 'Stop'\r\ntry {{ Wait-Process -Id {process_id} -Timeout 30 -ErrorAction SilentlyContinue }} catch {{ }}\r\nStart-Process -FilePath '{escaped}' -WorkingDirectory (Split-Path -Parent '{escaped}')\r\nRemove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue\r\n"
-        ),
-    )
-    .map_err(|error| error.to_string())?;
-    std::process::Command::new("powershell.exe")
+    // Re-enter only the native handoff branch, before single-instance/UI setup.
+    // The caller reaches this function only after explicit install confirmation.
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    std::process::Command::new(executable)
         .creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW)
-        .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-WindowStyle",
-            "Hidden",
-            "-File",
-        ])
-        .arg(&script)
+        .arg("--install-update-after")
+        .arg(std::process::id().to_string())
+        .arg(path)
         .spawn()
         .map_err(|error| error.to_string())?;
     Ok(())

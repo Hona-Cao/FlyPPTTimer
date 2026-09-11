@@ -85,7 +85,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let display_windows = Rc::new(RefCell::new(DisplayWindows::default()));
     let display_rebuild = Rc::new(Cell::new(true));
-    let time_up_window = Rc::new(RefCell::new(None));
+    let time_up_window = Rc::new(RefCell::new(Vec::new()));
     let preserve_time_up = Rc::new(Cell::new(false));
     let settings_window = Rc::new(RefCell::new(None));
     let presentation_window = Rc::new(RefCell::new(None));
@@ -163,6 +163,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }, 10000);
             }
             while let Some(event) = desktop_for_updates.try_recv() {
+                if let DesktopEvent::Command(command) = &event
+                    && matches!(command.as_str(), "startPause" | "start" | "resume" | "stopReset" | "reset")
+                {
+                    preserve_time_up_for_updates.set(false);
+                    hide_time_up(&time_up_for_updates);
+                }
                 handle_desktop_event(
                     event,
                     &weak_window,
@@ -205,17 +211,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = settings.hide();
             }
             let presentation_state = presentation_for_updates.state();
+            if last_remote_update.get().elapsed() >= Duration::from_secs(1)
+                && let Some(settings) = settings_for_updates.borrow().as_ref()
+            {
+                crate::settings::refresh_remote_status(settings, &remote_for_updates, &config_for_updates.borrow());
+            }
             if let Some(control) = presentation_window_for_updates.borrow().as_ref() {
                 update_presentation_window(
                     control,
                     &presentation_state,
                     &config_for_updates.borrow(),
                 );
-                update_remote_connection_window(
+                if last_remote_update.get().elapsed() >= Duration::from_secs(1) { update_remote_connection_window(
                     control,
                     &remote_for_updates,
                     &config_for_updates.borrow(),
-                );
+                ); }
             }
             if last_fullscreen_check.get().elapsed() >= Duration::from_millis(500) {
                 last_fullscreen_check.set(Instant::now());
@@ -226,11 +237,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         .fullscreen_process_whitelist,
                 );
             }
-            let action = lifecycle_for_updates.borrow_mut().observe(
-                presentation_state.slide_show_running || fullscreen_match.borrow().is_some(),
+            let mut action = lifecycle_for_updates.borrow_mut().observe_sample(
+                (!presentation_state.state_unavailable || fullscreen_match.borrow().is_some())
+                    .then_some(presentation_state.slide_show_running || fullscreen_match.borrow().is_some()),
                 &presentation_state.presentation_path,
                 &config_for_updates.borrow(),
             );
+            if preserve_time_up_for_updates.get() && matches!(action, PresentationTimerAction::Start(_)) {
+                action = PresentationTimerAction::None;
+            }
             if matches!(&action, PresentationTimerAction::Start(_))
                 && let Some(settings) = settings_for_updates.borrow().as_ref()
             {
@@ -340,10 +355,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     preserve_time_up_for_updates.get(),
                 ));
             }
-            if update.snapshot.state == TimerState::Running && preserve_time_up_for_updates.get() {
-                preserve_time_up_for_updates.set(false);
-                hide_time_up(&time_up_for_updates);
-            }
             drop(config);
             if let Some(root) = weak_window.upgrade() {
                 expand_timer_windows_if_needed(
@@ -372,6 +383,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     display_rebuild.set(false);
 
     slint::run_event_loop_until_quit()?;
+    hide_time_up(&time_up_window);
     desktop.shutdown();
     remote.stop();
     settings_window.borrow_mut().take();
@@ -396,42 +408,36 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn show_time_up(
-    holder: &Rc<RefCell<Option<TimeUpWindow>>>,
-    preserve: &Rc<Cell<bool>>,
+    holder: &Rc<RefCell<Vec<TimeUpWindow>>>,
+    _preserve: &Rc<Cell<bool>>,
     language: &str,
 ) {
     hide_time_up(holder);
-    let Ok(window) = TimeUpWindow::new() else {
-        return;
-    };
-    window.set_message(
-        if crate::config::ui_is_english(language) {
-            "TIME'S UP"
-        } else {
-            "时间到"
+    for monitor in display::monitors() {
+        let Ok(window) = TimeUpWindow::new() else {
+            crate::log::error("Failed to create time-up cover");
+            continue;
+        };
+        window.set_message(
+            if crate::config::ui_is_english(language) {
+                "TIME'S UP"
+            } else {
+                "时间到"
+            }
+            .into(),
+        );
+        if window.show().is_ok() {
+            window::show_time_up_window(window.window(), monitor.bounds);
+            holder.borrow_mut().push(window);
         }
-        .into(),
-    );
-    let weak = window.as_weak();
-    let preserve_for_dismiss = Rc::clone(preserve);
-    window.on_dismiss(move || {
-        preserve_for_dismiss.set(false);
-        if let Some(window) = weak.upgrade() {
-            let _ = window.hide();
-        }
-    });
-    if window.show().is_ok() {
-        window::show_time_up_window(window.window());
-        *holder.borrow_mut() = Some(window);
     }
 }
 
-fn hide_time_up(holder: &Rc<RefCell<Option<TimeUpWindow>>>) {
-    if let Some(window) = holder.borrow_mut().take() {
+fn hide_time_up(holder: &Rc<RefCell<Vec<TimeUpWindow>>>) {
+    for window in holder.borrow_mut().drain(..) {
         let _ = window.hide();
     }
 }
-
 fn apply_presentation_timer_action(
     action: PresentationTimerAction,
     timer: &Rc<RefCell<Timer<SystemClock>>>,
@@ -564,17 +570,8 @@ fn handle_desktop_event(
                 return;
             }
             let previous_settings_geometry = settings_window.borrow().as_ref().map(|settings| {
-                (
-                    settings.window().position(),
-                    // `Window::size()` is already reported by Slint/winit in
-                    // physical pixels.  Reading the HWND client rectangle
-                    // here is unsafe on a mixed-DPI desktop because a
-                    // non-per-monitor-aware caller can receive a DPI-
-                    // virtualized (smaller) value; feeding that value back
-                    // into `set_size(PhysicalSize)` shrinks the window on
-                    // every close/reopen cycle.
-                    Some(settings.window().size()),
-                )
+                let (position, size) = window::normal_window_geometry(settings.window());
+                (position, Some(size))
             });
             // A hidden settings adapter can retain a stale native surface after
             // repeated close/reopen cycles. Recreate only a clean, non-dirty
@@ -1280,11 +1277,9 @@ fn create_presentation_window(
             }
             5 => {
                 let config = config_for_remote.borrow();
-                let port = effective_remote_port(&remote_for_actions, &config);
-                let _ = crate::remote::open_url(&format!(
-                    "http://127.0.0.1:{port}/?token={}",
-                    config.remote_control.token
-                ));
+                if let Some(url) = preferred_remote_url(&remote_for_actions, &config) {
+                    let _ = crate::remote::open_url(&url);
+                }
             }
             6 => {
                 let _ = crate::remote::copy_text(&crate::remote::firewall_command(
@@ -1483,7 +1478,9 @@ fn populate_remote_connection_window(
     } else {
         format!("如果手机无法连接，请在 Windows 防火墙中允许 TCP 端口 {}。FlyPPTTimer 只提供修复命令，不会主动提权修改防火墙。\n{}", effective_port, crate::remote::firewall_command(effective_port))
     }.into());
-    if refresh_addresses || window.get_recommended_url().is_empty() {
+    let recommended = preferred_remote_url(remote, config).unwrap_or_default();
+    if refresh_addresses || window.get_connection_url().as_str() != recommended {
+        window.set_connection_url(recommended.clone().into());
         let addresses = crate::remote::lan_addresses();
         window.set_address_list_text(
             if addresses.is_empty() {
@@ -1497,7 +1494,7 @@ fn populate_remote_connection_window(
             }
             .into(),
         );
-        if let Some(recommended) = preferred_remote_url(remote, config) {
+        if !recommended.is_empty() {
             window.set_recommended_url(crate::remote::mask_token(&recommended).into());
             window.set_qr_image(crate::remote::qr_image(&recommended));
         } else {
@@ -1541,7 +1538,7 @@ fn handle_remote_request(
     alerts: &Rc<RefCell<AlertTracker>>,
     flash: &Rc<RefCell<FlashController>>,
     presentation: &Rc<PresentationService>,
-    time_up_window: &Rc<RefCell<Option<TimeUpWindow>>>,
+    time_up_window: &Rc<RefCell<Vec<TimeUpWindow>>>,
     preserve_time_up: &Rc<Cell<bool>>,
     config_path: &std::path::Path,
 ) {
@@ -1584,13 +1581,23 @@ fn execute_remote_command(
     alerts: &Rc<RefCell<AlertTracker>>,
     flash: &Rc<RefCell<FlashController>>,
     presentation: &Rc<PresentationService>,
-    time_up_window: &Rc<RefCell<Option<TimeUpWindow>>>,
+    time_up_window: &Rc<RefCell<Vec<TimeUpWindow>>>,
     preserve_time_up: &Rc<Cell<bool>>,
     config_path: &std::path::Path,
 ) -> Result<String, String> {
     let name = command.command.as_str();
     if name.starts_with("timer.") || name == "state.get" {
-        return execute_remote_timer_command(command, timer, config, alerts, config_path);
+        let result = execute_remote_timer_command(command, timer, config, alerts, config_path);
+        if result.is_ok()
+            && matches!(
+                name,
+                "timer.start" | "timer.restart" | "timer.reset" | "timer.resume"
+            )
+        {
+            preserve_time_up.set(false);
+            hide_time_up(time_up_window);
+        }
+        return result;
     }
     match name {
         "window.show" => {
@@ -2474,15 +2481,17 @@ fn show_settings_ready_at(
                     // the saved physical client size directly. Converting it
                     // through Slint's logical scale here would apply DPI a
                     // second time and shrink on every reopen.
+                    if let Some(position) = position {
+                        window.window().set_position(position);
+                    } else {
+                        window::center_window_on_cursor(window.window(), window.window().size());
+                    }
+                    // Move to the saved monitor first so Winit finishes its DPI
+                    // change before receiving the saved physical client size.
                     let physical_size = previous_size.unwrap_or_else(|| {
                         window::logical_size_to_physical(window.window(), 900, 650)
                     });
                     window.window().set_size(physical_size);
-                    if let Some(position) = position {
-                        window.window().set_position(position);
-                    } else {
-                        window::center_window_on_cursor(window.window(), physical_size);
-                    }
                     window::install_settings_dpi_stabilizer(window.window());
                     window::set_visible(window.window(), true);
                     window::foreground(window.window());
@@ -2526,6 +2535,7 @@ fn show_presentation_ready(
                 window::logical_size_to_physical(window.window(), logical_width, logical_height);
             window.window().set_size(physical_size);
             window::install_settings_dpi_stabilizer(window.window());
+            window.window().set_maximized(placement.maximized);
             if let Err(error) = window.show() {
                 eprintln!("failed to reveal remote control: {error}");
                 return;

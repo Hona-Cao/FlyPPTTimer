@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::{
     app::{RuleItem, SettingItem, SettingsWindow},
@@ -704,20 +704,21 @@ pub fn create(
                         } else {
                             active.remote_control.port
                         };
-                        let url = format!(
-                            "http://127.0.0.1:{port}/?token={}",
-                            active.remote_control.token
-                        );
+                        let url = crate::remote::lan_addresses().first().map(|address| {
+                            format!(
+                                "http://{address}:{port}/?token={}",
+                                active.remote_control.token
+                            )
+                        });
                         match action_key {
                             "remote.open" => {
-                                let _ = crate::remote::open_url(&url);
+                                if let Some(url) = &url {
+                                    let _ = crate::remote::open_url(url);
+                                }
                             }
                             "remote.copy" => {
-                                if let Some(address) = addresses_for_action.first() {
-                                    let _ = crate::remote::copy_text(&format!(
-                                        "http://{address}:{port}/?token={}",
-                                        active.remote_control.token
-                                    ));
+                                if let Some(url) = &url {
+                                    let _ = crate::remote::copy_text(url);
                                 }
                             }
                             "remote.copyfirewall" => {
@@ -1184,6 +1185,28 @@ pub fn create(
         });
     }
     Ok(window)
+}
+
+pub fn refresh_remote_status(window: &SettingsWindow, remote: &RemoteServer, config: &AppConfig) {
+    if window.get_current_page() != 3 {
+        return;
+    }
+    let model = window.get_items();
+    for (index, row) in remote_rows(config, Language::from_config(&config.language), remote, &[])
+        .into_iter()
+        .enumerate()
+    {
+        // Update only read-only status/address rows; preserve the draft port,
+        // selection and keyboard focus while a network or token changes.
+        if !row.enabled {
+            let item = row.localized(Language::from_config(&config.language));
+            if let Some(current) = model.row_data(index)
+                && current.value != item.value
+            {
+                model.set_row_data(index, item);
+            }
+        }
+    }
 }
 
 fn show_restart_dialog(window: &SettingsWindow, lang: Language) {
@@ -1667,8 +1690,9 @@ fn remote_rows(
     c: &AppConfig,
     lang: Language,
     remote: &RemoteServer,
-    addresses: &[String],
+    _addresses: &[String],
 ) -> Vec<Row> {
+    let addresses = crate::remote::lan_addresses();
     let note = t(
         lang,
         "优先使用已保存的固定端口。\n\n只有端口不可用时才自动切换并保存新端口，同时提示地址变化。\n\n手动修改端口后重启服务生效。",
@@ -1717,16 +1741,6 @@ fn remote_rows(
         )
         .to_owned()
     };
-    let all_addresses = if addresses.is_empty() {
-        t(
-            lang,
-            "未检测到可供手机访问的局域网地址",
-            "No mobile-accessible LAN address found",
-        )
-        .to_owned()
-    } else {
-        addresses.join("\n")
-    };
     vec![
         Row::section("本地网页遥控"),
         Row::check("remote.enabled", "启用远程控制", c.remote_control.enabled),
@@ -1737,7 +1751,7 @@ fn remote_rows(
         Row::text("", "连接设备数量", client_count).disabled(),
         Row::section("访问地址"),
         Row::text("", "推荐访问地址", recommended).disabled(),
-        Row::info("手机可用局域网地址", all_addresses).tall(150),
+
         Row::section("操作"),
         Row::action_group(vec![
             ("remote.restart", "重启远程服务并应用端口"),

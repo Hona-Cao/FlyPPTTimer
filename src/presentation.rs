@@ -39,6 +39,8 @@ pub struct PresentationState {
     pub running: bool,
     pub has_presentation: bool,
     pub slide_show_running: bool,
+    /// A COM failure is unknown, not evidence that the slideshow ended.
+    pub state_unavailable: bool,
     pub presentation_name: String,
     pub presentation_path: String,
     pub current_slide: i32,
@@ -228,7 +230,9 @@ impl PresentationService {
 impl Drop for PresentationService {
     fn drop(&mut self) {
         let _ = self.sender.send(Request::Stop);
-        if let Some(thread) = self.thread.take() {
+        if let Some(thread) = self.thread.take()
+            && thread.is_finished()
+        {
             let _ = thread.join();
         }
     }
@@ -286,6 +290,7 @@ impl Session {
                 wps_installed,
                 application: process,
                 running: process.is_some(),
+                state_unavailable: process.is_some(),
                 message: self.message.clone(),
                 ..PresentationState::default()
             };
@@ -302,6 +307,7 @@ impl Session {
                 wps_installed,
                 application: Some(kind),
                 running: true,
+                state_unavailable: true,
                 message: self.message.clone(),
                 error,
                 ..PresentationState::default()
@@ -414,33 +420,22 @@ impl Session {
         } else {
             1
         };
-        let original_range = int(get(&settings, "RangeType")?).ok();
-        let original_start = int(get(&settings, "StartingSlide")?).ok();
-        let original_end = int(get(&settings, "EndingSlide")?).ok();
-        let was_saved = int(get(&presentation, "Saved")?)
-            .ok()
-            .is_some_and(|value| value != 0);
-        put(
-            &settings,
-            "RangeType",
-            VARIANT::from(if from_current { 2 } else { 1 }),
+        // Obtain the complete snapshot before the first write. A failed read must
+        // never leave us guessing which settings or Saved flag are safe to restore.
+        let original = [
+            int(get(&settings, "RangeType")?)?,
+            int(get(&settings, "StartingSlide")?)?,
+            int(get(&settings, "EndingSlide")?)?,
+        ];
+        let was_saved = int(get(&presentation, "Saved")?)? != 0;
+        run_with_restored_range(
+            original,
+            [if from_current { 2 } else { 1 }, start, total],
+            was_saved,
+            |name, value| put(&settings, name, VARIANT::from(value)),
+            || call(&settings, "Run", &[]).map(|_| ()),
+            || put(&presentation, "Saved", VARIANT::from(true)),
         )?;
-        put(&settings, "StartingSlide", VARIANT::from(start))?;
-        put(&settings, "EndingSlide", VARIANT::from(total))?;
-        let result = call(&settings, "Run", &[]);
-        if let Some(value) = original_start {
-            let _ = put(&settings, "StartingSlide", VARIANT::from(value));
-        }
-        if let Some(value) = original_end {
-            let _ = put(&settings, "EndingSlide", VARIANT::from(value));
-        }
-        if let Some(value) = original_range {
-            let _ = put(&settings, "RangeType", VARIANT::from(value));
-        }
-        if was_saved {
-            let _ = put(&presentation, "Saved", VARIANT::from(true));
-        }
-        result?;
         Ok(if from_current {
             format!("已从第 {start} 页开始放映")
         } else {
@@ -506,6 +501,45 @@ impl Session {
         self.managed_paths.remove(&key);
         self.opened_order.retain(|candidate| candidate != &key);
     }
+}
+
+fn run_with_restored_range(
+    original: [i32; 3],
+    requested: [i32; 3],
+    was_saved: bool,
+    mut write: impl FnMut(&str, i32) -> Result<(), String>,
+    run: impl FnOnce() -> Result<(), String>,
+    mark_saved: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let properties = ["RangeType", "StartingSlide", "EndingSlide"];
+    let result = (|| {
+        for (name, value) in properties.iter().zip(requested) {
+            write(name, value)?;
+        }
+        run()
+    })();
+    // Even a failing property put may have changed the server. Attempt every
+    // restoration, including after the very first put or Run fails.
+    let mut errors = Vec::new();
+    for index in [1, 2, 0] {
+        if let Err(error) = write(properties[index], original[index]) {
+            errors.push(format!("{}: {error}", properties[index]));
+        }
+    }
+    if errors.is_empty()
+        && was_saved
+        && let Err(error) = mark_saved()
+    {
+        errors.push(format!("Saved: {error}"));
+    }
+    if !errors.is_empty() {
+        let cleanup = format!("无法完整恢复放映设置：{}", errors.join("; "));
+        return Err(match result {
+            Err(error) => format!("{error}; {cleanup}"),
+            Ok(()) => cleanup,
+        });
+    }
+    result
 }
 
 fn read_application_state(
@@ -583,6 +617,7 @@ fn read_application_state(
         running: true,
         has_presentation: true,
         slide_show_running,
+        state_unavailable: false,
         presentation_name: name,
         presentation_path: path.clone(),
         current_slide,
@@ -1089,6 +1124,16 @@ pub struct PresentationLifecycle {
 }
 
 impl PresentationLifecycle {
+    pub fn observe_sample(
+        &mut self,
+        showing: Option<bool>,
+        path: &str,
+        config: &AppConfig,
+    ) -> PresentationTimerAction {
+        showing.map_or(PresentationTimerAction::None, |showing| {
+            self.observe(showing, path, config)
+        })
+    }
     pub fn observe(
         &mut self,
         showing: bool,
@@ -1414,5 +1459,209 @@ mod direct_fix_regressions {
                 error: None,
             }
         );
+    }
+}
+
+#[cfg(test)]
+mod feedback_regressions {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn temporary_range_restores_after_each_put_or_run_failure() {
+        for fail_at in 0..=3 {
+            let values = RefCell::new([3, 4, 7]);
+            let writes = Cell::new(0);
+            let marked = Cell::new(false);
+            let result = run_with_restored_range(
+                [3, 4, 7],
+                [2, 5, 9],
+                true,
+                |name, value| {
+                    let index = ["RangeType", "StartingSlide", "EndingSlide"]
+                        .iter()
+                        .position(|p| *p == name)
+                        .unwrap();
+                    values.borrow_mut()[index] = value;
+                    let n = writes.get();
+                    writes.set(n + 1);
+                    if n == fail_at && fail_at < 3 {
+                        Err("injected put failure".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+                || Err("injected Run failure".into()),
+                || {
+                    marked.set(true);
+                    Ok(())
+                },
+            );
+            assert!(result.is_err());
+            assert_eq!(*values.borrow(), [3, 4, 7]);
+            assert!(marked.get());
+            assert_eq!(writes.get(), fail_at.min(2) + 4);
+        }
+    }
+
+    #[test]
+    fn incomplete_restoration_never_marks_saved_and_attempts_every_property() {
+        for failed_restore in 3..6 {
+            let writes = Cell::new(0);
+            let marked = Cell::new(false);
+            let result = run_with_restored_range(
+                [3, 4, 7],
+                [2, 5, 9],
+                true,
+                |_, _| {
+                    let n = writes.get();
+                    writes.set(n + 1);
+                    if n == failed_restore {
+                        Err("restore rejected".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+                || Ok(()),
+                || {
+                    marked.set(true);
+                    Ok(())
+                },
+            );
+            assert!(result.unwrap_err().contains("restore rejected"));
+            assert_eq!(writes.get(), 6);
+            assert!(!marked.get());
+        }
+        run_with_restored_range(
+            [3, 4, 7],
+            [2, 5, 9],
+            false,
+            |_, _| Ok(()),
+            || Ok(()),
+            || panic!("dirty document marked saved"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn blocked_presentation_worker_does_not_block_service_drop() {
+        let (release, wait) = mpsc::channel();
+        let (finished, completion) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let _ = wait.recv();
+            let _ = finished.send(());
+        });
+        let (sender, _receiver) = mpsc::channel();
+        let service = PresentationService {
+            sender,
+            state: Arc::new(Mutex::new(PresentationState::default())),
+            thread: Some(worker),
+        };
+        let (dropped, done) = mpsc::channel();
+        let dropper = thread::spawn(move || {
+            drop(service);
+            let _ = dropped.send(());
+        });
+        let result = done.recv_timeout(Duration::from_secs(1));
+        release.send(()).unwrap();
+        completion.recv_timeout(Duration::from_secs(1)).unwrap();
+        dropper.join().unwrap();
+        assert!(result.is_ok(), "Drop waited on the blocked worker");
+    }
+
+    #[test]
+    fn unknown_com_sample_does_not_end_show_but_confirmed_end_does() {
+        let config = AppConfig::default();
+        let mut lifecycle = PresentationLifecycle::default();
+        lifecycle.observe_sample(Some(true), "temporary.pptx", &config);
+        assert_eq!(
+            lifecycle.observe_sample(None, "", &config),
+            PresentationTimerAction::None
+        );
+        assert!(lifecycle.showing);
+        lifecycle.observe_sample(Some(false), "", &config);
+        assert!(!lifecycle.showing);
+    }
+}
+
+#[cfg(test)]
+mod native_range_test {
+    use super::*;
+
+    #[test]
+    #[ignore = "creates only disposable decks; requires FLYPPT_PRESENTATION_TEST_DIR and idle Office"]
+    fn native_clean_and_dirty_range_restoration() {
+        let directory = PathBuf::from(
+            std::env::var("FLYPPT_PRESENTATION_TEST_DIR").expect("temporary directory required"),
+        );
+        assert!(directory.is_absolute() && directory.is_dir());
+        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+            .ok()
+            .unwrap();
+        assert!(
+            running_application().is_none(),
+            "An Office automation application is already active; refusing test"
+        );
+        for (kind, prog_id) in [
+            (PresentationApp::PowerPoint, "PowerPoint.Application"),
+            (PresentationApp::Wps, "KWPP.Application"),
+        ] {
+            let app: IDispatch =
+                unsafe { CoCreateInstance(&clsid(prog_id).unwrap(), None, CLSCTX_LOCAL_SERVER) }
+                    .unwrap();
+            let presentations = dispatch(get(&app, "Presentations").unwrap()).unwrap();
+            assert_eq!(
+                int(get(&presentations, "Count").unwrap()).unwrap(),
+                0,
+                "Existing documents; refusing test"
+            );
+            let deck =
+                dispatch(call(&presentations, "Add", &[VARIANT::from(-1)]).unwrap()).unwrap();
+            let result = (|| -> Result<(), String> {
+                let slides = dispatch(get(&deck, "Slides")?)?;
+                for index in 1..=3 {
+                    call(&slides, "Add", &[VARIANT::from(index), VARIANT::from(12)])?;
+                }
+                let settings = dispatch(get(&deck, "SlideShowSettings")?)?;
+                put(&settings, "RangeType", VARIANT::from(2))?;
+                put(&settings, "StartingSlide", VARIANT::from(2))?;
+                put(&settings, "EndingSlide", VARIANT::from(3))?;
+                let path = directory.join(format!("disposable-{kind:?}.pptx"));
+                call(
+                    &deck,
+                    "SaveAs",
+                    &[
+                        VARIANT::from(path.to_string_lossy().as_ref()),
+                        VARIANT::from(24),
+                    ],
+                )?;
+                let mut session = Session::default();
+                for clean in [true, false] {
+                    put(&deck, "Saved", VARIANT::from(clean))?;
+                    session.start_show(None, false)?;
+                    for (name, expected) in
+                        [("RangeType", 2), ("StartingSlide", 2), ("EndingSlide", 3)]
+                    {
+                        if int(get(&settings, name)?)? != expected {
+                            return Err(format!("{kind:?} {name} was not restored"));
+                        }
+                    }
+                    if (int(get(&deck, "Saved")?)? != 0) != clean {
+                        return Err(format!("{kind:?} Saved flag changed"));
+                    }
+                    end_show_for(&app, &path.to_string_lossy());
+                    println!("{kind:?}: clean={clean}, range and Saved restored");
+                }
+                Ok(())
+            })();
+            // The object is the disposable deck just created above, never an
+            // active/last-opened lookup which could select a user's document.
+            let _ = put(&deck, "Saved", VARIANT::from(true));
+            let _ = call(&deck, "Close", &[]);
+            if int(get(&presentations, "Count").unwrap()).unwrap() == 0 {
+                let _ = call(&app, "Quit", &[]);
+            }
+            result.unwrap();
+        }
     }
 }

@@ -52,12 +52,22 @@ impl AudioService {
                         Playback::Speech(text) => {
                             if let Some(voice) = &voice {
                                 let text = wide(&text);
-                                let _ = unsafe {
+                                if let Err(error) = unsafe {
                                     voice.Speak(PCWSTR(text.as_ptr()), SPF_DEFAULT.0 as u32, None)
-                                };
+                                } {
+                                    crate::log::error(&format!("Speech playback failed: {error}"));
+                                }
+                            } else {
+                                crate::log::error(
+                                    "Speech playback unavailable: SAPI voice could not be created",
+                                );
                             }
                         }
-                        Playback::Sound(path) => play_sound(&path),
+                        Playback::Sound(path) => {
+                            if let Err(error) = play_sound(&path) {
+                                crate::log::error(&error);
+                            }
+                        }
                     }
                 }
             })
@@ -76,8 +86,10 @@ impl AudioService {
         } else {
             return;
         };
-        if let Some(sender) = &self.sender {
-            let _ = sender.try_send(playback);
+        if let Some(sender) = &self.sender
+            && let Err(error) = sender.try_send(playback)
+        {
+            crate::log::error(&format!("Audio queue rejected alert: {error}"));
         }
     }
 }
@@ -125,10 +137,9 @@ fn system_volume() -> Result<IAudioEndpointVolume, String> {
     }
 }
 
-fn play_sound(path: &str) {
+fn play_sound(path: &str) -> Result<(), String> {
     if !Path::new(path).is_file() {
-        eprintln!("prompt sound file does not exist: {path}");
-        return;
+        return Err(format!("Prompt sound file does not exist: {path}"));
     }
     let command_path = path.replace('"', "\"\"");
     let open = wide(&format!("open \"{command_path}\" alias FlyPPTTimerAlert"));
@@ -144,11 +155,11 @@ fn play_sound(path: &str) {
             open_result
         }
     };
-    if result != 0
-        && let Err(error) = play_wmp_native(path)
-    {
-        eprintln!("failed to play prompt sound (MCI error {result}): {error}");
+    if result != 0 {
+        play_wmp_native(path)
+            .map_err(|error| format!("Prompt sound failed (MCI error {result}): {error}"))?;
     }
+    Ok(())
 }
 
 // Keep the existing codec fallback, but host it on the audio STA directly.
@@ -171,6 +182,8 @@ fn play_wmp_native(path: &str) -> Result<(), String> {
         player_invoke(&controls, "play", DISPATCH_METHOD, &[])?;
         let started_at = Instant::now();
         let mut started = false;
+        let mut last_progress = Instant::now();
+        let mut last_position = 0.0;
         loop {
             pump_audio_messages();
             let value = player_invoke(&player, "playState", DISPATCH_PROPERTYGET, &[])?;
@@ -179,6 +192,17 @@ fn play_wmp_native(path: &str) -> Result<(), String> {
                 return Ok(());
             }
             started |= matches!(state, 3..=5);
+            if started {
+                let position =
+                    player_invoke(&controls, "currentPosition", DISPATCH_PROPERTYGET, &[])?;
+                let position = f64::try_from(&position).map_err(|error| error.to_string())?;
+                if position > last_position {
+                    last_position = position;
+                    last_progress = Instant::now();
+                } else if last_progress.elapsed() >= Duration::from_secs(30) {
+                    return Err("native media playback stalled for 30 seconds".into());
+                }
+            }
             // Bound startup only: valid, long audio is not cut off.
             if !started && started_at.elapsed() >= Duration::from_secs(15) {
                 return Err("native media player did not start the selected sound".to_owned());
@@ -267,4 +291,39 @@ unsafe extern "system" {
 
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
+}
+
+#[cfg(test)]
+mod native_feedback_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "plays generated audio through the real Windows endpoint; set FLYPPT_AUDIO_TEST_DIR"]
+    fn native_formats_repeat_fallback_speech_and_mute_restore() {
+        let directory =
+            std::env::var("FLYPPT_AUDIO_TEST_DIR").expect("temporary audio directory required");
+        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+            .ok()
+            .unwrap();
+        for extension in ["wav", "mp3", "wma", "m4a"] {
+            let path = Path::new(&directory).join(format!("中文 提醒.{extension}"));
+            let path = path.to_str().unwrap();
+            for _ in 0..2 {
+                play_sound(path).unwrap();
+            }
+            play_wmp_native(path).unwrap();
+            println!("{extension}: first/repeat and direct native fallback completed");
+        }
+        assert!(play_sound(&Path::new(&directory).join("missing.wav").to_string_lossy()).is_err());
+        let voice: ISpVoice = unsafe { CoCreateInstance(&SpVoice, None, CLSCTX_ALL) }.unwrap();
+        let text = wide("音频测试。Audio test.");
+        unsafe { voice.Speak(PCWSTR(text.as_ptr()), SPF_DEFAULT.0 as u32, None) }.unwrap();
+        let original = system_mute().unwrap();
+        let toggled = toggle_system_mute();
+        // Always attempt restoration, even if querying after SetMute failed.
+        let endpoint = system_volume().unwrap();
+        unsafe { endpoint.SetMute(original, std::ptr::null()) }.unwrap();
+        assert_eq!(toggled.unwrap(), !original);
+        assert_eq!(system_mute().unwrap(), original);
+    }
 }

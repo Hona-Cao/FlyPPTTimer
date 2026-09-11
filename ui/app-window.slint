@@ -140,7 +140,6 @@ export component BigScreenWindow inherits Window {
 
 export component TimeUpWindow inherits Window {
     in property <string> message: "时间到";
-    callback dismiss();
 
     title: "";
     no-frame: true;
@@ -160,7 +159,6 @@ export component TimeUpWindow inherits Window {
             horizontal-alignment: center;
             vertical-alignment: center;
         }
-        TouchArea { clicked => { root.dismiss(); } }
     }
 }
 
@@ -303,6 +301,7 @@ export component PresentationWindow inherits Window {
     in-out property <string> next-port: "4080";
     in property <string> client-count-text;
     in property <string> recommended-url;
+    in property <string> connection-url;
     in property <string> address-list-text;
     in property <image> qr-image;
     in property <string> restart-service-text: "重启远程服务";
@@ -354,45 +353,50 @@ export component PresentationWindow inherits Window {
         x: 24px; y: 88px; width: parent.width - 48px; height: parent.height - 102px;
         background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
 
-        connection-scroll := ScrollView {
+        Rectangle {
             x: 16px; y: 16px; width: parent.width - 24px; height: parent.height - 32px;
-            viewport-width: self.visible-width;
-            VerticalLayout {
-                width: connection-scroll.visible-width - 12px;
-                alignment: start;
-                spacing: 12px;
-                Rectangle {
-                    height: max(148px, recommended.y + recommended.preferred-height + 8px);
-                    Text { x: 0; y: 0; width: parent.width - 164px; height: 28px; text: root.service-status-text; color: DesktopTheme.text; font-size: 18px; font-weight: 700; vertical-alignment: center; overflow: elide; }
-                    Text { x: 0; y: 36px; width: parent.width - 164px; height: 22px; text: root.current-port-text; color: DesktopTheme.secondary; font-size: 13px; vertical-alignment: center; }
-                    Text { x: 0; y: 60px; width: parent.width - 164px; height: 22px; text: root.client-count-text; color: DesktopTheme.secondary; font-size: 13px; vertical-alignment: center; }
-                    recommended := Text { x: 0; y: 94px; width: parent.width - 164px; height: self.preferred-height; text: root.recommended-url; color: DesktopTheme.accent; font-size: 14px; font-weight: 600; wrap: word-wrap; }
-                    Image { x: parent.width - 144px; y: 0; width: 144px; height: 144px; source: root.qr-image; image-fit: contain; }
+            clip: true;
+            connection-scroll := ScrollView {
+                width: parent.width; height: parent.height;
+
+                viewport-width: self.visible-width;
+                VerticalLayout {
+                    width: connection-scroll.visible-width - 12px;
+                    alignment: start;
+                    spacing: 12px;
+                    Rectangle {
+                        height: max(148px, recommended.y + recommended.preferred-height + 8px);
+                        Text { x: 0; y: 0; width: parent.width - 164px; height: 28px; text: root.service-status-text; color: DesktopTheme.text; font-size: 18px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+                        Text { x: 0; y: 36px; width: parent.width - 164px; height: 22px; text: root.current-port-text; color: DesktopTheme.secondary; font-size: 13px; vertical-alignment: center; }
+                        Text { x: 0; y: 60px; width: parent.width - 164px; height: 22px; text: root.client-count-text; color: DesktopTheme.secondary; font-size: 13px; vertical-alignment: center; }
+                        recommended := Text { x: 0; y: 94px; width: parent.width - 164px; height: self.preferred-height; text: root.recommended-url; color: DesktopTheme.accent; font-size: 14px; font-weight: 600; wrap: word-wrap; }
+                        Image { x: parent.width - 144px; y: 0; width: 144px; height: 144px; source: root.qr-image; image-fit: contain; }
+                    }
+                    Rectangle { height: 1px; background: DesktopTheme.border; }
+                    HorizontalLayout {
+                        height: 36px; spacing: 12px;
+                        Text { width: 120px; text: root.next-port-label; color: DesktopTheme.secondary; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
+                        LineEdit { enabled: !root.confirm-exit; width: 96px; text <=> root.next-port; }
+                    }
+                    RemoteButton { enabled: !root.confirm-exit; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, false); } }
+                    HorizontalLayout {
+                        height: 36px; spacing: 12px;
+                        RemoteButton { enabled: !root.confirm-exit; text: root.service-toggle-text; clicked => { root.remote-action(7, "", false); } }
+                        RemoteButton { enabled: !root.confirm-exit; text: root.restart-service-text; clicked => { root.remote-action(0, "", false); } }
+                    }
+                    HorizontalLayout {
+                        height: 36px; spacing: 12px;
+                        RemoteButton { enabled: !root.confirm-exit; text: root.regenerate-token-text; clicked => { root.remote-action(2, "", false); } }
+                        RemoteButton { enabled: !root.confirm-exit; text: root.disconnect-text; clicked => { root.remote-action(3, "", false); } }
+                    }
+                    HorizontalLayout {
+                        height: 40px; spacing: 12px;
+                        RemoteButton { enabled: !root.confirm-exit; text: root.copy-address-text; clicked => { root.remote-action(4, "", false); } }
+                        RemoteButton { enabled: !root.confirm-exit; text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
+                        RemoteButton { enabled: !root.confirm-exit; text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
+                    }
+                    Text { text: root.firewall-text; color: DesktopTheme.muted; font-size: 12px; wrap: word-wrap; }
                 }
-                Rectangle { height: 1px; background: DesktopTheme.border; }
-                HorizontalLayout {
-                    height: 36px; spacing: 12px;
-                    Text { width: 120px; text: root.next-port-label; color: DesktopTheme.secondary; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
-                    LineEdit { enabled: !root.confirm-exit; width: 96px; text <=> root.next-port; }
-                }
-                RemoteButton { enabled: !root.confirm-exit; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, false); } }
-                HorizontalLayout {
-                    height: 36px; spacing: 12px;
-                    RemoteButton { enabled: !root.confirm-exit; text: root.service-toggle-text; clicked => { root.remote-action(7, "", false); } }
-                    RemoteButton { enabled: !root.confirm-exit; text: root.restart-service-text; clicked => { root.remote-action(0, "", false); } }
-                }
-                HorizontalLayout {
-                    height: 36px; spacing: 12px;
-                    RemoteButton { enabled: !root.confirm-exit; text: root.regenerate-token-text; clicked => { root.remote-action(2, "", false); } }
-                    RemoteButton { enabled: !root.confirm-exit; text: root.disconnect-text; clicked => { root.remote-action(3, "", false); } }
-                }
-                HorizontalLayout {
-                    height: 40px; spacing: 12px;
-                    RemoteButton { enabled: !root.confirm-exit; text: root.copy-address-text; clicked => { root.remote-action(4, "", false); } }
-                    RemoteButton { enabled: !root.confirm-exit; text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
-                    RemoteButton { enabled: !root.confirm-exit; text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
-                }
-                Text { text: root.firewall-text; color: DesktopTheme.muted; font-size: 12px; wrap: word-wrap; }
             }
         }
     }
@@ -404,30 +408,35 @@ export component PresentationWindow inherits Window {
         Text { x: 16px; y: 12px; width: 160px; height: 18px; text: root.rule-duration-text + " / " + root.rule-mode-text; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; }
         Text { x: parent.width - 220px; y: 12px; width: 84px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
         Text { x: parent.width - 120px; y: 12px; width: 100px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
-        rules-scroll := ScrollView {
+        Rectangle {
             x: 8px; y: 34px; width: parent.width - 12px; height: parent.height - 42px;
-            viewport-width: self.visible-width;
-            VerticalLayout {
-                width: rules-scroll.visible-width - 10px;
-                alignment: start;
-                spacing: 6px;
-                for item[index] in root.presentations: Rectangle {
-                    height: 68px; border-radius: 8px;
-                    background: item.selected ? DesktopTheme.selected : transparent;
-                    border-width: item.selected ? 1px : 0px;
-                    border-color: DesktopTheme.accent;
-                    Text { x: 12px; y: 6px; width: parent.width - 244px; height: 20px; text: item.name; color: DesktopTheme.text; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
-                    Text { x: 12px; y: 32px; width: parent.width - 244px; height: 20px; text: item.path; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; overflow: elide; }
-                    Text { x: parent.width - 220px; y: 6px; width: 84px; height: 20px; text: item.duration; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
-                    Text { x: parent.width - 120px; y: 6px; width: 100px; height: 20px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
-                    Text { x: parent.width - 220px; y: 34px; width: 208px; height: 18px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? DesktopTheme.success : DesktopTheme.warning; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
-                    TouchArea {
-                        enabled: !root.modal-open;
-                        x: 0px; y: 0px; width: parent.width; height: parent.height;
-                        pointer-event(event) => {
-                            if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
-                                root.selected-presentation = index;
-                                root.presentation-selected(index, event.modifiers.control, event.modifiers.shift);
+            clip: true;
+            rules-scroll := ScrollView {
+                width: parent.width; height: parent.height;
+
+                viewport-width: self.visible-width;
+                VerticalLayout {
+                    width: rules-scroll.visible-width - 10px;
+                    alignment: start;
+                    spacing: 6px;
+                    for item[index] in root.presentations: Rectangle {
+                        height: 68px; border-radius: 8px;
+                        background: item.selected ? DesktopTheme.selected : transparent;
+                        border-width: item.selected ? 1px : 0px;
+                        border-color: DesktopTheme.accent;
+                        Text { x: 12px; y: 6px; width: parent.width - 244px; height: 20px; text: item.name; color: DesktopTheme.text; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                        Text { x: 12px; y: 32px; width: parent.width - 244px; height: 20px; text: item.path; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 220px; y: 6px; width: 84px; height: 20px; text: item.duration; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 120px; y: 6px; width: 100px; height: 20px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 220px; y: 34px; width: 208px; height: 18px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? DesktopTheme.success : DesktopTheme.warning; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        TouchArea {
+                            enabled: !root.modal-open;
+                            x: 0px; y: 0px; width: parent.width; height: parent.height;
+                            pointer-event(event) => {
+                                if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                                    root.selected-presentation = index;
+                                    root.presentation-selected(index, event.modifiers.control, event.modifiers.shift);
+                                }
                             }
                         }
                     }
@@ -470,7 +479,6 @@ export component PresentationWindow inherits Window {
             RemoteButton { x: 318px; y: 202px; width: 88px; height: 36px; text: root.batch-confirm-text; primary: true; clicked => { root.batch-confirm(root.batch-duration, root.batch-mode); } }
         }
     }
-
 
     if root.confirm-exit && root.current-page == 1: Rectangle {
         init => { exit-cancel.focus(); }
@@ -590,6 +598,7 @@ component FieldRow inherits Rectangle {
         x: 16px; y: 5px; width: parent.width - 32px; height: 34px; spacing: 8px;
         for action[index] in item.options: Button {
             text: action;
+            enabled: root.interactive;
             clicked => { root.action(root.row-index * 100 + index); }
         }
     }
@@ -717,106 +726,109 @@ export component SettingsWindow inherits Window {
             vertical-alignment: top;
         }
 
-        settings-scroll := ScrollView {
-            x: 18px;
-            y: 56px;
-            width: parent.width - 26px;
-            viewport-width: self.visible-width;
-            // Keep the scroll viewport above the fixed action bar.  Refer to
-            // the window height explicitly so it cannot extend under the
-            // footer when the settings content grows.
-            height: parent.height - 64px;
-            viewport-y <=> root.preview-scroll-y;
+        Rectangle {
+            x: 18px; y: 56px; width: parent.width - 26px; height: root.height - 152px;
+            clip: true;
+            settings-scroll := ScrollView {
+                width: parent.width; height: parent.height;
 
-            VerticalLayout {
-                width: settings-scroll.visible-width - 12px;
-                alignment: start;
-                spacing: 10px;
-                padding-bottom: 12px;
+                viewport-width: self.visible-width;
+                // Keep the scroll viewport above the fixed action bar.  Refer to
+                // the window height explicitly so it cannot extend under the
+                // footer when the settings content grows.
 
-                for item[index] in root.items: FieldRow {
-                    width: parent.width;
-                    item: item;
-                    interactive: !root.modal-open;
-                    row-index: index;
-                    edited(index, value, checked, selected) => { root.field-edited(index, value, checked, selected); }
-                    action(index) => { root.field-action(index); }
-                }
+                viewport-y <=> root.preview-scroll-y;
 
-                if root.current-page == 0: Rectangle {
-                    height: root.rules.length > 0 ? root.rules.length * 56px + 12px : 72px;
-                    background: DesktopTheme.surface;
-                    border-radius: 8px;
-                    border-width: 1px;
-                    border-color: DesktopTheme.border;
-                    VerticalLayout {
-                        padding: 6px;
-                        spacing: 4px;
-                        for rule[index] in root.rules: Rectangle {
-                            height: 52px;
-                            border-radius: 8px;
-                            background: rule.selected ? DesktopTheme.selected : transparent;
-                            CheckBox { enabled: !root.modal-open;
-                                x: 8px; y: 12px; width: 24px;
-                                checked: rule.enabled;
-                                toggled => { root.rule-edited(index, "enabled", self.checked, 0); }
+                VerticalLayout {
+                    width: settings-scroll.visible-width - 12px;
+                    alignment: start;
+                    spacing: 10px;
+                    padding-bottom: 12px;
+
+                    for item[index] in root.items: FieldRow {
+                        width: parent.width;
+                        item: item;
+                        interactive: !root.modal-open;
+                        row-index: index;
+                        edited(index, value, checked, selected) => { root.field-edited(index, value, checked, selected); }
+                        action(index) => { root.field-action(index); }
+                    }
+
+                    if root.current-page == 0: Rectangle {
+                        height: root.rules.length > 0 ? root.rules.length * 56px + 12px : 72px;
+                        background: DesktopTheme.surface;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: DesktopTheme.border;
+                        VerticalLayout {
+                            padding: 6px;
+                            spacing: 4px;
+                            for rule[index] in root.rules: Rectangle {
+                                height: 52px;
+                                border-radius: 8px;
+                                background: rule.selected ? DesktopTheme.selected : transparent;
+                                CheckBox { enabled: !root.modal-open;
+                                    x: 8px; y: 12px; width: 24px;
+                                    checked: rule.enabled;
+                                    toggled => { root.rule-edited(index, "enabled", self.checked, 0); }
+                                }
+                                Text {
+                                    x: 40px; y: 4px; width: parent.width - 250px; height: 20px;
+                                    text: rule.file-name; color: DesktopTheme.text; font-size: 13px; overflow: elide;
+                                }
+                                Text {
+                                    x: 40px; y: 29px; width: parent.width - 52px; height: 19px;
+                                    text: rule.file-path; color: DesktopTheme.muted; font-size: 12px; overflow: elide;
+                                }
+                                Text {
+                                    x: parent.width - 200px; y: 4px; width: 80px; height: 20px;
+                                    text: rule.duration; color: DesktopTheme.secondary; vertical-alignment: center;
+                                }
+                                Text {
+                                    x: parent.width - 112px; y: 4px; width: 104px; height: 20px;
+                                    text: root.timer-modes[rule.mode]; color: DesktopTheme.secondary; vertical-alignment: center;
+                                }
+                                TouchArea { enabled: !root.modal-open; x: 32px; width: parent.width - 32px; pointer-event(event) => { if event.kind == PointerEventKind.up && event.button == PointerEventButton.left { root.rule-selected(index, event.modifiers.control, event.modifiers.shift); } } }
                             }
-                            Text {
-                                x: 40px; y: 4px; width: parent.width - 250px; height: 20px;
-                                text: rule.file-name; color: DesktopTheme.text; font-size: 13px; overflow: elide;
-                            }
-                            Text {
-                                x: 40px; y: 29px; width: parent.width - 52px; height: 19px;
-                                text: rule.file-path; color: DesktopTheme.muted; font-size: 12px; overflow: elide;
-                            }
-                            Text {
-                                x: parent.width - 200px; y: 4px; width: 80px; height: 20px;
-                                text: rule.duration; color: DesktopTheme.secondary; vertical-alignment: center;
-                            }
-                            Text {
-                                x: parent.width - 112px; y: 4px; width: 104px; height: 20px;
-                                text: root.timer-modes[rule.mode]; color: DesktopTheme.secondary; vertical-alignment: center;
-                            }
-                            TouchArea { enabled: !root.modal-open; x: 32px; width: parent.width - 32px; pointer-event(event) => { if event.kind == PointerEventKind.up && event.button == PointerEventButton.left { root.rule-selected(index, event.modifiers.control, event.modifiers.shift); } } }
                         }
                     }
-                }
 
-                if root.current-page == 0: Rectangle {
-                    height: 48px;
-                    background: DesktopTheme.subtle;
-                    border-radius: 8px;
-                    border-width: 1px;
-                    border-color: DesktopTheme.border;
-                    HorizontalLayout {
-                        x: 10px; y: 8px; width: parent.width - 20px; height: 32px;
-                        alignment: end;
-                        spacing: 6px;
-                        Button { width: 68px; height: 32px; enabled: !root.modal-open; text: root.rule-add-text; clicked => { root.rule-action(0); } }
-                        Button { width: 52px; height: 32px; text: root.rule-delete-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(1); } }
-                        Button { width: 52px; height: 32px; text: root.rule-clear-text; enabled: (root.rules.length > 0) && !root.modal-open; clicked => { root.rule-action(2); } }
-                        Button { width: 68px; height: 32px; text: root.rule-batch-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(3); } }
-                    }
-                }
-
-                if root.current-page == 0 && root.selected-rule >= 0: Rectangle {
-                    height: 54px;
-                    background: DesktopTheme.surface;
-                    border-radius: 8px;
-                    border-width: 1px;
-                    border-color: DesktopTheme.border;
-                    HorizontalLayout {
-                        x: 16px; y: 10px; width: parent.width - 32px; height: 34px;
-                        alignment: center; spacing: 8px;
-                        Text { width: 44px; text: root.rule-duration-label; color: DesktopTheme.secondary; horizontal-alignment: center; vertical-alignment: center; }
-                        LineEdit { enabled: !root.modal-open; width: 156px;
-                            text: root.rules[root.selected-rule].duration;
-                            edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
+                    if root.current-page == 0: Rectangle {
+                        height: 48px;
+                        background: DesktopTheme.subtle;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: DesktopTheme.border;
+                        HorizontalLayout {
+                            x: 10px; y: 8px; width: parent.width - 20px; height: 32px;
+                            alignment: end;
+                            spacing: 6px;
+                            Button { width: 68px; height: 32px; enabled: !root.modal-open; text: root.rule-add-text; clicked => { root.rule-action(0); } }
+                            Button { width: 52px; height: 32px; text: root.rule-delete-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(1); } }
+                            Button { width: 52px; height: 32px; text: root.rule-clear-text; enabled: (root.rules.length > 0) && !root.modal-open; clicked => { root.rule-action(2); } }
+                            Button { width: 68px; height: 32px; text: root.rule-batch-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(3); } }
                         }
-                        Text { width: 44px; text: root.rule-mode-label; color: DesktopTheme.secondary; horizontal-alignment: center; vertical-alignment: center; }
-                        ComboBox { enabled: !root.modal-open; width: 156px;
-                            model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
-                            selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
+                    }
+
+                    if root.current-page == 0 && root.selected-rule >= 0: Rectangle {
+                        height: 54px;
+                        background: DesktopTheme.surface;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: DesktopTheme.border;
+                        HorizontalLayout {
+                            x: 16px; y: 10px; width: parent.width - 32px; height: 34px;
+                            alignment: center; spacing: 8px;
+                            Text { width: 44px; text: root.rule-duration-label; color: DesktopTheme.secondary; horizontal-alignment: center; vertical-alignment: center; }
+                            LineEdit { enabled: !root.modal-open; width: 156px;
+                                text: root.rules[root.selected-rule].duration;
+                                edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
+                            }
+                            Text { width: 44px; text: root.rule-mode-label; color: DesktopTheme.secondary; horizontal-alignment: center; vertical-alignment: center; }
+                            ComboBox { enabled: !root.modal-open; width: 156px;
+                                model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
+                                selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
+                            }
                         }
                     }
                 }
@@ -880,8 +892,12 @@ export component SettingsWindow inherits Window {
             background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
             Text { x: 24px; y: 18px; width: parent.width - 48px; height: 34px; text: root.dialog-title; font-size: 18px; font-weight: 700; color: DesktopTheme.text; vertical-alignment: center; }
             Rectangle { x: 24px; y: 62px; width: parent.width - 48px; height: parent.height - 132px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border; }
+            Rectangle {
+            x: 28px; y: 66px; width: parent.width - 56px; height: parent.height - 140px;
+            clip: true;
             dialog-scroll := ScrollView {
-                x: 28px; y: 66px; width: parent.width - 56px; height: parent.height - 140px;
+                width: parent.width; height: parent.height;
+
                 viewport-width: self.visible-width;
                 viewport-height: dialog-body.preferred-height + 20px;
                 viewport-x: 0px;
@@ -897,6 +913,7 @@ export component SettingsWindow inherits Window {
                     font-size: 14px;
                 }
             }
+        }
             Button { visible: root.dialog-restart; x: parent.width - 212px; y: parent.height - 52px; width: 88px; height: 34px; text: root.cancel-text; clicked => { root.dialog-open = false; } }
             dialog-ok := Button { x: parent.width - 112px; y: parent.height - 52px; width: 88px; height: 34px; text: root.ok-text; clicked => { root.dialog-open = false; root.dialog-confirm(); } }
         }

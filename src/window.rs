@@ -5,14 +5,13 @@ use windows_sys::Win32::{
     Graphics::Gdi::{CreateRoundRectRgn, SetWindowRgn},
     UI::HiDpi::GetDpiForWindow,
     UI::WindowsAndMessaging::{
-        GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetSystemMetrics, GetWindowLongPtrW,
-        GetWindowRect, HWND_NOTOPMOST, HWND_TOPMOST, IsIconic, IsWindowVisible, LWA_ALPHA,
-        SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
-        SPI_GETWORKAREA, SW_HIDE, SW_SHOWNOACTIVATE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
-        SWP_NOSIZE, SWP_NOZORDER, SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos,
-        ShowWindow, SystemParametersInfoW, WS_CAPTION, WS_EX_APPWINDOW, WS_EX_LAYERED,
-        WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
-        WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+        GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetWindowLongPtrW, GetWindowRect,
+        HWND_NOTOPMOST, HWND_TOPMOST, IsIconic, IsWindowVisible, LWA_ALPHA, SPI_GETWORKAREA,
+        SW_HIDE, SW_SHOWNOACTIVATE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        SWP_NOZORDER, SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+        SystemParametersInfoW, WS_CAPTION, WS_EX_APPWINDOW, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+        WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
+        WS_THICKFRAME,
     },
 };
 
@@ -51,92 +50,125 @@ pub fn foreground(window: &slint::Window) {
     }
 }
 
-/// Keep decorated Slint windows at the same logical size when Windows sends
-/// `WM_DPICHANGED` while the pointer crosses a monitor boundary. Winit handles
-/// the message first; this only corrects a measurable mismatch and therefore
-/// does not create a second resize on the normal path.
+/// Preserve the last deliberate client size throughout a nested DPI transition.
+/// Amend Winit's pending WINDOWPOS before Windows applies it; never issue a
+/// second SetWindowPos from a DPI handler or scale an intermediate client rect.
 pub fn install_settings_dpi_stabilizer(window: &slint::Window) {
-    if let Some(hwnd) = hwnd(window) {
+    use windows_sys::Win32::UI::{
+        Shell::SetWindowSubclass,
+        WindowsAndMessaging::{GetPropW, SetPropW},
+    };
+    let Some(handle) = hwnd(window) else {
+        return;
+    };
+    let property = normal_size_property();
+    if !unsafe { GetPropW(handle, property.as_ptr()) }.is_null() {
+        return;
+    }
+    let mut client = RECT::default();
+    if unsafe { GetClientRect(handle, &mut client) } == 0 {
+        return;
+    }
+    let scale = unsafe { GetDpiForWindow(handle) }.max(96) as f64 / 96.0;
+    let state = Box::new(NormalSize {
+        logical: std::cell::Cell::new((client.right as f64 / scale, client.bottom as f64 / scale)),
+        sizing: std::cell::Cell::new(false),
+        dpi_depth: std::cell::Cell::new(0),
+    });
+    let data = Box::into_raw(state);
+    if unsafe { SetWindowSubclass(handle, Some(normal_size_proc), 3, data as usize) } == 0 {
         unsafe {
-            windows_sys::Win32::UI::Shell::SetWindowSubclass(
-                hwnd,
-                Some(settings_dpi_proc),
-                2,
-                GetDpiForWindow(hwnd).max(96) as usize,
-            );
+            drop(Box::from_raw(data));
+        }
+        return;
+    }
+    if unsafe { SetPropW(handle, property.as_ptr(), data.cast()) } == 0 {
+        unsafe {
+            windows_sys::Win32::UI::Shell::RemoveWindowSubclass(handle, Some(normal_size_proc), 3);
+            drop(Box::from_raw(data));
         }
     }
 }
 
-unsafe extern "system" fn settings_dpi_proc(
-    hwnd: HWND,
+struct NormalSize {
+    logical: std::cell::Cell<(f64, f64)>,
+    sizing: std::cell::Cell<bool>,
+    dpi_depth: std::cell::Cell<u32>,
+}
+
+fn normal_size_property() -> Vec<u16> {
+    "FlyPPTTimer.NormalClientSize"
+        .encode_utf16()
+        .chain(Some(0))
+        .collect()
+}
+
+unsafe extern "system" fn normal_size_proc(
+    handle: HWND,
     message: u32,
     wparam: usize,
     lparam: isize,
     id: usize,
-    previous_dpi: usize,
+    data: usize,
 ) -> isize {
     use windows_sys::Win32::UI::{
-        Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
-        WindowsAndMessaging::{IsZoomed, WM_DPICHANGED, WM_NCDESTROY},
+        Shell::{DefSubclassProc, RemoveWindowSubclass},
+        WindowsAndMessaging::*,
     };
-
-    if message == WM_DPICHANGED {
-        let old_dpi = (previous_dpi as u32).max(96);
-        let new_dpi = ((wparam as u32) & 0xffff).max(96);
-        let mut old_client = RECT::default();
-        let old_client_ok = unsafe { GetClientRect(hwnd, &mut old_client) } != 0;
-        let old_width = (old_client.right - old_client.left).max(1) as u64;
-        let old_height = (old_client.bottom - old_client.top).max(1) as u64;
-        unsafe { SetWindowSubclass(hwnd, Some(settings_dpi_proc), id, new_dpi as usize) };
-
-        // Winit still needs every DPI message to update Slint's scale factor.
-        let result = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
-        if old_dpi == new_dpi || unsafe { IsZoomed(hwnd) } != 0 || !old_client_ok {
+    let state = unsafe { &*(data as *const NormalSize) };
+    match message {
+        WM_DPICHANGED => {
+            state.dpi_depth.set(state.dpi_depth.get() + 1);
+            let result = unsafe { DefSubclassProc(handle, message, wparam, lparam) };
+            state.dpi_depth.set(state.dpi_depth.get() - 1);
             return result;
         }
-
-        let expected_width = ((old_width * u64::from(new_dpi) + u64::from(old_dpi / 2))
-            / u64::from(old_dpi))
-        .clamp(1, i32::MAX as u64) as i32;
-        let expected_height = ((old_height * u64::from(new_dpi) + u64::from(old_dpi / 2))
-            / u64::from(old_dpi))
-        .clamp(1, i32::MAX as u64) as i32;
-        let mut outer = RECT::default();
-        let mut client = RECT::default();
-        if unsafe { GetWindowRect(hwnd, &mut outer) } == 0
-            || unsafe { GetClientRect(hwnd, &mut client) } == 0
-        {
-            return result;
+        WM_WINDOWPOSCHANGING if state.dpi_depth.get() > 0 && unsafe { IsZoomed(handle) } == 0 => {
+            let position = unsafe { &mut *(lparam as *mut WINDOWPOS) };
+            if position.flags & SWP_NOSIZE == 0 {
+                let dpi = unsafe { GetDpiForWindow(handle) }.max(96);
+                let (width, height) = state.logical.get();
+                let mut rect = RECT {
+                    left: 0,
+                    top: 0,
+                    right: (width * dpi as f64 / 96.0).round() as i32,
+                    bottom: (height * dpi as f64 / 96.0).round() as i32,
+                };
+                if unsafe {
+                    windows_sys::Win32::UI::HiDpi::AdjustWindowRectExForDpi(
+                        &mut rect,
+                        GetWindowLongPtrW(handle, GWL_STYLE) as u32,
+                        0,
+                        GetWindowLongPtrW(handle, GWL_EXSTYLE) as u32,
+                        dpi,
+                    )
+                } != 0
+                {
+                    position.cx = rect.right - rect.left;
+                    position.cy = rect.bottom - rect.top;
+                }
+            }
         }
-
-        let actual_width = client.right - client.left;
-        let actual_height = client.bottom - client.top;
-        if actual_width == expected_width && actual_height == expected_height {
-            return result;
+        WM_ENTERSIZEMOVE => state.sizing.set(false),
+        WM_SIZING if state.dpi_depth.get() == 0 => state.sizing.set(true),
+        WM_EXITSIZEMOVE if state.sizing.replace(false) && unsafe { IsZoomed(handle) } == 0 => {
+            let mut client = RECT::default();
+            if unsafe { GetClientRect(handle, &mut client) } != 0 {
+                let scale = unsafe { GetDpiForWindow(handle) }.max(96) as f64 / 96.0;
+                state
+                    .logical
+                    .set((client.right as f64 / scale, client.bottom as f64 / scale));
+            }
         }
-
-        let frame_width = (outer.right - outer.left - actual_width).max(0);
-        let frame_height = (outer.bottom - outer.top - actual_height).max(0);
-        unsafe {
-            SetWindowPos(
-                hwnd,
-                std::ptr::null_mut(),
-                outer.left,
-                outer.top,
-                expected_width + frame_width,
-                expected_height + frame_height,
-                SWP_NOACTIVATE | SWP_NOZORDER,
-            );
-        }
-        return result;
+        WM_NCDESTROY => unsafe {
+            RemovePropW(handle, normal_size_property().as_ptr());
+            RemoveWindowSubclass(handle, Some(normal_size_proc), id);
+            drop(Box::from_raw(data as *mut NormalSize));
+        },
+        _ => {}
     }
-    if message == WM_NCDESTROY {
-        unsafe { RemoveWindowSubclass(hwnd, Some(settings_dpi_proc), id) };
-    }
-    unsafe { DefSubclassProc(hwnd, message, wparam, lparam) }
+    unsafe { DefSubclassProc(handle, message, wparam, lparam) }
 }
-
 pub fn handle_timer_frame_paint(window: &slint::Window) {
     if let Some(hwnd) = hwnd(window) {
         unsafe {
@@ -306,7 +338,12 @@ pub fn is_minimized(window: &slint::Window) -> bool {
     hwnd(window).is_some_and(|hwnd| unsafe { IsIconic(hwnd) != 0 })
 }
 
-pub fn show_time_up_window(window: &slint::Window) {
+pub fn show_time_up_window(window: &slint::Window, bounds: crate::display::DisplayRect) {
+    // Position the surface on its monitor before requesting borderless fullscreen.
+    // Winit/Slint then own both native geometry and layout through subsequent frames.
+    window.set_position(PhysicalPosition::new(bounds.x, bounds.y));
+    window.set_size(PhysicalSize::new(bounds.width as u32, bounds.height as u32));
+    window.set_fullscreen(true);
     let Some(hwnd) = hwnd(window) else {
         return;
     };
@@ -315,18 +352,14 @@ pub fn show_time_up_window(window: &slint::Window) {
         style |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
         style &= !WS_EX_APPWINDOW;
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style as isize);
-        let x = GetSystemMetrics(SM_XVIRTUALSCREEN);
-        let y = GetSystemMetrics(SM_YVIRTUALSCREEN);
-        let width = GetSystemMetrics(SM_CXVIRTUALSCREEN).max(1);
-        let height = GetSystemMetrics(SM_CYVIRTUALSCREEN).max(1);
         SetWindowPos(
             hwnd,
             HWND_TOPMOST,
-            x,
-            y,
-            width,
-            height,
-            SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE,
         );
         ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     }
@@ -370,7 +403,6 @@ pub fn restore_remote_window_position(window: &slint::Window, placement: &Remote
         work.left + (available_x as f64 * left_ratio).round() as i32,
         work.top + (available_y as f64 * top_ratio).round() as i32,
     ));
-    window.set_maximized(placement.maximized);
 }
 
 pub fn remote_window_size(placement: &RemoteWindowPlacement) -> (i32, i32) {
@@ -383,13 +415,7 @@ pub fn remote_window_size(placement: &RemoteWindowPlacement) -> (i32, i32) {
 
 pub fn capture_remote_window(window: &slint::Window, placement: &mut RemoteWindowPlacement) {
     let maximized = window.is_maximized();
-    let (position, size) = if maximized {
-        hwnd(window)
-            .and_then(normal_window_bounds)
-            .unwrap_or_else(|| (window.position(), window.size()))
-    } else {
-        (window.position(), window.size())
-    };
+    let (position, size) = normal_window_geometry(window);
     let monitor =
         monitor_for_window(window).unwrap_or_else(|| (String::new(), primary_work_area()));
     let work = monitor.1;
@@ -488,6 +514,12 @@ fn monitor_entries() -> Vec<(String, RECT)> {
     entries
 }
 
+pub fn normal_window_geometry(window: &slint::Window) -> (PhysicalPosition, PhysicalSize) {
+    hwnd(window)
+        .and_then(normal_window_bounds)
+        .unwrap_or_else(|| (window.position(), window.size()))
+}
+
 fn normal_window_bounds(hwnd: HWND) -> Option<(PhysicalPosition, PhysicalSize)> {
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowPlacement, WINDOWPLACEMENT};
     let mut placement = unsafe { std::mem::zeroed::<WINDOWPLACEMENT>() };
@@ -496,11 +528,52 @@ fn normal_window_bounds(hwnd: HWND) -> Option<(PhysicalPosition, PhysicalSize)> 
         return None;
     }
     let bounds = placement.rcNormalPosition;
+    use windows_sys::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+    };
+    let mut monitor = MONITORINFO {
+        cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    let (offset_x, offset_y) = if unsafe {
+        GetMonitorInfoW(
+            MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
+            &mut monitor,
+        )
+    } != 0
+    {
+        (
+            monitor.rcWork.left - monitor.rcMonitor.left,
+            monitor.rcWork.top - monitor.rcMonitor.top,
+        )
+    } else {
+        (0, 0)
+    };
+    // WINDOWPLACEMENT retains the restore rectangle for maximized and snapped
+    // windows. It is an OUTER rectangle in workspace coordinates, not a client
+    // size. Saving it as a client size adds the frame on every reopen.
+    let mut frame = RECT::default();
+    let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) } as u32
+        & !(windows_sys::Win32::UI::WindowsAndMessaging::WS_MAXIMIZE
+            | windows_sys::Win32::UI::WindowsAndMessaging::WS_MINIMIZE);
+    let exstyle = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) } as u32;
+    if unsafe {
+        windows_sys::Win32::UI::HiDpi::AdjustWindowRectExForDpi(
+            &mut frame,
+            style,
+            0,
+            exstyle,
+            GetDpiForWindow(hwnd).max(96),
+        )
+    } == 0
+    {
+        return None;
+    }
     Some((
-        PhysicalPosition::new(bounds.left, bounds.top),
+        PhysicalPosition::new(bounds.left + offset_x, bounds.top + offset_y),
         PhysicalSize::new(
-            (bounds.right - bounds.left).max(1) as u32,
-            (bounds.bottom - bounds.top).max(1) as u32,
+            (bounds.right - bounds.left - (frame.right - frame.left)).max(1) as u32,
+            (bounds.bottom - bounds.top - (frame.bottom - frame.top)).max(1) as u32,
         ),
     ))
 }
