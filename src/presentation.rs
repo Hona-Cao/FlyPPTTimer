@@ -775,15 +775,19 @@ fn choose_show_window_index(
     target_path: Option<&str>,
     window_paths: &[String],
 ) -> Result<Option<usize>, String> {
-    if let Some(target_path) = target_path.filter(|path| !path.is_empty())
-        && let Some(index) = window_paths
+    if window_paths.is_empty() {
+        return Ok(None);
+    }
+    // A known target must match even when only one other deck is showing.
+    // The unique-window fallback is safe only when no target is available.
+    if let Some(target_path) = target_path.filter(|path| !path.is_empty()) {
+        return window_paths
             .iter()
             .position(|path| same_path(path, target_path))
-    {
-        return Ok(Some(index));
+            .map(Some)
+            .ok_or_else(|| "未能按目标文稿匹配放映窗口。".to_owned());
     }
     match window_paths.len() {
-        0 => Ok(None),
         1 => Ok(Some(0)),
         _ => Err("存在多个正在运行的放映，但无法确定当前文稿。".to_owned()),
     }
@@ -991,7 +995,6 @@ fn invoke(
 fn dispatch(value: VARIANT) -> Result<IDispatch, String> {
     IDispatch::try_from(&value).map_err(|error| error.to_string())
 }
-
 fn int(value: VARIANT) -> Result<i32, String> {
     i32::try_from(&value).map_err(|error| error.to_string())
 }
@@ -1092,7 +1095,10 @@ impl PresentationLifecycle {
         config: &AppConfig,
     ) -> PresentationTimerAction {
         if showing {
-            if self.showing && same_path(&self.path, path) {
+            // An unavailable path is not evidence of a different presentation.
+            // Preserve the last known identity across ambiguous reads, and do
+            // not restart pathless fullscreen timers on every observation.
+            if self.showing && (path.is_empty() || same_path(&self.path, path)) {
                 return PresentationTimerAction::None;
             }
             self.showing = true;
@@ -1325,5 +1331,89 @@ mod tests {
             call(&app, "Quit", &[]).unwrap_or_else(|error| panic!("{prog_id} Quit: {error}"));
             println!("{prog_id} {version}");
         }
+    }
+}
+
+#[cfg(test)]
+mod direct_fix_regressions {
+    use super::*;
+
+    #[test]
+    fn pathless_fullscreen_starts_once_until_actual_exit() {
+        let config = AppConfig::default();
+        let mut lifecycle = PresentationLifecycle::default();
+        assert_eq!(
+            lifecycle.observe(true, "", &config),
+            PresentationTimerAction::Start(String::new())
+        );
+        for _ in 0..20 {
+            assert_eq!(
+                lifecycle.observe(true, "", &config),
+                PresentationTimerAction::None
+            );
+        }
+        assert_eq!(
+            lifecycle.observe(false, "", &config),
+            PresentationTimerAction::Stop { reset: true }
+        );
+        assert_eq!(
+            lifecycle.observe(true, "", &config),
+            PresentationTimerAction::Start(String::new())
+        );
+    }
+
+    #[test]
+    fn ambiguous_path_preserves_round_and_last_known_identity() {
+        let config = AppConfig::default();
+        let mut lifecycle = PresentationLifecycle::default();
+        let a = r"C:\Decks\A.pptx";
+        let b = r"C:\Decks\B.pptx";
+        assert_eq!(
+            lifecycle.observe(true, a, &config),
+            PresentationTimerAction::Start(a.to_owned())
+        );
+        for path in ["", "", a] {
+            assert_eq!(
+                lifecycle.observe(true, path, &config),
+                PresentationTimerAction::None
+            );
+        }
+        assert_eq!(
+            lifecycle.observe(true, b, &config),
+            PresentationTimerAction::Start(b.to_owned())
+        );
+        assert_eq!(
+            lifecycle.observe(false, "", &config),
+            PresentationTimerAction::Stop { reset: true }
+        );
+    }
+
+    #[test]
+    fn known_target_never_falls_back_to_another_only_window() {
+        let paths = vec![r"C:\Decks\A.pptx".to_owned()];
+        let status = show_window_status(Some(r"C:\Decks\B.pptx"), &paths);
+        assert!(status.running);
+        assert_eq!(status.index, None);
+        assert!(status.error.is_some());
+        assert!(choose_show_window_index(Some(r"C:\Decks\B.pptx"), &paths).is_err());
+    }
+
+    #[test]
+    fn known_target_does_not_match_unreadable_window_identity() {
+        assert!(
+            choose_show_window_index(Some(r"C:\Decks\A.pptx"), &[String::new()]).is_err()
+        );
+    }
+
+    #[test]
+    fn known_target_with_no_windows_is_not_running() {
+        assert_eq!(
+            show_window_status(Some(r"C:\Decks\A.pptx"), &[]),
+            ShowWindowStatus {
+                running: false,
+                index: None,
+                error: None,
+            }
+        );
     }
 }
