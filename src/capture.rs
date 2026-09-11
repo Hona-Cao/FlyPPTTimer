@@ -1,7 +1,7 @@
 use std::{cell::RefCell, fs::File, path::PathBuf, rc::Rc};
 
 use slint::{
-    ComponentHandle, PhysicalSize,
+    ComponentHandle, Model, PhysicalSize,
     platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType},
     platform::{Platform, PlatformError, WindowAdapter},
 };
@@ -57,6 +57,25 @@ pub fn capture_all(output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
                     part + 1,
                 );
                 write_png(output.join(file_name), &pixels)?;
+            }
+        }
+        // Reuse the production info callback, rather than a hand-written mock.
+        preview.invoke_navigate(5);
+        let rows = preview.get_items();
+        for index in 0..rows.row_count() {
+            if let Some(row) = rows.row_data(index)
+                && (row.label.as_str() == "作者的话" || row.label.as_str() == "From the author")
+            {
+                preview.invoke_field_action(index as i32);
+                slint::platform::update_timers_and_animations();
+                HEADLESS_WINDOW.with(|window| window.request_redraw());
+                let pixels = preview.window().take_snapshot()?;
+                write_png(
+                    output.join(format!("author-dialog-{language_name}.png")),
+                    &pixels,
+                )?;
+                preview.set_dialog_open(false);
+                break;
             }
         }
         preview.hide()?;

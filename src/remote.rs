@@ -1,9 +1,8 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     io::{Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
-    process::Command,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering},
@@ -647,43 +646,85 @@ pub fn generate_token() -> String {
 }
 
 pub fn lan_addresses() -> Vec<String> {
-    let mut addresses = HashSet::new();
-    if let Ok(output) = Command::new("ipconfig").output() {
-        let text = String::from_utf8_lossy(&output.stdout);
-        let mut adapter = String::new();
-        for line in text.lines() {
-            if !line.starts_with(char::is_whitespace) && line.trim_end().ends_with(':') {
-                adapter = line.to_lowercase();
+    use windows_sys::Win32::{
+        Foundation::{ERROR_BUFFER_OVERFLOW, NO_ERROR},
+        NetworkManagement::{
+            IpHelper::{
+                GAA_FLAG_INCLUDE_GATEWAYS, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
+                GAA_FLAG_SKIP_MULTICAST, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
+            },
+            Ndis::IfOperStatusUp,
+        },
+        Networking::WinSock::{AF_INET, SOCKADDR_IN},
+    };
+    // An aligned buffer owns all records until traversal is complete.
+    let mut bytes = 15_000u32;
+    for _ in 0..3 {
+        let mut buffer = vec![0u64; (bytes as usize).div_ceil(8)];
+        let head = buffer.as_mut_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>();
+        let result = unsafe {
+            GetAdaptersAddresses(
+                u32::from(AF_INET),
+                GAA_FLAG_INCLUDE_GATEWAYS
+                    | GAA_FLAG_SKIP_ANYCAST
+                    | GAA_FLAG_SKIP_MULTICAST
+                    | GAA_FLAG_SKIP_DNS_SERVER,
+                std::ptr::null(),
+                head,
+                &mut bytes,
+            )
+        };
+        if result == ERROR_BUFFER_OVERFLOW {
+            if bytes > 1_048_576 {
+                return Vec::new();
             }
-            if [
-                "virtual",
-                "vmware",
-                "hyper-v",
-                "virtualbox",
-                "clash",
-                "tun",
-                "wintun",
-                "proxy",
-            ]
-            .iter()
-            .any(|name| adapter.contains(name))
-            {
-                continue;
-            }
-            for candidate in
-                line.split(|character: char| !character.is_ascii_digit() && character != '.')
-            {
-                if let Ok(IpAddr::V4(ip)) = candidate.parse::<IpAddr>()
-                    && is_lan(ip)
-                {
-                    addresses.insert(ip);
+            continue;
+        }
+        if result != NO_ERROR {
+            return Vec::new();
+        }
+        let mut candidates = Vec::new();
+        let mut adapter_ptr = head;
+        while let Some(adapter) = unsafe { adapter_ptr.as_ref() } {
+            if adapter.OperStatus == IfOperStatusUp && matches!(adapter.IfType, 6 | 71) {
+                let mut address_ptr = adapter.FirstUnicastAddress;
+                while let Some(address) = unsafe { address_ptr.as_ref() } {
+                    let socket = address.Address;
+                    if !socket.lpSockaddr.is_null()
+                        && socket.iSockaddrLength >= std::mem::size_of::<SOCKADDR_IN>() as i32
+                        && unsafe { (*socket.lpSockaddr).sa_family } == AF_INET
+                    {
+                        let socket = unsafe { &*socket.lpSockaddr.cast::<SOCKADDR_IN>() };
+                        let ip =
+                            Ipv4Addr::from(unsafe { socket.sin_addr.S_un.S_addr }.to_ne_bytes());
+                        if is_lan(ip) {
+                            candidates.push((
+                                !adapter.FirstGatewayAddress.is_null(),
+                                adapter.IfType == 71,
+                                adapter.Ipv4Metric,
+                                ip,
+                            ));
+                        }
+                    }
+                    address_ptr = address.Next;
                 }
             }
+            adapter_ptr = adapter.Next;
         }
+        return preferred_lan_address(candidates);
     }
-    let mut result: Vec<_> = addresses.into_iter().map(|ip| ip.to_string()).collect();
-    result.sort();
-    result
+    Vec::new()
+}
+
+// One connection address and QR: only assigned unicast IPs are candidates,
+// never DNS servers, subnet masks, DHCP servers or default gateways.
+fn preferred_lan_address(mut candidates: Vec<(bool, bool, u32, Ipv4Addr)>) -> Vec<String> {
+    candidates.sort_by_key(|(gateway, wifi, metric, ip)| (!*gateway, !*wifi, *metric, *ip));
+    candidates
+        .into_iter()
+        .find(|(_, _, _, ip)| is_lan(*ip))
+        .map(|(_, _, _, ip)| vec![ip.to_string()])
+        .unwrap_or_default()
 }
 
 pub fn mask_token(url: &str) -> String {
@@ -1039,5 +1080,29 @@ mod tests {
         assert_eq!(server.start(&mut config).unwrap(), port);
         assert_eq!(server.take_port_change(), None);
         server.stop();
+    }
+}
+
+#[cfg(test)]
+mod feedback_address_tests {
+    use super::*;
+    #[test]
+    fn phone_hotspot_wifi_is_one_address_not_the_gateway() {
+        assert_eq!(
+            preferred_lan_address(vec![
+                (true, false, 10, Ipv4Addr::new(192, 168, 1, 25)),
+                (true, true, 30, Ipv4Addr::new(172, 20, 10, 4)),
+            ]),
+            vec!["172.20.10.4"]
+        );
+    }
+    #[test]
+    fn disconnected_or_non_lan_candidates_do_not_create_a_phone_url() {
+        assert!(preferred_lan_address(Vec::new()).is_empty());
+        assert!(preferred_lan_address(vec![(true, true, 1, Ipv4Addr::LOCALHOST)]).is_empty());
+        assert_eq!(
+            preferred_lan_address(vec![(true, true, 10, Ipv4Addr::new(192, 168, 43, 20))]),
+            vec!["192.168.43.20"]
+        );
     }
 }

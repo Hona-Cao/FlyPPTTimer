@@ -354,10 +354,12 @@ export component PresentationWindow inherits Window {
         x: 24px; y: 88px; width: parent.width - 48px; height: parent.height - 102px;
         background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
 
-        ScrollView {
-            x: 16px; y: 16px; width: parent.width - 32px; height: parent.height - 32px;
+        connection-scroll := ScrollView {
+            x: 16px; y: 16px; width: parent.width - 24px; height: parent.height - 32px;
+            viewport-width: self.visible-width;
             VerticalLayout {
-                width: parent.width;
+                width: connection-scroll.visible-width - 12px;
+                alignment: start;
                 spacing: 12px;
                 Rectangle {
                     height: max(148px, recommended.y + recommended.preferred-height + 8px);
@@ -367,7 +369,6 @@ export component PresentationWindow inherits Window {
                     recommended := Text { x: 0; y: 94px; width: parent.width - 164px; height: self.preferred-height; text: root.recommended-url; color: DesktopTheme.accent; font-size: 14px; font-weight: 600; wrap: word-wrap; }
                     Image { x: parent.width - 144px; y: 0; width: 144px; height: 144px; source: root.qr-image; image-fit: contain; }
                 }
-                Text { text: root.address-list-text; color: DesktopTheme.muted; font-size: 12px; wrap: word-wrap; }
                 Rectangle { height: 1px; background: DesktopTheme.border; }
                 HorizontalLayout {
                     height: 36px; spacing: 12px;
@@ -398,15 +399,17 @@ export component PresentationWindow inherits Window {
 
     Rectangle {
         visible: root.current-page == 1;
-        x: 24px; y: 88px; width: parent.width - 48px; height: root.height - 266px;
+        x: 24px; y: 88px; width: parent.width - 48px; height: root.height - 252px;
         background: DesktopTheme.surface; border-radius: 10px; border-width: 1px; border-color: DesktopTheme.border;
         Text { x: 16px; y: 12px; width: 160px; height: 18px; text: root.rule-duration-text + " / " + root.rule-mode-text; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; }
         Text { x: parent.width - 220px; y: 12px; width: 84px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
         Text { x: parent.width - 120px; y: 12px; width: 100px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
-        ScrollView {
-            x: 8px; y: 34px; width: parent.width - 16px; height: parent.height - 42px;
+        rules-scroll := ScrollView {
+            x: 8px; y: 34px; width: parent.width - 12px; height: parent.height - 42px;
+            viewport-width: self.visible-width;
             VerticalLayout {
-                width: parent.width;
+                width: rules-scroll.visible-width - 10px;
+                alignment: start;
                 spacing: 6px;
                 for item[index] in root.presentations: Rectangle {
                     height: 68px; border-radius: 8px;
@@ -433,9 +436,9 @@ export component PresentationWindow inherits Window {
         }
     }
 
-    Rectangle { visible: root.current-page == 1 && root.selected-presentation >= 0; x: 24px; y: root.height - 176px; width: parent.width - 48px; height: 72px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
+    Rectangle { visible: root.current-page == 1 && root.selected-presentation >= 0; x: 24px; y: root.height - 154px; width: parent.width - 48px; height: 54px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
         HorizontalLayout {
-            y: 18px; width: parent.width; height: 34px; alignment: center; spacing: 10px;
+            x: 12px; y: 10px; width: parent.width - 24px; height: 34px; alignment: center; spacing: 10px;
             Text { width: 42px; text: root.rule-duration-text; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
             LineEdit { enabled: !root.modal-open; width: 112px; text <=> root.rule-duration; }
             Text { width: 42px; text: root.rule-mode-text; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
@@ -697,7 +700,7 @@ export component SettingsWindow inherits Window {
         // Leave a clear breathing room between the scroll viewport and the
         // fixed action buttons.  The footer remains transparent, so the
         // content surface must end before its buttons begin.
-        height: parent.height - 92px;
+        height: parent.height - 76px;
         background: DesktopTheme.canvas;
         // The footer is a sibling below this content surface.  Clip the
         // scroll viewport at the surface boundary so its rows can never
@@ -714,18 +717,20 @@ export component SettingsWindow inherits Window {
             vertical-alignment: top;
         }
 
-        ScrollView {
+        settings-scroll := ScrollView {
             x: 18px;
             y: 56px;
-            width: parent.width - 36px;
+            width: parent.width - 26px;
+            viewport-width: self.visible-width;
             // Keep the scroll viewport above the fixed action bar.  Refer to
             // the window height explicitly so it cannot extend under the
             // footer when the settings content grows.
-            height: root.height - 164px;
+            height: parent.height - 64px;
             viewport-y <=> root.preview-scroll-y;
 
             VerticalLayout {
-                width: parent.width;
+                width: settings-scroll.visible-width - 12px;
+                alignment: start;
                 spacing: 10px;
                 padding-bottom: 12px;
 
@@ -795,13 +800,13 @@ export component SettingsWindow inherits Window {
                 }
 
                 if root.current-page == 0 && root.selected-rule >= 0: Rectangle {
-                    height: 76px;
+                    height: 54px;
                     background: DesktopTheme.surface;
                     border-radius: 8px;
                     border-width: 1px;
                     border-color: DesktopTheme.border;
                     HorizontalLayout {
-                        x: 16px; y: 21px; width: parent.width - 32px; height: 34px;
+                        x: 16px; y: 10px; width: parent.width - 32px; height: 34px;
                         alignment: center; spacing: 8px;
                         Text { width: 44px; text: root.rule-duration-label; color: DesktopTheme.secondary; horizontal-alignment: center; vertical-alignment: center; }
                         LineEdit { enabled: !root.modal-open; width: 156px;
@@ -821,19 +826,19 @@ export component SettingsWindow inherits Window {
 
     Rectangle {
         x: 196px;
-        y: parent.height - 68px;
+        y: parent.height - 76px;
         width: parent.width - 196px;
-        height: 68px;
+        height: 76px;
         background: transparent;
         border-radius: 0px;
         border-width: 0px;
 
         HorizontalLayout {
-            x: parent.width - 290px;
-            y: 16px;
-            width: 290px;
+            x: parent.width - 324px;
+            y: 20px;
+            width: 300px;
             height: 36px;
-            spacing: 6px;
+            spacing: 12px;
             Button { enabled: !root.modal-open; text: root.ok-text; clicked => { root.accept(); } }
             Button { enabled: !root.modal-open; text: root.cancel-text; clicked => { root.cancel(); } }
             Button { text: root.apply-text; enabled: (root.dirty) && !root.modal-open; clicked => { root.apply(); } }
@@ -862,28 +867,28 @@ export component SettingsWindow inherits Window {
     }
     if root.dialog-open: Rectangle {
         init => { dialog-ok.focus(); }
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
         background: DesktopTheme.scrim;
         TouchArea { }
-        Rectangle {
+        dialog-card := Rectangle {
             width: min(660px, parent.width - 48px);
-            height: min(parent.height - 48px, max(236px, min(520px, 150px + dialog-measure.preferred-height)));
+            // Measure the actual visible text at its actual font and width.
+            // Long content scrolls inside the available window, never clips.
+            height: min(parent.height - 48px, max(190px, dialog-body.preferred-height + 158px));
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
             background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
-            Rectangle { x: 0px; y: 0px; width: parent.width; height: 5px; background: DesktopTheme.accent; border-radius: 12px; }
-            dialog-measure := Text {
-                x: 30px; y: 78px; width: parent.width - 60px;
-                height: self.preferred-height;
-                text: root.dialog-message;
-                wrap: word-wrap;
-                opacity: 0;
-            }
-            Text { x: 30px; y: 20px; width: parent.width - 60px; height: 34px; text: root.dialog-title; font-size: 18px; font-weight: 700; color: DesktopTheme.text; vertical-alignment: center; }
-            Rectangle { x: 30px; y: 58px; width: parent.width - 60px; height: parent.height - 126px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border; }
-            ScrollView {
-                x: 42px; y: 72px; width: parent.width - 84px; height: parent.height - 150px;
-                Text {
-                    width: parent.width;
+            Text { x: 24px; y: 18px; width: parent.width - 48px; height: 34px; text: root.dialog-title; font-size: 18px; font-weight: 700; color: DesktopTheme.text; vertical-alignment: center; }
+            Rectangle { x: 24px; y: 62px; width: parent.width - 48px; height: parent.height - 132px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border; }
+            dialog-scroll := ScrollView {
+                x: 28px; y: 66px; width: parent.width - 56px; height: parent.height - 140px;
+                viewport-width: self.visible-width;
+                viewport-height: dialog-body.preferred-height + 20px;
+                viewport-x: 0px;
+                viewport-y: 0px;
+                dialog-body := Text {
+                    x: 12px; y: 10px;
+                    width: dialog-card.width - 104px;
                     height: self.preferred-height;
                     text: root.dialog-message;
                     wrap: word-wrap;
@@ -892,7 +897,7 @@ export component SettingsWindow inherits Window {
                     font-size: 14px;
                 }
             }
-            Button { visible: root.dialog-restart; x: parent.width - 214px; y: parent.height - 52px; width: 88px; height: 34px; text: root.cancel-text; clicked => { root.dialog-open = false; } }
+            Button { visible: root.dialog-restart; x: parent.width - 212px; y: parent.height - 52px; width: 88px; height: 34px; text: root.cancel-text; clicked => { root.dialog-open = false; } }
             dialog-ok := Button { x: parent.width - 112px; y: parent.height - 52px; width: 88px; height: 34px; text: root.ok-text; clicked => { root.dialog-open = false; root.dialog-confirm(); } }
         }
     }

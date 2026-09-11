@@ -2,6 +2,7 @@ use std::{
     path::Path,
     sync::mpsc::{self, SyncSender},
     thread,
+    time::{Duration, Instant},
 };
 
 use windows::{
@@ -13,9 +14,16 @@ use windows::{
             },
             Speech::{ISpVoice, SPF_DEFAULT, SpVoice},
         },
-        System::Com::{CLSCTX_ALL, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx},
+        System::{
+            Com::{
+                CLSCTX_ALL, CLSCTX_INPROC_SERVER, CLSIDFromProgID, COINIT_APARTMENTTHREADED,
+                CoCreateInstance, CoInitializeEx, DISPATCH_FLAGS, DISPATCH_METHOD,
+                DISPATCH_PROPERTYGET, DISPATCH_PROPERTYPUT, DISPPARAMS, IDispatch,
+            },
+            Variant::VARIANT,
+        },
     },
-    core::PCWSTR,
+    core::{GUID, PCWSTR},
 };
 
 use crate::alerts::AlertEvent;
@@ -122,42 +130,128 @@ fn play_sound(path: &str) {
         eprintln!("prompt sound file does not exist: {path}");
         return;
     }
-    let path = path.replace('"', "\"\"");
-    let open = wide(&format!("open \"{path}\" alias FlyPPTTimerAlert"));
+    let command_path = path.replace('"', "\"\"");
+    let open = wide(&format!("open \"{command_path}\" alias FlyPPTTimerAlert"));
     let play = wide("play FlyPPTTimerAlert wait");
     let close = wide("close FlyPPTTimerAlert");
+    let result = unsafe {
+        let open_result = mci_send_string(open.as_ptr(), std::ptr::null_mut(), 0, 0);
+        if open_result == 0 {
+            let play_result = mci_send_string(play.as_ptr(), std::ptr::null_mut(), 0, 0);
+            let _ = mci_send_string(close.as_ptr(), std::ptr::null_mut(), 0, 0);
+            play_result
+        } else {
+            open_result
+        }
+    };
+    if result != 0
+        && let Err(error) = play_wmp_native(path)
+    {
+        eprintln!("failed to play prompt sound (MCI error {result}): {error}");
+    }
+}
+
+// Keep the existing codec fallback, but host it on the audio STA directly.
+// No shell, command interpreter, encoded script or process launch is involved.
+fn play_wmp_native(path: &str) -> Result<(), String> {
+    let prog_id = wide("WMPlayer.OCX");
+    let class = unsafe { CLSIDFromProgID(PCWSTR(prog_id.as_ptr())) }.map_err(|e| e.to_string())?;
+    let player: IDispatch = unsafe { CoCreateInstance(&class, None, CLSCTX_INPROC_SERVER) }
+        .map_err(|e| e.to_string())?;
+    let result = (|| {
+        let settings = player_object(&player, "settings")?;
+        player_invoke(
+            &settings,
+            "autoStart",
+            DISPATCH_PROPERTYPUT,
+            &[VARIANT::from(false)],
+        )?;
+        player_invoke(&player, "URL", DISPATCH_PROPERTYPUT, &[VARIANT::from(path)])?;
+        let controls = player_object(&player, "controls")?;
+        player_invoke(&controls, "play", DISPATCH_METHOD, &[])?;
+        let started_at = Instant::now();
+        let mut started = false;
+        loop {
+            pump_audio_messages();
+            let value = player_invoke(&player, "playState", DISPATCH_PROPERTYGET, &[])?;
+            let state = i32::try_from(&value).map_err(|e| e.to_string())?;
+            if state == 8 || (started && matches!(state, 1 | 10)) {
+                return Ok(());
+            }
+            started |= matches!(state, 3..=5);
+            // Bound startup only: valid, long audio is not cut off.
+            if !started && started_at.elapsed() >= Duration::from_secs(15) {
+                return Err("native media player did not start the selected sound".to_owned());
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+    })();
+    // close also stops playback; execute it on both success and error paths.
+    let _ = player_invoke(&player, "close", DISPATCH_METHOD, &[]);
+    result
+}
+
+fn pump_audio_messages() {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage,
+    };
     unsafe {
-        let _ = mci_send_string(open.as_ptr(), std::ptr::null_mut(), 0, 0);
-        let result = mci_send_string(play.as_ptr(), std::ptr::null_mut(), 0, 0);
-        let _ = mci_send_string(close.as_ptr(), std::ptr::null_mut(), 0, 0);
-        if result != 0 {
-            play_wmp_fallback(path.as_str(), result);
+        let mut message = MSG::default();
+        while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
         }
     }
 }
 
-fn play_wmp_fallback(path: &str, mci_error: u32) {
-    const SCRIPT: &str = r#"$player = New-Object -ComObject WMPlayer.OCX
-$player.settings.autoStart = $false
-$player.URL = $args[0]
-$player.controls.play()
-while ($player.playState -notin 1, 8, 10) { Start-Sleep -Milliseconds 50 }
-"#;
-    let result =
-        std::process::Command::new(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-WindowStyle",
-                "Hidden",
-                "-Command",
-                SCRIPT,
-                path,
-            ])
-            .status();
-    if !result.is_ok_and(|status| status.success()) {
-        eprintln!("failed to play prompt sound: {path} (MCI error {mci_error})");
+fn player_object(player: &IDispatch, name: &str) -> Result<IDispatch, String> {
+    let value = player_invoke(player, name, DISPATCH_PROPERTYGET, &[])?;
+    IDispatch::try_from(&value).map_err(|e| e.to_string())
+}
+
+fn player_invoke(
+    object: &IDispatch,
+    name: &str,
+    flags: DISPATCH_FLAGS,
+    args: &[VARIANT],
+) -> Result<VARIANT, String> {
+    let name = wide(name);
+    let name_ptr = PCWSTR(name.as_ptr());
+    let mut id = 0;
+    unsafe { object.GetIDsOfNames(&GUID::zeroed(), &name_ptr, 1, 0, &mut id) }
+        .map_err(|e| e.to_string())?;
+    let mut reversed: Vec<_> = args.iter().rev().cloned().collect();
+    let property_put = flags == DISPATCH_PROPERTYPUT;
+    let mut named_id = -3;
+    let params = DISPPARAMS {
+        rgvarg: if reversed.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            reversed.as_mut_ptr()
+        },
+        rgdispidNamedArgs: if property_put {
+            &mut named_id
+        } else {
+            std::ptr::null_mut()
+        },
+        cArgs: reversed.len() as u32,
+        cNamedArgs: u32::from(property_put),
+    };
+    let mut value = VARIANT::default();
+    unsafe {
+        object.Invoke(
+            id,
+            &GUID::zeroed(),
+            0,
+            flags,
+            &params,
+            Some(&mut value),
+            None,
+            None,
+        )
     }
+    .map_err(|e| e.to_string())?;
+    Ok(value)
 }
 
 #[link(name = "winmm")]
