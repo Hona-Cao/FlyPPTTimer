@@ -2372,8 +2372,12 @@ fn import_sound(
             "请选择 MP3、WAV、WMA 或 M4A 音频文件。",
         ));
     }
-    fs::create_dir_all(directory)?;
-    let destination = directory.join(format!("{slot}.{extension}"));
+    let file_name = source.file_name().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "提示音文件名无效。")
+    })?;
+    let slot_directory = directory.join(slot);
+    fs::create_dir_all(&slot_directory)?;
+    let destination = slot_directory.join(file_name);
     if !source
         .to_string_lossy()
         .eq_ignore_ascii_case(&destination.to_string_lossy())
@@ -2727,7 +2731,7 @@ mod parity_tests {
     }
 
     #[test]
-    fn sound_import_copies_overwrites_same_slot_and_rejects_unsupported_extension() {
+    fn sound_import_preserves_filename_overwrites_same_slot_and_rejects_unsupported_extension() {
         let root =
             std::env::temp_dir().join(format!("flyppttimer-sound-parity-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
@@ -2735,7 +2739,7 @@ mod parity_tests {
         fs::write(&source, b"sound").unwrap();
         let destination = root.join("alert-sounds");
         let imported = import_sound(&source, "prompt1", &destination).unwrap();
-        assert_eq!(imported, destination.join("prompt1.wav"));
+        assert_eq!(imported, destination.join("prompt1").join("chosen.WAV"));
         assert!(imported.is_file());
         fs::write(&imported, b"previous slot content").unwrap();
         import_sound(&source, "prompt1", &destination).unwrap();

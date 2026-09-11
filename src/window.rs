@@ -338,6 +338,11 @@ pub fn is_minimized(window: &slint::Window) -> bool {
     hwnd(window).is_some_and(|hwnd| unsafe { IsIconic(hwnd) != 0 })
 }
 
+pub fn escape_key_down() -> bool {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE};
+    unsafe { (GetAsyncKeyState(VK_ESCAPE as i32) as u16 & 0x8000) != 0 }
+}
+
 pub fn show_time_up_window(window: &slint::Window, bounds: crate::display::DisplayRect) {
     // Position the surface on its monitor before requesting borderless fullscreen.
     // Winit/Slint then own both native geometry and layout through subsequent frames.

@@ -361,7 +361,7 @@ export component PresentationWindow inherits Window {
 
                 viewport-width: self.visible-width;
                 VerticalLayout {
-                    width: connection-scroll.visible-width - 12px;
+                    width: connection-scroll.visible-width - 20px;
                     alignment: start;
                     spacing: 12px;
                     Rectangle {
@@ -416,7 +416,7 @@ export component PresentationWindow inherits Window {
 
                 viewport-width: self.visible-width;
                 VerticalLayout {
-                    width: rules-scroll.visible-width - 10px;
+                    width: rules-scroll.visible-width - 18px;
                     alignment: start;
                     spacing: 6px;
                     for item[index] in root.presentations: Rectangle {
@@ -740,7 +740,7 @@ export component SettingsWindow inherits Window {
                 viewport-y <=> root.preview-scroll-y;
 
                 VerticalLayout {
-                    width: settings-scroll.visible-width - 12px;
+                    width: settings-scroll.visible-width - 20px;
                     alignment: start;
                     spacing: 10px;
                     padding-bottom: 12px;

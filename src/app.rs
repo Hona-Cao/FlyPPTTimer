@@ -148,12 +148,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let fullscreen_match = Rc::new(RefCell::new(None::<String>));
     let last_remote_update = Rc::new(Cell::new(Instant::now()));
     let last_display_check = Rc::new(Cell::new(Instant::now()));
+    let escape_was_down = Cell::new(false);
 
     let refresh_timer = slint::Timer::default();
     refresh_timer.start(
         slint::TimerMode::Repeated,
         Duration::from_millis(100),
         move || {
+            let escape_down = window::escape_key_down();
+            let was_escape_down = escape_was_down.replace(escape_down);
+            if preserve_time_up_for_updates.get() && escape_down && !was_escape_down {
+                preserve_time_up_for_updates.set(false);
+                hide_time_up(&time_up_for_updates);
+            }
             if let Some((old, port)) = remote_for_updates.take_port_change() {
                 let english = crate::config::ui_is_english(&config_for_updates.borrow().language);
                 desktop_for_updates.notify(&if english {
@@ -1598,6 +1605,10 @@ fn execute_remote_command(
             hide_time_up(time_up_window);
         }
         return result;
+    }
+    if name.starts_with("ppt.") && name != "ppt.refresh" && preserve_time_up.get() {
+        preserve_time_up.set(false);
+        hide_time_up(time_up_window);
     }
     match name {
         "window.show" => {

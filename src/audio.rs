@@ -28,6 +28,8 @@ use windows::{
 
 use crate::alerts::AlertEvent;
 
+const MAX_PROMPT_SOUND_DURATION: Duration = Duration::from_secs(10);
+
 enum Playback {
     Speech(String),
     Sound(String),
@@ -143,18 +145,45 @@ fn play_sound(path: &str) -> Result<(), String> {
     }
     let command_path = path.replace('"', "\"\"");
     let open = wide(&format!("open \"{command_path}\" alias FlyPPTTimerAlert"));
-    let play = wide("play FlyPPTTimerAlert wait");
+    let play = wide("play FlyPPTTimerAlert");
+    let status = wide("status FlyPPTTimerAlert mode");
     let close = wide("close FlyPPTTimerAlert");
     let result = unsafe {
         let open_result = mci_send_string(open.as_ptr(), std::ptr::null_mut(), 0, 0);
-        if open_result == 0 {
-            let play_result = mci_send_string(play.as_ptr(), std::ptr::null_mut(), 0, 0);
-            let _ = mci_send_string(close.as_ptr(), std::ptr::null_mut(), 0, 0);
-            play_result
-        } else {
+        if open_result != 0 {
             open_result
+        } else {
+            let play_result = mci_send_string(play.as_ptr(), std::ptr::null_mut(), 0, 0);
+            if play_result != 0 {
+                play_result
+            } else {
+                let started = Instant::now();
+                while started.elapsed() < MAX_PROMPT_SOUND_DURATION {
+                    let mut mode = [0u16; 32];
+                    let status_result =
+                        mci_send_string(status.as_ptr(), mode.as_mut_ptr(), mode.len() as u32, 0);
+                    if status_result != 0 {
+                        break;
+                    }
+                    let end = mode
+                        .iter()
+                        .position(|value| *value == 0)
+                        .unwrap_or(mode.len());
+                    if String::from_utf16_lossy(&mode[..end])
+                        .trim()
+                        .eq_ignore_ascii_case("stopped")
+                    {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(25));
+                }
+                0
+            }
         }
     };
+    unsafe {
+        let _ = mci_send_string(close.as_ptr(), std::ptr::null_mut(), 0, 0);
+    }
     if result != 0 {
         play_wmp_native(path)
             .map_err(|error| format!("Prompt sound failed (MCI error {result}): {error}"))?;
@@ -182,6 +211,7 @@ fn play_wmp_native(path: &str) -> Result<(), String> {
         player_invoke(&controls, "play", DISPATCH_METHOD, &[])?;
         let started_at = Instant::now();
         let mut started = false;
+        let mut playback_started_at = None;
         let mut last_progress = Instant::now();
         let mut last_position = 0.0;
         loop {
@@ -191,7 +221,15 @@ fn play_wmp_native(path: &str) -> Result<(), String> {
             if state == 8 || (started && matches!(state, 1 | 10)) {
                 return Ok(());
             }
-            started |= matches!(state, 3..=5);
+            if matches!(state, 3..=5) && !started {
+                started = true;
+                playback_started_at = Some(Instant::now());
+            }
+            if playback_started_at
+                .is_some_and(|started| started.elapsed() >= MAX_PROMPT_SOUND_DURATION)
+            {
+                return Ok(());
+            }
             if started {
                 let position =
                     player_invoke(&controls, "currentPosition", DISPATCH_PROPERTYGET, &[])?;
@@ -203,7 +241,7 @@ fn play_wmp_native(path: &str) -> Result<(), String> {
                     return Err("native media playback stalled for 30 seconds".into());
                 }
             }
-            // Bound startup only: valid, long audio is not cut off.
+            // Bound startup separately; audible prompt playback is capped above.
             if !started && started_at.elapsed() >= Duration::from_secs(15) {
                 return Err("native media player did not start the selected sound".to_owned());
             }

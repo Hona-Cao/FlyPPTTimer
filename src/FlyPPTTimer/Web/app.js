@@ -85,11 +85,11 @@ const token=window.FLYPPT_TOKEN||'';
 const $=id=>document.getElementById(id);
 const commandButtons=[...document.querySelectorAll('[data-command]')];
 const timerModeButtons=[...document.querySelectorAll('[data-timer-mode]')];
-let connected=false,lastState=null,messageTimer=null,pollTimer=null,busy=false,pendingConfirmation=null,timerEditorDirty=false,selectedPresentationId=null;
+let connected=false,lastState=null,messageTimer=null,pollTimer=null,busy=false,pendingConfirmation=null,timerEditorDirty=false,selectedPresentationId=null,pollFailures=0;
 
 function url(path){return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token)}
 async function api(path,options={}){
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),6000);
   try{
     const response=await fetch(url(path),{cache:'no-store',credentials:'omit',...options,signal:controller.signal});
     const data=await response.json();
@@ -107,7 +107,7 @@ function setDurationEditor(durationMs){
   $('durationSeconds').value=String(total%60);
 }
 function paint(s){
-  lastState=s;connection(true);const t=timerState(s),p=s.presentationState||{};
+  lastState=s;pollFailures=0;connection(true);const t=timerState(s),p=s.presentationState||{};
   $('timerText').textContent=t.displayText||'--:--';$('timerStatus').textContent=t.isOvertime?'已超时':(t.state||'停止');$('timerMode').textContent=t.mode||'倒计时';
   const muted=!!t.muted;$('muteButton').textContent=muted?'电脑已静音（点击恢复声音）':'电脑声音正常（点击静音）';$('muteButton').classList.toggle('selected',muted);$('muteButton').setAttribute('aria-pressed',String(muted));
   document.querySelector('.timer-card').classList.toggle('overtime',!!t.isOvertime);
@@ -172,7 +172,14 @@ function updatePresentationHint(p){
 function schedulePoll(delay=1000){clearTimeout(pollTimer);pollTimer=setTimeout(poll,delay)}
 async function poll(){
   try{paint(await api('/state'));schedulePoll(1000)}
-  catch(e){connection(false);setAvailability({},{});refreshPresentationButtons();notify('连接失败：'+e.message+'。Clash/TUN 请将本机局域网 IP 和端口设为 DIRECT。',true);schedulePoll(2500)}
+  catch(e){
+    pollFailures+=1;
+    if(pollFailures>=3){
+      connection(false);setAvailability({},{});refreshPresentationButtons();
+      if(pollFailures===3)notify('连接失败：'+e.message+'。正在自动重连；Clash/TUN 请将本机局域网 IP 和端口设为 DIRECT。',true);
+    }
+    schedulePoll(Math.min(5000,500+pollFailures*750));
+  }
 }
 function requestConfirmation(name,extra){
   const details={
@@ -239,4 +246,7 @@ $('applyDuration').addEventListener('click',async()=>{
 });
 timerModeButtons.forEach(button=>button.addEventListener('click',async()=>{if(await command('timer.setMode',{mode:button.dataset.timerMode,presentationId:selectedPresentationId}))notify(`已切换为${button.dataset.timerMode==='countup'?'正计时':'倒计时'}`)}));
 $('gotoSlide').addEventListener('click',()=>{const input=$('slideNumber'),value=Number(input.value),max=Number(input.max);if(!Number.isInteger(value)||value<1||value>max){notify(`请输入 1 到 ${max} 之间的页码`,true);input.focus();return}command('ppt.gotoSlide',{slideNumber:value})});
+window.addEventListener('online',()=>{if(!busy)schedulePoll(0)});
+window.addEventListener('focus',()=>{if(!busy)schedulePoll(0)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!busy)schedulePoll(0)});
 poll();
