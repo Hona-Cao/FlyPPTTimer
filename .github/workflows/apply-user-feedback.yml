@@ -25,11 +25,19 @@ jobs:
       - name: Prepare reviewed changes
         run: |
           $ErrorActionPreference = 'Stop'
-          python scripts/apply-user-feedback.py
+          New-Item -ItemType Directory -Force feedback-evidence | Out-Null
+          git archive --format=zip HEAD -o feedback-evidence/reviewed-input.zip
+          @'
+          from pathlib import Path
+          s = Path('scripts/apply-user-feedback.py').read_text(encoding='utf-8')
+          old = "audio = one(audio, '    thread,\\n', '    thread,\\n    time::{Duration, Instant},\\n')"
+          new = "audio = one(audio, '    thread,\\n};', '    thread,\\n    time::{Duration, Instant},\\n};')"
+          assert s.count(old) == 1
+          exec(compile(s.replace(old, new), 'scripts/apply-user-feedback.py', 'exec'))
+          '@ | python
           if ($LASTEXITCODE -ne 0) { throw 'Reviewed patch did not apply' }
           python scripts/feedback-capture-probe.py
           if ($LASTEXITCODE -ne 0) { throw 'Capture patch did not apply' }
-          New-Item -ItemType Directory -Force feedback-evidence | Out-Null
           git diff --stat
       - name: Project toolchain
         run: |
@@ -65,7 +73,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -- Cargo.toml src/audio.rs src/remote.rs src/capture.rs ui/app-window.slint
-          git rm -- scripts/apply-user-feedback.py scripts/feedback-capture-probe.py .github/workflows/apply-user-feedback.yml
+          git rm -- scripts/apply-user-feedback.py scripts/feedback-capture-probe.py
           git commit -m 'fix: feedback layout clipping native audio and assigned LAN address'
           if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
           git fetch origin codex/v1-06-manual-test
