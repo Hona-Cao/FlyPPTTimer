@@ -89,7 +89,8 @@ end_marker = '\npub(crate) fn is_supported_presentation_path'
 end = s.find(end_marker, start)
 if start < 0 or end < 0:
     raise SystemExit("presentation picker block not found")
-modern_picker = r'''const PRESENTATION_FILTER_PATTERN: &str = "*.ppt;*.pptx;*.pptm";
+modern_picker = r'''const PRESENTATION_FILTER_PATTERN: windows::core::PCWSTR =
+    windows::core::w!("*.ppt;*.pptx;*.pptm");
 
 pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
     use windows::{
@@ -135,7 +136,7 @@ pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
     }
     let filters = [COMDLG_FILTERSPEC {
         pszName: w!("PowerPoint (*.ppt;*.pptx;*.pptm)"),
-        pszSpec: w!("*.ppt;*.pptx;*.pptm"),
+        pszSpec: PRESENTATION_FILTER_PATTERN,
     }];
     if unsafe { dialog.SetFileTypes(&filters) }.is_err() {
         return Vec::new();
@@ -143,13 +144,8 @@ pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
     let _ = unsafe { dialog.SetFileTypeIndex(1) };
     let _ = unsafe { dialog.SetTitle(w!("选择 PPT 文件")) };
 
-    let raw_owner = crate::window::app_dialog_owner();
-    let owner: Option<HWND> = if raw_owner.is_null() {
-        None
-    } else {
-        Some(raw_owner)
-    };
-    if unsafe { dialog.Show(owner) }.is_err() {
+    let owner = HWND(crate::window::app_dialog_owner());
+    if unsafe { dialog.Show(Some(owner)) }.is_err() {
         return Vec::new();
     }
     let items = match unsafe { dialog.GetResults() } {
@@ -187,9 +183,8 @@ pattern = re.compile(
 )
 replacement = '''    #[test]
     fn powerpoint_dialog_filter_is_strict_and_has_no_all_files_fallback() {
-        assert_eq!(PRESENTATION_FILTER_PATTERN, "*.ppt;*.pptx;*.pptm");
-        assert!(!PRESENTATION_FILTER_PATTERN.contains("*.*"));
-        assert!(!PRESENTATION_FILTER_PATTERN.contains("pdf"));
+        let pattern = unsafe { PRESENTATION_FILTER_PATTERN.to_string() }.unwrap();
+        assert_eq!(pattern, "*.ppt;*.pptx;*.pptm");
     }
 '''
 s, count = pattern.subn(replacement, s, count=1)
