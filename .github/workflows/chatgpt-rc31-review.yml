@@ -25,7 +25,7 @@ jobs:
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw "Patched tree has whitespace errors" }
           $changed = @(git diff --name-only)
-          $expected = @("src/config.rs","src/presentation.rs","src/window.rs")
+          $expected = @("src/app.rs","src/config.rs","src/presentation.rs","src/settings.rs","src/window.rs")
           if (@(Compare-Object $changed $expected).Count -ne 0) {
             throw "Unexpected patched files: $($changed -join ', ')"
           }
@@ -72,7 +72,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/window.rs src/config.rs src/presentation.rs
+          git add src/app.rs src/config.rs src/presentation.rs src/settings.rs src/window.rs
           git commit -m "fix: stabilize RC3.1 review blockers"
           if ($LASTEXITCODE -ne 0) { throw "Could not create patched-source commit" }
           $sha = (git rev-parse HEAD).Trim()
