@@ -686,3 +686,106 @@ unsafe fn apply_shape(hwnd: HWND, shape: &str) {
         unsafe { SetWindowRgn(hwnd, region, 1) };
     }
 }
+
+pub fn app_dialog_owner() -> HWND {
+    use windows_sys::Win32::{
+        System::Threading::GetCurrentProcessId,
+        UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId},
+    };
+    unsafe {
+        let handle = GetForegroundWindow();
+        let mut pid = 0;
+        GetWindowThreadProcessId(handle, &mut pid);
+        if pid == GetCurrentProcessId() {
+            handle
+        } else {
+            std::ptr::null_mut()
+        }
+    }
+}
+
+pub fn brand_native_window(window: &slint::Window) {
+    if let Some(handle) = hwnd(window) {
+        brand_handle(handle);
+    }
+}
+
+fn brand_handle(handle: HWND) {
+    use windows_sys::Win32::{
+        System::LibraryLoader::GetModuleHandleW,
+        UI::WindowsAndMessaging::{
+            ICON_BIG, ICON_SMALL, IMAGE_ICON, LR_SHARED, LoadImageW, SendMessageW, WM_SETICON,
+        },
+    };
+    if handle.is_null() {
+        return;
+    }
+    unsafe {
+        let module = GetModuleHandleW(std::ptr::null());
+        for (kind, size) in [(ICON_SMALL, 16), (ICON_BIG, 32)] {
+            let icon = LoadImageW(
+                module,
+                std::ptr::without_provenance::<u16>(1),
+                IMAGE_ICON,
+                size,
+                size,
+                LR_SHARED,
+            );
+            if !icon.is_null() {
+                SendMessageW(handle, WM_SETICON, kind as usize, icon as isize);
+            }
+        }
+    }
+}
+
+/// Common-dialog hook runs only inside dialogs created by this application.
+pub unsafe extern "system" fn brand_common_dialog(
+    handle: HWND,
+    message: u32,
+    _: usize,
+    _: isize,
+) -> usize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetParent, WM_INITDIALOG};
+    if message == WM_INITDIALOG {
+        brand_handle(handle);
+        let parent = unsafe { GetParent(handle) };
+        if !parent.is_null() {
+            brand_handle(parent);
+        }
+    }
+    0
+}
+
+/// Keep severity text/buttons, but use the product icon instead of stock artwork.
+pub unsafe fn branded_message_box(
+    owner: HWND,
+    text: *const u16,
+    title: *const u16,
+    style: u32,
+) -> i32 {
+    use windows_sys::Win32::{
+        System::LibraryLoader::GetModuleHandleW,
+        UI::WindowsAndMessaging::{MB_USERICON, MSGBOXPARAMSW, MessageBoxIndirectW},
+    };
+    let parameters = MSGBOXPARAMSW {
+        cbSize: std::mem::size_of::<MSGBOXPARAMSW>() as u32,
+        hwndOwner: owner,
+        hInstance: unsafe { GetModuleHandleW(std::ptr::null()) },
+        lpszText: text,
+        lpszCaption: title,
+        dwStyle: (style & !0xF0) | MB_USERICON,
+        lpszIcon: std::ptr::without_provenance::<u16>(1),
+        ..unsafe { std::mem::zeroed() }
+    };
+    unsafe { MessageBoxIndirectW(&parameters) }
+}
+
+pub fn log_management_window(label: &str, window: &slint::Window) {
+    crate::log::info(&format!(
+        "{label}: slint_visible={} native_visible={} size={:?} scale={}",
+        window.is_visible(),
+        is_visible(window),
+        window.size(),
+        window.scale_factor()
+    ));
+}

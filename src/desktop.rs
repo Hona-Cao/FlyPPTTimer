@@ -13,7 +13,7 @@ use windows_sys::Win32::{
             MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, RegisterHotKey, UnregisterHotKey,
         },
         Shell::{
-            NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY,
+            NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY,
             NOTIFYICONDATAW, Shell_NotifyIconW,
         },
         WindowsAndMessaging::{
@@ -21,9 +21,9 @@ use windows_sys::Win32::{
             CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
             DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, HMENU, IDI_APPLICATION,
             LR_DEFAULTCOLOR, LoadIconW, MB_ICONWARNING, MB_OK, MF_SEPARATOR, MF_STRING, MSG,
-            MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW, SetForegroundWindow,
-            TPM_RIGHTBUTTON, TPM_VERTICAL, TrackPopupMenu, TranslateMessage, WM_APP, WM_CLOSE,
-            WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_RBUTTONUP, WNDCLASSW,
+            PostMessageW, PostQuitMessage, RegisterClassW, SetForegroundWindow, TPM_RIGHTBUTTON,
+            TPM_VERTICAL, TrackPopupMenu, TranslateMessage, WM_APP, WM_CLOSE, WM_COMMAND,
+            WM_DESTROY, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_RBUTTONUP, WNDCLASSW,
         },
     },
 };
@@ -112,7 +112,8 @@ impl DesktopIntegration {
             hWnd: self.hwnd,
             uID: TRAY_ID,
             uFlags: NIF_INFO,
-            dwInfoFlags: NIIF_INFO,
+            dwInfoFlags: windows_sys::Win32::UI::Shell::NIIF_USER,
+            hBalloonIcon: *TRAY_ICON.get_or_init(Default::default).lock().unwrap() as _,
             ..Default::default()
         };
         data.Anonymous.uTimeout = milliseconds;
@@ -479,7 +480,7 @@ unsafe fn register_hotkeys(hwnd: HWND) {
             let message = wide(&message);
             let title = wide("FlyPPTTimer");
             unsafe {
-                MessageBoxW(
+                crate::window::branded_message_box(
                     hwnd,
                     message.as_ptr(),
                     title.as_ptr(),

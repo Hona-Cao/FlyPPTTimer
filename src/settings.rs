@@ -36,6 +36,7 @@ fn localize(lang: Language, value: &str) -> &str {
         return value;
     }
     match value {
+        "选择颜色" => "Choose color",
         "窗口大小" => "Window sizing",
         "自动" => "Automatic",
         "自动（按内容与字号）" => "Automatic (content and font)",
@@ -289,6 +290,13 @@ impl Row {
             ..Self::new(key, label, 2)
         }
     }
+    fn color(key: impl Into<String>, label: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            button: "选择颜色".into(),
+            ..Self::new(key, label, 7)
+        }
+    }
     fn combo(
         key: impl Into<String>,
         label: impl Into<String>,
@@ -381,6 +389,8 @@ impl Row {
             key: self.key.into(),
             label: label.into(),
             kind: self.kind,
+            color_preview: crate::color_picker::parse_hex(&self.value)
+                .unwrap_or(slint::Color::from_rgb_u8(255, 255, 255)),
             value: self.value.into(),
             checked: self.checked,
             options: ModelRc::new(VecModel::from(
@@ -401,15 +411,15 @@ impl Row {
 pub mod native {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         IDNO, IDYES, MB_DEFBUTTON1, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_YESNO,
-        MB_YESNOCANCEL, MessageBoxW,
+        MB_YESNOCANCEL,
     };
 
     pub fn message(text: &str, title: &str, error: bool) {
         let text = wide(text);
         let title = wide(title);
         unsafe {
-            MessageBoxW(
-                std::ptr::null_mut(),
+            crate::window::branded_message_box(
+                crate::window::app_dialog_owner(),
                 text.as_ptr(),
                 title.as_ptr(),
                 MB_OK
@@ -426,8 +436,8 @@ pub mod native {
         let text = wide(text);
         let title = wide(title);
         unsafe {
-            MessageBoxW(
-                std::ptr::null_mut(),
+            crate::window::branded_message_box(
+                crate::window::app_dialog_owner(),
                 text.as_ptr(),
                 title.as_ptr(),
                 MB_YESNO | icon,
@@ -447,7 +457,7 @@ pub mod native {
         let text = wide(text);
         let title = wide(title);
         unsafe {
-            MessageBoxW(
+            crate::window::branded_message_box(
                 owner,
                 text.as_ptr(),
                 title.as_ptr(),
@@ -460,8 +470,8 @@ pub mod native {
         let text = wide(text);
         let title = wide("FlyPPTTimer");
         let result = unsafe {
-            MessageBoxW(
-                std::ptr::null_mut(),
+            crate::window::branded_message_box(
+                crate::window::app_dialog_owner(),
                 text.as_ptr(),
                 title.as_ptr(),
                 MB_YESNOCANCEL | MB_ICONWARNING | MB_DEFBUTTON1,
@@ -570,6 +580,15 @@ pub fn create(
                         value.as_str()
                     };
                     update_field(&mut draft.borrow_mut(), &row.key, value, checked, selected);
+                    if row.kind == 7
+                        && let Some(mut item) = w.get_items().row_data(index as usize)
+                    {
+                        item.value = value.into();
+                        if let Some(color) = crate::color_picker::parse_hex(value) {
+                            item.color_preview = color;
+                        }
+                        w.get_items().set_row_data(index as usize, item);
+                    }
                     set_timer_preview(&w, &draft.borrow());
                     let dirty = !configs_equal(&draft.borrow(), &baseline_for_field.borrow());
                     if matches!(
@@ -628,6 +647,12 @@ pub fn create(
                 &addresses_for_action,
             );
             if let Some(row) = rows.get(row_index) {
+                if row.kind == 7 {
+                    if let Some(w) = weak.upgrade() {
+                        crate::color_picker::open(&w, row_index as i32, &row.value);
+                    }
+                    return;
+                }
                 if row.kind == 5 {
                     if let Some(w) = weak.upgrade() {
                         w.set_dialog_title(localize(ui_language, &row.label).into());
@@ -1207,6 +1232,10 @@ pub fn create(
         let weak = window.as_weak();
         window.window().on_close_requested(move || {
             if let Some(w) = weak.upgrade() {
+                if w.get_native_dialog_open() {
+                    return slint::CloseRequestResponse::KeepWindowShown;
+                }
+                w.set_show_generation(w.get_show_generation().wrapping_add(1));
                 w.invoke_cancel();
             }
             slint::CloseRequestResponse::KeepWindowShown
@@ -1473,12 +1502,12 @@ fn behavior_rows(c: &AppConfig) -> Vec<Row> {
         &c.behavior.end_prompt,
         "计时结束",
     ));
-    rows.push(Row::text(
+    rows.push(Row::color(
         "appearance.timeout_text",
         "超时文字颜色",
         &c.appearance.timeout_text_color,
     ));
-    rows.push(Row::text(
+    rows.push(Row::color(
         "appearance.timeout_background",
         "超时背景颜色",
         &c.appearance.timeout_background_color,
@@ -1604,13 +1633,13 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             ],
             scheme_index(&c.appearance.color_scheme),
         ),
-        Row::text("appearance.text", "字体颜色", &c.appearance.text_color),
-        Row::text(
+        Row::color("appearance.text", "字体颜色", &c.appearance.text_color),
+        Row::color(
             "appearance.background",
             "背景颜色",
             &c.appearance.background_color,
         ),
-        Row::text(
+        Row::color(
             "appearance.flash_background",
             "闪烁背景颜色",
             &c.appearance.flash_background_color,
@@ -1652,7 +1681,7 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             "页数颜色跟随时间",
             c.appearance.page_text_color.is_none(),
         ),
-        Row::text(
+        Row::color(
             "appearance.page_color",
             "页数颜色",
             c.appearance
@@ -2237,6 +2266,31 @@ fn handle_action(key: &str, c: &mut AppConfig, config_path: &std::path::Path) {
 }
 
 fn validate(c: &AppConfig, lang: Language) -> Result<(), String> {
+    for (label, value) in [
+        ("Text", c.appearance.text_color.as_str()),
+        ("Background", c.appearance.background_color.as_str()),
+        ("Flash", c.appearance.flash_background_color.as_str()),
+        ("Overtime text", c.appearance.timeout_text_color.as_str()),
+        (
+            "Overtime background",
+            c.appearance.timeout_background_color.as_str(),
+        ),
+        (
+            "Page",
+            c.appearance
+                .page_text_color
+                .as_deref()
+                .unwrap_or(&c.appearance.text_color),
+        ),
+    ] {
+        if crate::color_picker::parse_hex(value).is_none() {
+            return Err(if lang.english() {
+                format!("{label}: choose a color or enter #RRGGBB.")
+            } else {
+                "颜色值无效：请点击“选择颜色”，或输入 #RRGGBB 格式的色值。".into()
+            });
+        }
+    }
     if !crate::config::is_valid_duration(&c.timer.default_duration) {
         return Err(t(
             lang,
@@ -2428,19 +2482,28 @@ fn merge_rule_fields(current: &mut FileRule, before: &FileRule, after: &FileRule
     }
 }
 
+const PRESENTATION_FILTER: &str = "PowerPoint (*.ppt;*.pptx;*.pptm)\0*.ppt;*.pptx;*.pptm\0";
+
 pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
     use windows_sys::Win32::UI::Controls::Dialogs::{
         GetOpenFileNameW, OFN_ALLOWMULTISELECT, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_HIDEREADONLY,
         OPENFILENAMEW,
     };
-    let mut filter = wide("演示文稿和 PDF (*.ppt;*.pptx;*.pptm;*.pdf)|*.ppt;*.pptx;*.pptm;*.pdf\0");
+    let mut filter = wide(PRESENTATION_FILTER);
     let mut file = [0u16; 32768];
     let mut ofn = unsafe { std::mem::zeroed::<OPENFILENAMEW>() };
     ofn.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+    ofn.hwndOwner = crate::window::app_dialog_owner();
+    ofn.lpfnHook = Some(crate::window::brand_common_dialog);
     ofn.lpstrFilter = filter.as_mut_ptr();
     ofn.lpstrFile = file.as_mut_ptr();
     ofn.nMaxFile = file.len() as u32;
-    ofn.Flags = OFN_EXPLORER | OFN_ALLOWMULTISELECT | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.Flags = windows_sys::Win32::UI::Controls::Dialogs::OFN_ENABLEHOOK
+        | windows_sys::Win32::UI::Controls::Dialogs::OFN_NOCHANGEDIR
+        | OFN_EXPLORER
+        | OFN_ALLOWMULTISELECT
+        | OFN_FILEMUSTEXIST
+        | OFN_HIDEREADONLY;
     if unsafe { GetOpenFileNameW(&mut ofn) } == 0 {
         return Vec::new();
     }
@@ -2477,7 +2540,7 @@ pub(crate) fn is_supported_presentation_path(path: &Path) -> bool {
             .and_then(|extension| extension.to_str())
             .map(|extension| extension.to_ascii_lowercase())
             .as_deref(),
-        Some("ppt" | "pptx" | "pptm" | "pdf")
+        Some("ppt" | "pptx" | "pptm")
     )
 }
 
@@ -2544,10 +2607,16 @@ fn native_choose_sound() -> Option<String> {
     let mut file = [0u16; 2048];
     let mut ofn = unsafe { std::mem::zeroed::<OPENFILENAMEW>() };
     ofn.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+    ofn.hwndOwner = crate::window::app_dialog_owner();
+    ofn.lpfnHook = Some(crate::window::brand_common_dialog);
     ofn.lpstrFilter = filter.as_mut_ptr();
     ofn.lpstrFile = file.as_mut_ptr();
     ofn.nMaxFile = file.len() as u32;
-    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.Flags = windows_sys::Win32::UI::Controls::Dialogs::OFN_ENABLEHOOK
+        | windows_sys::Win32::UI::Controls::Dialogs::OFN_NOCHANGEDIR
+        | OFN_EXPLORER
+        | OFN_FILEMUSTEXIST
+        | OFN_HIDEREADONLY;
     let ok = unsafe { GetOpenFileNameW(&mut ofn) };
     if ok != 0 {
         let end = file.iter().position(|c| *c == 0).unwrap_or(file.len());
@@ -2561,14 +2630,20 @@ fn native_import_config() -> Option<Result<AppConfig, crate::config::ConfigError
     use windows_sys::Win32::UI::Controls::Dialogs::{
         GetOpenFileNameW, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_HIDEREADONLY, OPENFILENAMEW,
     };
-    let mut filter = wide("配置文件 (*.json)|*.json|所有文件 (*.*)|*.*\0");
+    let mut filter = wide("配置文件 (*.json)\0*.json\0所有文件 (*.*)\0*.*\0");
     let mut file = [0u16; 2048];
     let mut ofn = unsafe { std::mem::zeroed::<OPENFILENAMEW>() };
     ofn.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+    ofn.hwndOwner = crate::window::app_dialog_owner();
+    ofn.lpfnHook = Some(crate::window::brand_common_dialog);
     ofn.lpstrFilter = filter.as_mut_ptr();
     ofn.lpstrFile = file.as_mut_ptr();
     ofn.nMaxFile = file.len() as u32;
-    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.Flags = windows_sys::Win32::UI::Controls::Dialogs::OFN_ENABLEHOOK
+        | windows_sys::Win32::UI::Controls::Dialogs::OFN_NOCHANGEDIR
+        | OFN_EXPLORER
+        | OFN_FILEMUSTEXIST
+        | OFN_HIDEREADONLY;
     if unsafe { GetOpenFileNameW(&mut ofn) } == 0 {
         return None;
     }
@@ -2589,17 +2664,23 @@ fn native_save_path() -> Option<PathBuf> {
     use windows_sys::Win32::UI::Controls::Dialogs::{
         GetSaveFileNameW, OFN_EXPLORER, OFN_HIDEREADONLY, OFN_OVERWRITEPROMPT, OPENFILENAMEW,
     };
-    let mut filter = wide("配置文件 (*.json)|*.json\0");
+    let mut filter = wide("配置文件 (*.json)\0*.json\0");
     let mut file = [0u16; 2048];
     for (i, ch) in "FlyPPTTimer.config.json".encode_utf16().enumerate() {
         file[i] = ch;
     }
     let mut ofn = unsafe { std::mem::zeroed::<OPENFILENAMEW>() };
     ofn.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
+    ofn.hwndOwner = crate::window::app_dialog_owner();
+    ofn.lpfnHook = Some(crate::window::brand_common_dialog);
     ofn.lpstrFilter = filter.as_mut_ptr();
     ofn.lpstrFile = file.as_mut_ptr();
     ofn.nMaxFile = file.len() as u32;
-    ofn.Flags = OFN_EXPLORER | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
+    ofn.Flags = windows_sys::Win32::UI::Controls::Dialogs::OFN_ENABLEHOOK
+        | windows_sys::Win32::UI::Controls::Dialogs::OFN_NOCHANGEDIR
+        | OFN_EXPLORER
+        | OFN_HIDEREADONLY
+        | OFN_OVERWRITEPROMPT;
     if unsafe { GetSaveFileNameW(&mut ofn) } == 0 {
         return None;
     }
@@ -2944,11 +3025,18 @@ mod parity_tests {
     }
 
     #[test]
-    fn presentation_file_filter_accepts_slides_and_pdf_only() {
-        for path in ["deck.ppt", "deck.PPTX", "deck.pptm", "handout.pdf"] {
+    fn presentation_file_filter_accepts_powerpoint_only() {
+        for path in ["deck.ppt", "deck.PPTX", "deck.pptm"] {
             assert!(is_supported_presentation_path(Path::new(path)));
         }
-        for path in ["notes.docx", "image.png", "audio.mp3", "deck"] {
+        for path in [
+            "handout.pdf",
+            "notes.docx",
+            "image.png",
+            "audio.mp3",
+            "deck",
+            "deck.pptx.exe",
+        ] {
             assert!(!is_supported_presentation_path(Path::new(path)));
         }
     }
@@ -2958,6 +3046,37 @@ mod parity_tests {
 mod rc32_tests {
     use super::*;
     use crate::config::{AppearanceSettings, PageAlignment, PagePosition};
+    #[test]
+    fn every_exposed_color_row_supports_picker_and_hex() {
+        let mut config = AppConfig::default();
+        config.appearance.page_text_color = Some("#123456".into());
+        let rows = appearance_rows(&config);
+        for key in [
+            "appearance.text",
+            "appearance.background",
+            "appearance.flash_background",
+            "appearance.page_color",
+        ] {
+            let row = rows.iter().find(|r| r.key == key).unwrap();
+            assert_eq!(row.kind, 7);
+            assert!(crate::color_picker::parse_hex(&row.value).is_some());
+        }
+        config.appearance.text_color = "#123".into();
+        assert!(validate(&config, Language(true)).is_err());
+        config.appearance.text_color = "123ABC".into();
+        assert!(validate(&config, Language(true)).is_ok());
+    }
+
+    #[test]
+    fn powerpoint_dialog_filter_has_separate_label_pattern_and_double_terminator() {
+        let filter = wide(PRESENTATION_FILTER);
+        let parts: Vec<_> = filter.split(|v| *v == 0).collect();
+        assert_eq!(parts.len(), 4);
+        assert_eq!(String::from_utf16(parts[1]).unwrap(), "*.ppt;*.pptx;*.pptm");
+        assert!(parts[2].is_empty() && parts[3].is_empty());
+        assert!(!PRESENTATION_FILTER.contains('|'));
+    }
+
     #[test]
     fn automatic_and_page_follow_options_hide_only_relevant_rows() {
         let mut c = AppConfig::default();

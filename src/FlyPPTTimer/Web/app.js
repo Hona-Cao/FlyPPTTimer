@@ -111,7 +111,7 @@ const token=window.FLYPPT_TOKEN||'';
 const $=id=>document.getElementById(id);
 const commandButtons=[...document.querySelectorAll('[data-command]')];
 const timerModeButtons=[...document.querySelectorAll('[data-timer-mode]')];
-let stateEpoch=0;
+let stateEpoch=0,lastPaintedRevision=-1,lastServerInstance=null,pollSequence=0,lastPaintedPoll=0;
 let connected=false,lastState=null,messageTimer=null,pollTimer=null,busy=false,pendingConfirmation=null,timerEditorDirty=false,selectedPresentationId=null,pollFailures=0;
 
 function url(path){return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token)}
@@ -134,6 +134,12 @@ function setDurationEditor(durationMs){
   $('durationSeconds').value=String(total%60);
 }
 function paint(s){
+  // Revisions are monotonic within one application process, not across restarts.
+  const instance=s.serverInstance||'';
+  if(lastServerInstance!==instance){lastServerInstance=instance;lastPaintedRevision=-1}
+  const revision=Number(s.revision);
+  if(Number.isFinite(revision)&&revision<lastPaintedRevision)return false;
+  if(Number.isFinite(revision))lastPaintedRevision=revision;
   lastState=s;pollFailures=0;connection(true);const t=timerState(s),p=s.presentationState||{};
   $('timerText').textContent=t.displayText||'--:--';$('timerStatus').textContent=t.isOvertime?'已超时':(t.state||'停止');$('timerMode').textContent=t.mode||'倒计时';
   const muted=!!t.muted;$('muteButton').textContent=muted?'电脑已静音（点击恢复声音）':'电脑声音正常（点击静音）';$('muteButton').classList.toggle('selected',muted);$('muteButton').setAttribute('aria-pressed',String(muted));
@@ -209,6 +215,7 @@ function renderPresentations(items){
   const controlled=items.filter(x=>x.isRule!==false),active=controlled.find(x=>x.isActive);
   if(active)selectedPresentationId=active.id;
   else if(!controlled.some(x=>x.id===selectedPresentationId))selectedPresentationId=null;
+  const previousOrder=listRows().map(row=>row.dataset.id).join('\n');
   const before=positions(),visible=controlled.filter(x=>showHiddenPresentations||!x.mobileHidden),ids=new Set(visible.map(x=>x.id));
   for(const row of listRows())if(!ids.has(row.dataset.id))row.remove();
   const existing=new Map(listRows().map(el=>[el.dataset.id,el]));
@@ -227,7 +234,9 @@ function renderPresentations(items){
     if(listHost.children[index]!==row)listHost.insertBefore(row,listHost.children[index]||null);
   });
   $('listEmpty').hidden=visible.length>0;text($('listEmpty'),wt(controlled.length?"所有文件已隐藏":"暂无受控文件"));
-  animateOrder(before);refreshPresentationButtons();
+  // Timer/status polling must not cancel a movement already in progress.
+  if(previousOrder!==visible.map(item=>item.id).join('\n'))animateOrder(before);
+  refreshPresentationButtons();
 }
 function renderListTools(p){
   if(!listGesture?.active&&!listCommit){
@@ -352,8 +361,8 @@ function updatePresentationHint(p){
 }
 function schedulePoll(delay=1000){clearTimeout(pollTimer);pollTimer=setTimeout(poll,delay)}
 async function poll(){
-  const epoch=stateEpoch;
-  try{const result=await api('/state');if(epoch===stateEpoch&&!busy)paint(result);schedulePoll(1000)}
+  const epoch=stateEpoch,sequence=++pollSequence;
+  try{const result=await api('/state');if(epoch===stateEpoch&&!busy&&sequence>lastPaintedPoll){lastPaintedPoll=sequence;paint(result)}schedulePoll(1000)}
   catch(e){
     if(epoch!==stateEpoch||busy){schedulePoll(1000);return}
     pollFailures+=1;

@@ -1,3 +1,10 @@
+# RC3.3 - ChatGPT direct changes pending final validation
+
+Implemented the focused changes in USER_FEEDBACK_20260912_4.md. Codex remains paused. This source note is not a claim that Windows CI, physical phones, Office or all blank-window cases passed. The delivery report must record the final CI run, exact committed product source and download hashes.
+
+---
+Historical results below.
+
 # RC3.2 - ChatGPT direct implementation
 
 Implemented the 2026-09-12 user feedback on automatic/custom sizing, page typography/position/alignment, large-screen overlay exclusion, metadata sorting, controlled-file removal, animated mobile reordering/long press and non-selectable mobile text. Requirements and scope: USER_FEEDBACK_20260912_3.md. Codex did not implement this round and remains paused.
