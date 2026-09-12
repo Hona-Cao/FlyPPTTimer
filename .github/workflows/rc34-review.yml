@@ -2,17 +2,160 @@ name: RC34 usability review
 on:
   push:
     branches: [chatgpt/rc34-feedback]
-    paths: [.github/workflows/rc34-review.yml, .github/rc34-refine.py]
+    paths: [.github/workflows/rc34-review.yml, .github/rc34-refine.py, '.github/rc34-patch-*.b64']
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: rc34-review
+  cancel-in-progress: true
 jobs:
-  source:
-    runs-on: ubuntu-latest
+  review:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      RUSTUP_TOOLCHAIN: 1.92.0
+    defaults:
+      run:
+        shell: pwsh
     steps:
+      - name: Keep repository line endings before checkout
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
-      - run: git archive --format=zip --output=rc34-source.zip HEAD
+        with:
+          fetch-depth: 0
+      - name: Apply reviewed source changes
+        run: |
+          python .github/rc34-refine.py
+          if ($LASTEXITCODE -ne 0) { throw 'RC34 source application failed' }
+          New-Item -ItemType Directory -Force artifacts/rc34-evidence | Out-Null
+      - name: Windows SDK resource compiler
+        run: |
+          $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+          $rc = Get-ChildItem -LiteralPath $kits -Filter rc.exe -File -Recurse | Where-Object { $_.FullName -match '\\x64\\rc\.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'Windows SDK rc.exe missing' }
+          $rc.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Pinned Rust
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust setup failed' }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rc34-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            rc34-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+            rc331-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+            rc33-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+      - name: Format and lint
+        run: |
+          cargo fmt --all
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace error' }
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object artifacts/rc34-evidence/clippy.log
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+      - name: Regression tests
+        run: |
+          cargo test --locked 2>&1 | Tee-Object artifacts/rc34-evidence/tests.log
+          if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed' }
+          node --check src/FlyPPTTimer/Web/app.js
+          if ($LASTEXITCODE -ne 0) { throw 'JavaScript syntax failed' }
+      - name: Release build
+        run: |
+          cargo build --locked --release 2>&1 | Tee-Object artifacts/rc34-evidence/release.log
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+      - name: Light and dark production software captures
+        run: |
+          foreach ($theme in @('light','dark')) {
+            $env:FLYPPT_CAPTURE_THEME = $theme
+            & target/release/FlyPPTTimer.exe --capture-settings "artifacts/rc34-evidence/$theme/settings"
+            if ($LASTEXITCODE -ne 0) { throw "Settings capture failed: $theme" }
+            & target/release/FlyPPTTimer.exe --capture-windows "artifacts/rc34-evidence/$theme/windows"
+            if ($LASTEXITCODE -ne 0) { throw "Window capture failed: $theme" }
+          }
+          Remove-Item Env:FLYPPT_CAPTURE_THEME
+      - name: First-start delayed HTTP request smoke
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'rc34-first-start'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe $stage
+          $exe = Join-Path $stage 'FlyPPTTimer.exe'
+          $configPath = Join-Path $stage 'FlyPPTTimer.config.json'
+          $process = Start-Process $exe -WorkingDirectory $stage -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(15)
+            while (-not (Test-Path $configPath)) {
+              if ((Get-Date) -gt $deadline) { throw 'First-start config was not created' }
+              Start-Sleep -Milliseconds 100
+            }
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json
+            $port = [int]$config.RemoteControl.Port
+            $token = [string]$config.RemoteControl.Token
+            $client = [System.Net.Sockets.TcpClient]::new()
+            $client.Connect('127.0.0.1', $port)
+            try {
+              Start-Sleep -Milliseconds 250
+              $stream = $client.GetStream()
+              $stream.ReadTimeout = 8000
+              $request = "GET /?token=$token HTTP/1.1`r`nHost: localhost`r`nConnection: close`r`n`r`n"
+              $bytes = [Text.Encoding]::ASCII.GetBytes($request)
+              $stream.Write($bytes, 0, $bytes.Length)
+              $buffer = New-Object byte[] 8192
+              $builder = [Text.StringBuilder]::new()
+              while (($count = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                [void]$builder.Append([Text.Encoding]::UTF8.GetString($buffer, 0, $count))
+              }
+              $response = $builder.ToString()
+              if ($response -notmatch '^HTTP/1\.1 200' -or $response -notmatch 'FlyPPTTimer') { throw 'Unexpected first-start HTTP response' }
+              $response | Set-Content artifacts/rc34-evidence/first-start-http.txt -Encoding utf8
+            } finally { $client.Dispose() }
+          } finally {
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+      - name: Commit verified product source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.toml src ui docs
+          git commit -m 'feat: RC3.4 percentage previews dark theme and editing usability'
+          if ($LASTEXITCODE -ne 0) { throw 'Product commit failed' }
+          $sha = (git rev-parse HEAD).Trim()
+          "PATCHED_SOURCE_SHA=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          git push origin "HEAD:refs/heads/chatgpt/rc34-verified-$env:GITHUB_RUN_ID"
+          if ($LASTEXITCODE -ne 0) { throw 'Product source push failed' }
+          git archive --format=zip --output=artifacts/rc34-evidence/product-source.zip HEAD
+      - name: Package portable
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'FlyPPTTimer-v1.13.0-rc34-win-x64'
+          $stage = Join-Path $env:RUNNER_TEMP $name
+          $out = Join-Path $PWD 'artifacts/review'
+          New-Item -ItemType Directory -Force $stage,$out | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe $stage
+          Copy-Item docs/rc34-default-config.json (Join-Path $stage 'FlyPPTTimer.config.json')
+          Copy-Item LICENSE $stage
+          Copy-Item docs/v1/RC34_MANUAL_TEST.zh-CN.md (Join-Path $stage 'MANUAL_TEST.zh-CN.md')
+          Copy-Item docs/v1/RC34_SCOPE.md (Join-Path $stage 'CHANGES.md')
+          foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) {
+            Copy-Item (Join-Path $env:WINDIR "System32\$dll") $stage
+          }
+          $hash = (Get-FileHash (Join-Path $stage 'FlyPPTTimer.exe') -Algorithm SHA256).Hash
+          @('FlyPPTTimer RC3.4 manual-test build','Version: 1.13.0',"Product source SHA: $env:PATCHED_SOURCE_SHA",'Base: tested RC3.3.1 19bd8d1',"Workflow run: $env:GITHUB_RUN_ID","EXE SHA256: $hash",'Changes: page defaults; small/medium/large corners; live percentage sliders; edit focus and unsaved status; desktop/mobile themes; foreground maximized document opening.','Verified: fmt; clippy; cargo test; JS syntax; release; light/dark software captures; delayed first-start HTTP.','Manual pending: actual Windows input/drag; PowerPoint/WPS maximization; physical phone. Native Windows dialogs use the OS theme.','No Release/Tag. Main unchanged. Codex remains paused.') | Set-Content (Join-Path $stage 'BUILD.txt') -Encoding utf8
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $out "$name.zip") -CompressionLevel Optimal
       - uses: actions/upload-artifact@v4
         with:
-          name: RC34-source
-          path: rc34-source.zip
-          retention-days: 3
+          name: FlyPPTTimer-RC34-portable
+          path: artifacts/review/*.zip
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RC34-evidence
+          path: artifacts/rc34-evidence/**
+          if-no-files-found: warn
+          retention-days: 14
