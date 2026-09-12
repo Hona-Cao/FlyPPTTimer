@@ -401,10 +401,27 @@ struct ConnectionContext {
     sender: mpsc::Sender<RemoteRequest>,
 }
 
+fn configure_client_stream(stream: &TcpStream) -> Result<(), String> {
+    // The listening socket is non-blocking so the server thread can observe stop requests.
+    // Winsock may propagate that mode to an accepted socket. HTTP parsing is intentionally
+    // blocking with bounded timeouts; otherwise the first read can race the request bytes and
+    // surface WSAEWOULDBLOCK (10035) to a freshly scanned phone.
+    stream
+        .set_nonblocking(false)
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(8)))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(8)))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 fn handle_connection(mut stream: TcpStream, address: SocketAddr, context: ConnectionContext) {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(8)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(8)));
-    let result = read_request(&mut stream).and_then(|request| route(request, address, &context));
+    let result = configure_client_stream(&stream)
+        .and_then(|()| read_request(&mut stream))
+        .and_then(|request| route(request, address, &context));
     let response = result.unwrap_or_else(|error| {
         HttpResponse::json(400, &serde_json::json!({"ok":false,"error":error}))
     });
@@ -1058,6 +1075,29 @@ pub fn id_for_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn client_stream_is_restored_to_blocking_before_http_read() {
+        use std::io::Write as _;
+
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let writer = thread::spawn(move || {
+            let mut stream = TcpStream::connect(address).unwrap();
+            thread::sleep(Duration::from_millis(40));
+            stream
+                .write_all(b"GET /state?token=test HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                .unwrap();
+        });
+        let (mut stream, _) = listener.accept().unwrap();
+        // Make the regression deterministic even where accept does not inherit nonblocking mode.
+        stream.set_nonblocking(true).unwrap();
+        configure_client_stream(&stream).unwrap();
+        let request = read_request(&mut stream).unwrap();
+        assert_eq!(request.method, "GET");
+        assert_eq!(request.raw_url, "/state?token=test");
+        writer.join().unwrap();
+    }
     #[test]
     fn command_snapshot_is_published_before_followup_get_and_keeps_its_revision() {
         let (sender, _receiver) = mpsc::channel();

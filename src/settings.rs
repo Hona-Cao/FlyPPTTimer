@@ -2482,56 +2482,89 @@ fn merge_rule_fields(current: &mut FileRule, before: &FileRule, after: &FileRule
     }
 }
 
-const PRESENTATION_FILTER: &str = "PowerPoint (*.ppt;*.pptx;*.pptm)\0*.ppt;*.pptx;*.pptm\0";
+const PRESENTATION_FILTER_PATTERN: windows::core::PCWSTR = windows::core::w!("*.ppt;*.pptx;*.pptm");
 
 pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
-    use windows_sys::Win32::UI::Controls::Dialogs::{
-        GetOpenFileNameW, OFN_ALLOWMULTISELECT, OFN_EXPLORER, OFN_FILEMUSTEXIST, OFN_HIDEREADONLY,
-        OPENFILENAMEW,
+    use windows::{
+        Win32::{
+            Foundation::HWND,
+            System::Com::{
+                CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
+                CoTaskMemFree, CoUninitialize,
+            },
+            UI::Shell::{
+                Common::COMDLG_FILTERSPEC, FOS_ALLOWMULTISELECT, FOS_FILEMUSTEXIST,
+                FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FileOpenDialog, IFileOpenDialog,
+                SIGDN_FILESYSPATH,
+            },
+        },
+        core::w,
     };
-    let mut filter = wide(PRESENTATION_FILTER);
-    let mut file = [0u16; 32768];
-    let mut ofn = unsafe { std::mem::zeroed::<OPENFILENAMEW>() };
-    ofn.lStructSize = std::mem::size_of::<OPENFILENAMEW>() as u32;
-    ofn.hwndOwner = crate::window::app_dialog_owner();
-    ofn.lpfnHook = Some(crate::window::brand_common_dialog);
-    ofn.lpstrFilter = filter.as_mut_ptr();
-    ofn.lpstrFile = file.as_mut_ptr();
-    ofn.nMaxFile = file.len() as u32;
-    ofn.Flags = windows_sys::Win32::UI::Controls::Dialogs::OFN_ENABLEHOOK
-        | windows_sys::Win32::UI::Controls::Dialogs::OFN_NOCHANGEDIR
-        | OFN_EXPLORER
-        | OFN_ALLOWMULTISELECT
-        | OFN_FILEMUSTEXIST
-        | OFN_HIDEREADONLY;
-    if unsafe { GetOpenFileNameW(&mut ofn) } == 0 {
-        return Vec::new();
-    }
-    let mut parts = Vec::new();
-    let mut start = 0;
-    for index in 0..file.len() {
-        if file[index] == 0 {
-            if index == start {
-                break;
-            }
-            parts.push(String::from_utf16_lossy(&file[start..index]));
-            start = index + 1;
+
+    struct ComApartment;
+    impl Drop for ComApartment {
+        fn drop(&mut self) {
+            unsafe { CoUninitialize() };
         }
     }
-    if parts.len() <= 1 {
-        return parts
-            .into_iter()
-            .map(PathBuf::from)
-            .filter(|path| is_supported_presentation_path(path))
-            .collect();
+
+    if unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_err() {
+        return Vec::new();
     }
-    let directory = PathBuf::from(&parts[0]);
-    parts
-        .into_iter()
-        .skip(1)
-        .map(|name| directory.join(name))
-        .filter(|path| is_supported_presentation_path(path))
-        .collect()
+    let _apartment = ComApartment;
+    let dialog: IFileOpenDialog =
+        match unsafe { CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER) } {
+            Ok(dialog) => dialog,
+            Err(_) => return Vec::new(),
+        };
+    let mut options = match unsafe { dialog.GetOptions() } {
+        Ok(options) => options,
+        Err(_) => return Vec::new(),
+    };
+    options |= FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST;
+    if unsafe { dialog.SetOptions(options) }.is_err() {
+        return Vec::new();
+    }
+    let filters = [COMDLG_FILTERSPEC {
+        pszName: w!("PowerPoint (*.ppt;*.pptx;*.pptm)"),
+        pszSpec: PRESENTATION_FILTER_PATTERN,
+    }];
+    if unsafe { dialog.SetFileTypes(&filters) }.is_err() {
+        return Vec::new();
+    }
+    let _ = unsafe { dialog.SetFileTypeIndex(1) };
+    let _ = unsafe { dialog.SetTitle(w!("选择 PPT 文件")) };
+
+    let owner = HWND(crate::window::app_dialog_owner());
+    if unsafe { dialog.Show(Some(owner)) }.is_err() {
+        return Vec::new();
+    }
+    let items = match unsafe { dialog.GetResults() } {
+        Ok(items) => items,
+        Err(_) => return Vec::new(),
+    };
+    let count = match unsafe { items.GetCount() } {
+        Ok(count) => count,
+        Err(_) => return Vec::new(),
+    };
+    let mut paths = Vec::with_capacity(count as usize);
+    for index in 0..count {
+        let Ok(item) = (unsafe { items.GetItemAt(index) }) else {
+            continue;
+        };
+        let Ok(display_name) = (unsafe { item.GetDisplayName(SIGDN_FILESYSPATH) }) else {
+            continue;
+        };
+        let value = unsafe { display_name.to_string() }.ok();
+        unsafe { CoTaskMemFree(Some(display_name.0.cast())) };
+        if let Some(value) = value {
+            let path = PathBuf::from(value);
+            if is_supported_presentation_path(&path) {
+                paths.push(path);
+            }
+        }
+    }
+    paths
 }
 
 pub(crate) fn is_supported_presentation_path(path: &Path) -> bool {
@@ -3068,13 +3101,9 @@ mod rc32_tests {
     }
 
     #[test]
-    fn powerpoint_dialog_filter_has_separate_label_pattern_and_double_terminator() {
-        let filter = wide(PRESENTATION_FILTER);
-        let parts: Vec<_> = filter.split(|v| *v == 0).collect();
-        assert_eq!(parts.len(), 4);
-        assert_eq!(String::from_utf16(parts[1]).unwrap(), "*.ppt;*.pptx;*.pptm");
-        assert!(parts[2].is_empty() && parts[3].is_empty());
-        assert!(!PRESENTATION_FILTER.contains('|'));
+    fn powerpoint_dialog_filter_is_strict_and_has_no_all_files_fallback() {
+        let pattern = unsafe { PRESENTATION_FILTER_PATTERN.to_string() }.unwrap();
+        assert_eq!(pattern, "*.ppt;*.pptx;*.pptm");
     }
 
     #[test]
