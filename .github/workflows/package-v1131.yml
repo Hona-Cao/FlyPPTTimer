@@ -1,0 +1,18 @@
+name: FlyPPTTimer v1.13.1
+on:
+  push:
+    branches: [chatgpt/v1.13.1]
+    paths: [.github/workflows/package-v1131.yml, .github/v1131-apply.py]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git archive --format=zip --output=source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1131-source
+          path: source.zip
+          retention-days: 3
