@@ -28,6 +28,8 @@ jobs:
           git apply --unidiff-zero rc32.patch
           if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
           Remove-Item rc32.patch
+          python .github/rc32-refine.py
+          if ($LASTEXITCODE -ne 0) { throw 'Native correction failed' }
       - name: Locate Windows SDK resource compiler
         run: |
           $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
@@ -39,7 +41,7 @@ jobs:
           rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
           if ($LASTEXITCODE -ne 0) { throw 'Rust setup failed' }
           rustc --version
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
@@ -55,8 +57,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Formatting check failed' }
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed' }
-      - name: Clippy
-        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Clippy and Slint binding-loop check
+        run: |
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object -FilePath clippy.log
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+          if (Select-String -Path clippy.log -Pattern 'binding loop' -Quiet) { throw 'Slint binding loop detected' }
       - name: Production regressions
         run: cargo test --locked
       - name: JavaScript syntax
@@ -73,7 +78,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/rc32-patch-0.b64 .github/rc32-patch-1.b64 .github/rc32-patch-2.b64 .github/rc32-patch-3.b64
+          git rm .github/rc32-patch-0.b64 .github/rc32-patch-1.b64 .github/rc32-patch-2.b64 .github/rc32-patch-3.b64 .github/rc32-refine.py
           git add src ui docs/v1
           git commit -m 'feat: implement RC3.2 sizing typography and controlled mobile list'
           if ($LASTEXITCODE -ne 0) { throw 'Source commit failed' }
@@ -112,3 +117,11 @@ jobs:
           path: artifacts/rc32-layout/*.png
           if-no-files-found: error
           retention-days: 7
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rc32-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
