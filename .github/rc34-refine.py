@@ -24,5 +24,8 @@ s = p.read_text(encoding='utf-8').replace(
     '    control.set_unsaved_text("有未保存的修改".into());\n',
     1,
 )
+s = s.replace('preview.set_preview_scroll_y(-700.0)', 'preview.set_preview_scroll_y(-1100.0)')
+s = s.replace('1 => &[0.0, -500.0, -1_000.0, -1_500.0, -2_000.0],', '1 | 2 => &[0.0, -500.0, -1_000.0, -1_500.0, -2_000.0],')
+s = s.replace('2 | 3 | 5 => &[0.0, -500.0, -1_000.0],', '3 | 5 => &[0.0, -500.0, -1_000.0],')
 p.write_text(s, encoding='utf-8', newline='\n')
 print('RC3.4 source changes applied')
