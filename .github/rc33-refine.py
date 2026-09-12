@@ -41,4 +41,17 @@ replace('src/desktop.rs',
 }''')
 p = Path('src/FlyPPTTimer/Web/app.css')
 p.write_text(p.read_text(encoding='utf-8') + '\n@media (max-width:340px) { html[lang="en"] .presentation-actions button { font-size:11px; } }\n', encoding='utf-8')
-print('RC3.3 narrow-label and product-icon fallback refinements applied')
+
+# A direct layout child of ScrollView is assigned viewport geometry by Slint.
+# Reserve the gutter as layout padding, not a width that the viewport overwrites.
+for view, prior in [('settings-scroll', 36), ('connection-scroll', 36), ('rules-scroll', 18)]:
+    replace('ui/app-window.slint',
+        f'width: {view}.visible-width - {prior}px;',
+        f'width: {view}.visible-width;\n                    padding-left: 18px;\n                    padding-right: 36px;')
+replace('ui/app-window.slint',
+    '''for item[index] in root.items: FieldRow {
+                        width: parent.width;
+                        item: item;''',
+    '''for item[index] in root.items: FieldRow {
+                        item: item;''')
+print('RC3.3 rendered-gutter, narrow-label and product-icon refinements applied')
