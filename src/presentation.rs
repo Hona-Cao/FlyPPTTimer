@@ -363,9 +363,7 @@ impl Session {
             }
         };
         end_other_shows(&app, &path)?;
-        if !matching_show_views(&app, &path, true)?.is_empty() {
-            return Ok("目标文稿已在放映".into());
-        }
+        let already_showing = !matching_show_views(&app, &path, true)?.is_empty();
         let presentations = dispatch(get(&app, "Presentations")?)?;
         let presentation = if let Some(presentation) = find_presentation(&presentations, &path)? {
             presentation
@@ -394,13 +392,17 @@ impl Session {
             let _ = call(&window, "Activate", &[]);
         }
         let _ = put(&app, "Visible", VARIANT::from(true));
-        Ok(format!(
-            "已打开 {}",
-            Path::new(&path)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-        ))
+        if already_showing {
+            Ok("目标文稿已在放映".into())
+        } else {
+            Ok(format!(
+                "已打开 {}",
+                Path::new(&path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+            ))
+        }
     }
 
     fn start_show(
@@ -458,10 +460,7 @@ impl Session {
         let presentation = dispatch(get(&app, "ActivePresentation")?)?;
         let path = string(get(&presentation, "FullName")?)?;
         end_show_for(&app, &path)?;
-        if self.managed_paths.contains(&normalize_path(&path)) {
-            let _ = put(&presentation, "Saved", VARIANT::from(true));
-        }
-        call(&presentation, "Close", &[])?;
+        close_without_saving(&presentation)?;
         self.remove_managed(&path);
         Ok(format!("已关闭当前文稿：{}。", file_name(&path)))
     }
@@ -474,8 +473,7 @@ impl Session {
             let presentations = dispatch(get(&app, "Presentations")?)?;
             if let Some(presentation) = find_presentation(&presentations, &path)? {
                 end_show_for(&app, &path)?;
-                let _ = put(&presentation, "Saved", VARIANT::from(true));
-                call(&presentation, "Close", &[])?;
+                close_without_saving(&presentation)?;
                 self.managed_paths.remove(&path);
                 return Ok(format!("已关闭最后打开的文稿：{}。", file_name(&path)));
             }
@@ -972,6 +970,28 @@ fn end_show_for(app: &IDispatch, path: &str) -> Result<(), String> {
         call(&view, "Exit", &[])?;
     }
     Ok(())
+}
+
+fn close_without_saving(presentation: &IDispatch) -> Result<(), String> {
+    // Remote close is an explicitly confirmed "discard changes" action.
+    // Mark Saved before Close so Office cannot block the single STA worker on
+    // a save-confirmation dialog. If Close itself fails, restore the dirty bit
+    // so an open document is never silently left looking saved.
+    let was_saved = int(get(presentation, "Saved")?)? != 0;
+    put(presentation, "Saved", VARIANT::from(true))?;
+    match call(presentation, "Close", &[]).map(|_| ()) {
+        Ok(()) => Ok(()),
+        Err(close_error) => {
+            if !was_saved
+                && let Err(restore_error) = put(presentation, "Saved", VARIANT::from(false))
+            {
+                return Err(format!(
+                    "{close_error}; 关闭失败后无法恢复未保存状态：{restore_error}"
+                ));
+            }
+            Err(close_error)
+        }
+    }
 }
 
 fn get(object: &IDispatch, name: &str) -> Result<VARIANT, String> {

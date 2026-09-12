@@ -315,7 +315,11 @@ pub fn is_minimized(window: &slint::Window) -> bool {
 
 pub fn escape_key_down() -> bool {
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE};
-    unsafe { (GetAsyncKeyState(VK_ESCAPE as i32) as u16 & 0x8000) != 0 }
+    let state = unsafe { GetAsyncKeyState(VK_ESCAPE as i32) as u16 };
+    // The high bit reports the current state; the low bit records a press
+    // since the previous query. Reading both prevents an ordinary short tap
+    // from disappearing between the app's 100 ms refresh samples.
+    state & 0x8001 != 0
 }
 
 pub fn show_time_up_window(window: &slint::Window, bounds: crate::display::DisplayRect) {

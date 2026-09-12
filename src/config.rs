@@ -560,6 +560,15 @@ impl Default for FileRule {
     }
 }
 
+pub(crate) fn next_mobile_order(rules: &[FileRule]) -> i32 {
+    rules
+        .iter()
+        .map(|rule| rule.mobile_order)
+        .max()
+        .unwrap_or(-1)
+        .saturating_add(1)
+}
+
 pub(crate) fn parse_duration(value: &str) -> Option<Duration> {
     let mut fields = value.split(':');
     let hours: u64 = fields.next()?.parse().ok()?;
@@ -632,6 +641,22 @@ mod tests {
         assert!(c.appearance.show_slide_numbers);
         assert!(!c.rules[0].mobile_hidden);
         assert_eq!(c.rules[0].mobile_order, 0);
+    }
+
+    #[test]
+    fn next_mobile_order_appends_after_existing_custom_order() {
+        let rules = vec![
+            FileRule {
+                mobile_order: 4,
+                ..FileRule::default()
+            },
+            FileRule {
+                mobile_order: 1,
+                ..FileRule::default()
+            },
+        ];
+        assert_eq!(next_mobile_order(&[]), 0);
+        assert_eq!(next_mobile_order(&rules), 5);
     }
 
     #[test]

@@ -880,7 +880,10 @@ pub fn create(
                                 continue;
                             }
                             let full = path.to_string_lossy().to_string();
+                            let mobile_order =
+                                crate::config::next_mobile_order(&draft.borrow().rules);
                             draft.borrow_mut().rules.push(FileRule {
+                                mobile_order,
                                 file_name: path
                                     .file_name()
                                     .unwrap_or_default()

@@ -1036,7 +1036,9 @@ fn create_presentation_window(
                     }) {
                         continue;
                     }
+                    let mobile_order = crate::config::next_mobile_order(&config.rules);
                     config.rules.push(crate::config::FileRule {
+                        mobile_order,
                         file_name: std::path::Path::new(&full)
                             .file_name()
                             .map(|name| name.to_string_lossy().into_owned())
