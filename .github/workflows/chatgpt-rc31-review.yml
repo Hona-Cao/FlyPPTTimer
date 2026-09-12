@@ -53,7 +53,12 @@ jobs:
           Get-Command rc.exe | Format-List Source
 
       - name: Rust format check
-        run: cargo fmt --all -- --check
+        shell: pwsh
+        run: |
+          cargo fmt --all
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw "Formatted hotfix has whitespace errors" }
+          cargo fmt --all -- --check
 
       - name: Clippy
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
