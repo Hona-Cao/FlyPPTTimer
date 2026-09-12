@@ -362,6 +362,10 @@ impl Session {
                 value
             }
         };
+        end_other_shows(&app, &path)?;
+        if !matching_show_views(&app, &path, true)?.is_empty() {
+            return Ok("目标文稿已在放映".into());
+        }
         let presentations = dispatch(get(&app, "Presentations")?)?;
         let presentation = if let Some(presentation) = find_presentation(&presentations, &path)? {
             presentation
@@ -404,15 +408,21 @@ impl Session {
         requested: Option<PathBuf>,
         from_current: bool,
     ) -> Result<String, String> {
-        if let Some(path) = requested {
-            self.open(path)?;
+        if let Some(path) = requested.as_ref() {
+            self.open(path.clone())?;
         }
         let (_, app) = running_application().ok_or("PowerPoint 或 WPS 演示未运行。")?;
-        let windows = dispatch(get(&app, "SlideShowWindows")?)?;
-        if int(get(&windows, "Count")?)? > 0 {
+        let presentation = if let Some(path) = requested {
+            let presentations = dispatch(get(&app, "Presentations")?)?;
+            find_presentation(&presentations, &path.to_string_lossy())?.ok_or("未找到目标文稿。")?
+        } else {
+            dispatch(get(&app, "ActivePresentation")?)?
+        };
+        let target = string(get(&presentation, "FullName")?)?;
+        end_other_shows(&app, &target)?;
+        if !matching_show_views(&app, &target, true)?.is_empty() {
             return Ok("放映已经在运行，本次重复启动已忽略".to_owned());
         }
-        let presentation = dispatch(get(&app, "ActivePresentation")?)?;
         let settings = dispatch(get(&presentation, "SlideShowSettings")?)?;
         let total = int(get(&dispatch(get(&presentation, "Slides")?)?, "Count")?)?;
         let start = if from_current {
@@ -447,7 +457,7 @@ impl Session {
         let (_, app) = running_application().ok_or("PowerPoint 或 WPS 演示未运行。")?;
         let presentation = dispatch(get(&app, "ActivePresentation")?)?;
         let path = string(get(&presentation, "FullName")?)?;
-        end_show_for(&app, &path);
+        end_show_for(&app, &path)?;
         if self.managed_paths.contains(&normalize_path(&path)) {
             let _ = put(&presentation, "Saved", VARIANT::from(true));
         }
@@ -463,7 +473,7 @@ impl Session {
             };
             let presentations = dispatch(get(&app, "Presentations")?)?;
             if let Some(presentation) = find_presentation(&presentations, &path)? {
-                end_show_for(&app, &path);
+                end_show_for(&app, &path)?;
                 let _ = put(&presentation, "Saved", VARIANT::from(true));
                 call(&presentation, "Close", &[])?;
                 self.managed_paths.remove(&path);
@@ -934,30 +944,34 @@ fn find_presentation(presentations: &IDispatch, path: &str) -> Result<Option<IDi
     Ok(None)
 }
 
-fn end_show_for(app: &IDispatch, path: &str) {
-    let Ok(windows) = get(app, "SlideShowWindows").and_then(dispatch) else {
-        return;
-    };
-    let Ok(count) = get(&windows, "Count").and_then(int) else {
-        return;
-    };
+// Collect views before exiting: COM collection indexes change after Exit.
+fn matching_show_views(app: &IDispatch, path: &str, same: bool) -> Result<Vec<IDispatch>, String> {
+    let windows = dispatch(get(app, "SlideShowWindows")?)?;
+    let count = int(get(&windows, "Count")?)?;
+    let mut views = Vec::new();
     for index in 1..=count {
-        let Ok(window) = call(&windows, "Item", &[VARIANT::from(index)]).and_then(dispatch) else {
-            continue;
-        };
-        let Ok(presentation) = get(&window, "Presentation").and_then(dispatch) else {
-            continue;
-        };
-        let Ok(showing_path) = get(&presentation, "FullName").and_then(string) else {
-            continue;
-        };
-        if same_path(&showing_path, path)
-            && let Ok(view) = get(&window, "View").and_then(dispatch)
-        {
-            let _ = call(&view, "Exit", &[]);
-            return;
+        let window = dispatch(call(&windows, "Item", &[VARIANT::from(index)])?)?;
+        let deck = dispatch(get(&window, "Presentation")?)?;
+        let showing = string(get(&deck, "FullName")?)?;
+        if same_path(&showing, path) == same {
+            views.push(dispatch(get(&window, "View")?)?);
         }
     }
+    Ok(views)
+}
+
+fn end_other_shows(app: &IDispatch, path: &str) -> Result<(), String> {
+    for view in matching_show_views(app, path, false)? {
+        call(&view, "Exit", &[])?;
+    }
+    Ok(())
+}
+
+fn end_show_for(app: &IDispatch, path: &str) -> Result<(), String> {
+    for view in matching_show_views(app, path, true)? {
+        call(&view, "Exit", &[])?;
+    }
+    Ok(())
 }
 
 fn get(object: &IDispatch, name: &str) -> Result<VARIANT, String> {
@@ -1277,6 +1291,40 @@ mod tests {
         assert_eq!(
             lifecycle.observe(false, "", &config),
             PresentationTimerAction::Stop { reset: true }
+        );
+    }
+
+    #[test]
+    fn atomic_switch_sample_rebinds_timer_without_intermediate_stop_sample() {
+        let config = AppConfig {
+            rules: vec![
+                FileRule {
+                    file_path: r"C:\A.pptx".into(),
+                    duration: "00:03:00".into(),
+                    ..FileRule::default()
+                },
+                FileRule {
+                    file_path: r"C:\B.pptx".into(),
+                    duration: "00:05:00".into(),
+                    mobile_hidden: true,
+                    ..FileRule::default()
+                },
+            ],
+            ..AppConfig::default()
+        };
+        let mut lifecycle = PresentationLifecycle::default();
+        lifecycle.observe(true, r"C:\A.pptx", &config);
+        assert_eq!(
+            lifecycle.observe(true, r"C:\B.pptx", &config),
+            PresentationTimerAction::Start(r"C:\B.pptx".into())
+        );
+        assert_eq!(
+            timer_settings_for(&config, r"C:\B.pptx").0,
+            Duration::from_secs(300)
+        );
+        assert_eq!(
+            lifecycle.observe(true, r"C:\B.pptx", &config),
+            PresentationTimerAction::None
         );
     }
 
@@ -1649,7 +1697,7 @@ mod native_range_test {
                     if (int(get(&deck, "Saved")?)? != 0) != clean {
                         return Err(format!("{kind:?} Saved flag changed"));
                     }
-                    end_show_for(&app, &path.to_string_lossy());
+                    end_show_for(&app, &path.to_string_lossy())?;
                     println!("{kind:?}: clean={clean}, range and Saved restored");
                 }
                 Ok(())

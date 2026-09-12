@@ -1,6 +1,11 @@
 const effectiveLanguage=navigator.language.toLowerCase().startsWith('zh')?'zh-CN':'en';
 document.documentElement.lang=effectiveLanguage;
 const webEnglish={
+  '隐藏':'Hide','恢复':'Restore','显示隐藏项':'Show hidden items','收起隐藏项':'Hide hidden items',
+  '移除规则':'Remove rule','加入列表':'Add to list','上移':'Move up','下移':'Move down',
+  '列表已更新':'List updated','删除列表规则':'Remove list rule',
+  '只移除 FlyPPTTimer 的列表规则，不删除磁盘文件，也不关闭已打开文稿。':'Only removes the FlyPPTTimer list rule. The disk file and open presentation are kept.',
+
   'FlyPPTTimer 遥控':'FlyPPTTimer Remote','演讲遥控':'Presentation Remote','正在连接电脑...':'Connecting to computer...',
   '连接中':'Connecting','遥控页面':'Remote pages','计时':'Timer','演示':'Presentation','等待同步':'Waiting for sync',
   '倒计时':'Countdown','正计时':'Count up','计时设置（同步到电脑）':'Timer settings (sync to computer)',
@@ -120,27 +125,37 @@ function paint(s){
   $('blackScreenButton').classList.toggle('selected',p.screenMode==='黑屏');$('whiteScreenButton').classList.toggle('selected',p.screenMode==='白屏');
   renderPresentations(p.presentations||[]);setAvailability(t,p);updatePresentationHint(p);requestAnimationFrame(syncViewportHeight);if(s.message)notify(s.message);
 }
+let showHiddenPresentations=false;
 function renderPresentations(items){
   const activeItem=items.find(x=>x.isActive);
   if(activeItem)selectedPresentationId=activeItem.id;
   else if(selectedPresentationId&&!items.some(x=>x.id===selectedPresentationId))selectedPresentationId=null;
-  const host=$('presentationList'),signature=items.map(x=>[x.id,x.name,x.directory,x.isActive,x.isOpen,x.isManaged].join(':')).join('|');
+  const host=$('presentationList'),signature=JSON.stringify([showHiddenPresentations,items]);
   if(host.dataset.signature!==signature){
     host.dataset.signature=signature;host.innerHTML='';
     if(!items.length)host.innerHTML='<div class="hint">没有已打开或文件规则中已启用的演示文稿</div>';
-    items.forEach(item=>{
+    const toggle=document.createElement('button');toggle.textContent=showHiddenPresentations?'收起隐藏项':'显示隐藏项';
+    toggle.addEventListener('click',()=>{showHiddenPresentations=!showHiddenPresentations;renderPresentations(items);requestAnimationFrame(syncViewportHeight)});host.append(toggle);
+    items.filter(item=>showHiddenPresentations||!item.mobileHidden).forEach(item=>{
       const row=document.createElement('div');row.className='presentation-item';row.dataset.active=String(!!item.isActive);row.dataset.open=String(!!item.isOpen);
       const text=document.createElement('div'),title=document.createElement('strong'),meta=document.createElement('span');
       title.textContent=item.name;title.title=[item.name,item.directory].filter(Boolean).join('\n');
       meta.textContent=(item.directory?item.directory+' · ':'')+(item.isActive?'当前活动':item.isOpen?'已打开':'文件规则');meta.title=item.directory||'';
       text.append(title,meta);
       const button=document.createElement('button');button.dataset.presentationButton='true';button.textContent=item.isActive?'当前':item.isOpen?'切换':'打开';button.addEventListener('click',()=>{selectedPresentationId=item.id;command('ppt.openPresentation',{presentationId:item.id})});
-      row.append(text,button);host.append(row);
+      const actions=document.createElement('div');actions.className='presentation-actions';actions.append(button);
+      const addAction=(label,name)=>{const action=document.createElement('button');action.textContent=label;action.dataset.ruleButton='true';action.addEventListener('click',()=>command(name,{presentationId:item.id}));actions.append(action)};
+      if(item.isRule){
+        addAction(item.mobileHidden?'恢复':'隐藏',item.mobileHidden?'rules.restore':'rules.hide');
+        addAction('上移','rules.moveUp');addAction('下移','rules.moveDown');addAction('移除规则','rules.delete');
+      }else{addAction('加入列表','rules.addOpen')}
+      row.append(text,actions);host.append(row);
     });
   }
   refreshPresentationButtons();
 }
 function refreshPresentationButtons(){
+  document.querySelectorAll('[data-rule-button]').forEach(button=>button.disabled=busy||!connected);
   document.querySelectorAll('[data-presentation-button]').forEach(button=>{
     const row=button.closest('.presentation-item'),active=row?.dataset.active==='true';button.disabled=busy||!connected||active;
   });
@@ -183,6 +198,7 @@ async function poll(){
 }
 function requestConfirmation(name,extra){
   const details={
+    'rules.delete':['删除列表规则','只移除 FlyPPTTimer 的列表规则，不删除磁盘文件，也不关闭已打开文稿。'],
     'ppt.endShow':['结束放映','仅结束电脑端当前放映，不关闭文稿或 PowerPoint。'],
     'ppt.closeActivePresentation':['关闭当前文稿','关闭当前活动文稿且不保存；其他已打开文稿保持不变。'],
     'ppt.closeCurrentPresentation':['关闭最后打开的文稿','将按打开顺序关闭最后打开的文稿且不保存；每次只关闭一个。'],
@@ -190,14 +206,24 @@ function requestConfirmation(name,extra){
   }[name];
   if(!details)return false;
   pendingConfirmation={name,extra};
-  $('confirmTitle').textContent=details[0];$('confirmText').textContent=details[1];$('confirmPanel').hidden=false;$('confirmAccept').focus();
+  $('confirmTitle').textContent=details[0];$('confirmText').textContent=details[1];showConfirmation();
   return true;
 }
-function closeConfirmation(){pendingConfirmation=null;$('confirmPanel').hidden=true;$('confirmCancel').textContent='取消';$('confirmAccept').textContent='确认';$('confirmAccept').classList.add('danger')}
+let confirmationFocus=null;
+function showConfirmation(){
+  confirmationFocus=document.activeElement;
+  const panel=$('confirmPanel');
+  panel.hidden=false;
+  for(const child of panel.parentElement.children){if(child!==panel)child.inert=true}
+  $('confirmAccept').focus();
+}
+function closeConfirmation(){
+  for(const child of $('confirmPanel').parentElement.children)child.inert=false;
+  pendingConfirmation=null;$('confirmPanel').hidden=true;if(confirmationFocus?.isConnected)confirmationFocus.focus();confirmationFocus=null;$('confirmCancel').textContent='取消';$('confirmAccept').textContent='确认';$('confirmAccept').classList.add('danger')}
 function requestDurationConfirmation(durationMs,ruleCount){
   pendingConfirmation={name:'timer.setDuration',extra:{durationMs},durationChoice:true};
   $('confirmTitle').textContent='同步文件规则时长？';$('confirmText').textContent=`当前已有 ${ruleCount} 个待控演示文稿。是否把新时长同步应用到全部文件规则？`;
-  $('confirmCancel').textContent='仅修改全局';$('confirmAccept').textContent='同步全部';$('confirmAccept').classList.remove('danger');$('confirmPanel').hidden=false;$('confirmAccept').focus();
+  $('confirmCancel').textContent='仅修改全局';$('confirmAccept').textContent='同步全部';$('confirmAccept').classList.remove('danger');showConfirmation();
 }
 async function command(name,extra={}){
   if(!connected||busy){if(!connected)notify('当前已断开，命令未发送',true);return false}
@@ -250,3 +276,11 @@ window.addEventListener('online',()=>{if(!busy)schedulePoll(0)});
 window.addEventListener('focus',()=>{if(!busy)schedulePoll(0)});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!busy)schedulePoll(0)});
 poll();
+
+$('confirmPanel').addEventListener('keydown',event=>{
+  if(event.key==='Escape'){event.preventDefault();closeConfirmation();return}
+  if(event.key==='Tab'){
+    event.preventDefault();
+    (document.activeElement===$('confirmAccept')?$('confirmCancel'):$('confirmAccept')).focus();
+  }
+});

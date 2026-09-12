@@ -1,6 +1,10 @@
 # FlyPPTTimer V1 — 当前交接
 
-## 最新状态：第二轮直接小修已绿，进入 Codex 深层整合
+## 最新状态：家用 Windows 第二轮整合完成，等待审核
+
+2026-09-12：从 GitHub 最新 `b193bef` 开始本轮，完成原子切换、手机列表、页码、自适应和限定字段实时预览；最终 72 passed / 0 failed / 3 ignored，fmt/clippy/release 全绿。真实 WPS、125% 同 DPI 双屏和普通 Edge 验证范围及环境限制详见 CODEX_RESULT 顶部。只交付一个 `home-feedback-20260912` ZIP，提交推送后停止等待审核。
+
+## 本轮任务来源（历史交接）
 
 日期：2026-09-11。Review 分支：`codex/v1-06-manual-test`。版本先保持 `1.13.0`，Rust `1.92.0`。
 

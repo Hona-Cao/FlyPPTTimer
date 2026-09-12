@@ -48,6 +48,8 @@ pub struct TimerRemoteState {
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PresentationOption {
+    pub is_rule: bool,
+    pub mobile_hidden: bool,
     pub id: String,
     pub name: String,
     pub directory: String,
@@ -884,8 +886,48 @@ fn presentation_remote_state(
     state: &PresentationState,
     rules: &[FileRule],
 ) -> PresentationRemoteState {
+    let mut ordered = rules.iter().collect::<Vec<_>>();
+    ordered.sort_by_key(|rule| rule.mobile_order);
     let mut options = Vec::new();
-    for item in &state.presentations {
+    for rule in ordered {
+        let open = state
+            .presentations
+            .iter()
+            .find(|item| id_for_path(&item.path) == id_for_path(&rule.file_path));
+        options.push(PresentationOption {
+            id: id_for_path(&rule.file_path),
+            name: if rule.file_name.is_empty() {
+                std::path::Path::new(&rule.file_path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned()
+            } else {
+                rule.file_name.clone()
+            },
+            directory: std::path::Path::new(&rule.file_path)
+                .parent()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
+            is_rule: true,
+            mobile_hidden: rule.mobile_hidden,
+            is_open: open.is_some(),
+            is_active: open.is_some_and(|item| item.active),
+            is_slide_show_running: open.is_some_and(|item| item.slide_show_running),
+            is_managed: open.is_some_and(|item| item.managed),
+        });
+    }
+    let mut unmanaged = state
+        .presentations
+        .iter()
+        .filter(|item| {
+            !rules
+                .iter()
+                .any(|rule| id_for_path(&rule.file_path) == id_for_path(&item.path))
+        })
+        .collect::<Vec<_>>();
+    unmanaged.sort_by_key(|item| id_for_path(&item.path));
+    for item in unmanaged {
         options.push(PresentationOption {
             id: id_for_path(&item.path),
             name: item.name.clone(),
@@ -897,26 +939,6 @@ fn presentation_remote_state(
             is_active: item.active,
             is_slide_show_running: item.slide_show_running,
             is_managed: item.managed,
-        });
-    }
-    for rule in rules.iter().filter(|rule| rule.enabled) {
-        if options
-            .iter()
-            .any(|option| option.id == id_for_path(&rule.file_path))
-        {
-            continue;
-        }
-        options.push(PresentationOption {
-            id: id_for_path(&rule.file_path),
-            name: std::path::Path::new(&rule.file_path)
-                .file_name()
-                .map(|v| v.to_string_lossy().into_owned())
-                .unwrap_or_default(),
-            directory: std::path::Path::new(&rule.file_path)
-                .parent()
-                .map(|p| p.display().to_string())
-                .unwrap_or_default(),
-            is_managed: true,
             ..PresentationOption::default()
         });
     }
@@ -967,7 +989,14 @@ pub(crate) fn utc_timestamp() -> String {
 
 // Stable, case-insensitive path identity used consistently by state and commands.
 pub fn id_for_path(path: &str) -> String {
-    let normalized = std::path::absolute(path).unwrap_or_else(|_| std::path::PathBuf::from(path));
+    // Office may return the verbatim prefix introduced by canonicalize().
+    // It identifies the same saved rule, not a second unmanaged document.
+    let path = if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        path.strip_prefix(r"\\?\").unwrap_or(path).to_owned()
+    };
+    let normalized = std::path::absolute(&path).unwrap_or_else(|_| std::path::PathBuf::from(&path));
     normalized
         .to_string_lossy()
         .trim_end_matches(['\\', '/'])
@@ -977,6 +1006,49 @@ pub fn id_for_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn office_verbatim_paths_keep_the_saved_rule_identity() {
+        assert_eq!(
+            id_for_path(r"C:\Decks\A.pptx"),
+            id_for_path(r"\\?\C:\Decks\A.pptx")
+        );
+        assert_eq!(
+            id_for_path(r"\\server\share\A.pptx"),
+            id_for_path(r"\\?\UNC\server\share\A.pptx")
+        );
+    }
+
+    #[test]
+    fn mobile_projection_keeps_order_hidden_and_disabled_rules() {
+        let mut state = PresentationState::default();
+        let rules = vec![
+            FileRule {
+                file_path: "B.pptx".into(),
+                mobile_order: 1,
+                mobile_hidden: true,
+                ..FileRule::default()
+            },
+            FileRule {
+                file_path: "A.pptx".into(),
+                enabled: false,
+                ..FileRule::default()
+            },
+        ];
+        state
+            .presentations
+            .push(crate::presentation::OpenPresentation {
+                path: "B.pptx".into(),
+                name: "B".into(),
+                active: true,
+                slide_show_running: true,
+                managed: false,
+            });
+        let options = presentation_remote_state(&state, &rules).presentations;
+        assert_eq!(options.len(), 2);
+        assert_eq!(options[0].id, id_for_path("A.pptx"));
+        assert!(options[1].mobile_hidden && options[1].is_active && options[1].is_rule);
+    }
+
     #[test]
     fn token_comparison_rejects_wrong_values() {
         assert!(fixed_time_token_equals("abc", "abc"));

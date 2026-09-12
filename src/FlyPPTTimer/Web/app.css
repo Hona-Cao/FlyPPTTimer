@@ -82,3 +82,8 @@ input { min-width:0; width:100%; padding:0 12px; }
   .topbar h1 { font-size:21px; }
 }
 .topbar-actions{display:flex;align-items:center;gap:8px}
+
+.presentation-actions { grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:8px; }
+.presentation-actions button { flex:1 0 auto; }
+
+.confirm-card { max-height:calc(100dvh - 40px); overflow-y:auto; box-sizing:border-box; }

@@ -344,11 +344,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             {
                 eprintln!("failed to rebuild display windows: {error}");
             }
+            let preview = settings::preview_config(&config, settings_for_updates.borrow().as_ref());
+            let label = page_label(preview.appearance.show_slide_numbers, presentation_state.current_slide, presentation_state.total_slides);
+            if let Some(root) = weak_window.upgrade() { root.set_page_text(label.clone().into());
+                root.set_page_reserve(page_reserve(presentation_state.total_slides).into()); }
+            {
+                let displays = display_windows_for_updates.borrow();
+                for overlay in &displays.overlays { overlay.set_page_text(label.clone().into());
+                    overlay.set_page_reserve(page_reserve(presentation_state.total_slides).into()); }
+                if let Some(big) = &displays.big_screen { big.set_page_text(label.into()); }
+            }
             update_display_windows(
                 &weak_window,
                 &display_windows_for_updates,
                 &update.snapshot,
-                &config,
+                &preview,
                 frame,
             );
             if last_remote_update.get().elapsed() >= Duration::from_secs(1) {
@@ -362,15 +372,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     preserve_time_up_for_updates.get(),
                 ));
             }
-            drop(config);
-            if let Some(root) = weak_window.upgrade() {
-                expand_timer_windows_if_needed(
-                    &root,
-                    &display_windows_for_updates.borrow(),
-                    &config_for_updates,
-                    &config_path_for_updates,
-                );
-            }
+
         },
     );
 
@@ -1610,6 +1612,15 @@ fn execute_remote_command(
         preserve_time_up.set(false);
         hide_time_up(time_up_window);
     }
+    if name.starts_with("rules.") {
+        let mut updated = config.borrow().clone();
+        crate::mobile_rules::execute(&mut updated, &presentation.state(), command)?;
+        updated
+            .save(config_path)
+            .map_err(|error| error.to_string())?;
+        *config.borrow_mut() = updated;
+        return Ok("列表已更新".into());
+    }
     match name {
         "window.show" => {
             if let Some(w) = window.upgrade() {
@@ -2173,11 +2184,14 @@ fn update_display_windows(
 }
 
 fn sync_timer_window_scale(window: &AppWindow, config: &AppConfig) {
-    window::resize_for_dpi(
-        window.window(),
-        config.appearance.width,
-        config.appearance.height,
+    let (width, height) = timer_content_size(
+        config,
+        window.get_required_text_width(),
+        window.get_required_text_height(),
     );
+    window.set_content_width(width as f32);
+    window.set_content_height(height as f32);
+    window::resize_for_dpi(window.window(), width, height);
     // Region dimensions are physical and can change after WM_DPICHANGED.
     // Refreshing it with the current client rect keeps the configured corners
     // aligned while a timer is dragged between monitors.
@@ -2212,7 +2226,9 @@ fn update_big_screen(window: &BigScreenWindow, snapshot: &TimerSnapshot, config:
     window.set_timer_font_family(config.appearance.font_family.clone().into());
     let logical_height =
         window.window().size().height as f32 / window.window().scale_factor().max(0.1);
-    window.set_timer_font_size((logical_height * 0.30).clamp(48.0, 360.0));
+    window.set_timer_font_size(
+        (logical_height * 0.30 * config.appearance.font_size / 18.0).clamp(24.0, 360.0),
+    );
     window.set_keep_on_top(config.appearance.always_on_top);
 }
 
@@ -2222,68 +2238,38 @@ fn connect_timer_visibility(window: &AppWindow, visible: bool) {
     }
 }
 
-fn expand_timer_windows_if_needed(
-    root: &AppWindow,
-    displays: &DisplayWindows,
-    config: &Rc<RefCell<AppConfig>>,
-    path: &std::path::Path,
-) {
-    let mut config = config.borrow_mut();
-    let width = (root.get_required_text_width().ceil() as i32)
-        .max(config.appearance.width)
-        .min(2000);
-    let height = (root.get_required_text_height().ceil() as i32)
-        .max(config.appearance.height)
-        .min(1000);
-    if width <= config.appearance.width && height <= config.appearance.height {
-        return;
+fn timer_content_size(config: &AppConfig, required_width: f32, required_height: f32) -> (i32, i32) {
+    (
+        config
+            .appearance
+            .width
+            .max(required_width.ceil() as i32)
+            .clamp(1, 2000),
+        config
+            .appearance
+            .height
+            .max(required_height.ceil() as i32)
+            .clamp(1, 1000),
+    )
+}
+
+fn page_reserve(total: i32) -> String {
+    let digits = "8".repeat(total.max(1).to_string().len());
+    format!("{digits}/{digits}")
+}
+
+fn page_label(enabled: bool, current: i32, total: i32) -> String {
+    if enabled && current > 0 && total > 0 {
+        format!("{current}/{total}")
+    } else {
+        String::new()
     }
-    config.appearance.width = width;
-    config.appearance.height = height;
-    save_config(&config, path);
-    for overlay in std::iter::once(root).chain(displays.overlays.iter()) {
-        let old_position = overlay.window().position();
-        let old_size = overlay.window().size();
-        let scale = overlay.window().scale_factor();
-        overlay
-            .window()
-            .set_size(LogicalSize::new(width as f32, height as f32));
-        overlay.window().set_position(slint::PhysicalPosition::new(
-            old_position.x + (old_size.width as i32 - (width as f32 * scale).round() as i32) / 2,
-            old_position.y + (old_size.height as i32 - (height as f32 * scale).round() as i32) / 2,
-        ));
-        let weak = overlay.as_weak();
-        let shape = config.appearance.shape.clone();
-        slint::Timer::single_shot(Duration::from_millis(80), move || {
-            if let Some(window) = weak.upgrade() {
-                window::refresh_shape(window.window(), &shape);
-            }
-        });
-    }
-    let english = crate::config::ui_is_english(&config.language);
-    drop(config);
-    // Deliver the baseline notification after the refresh callback releases its borrows.
-    slint::Timer::single_shot(Duration::ZERO, move || {
-        settings::native::message(
-            &if english {
-                format!(
-                    "The current timer text needs more space. The window was resized to {width} × {height}."
-                )
-            } else {
-                format!("当前时间文字需要更大的显示区域，窗口已自动调整为 {width} × {height}。")
-            },
-            if english {
-                "Presentation Timer"
-            } else {
-                "演讲计时器"
-            },
-            false,
-        );
-    });
 }
 
 pub(crate) fn apply_config(window: &AppWindow, config: &AppConfig) {
     let appearance = &config.appearance;
+    window.set_content_width(appearance.width.max(1) as f32);
+    window.set_content_height(appearance.height.max(1) as f32);
     window.window().set_size(LogicalSize::new(
         appearance.width.max(1) as f32,
         appearance.height.max(1) as f32,
@@ -2324,6 +2310,7 @@ fn update_window(
     };
     let overtime = snapshot.state == TimerState::Finished || snapshot.is_overtime;
     window.set_display_text(format_snapshot(snapshot, &config.appearance.overtime_prefix).into());
+    window.set_timer_font_size(config.appearance.font_size);
     let color = if overtime {
         parse_color(
             &config.appearance.timeout_text_color,
@@ -2728,6 +2715,20 @@ mod remote_parity_tests {
     }
 
     #[test]
+    fn page_visibility_and_content_size_preserve_baseline() {
+        assert_eq!(page_label(true, 1, 23), "1/23");
+        for (enabled, current, total) in [(false, 1, 23), (true, 0, 23), (true, 1, 0)] {
+            assert!(page_label(enabled, current, total).is_empty());
+        }
+        let config = AppConfig::default();
+        let before = serde_json::to_value(&config).unwrap();
+        assert_eq!(timer_content_size(&config, 85.0, 30.0), (100, 35));
+        assert_eq!(timer_content_size(&config, 120.2, 54.1), (121, 55));
+        assert_eq!(timer_content_size(&config, 85.0, 30.0), (100, 35));
+        assert_eq!(serde_json::to_value(&config).unwrap(), before);
+    }
+
+    #[test]
     fn settings_and_remote_callbacks_preserve_edits_and_saved_data() {
         // Use Slint's existing software window to invoke production callbacks;
         // this verifies data flow, not native mouse/focus/DPI behavior.
@@ -2744,6 +2745,25 @@ mod remote_parity_tests {
             }
         }
         slint::platform::set_platform(Box::new(SoftwarePlatform)).unwrap();
+        // Exercise the real Slint measurements/root sizing, not just arithmetic.
+        let overlay = AppWindow::new().unwrap();
+        let baseline = AppConfig::default();
+        overlay.set_timer_font_size(60.0);
+        sync_timer_window_scale(&overlay, &baseline);
+        assert!(overlay.get_content_width() > 100.0);
+        assert!(overlay.get_content_height() > 35.0);
+        overlay.set_timer_font_size(18.0);
+        overlay.set_page_text("1/23".into());
+        overlay.set_page_reserve(page_reserve(23).into());
+        sync_timer_window_scale(&overlay, &baseline);
+        assert!(overlay.get_content_height() > 35.0);
+        overlay.set_page_text("".into());
+        sync_timer_window_scale(&overlay, &baseline);
+        assert_eq!(overlay.get_content_width(), 100.0);
+        assert_eq!(overlay.get_content_height(), 35.0);
+        assert_eq!(baseline.appearance.width, 100);
+        assert_eq!(baseline.appearance.height, 35);
+
         let root = std::env::temp_dir().join(format!(
             "flyppttimer-ux13-regression-{}",
             std::process::id()
@@ -2787,6 +2807,8 @@ mod remote_parity_tests {
             .position(|item| item.key == "appearance.width")
             .unwrap() as i32;
         settings.invoke_field_edited(width_row, "150".into(), false, 0);
+        assert_eq!(settings.get_timer_preview_width(), 150);
+        assert_eq!(config.borrow().appearance.width, 100);
         assert!(settings.get_dirty());
 
         control.invoke_presentation_selected(0, false, false);

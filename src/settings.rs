@@ -125,6 +125,7 @@ fn localize(lang: Language, value: &str) -> &str {
         "窗口尺寸与字号" => "Window Size & Font",
         "宽" => "Width",
         "高" => "Height",
+        "显示当前页/总页数" => "Show current/total slides",
         "字号" => "Font size",
         "外观形状" => "Window shape",
         "直角矩形" => "Rectangle",
@@ -552,6 +553,7 @@ pub fn create(
                         value.as_str()
                     };
                     update_field(&mut draft.borrow_mut(), &row.key, value, checked, selected);
+                    set_timer_preview(&w, &draft.borrow());
                     let dirty = !configs_equal(&draft.borrow(), &baseline_for_field.borrow());
                     if matches!(
                         row.key.as_str(),
@@ -1259,6 +1261,7 @@ fn refresh(
     remote: &RemoteServer,
     addresses: &[String],
 ) {
+    set_timer_preview(window, config);
     let pages = [
         "时长设置",
         "行为设置",
@@ -1587,6 +1590,11 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             &c.appearance.flash_background_color,
         ),
         Row::section("窗口尺寸与字号"),
+        Row::check(
+            "appearance.pages",
+            "显示当前页/总页数",
+            c.appearance.show_slide_numbers,
+        ),
         Row::text("appearance.width", "宽", c.appearance.width.to_string()),
         Row::text("appearance.height", "高", c.appearance.height.to_string()),
         Row::text(
@@ -1970,6 +1978,7 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
         "appearance.timeout_text" => c.appearance.timeout_text_color = value.into(),
         "appearance.timeout_background" => c.appearance.timeout_background_color = value.into(),
         "appearance.overtime_prefix" => c.appearance.overtime_prefix = value.into(),
+        "appearance.pages" => c.appearance.show_slide_numbers = checked,
         "appearance.width" => c.appearance.width = int(),
         "appearance.height" => c.appearance.height = int(),
         "appearance.font" => c.appearance.font_size = float() as f32,
@@ -2274,6 +2283,12 @@ fn merge_rules(applied: &[FileRule], baseline: &[FileRule], draft: &[FileRule]) 
 }
 
 fn merge_rule_fields(current: &mut FileRule, before: &FileRule, after: &FileRule) {
+    if before.mobile_hidden != after.mobile_hidden {
+        current.mobile_hidden = after.mobile_hidden;
+    }
+    if before.mobile_order != after.mobile_order {
+        current.mobile_order = after.mobile_order;
+    }
     if before.file_name != after.file_name {
         current.file_name = after.file_name.clone();
     }
@@ -2485,6 +2500,24 @@ fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
 }
 
+fn set_timer_preview(window: &SettingsWindow, config: &AppConfig) {
+    window.set_timer_preview_width(config.appearance.width.clamp(1, 2000));
+    window.set_timer_preview_height(config.appearance.height.clamp(1, 1000));
+    window.set_timer_preview_font(config.appearance.font_size.clamp(8.0, 180.0));
+    window.set_timer_preview_pages(config.appearance.show_slide_numbers);
+}
+
+pub(crate) fn preview_config(applied: &AppConfig, settings: Option<&SettingsWindow>) -> AppConfig {
+    let mut preview = applied.clone();
+    if let Some(settings) = settings.filter(|w| crate::window::is_visible(w.window())) {
+        preview.appearance.width = settings.get_timer_preview_width();
+        preview.appearance.height = settings.get_timer_preview_height();
+        preview.appearance.font_size = settings.get_timer_preview_font();
+        preview.appearance.show_slide_numbers = settings.get_timer_preview_pages();
+    }
+    preview
+}
+
 #[cfg(test)]
 mod parity_tests {
     use super::*;
@@ -2596,6 +2629,8 @@ mod parity_tests {
 
         let mut applied = baseline.clone();
         applied[0].enabled = false; // Remote edits A.enabled.
+        applied[0].mobile_hidden = true;
+        applied[0].mobile_order = 7;
         applied[1].duration = "00:06:00".into(); // Remote edits B, but Settings deletes B.
         applied.push(rule(&path_c, "00:04:00", TimerMode::Countdown, false)); // Same-path external add.
         applied.push(rule(&path_d, "00:02:00", TimerMode::Countdown, true));
@@ -2615,6 +2650,8 @@ mod parity_tests {
             .unwrap();
         assert_eq!(a.duration, "00:10:00");
         assert!(!a.enabled);
+        assert!(a.mobile_hidden);
+        assert_eq!(a.mobile_order, 7);
         let c = merged
             .iter()
             .find(|item| item.file_path == path_c.to_string_lossy())

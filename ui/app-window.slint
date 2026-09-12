@@ -1,4 +1,4 @@
-import { Button, CheckBox, ComboBox, LineEdit, ScrollView } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, Palette } from "std-widgets.slint";
 
 export struct SettingItem {
     key: string,
@@ -34,6 +34,10 @@ export struct PresentationItem {
 }
 
 export component AppWindow inherits Window {
+    in property <length> content-width: 100px;
+    in property <length> content-height: 35px;
+    in property <string> page-text;
+    in property <string> page-reserve;
     in property <string> display-text: "08:00";
     in property <brush> surface-color: #f3f8fc;
     in property <color> foreground-color: #0b3a66;
@@ -48,8 +52,8 @@ export component AppWindow inherits Window {
     in property <bool> flash-background-active: false;
     in property <bool> flash-border-active: false;
     in property <color> flash-color: #4ea3d8;
-    out property <length> required-text-width: time-text.preferred-width + 8px;
-    out property <length> required-text-height: time-text.preferred-height + 4px;
+    out property <length> required-text-width: max(time-text.preferred-width, page-measure.preferred-width) + 12px;
+    out property <length> required-text-height: time-text.preferred-height + (root.page-text == "" ? 0px : page-measure.preferred-height + 2px) + 8px;
 
     callback begin-drag();
     callback drag-move();
@@ -57,22 +61,43 @@ export component AppWindow inherits Window {
     callback show-menu();
 
     title: "";
-    width: 100px;
-    height: 35px;
+    width: root.content-width;
+    height: root.content-height;
     no-frame: true;
     always-on-top: root.keep-on-top;
     background: root.flash-background-active ? root.flash-color : root.surface-color;
 
     Rectangle {
+        width: root.width;
+        height: root.height;
         background: root.flash-background-active ? root.flash-color : root.surface-color;
         border-radius: root.corner-radius;
         border-width: root.flash-border-active ? 3px : 0px;
         border-color: root.flash-color;
 
+        page-measure := Text {
+            text: root.page-text == "" ? "" : root.page-reserve;
+            font-family: root.timer-font-family;
+            font-size: root.timer-font-size * 0.55;
+            visible: false;
+        }
+        Text {
+            x: 6px;
+            y: (parent.height + time-text.preferred-height - page-measure.preferred-height) / 2 + 1px;
+            width: parent.width - 12px;
+            height: page-measure.preferred-height;
+            text: root.page-text;
+            font-family: root.timer-font-family;
+            font-size: root.timer-font-size * 0.55;
+            color: root.foreground-color;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            visible: root.page-text != "" && root.flash-text-visible;
+        }
         time-text := Text {
             x: 4px;
             width: parent.width - 8px;
-            height: parent.height;
+            height: parent.height - (root.page-text == "" ? 0px : page-measure.preferred-height + 2px);
             text: root.display-text;
             color: root.foreground-color;
             font-family: root.timer-font-family;
@@ -105,6 +130,7 @@ export component AppWindow inherits Window {
     }
 }
 export component BigScreenWindow inherits Window {
+    in property <string> page-text;
     in property <string> display-text: "08:00";
     in property <brush> surface-color: #f3f8fc;
     in property <color> foreground-color: #0b3a66;
@@ -124,8 +150,19 @@ export component BigScreenWindow inherits Window {
     Rectangle {
         background: root.surface-color;
         Text {
+            y: parent.height * 0.65;
             width: parent.width;
-            height: parent.height;
+            height: parent.height * 0.25;
+            text: root.page-text;
+            font-family: root.timer-font-family;
+            font-size: root.timer-font-size * 0.45;
+            color: root.foreground-color;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        Text {
+            width: parent.width;
+            height: parent.height * (root.page-text == "" ? 1 : 0.7);
             text: root.display-text;
             color: root.foreground-color;
             font-family: root.timer-font-family;
@@ -244,6 +281,7 @@ component RemoteButton inherits Rectangle {
 }
 
 export component PresentationWindow inherits Window {
+    init => { Palette.color-scheme = ColorScheme.light; }
     in property <string> window-title: "远程控制";
     in property <[PresentationItem]> presentations;
     in-out property <int> selected-presentation: -1;
@@ -605,6 +643,11 @@ component FieldRow inherits Rectangle {
 
 }
 export component SettingsWindow inherits Window {
+    init => { Palette.color-scheme = ColorScheme.light; }
+    in-out property <int> timer-preview-width: 100;
+    in-out property <int> timer-preview-height: 35;
+    in-out property <float> timer-preview-font: 18;
+    in-out property <bool> timer-preview-pages: true;
     in property <string> settings-title: "FlyPPTTimer Settings";
     in property <[string]> pages;
     in property <[SettingItem]> items;

@@ -9,6 +9,7 @@ mod desktop;
 mod display;
 mod flash;
 mod log;
+mod mobile_rules;
 mod presentation;
 mod remote;
 mod settings;

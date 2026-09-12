@@ -316,6 +316,7 @@ impl Default for PromptSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
 pub struct AppearanceSettings {
+    pub show_slide_numbers: bool,
     pub color_scheme: String,
     pub font_family: String,
     pub font_size: f32,
@@ -341,6 +342,7 @@ pub struct AppearanceSettings {
 impl Default for AppearanceSettings {
     fn default() -> Self {
         Self {
+            show_slide_numbers: true,
             color_scheme: "医疗卫生（蓝白）".to_owned(),
             font_family: "Microsoft YaHei UI".to_owned(),
             font_size: 18.0,
@@ -531,6 +533,8 @@ pub enum OverlayAnchor {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
 pub struct FileRule {
+    pub mobile_hidden: bool,
+    pub mobile_order: i32,
     pub file_name: String,
     pub file_path: String,
     pub duration: String,
@@ -543,6 +547,8 @@ pub struct FileRule {
 impl Default for FileRule {
     fn default() -> Self {
         Self {
+            mobile_hidden: false,
+            mobile_order: 0,
             file_name: String::new(),
             file_path: String::new(),
             duration: "00:08:00".to_owned(),
@@ -605,11 +611,27 @@ mod tests {
             ..AppConfig::default()
         };
         let mut actual = serde_json::to_value(config).unwrap();
+        // U10 explicitly adds this default; all pre-existing defaults still match.
+        assert_eq!(actual["Appearance"]["ShowSlideNumbers"], true);
+        actual["Appearance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("ShowSlideNumbers");
 
         normalize_integral_numbers(&mut expected);
         normalize_integral_numbers(&mut actual);
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn legacy_config_defaults_mobile_metadata_and_page_display() {
+        let c =
+            AppConfig::from_json(r#"{"Appearance":{"Width":100},"Rules":[{"FilePath":"A.pptx"}]}"#)
+                .unwrap();
+        assert!(c.appearance.show_slide_numbers);
+        assert!(!c.rules[0].mobile_hidden);
+        assert_eq!(c.rules[0].mobile_order, 0);
     }
 
     #[test]
