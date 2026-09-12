@@ -31,10 +31,21 @@ jobs:
           git apply --unidiff-zero rc33.patch
           if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
           Remove-Item rc33.patch
+          # MAKEINTRESOURCEW encodes ID 1, not an aligned/dereferenceable u16 pointer.
+          python -c "from pathlib import Path; p=Path('src/window.rs'); s=p.read_text(encoding='utf-8'); assert s.count('1usize as *const u16')==2; p.write_text(s.replace('1usize as *const u16','std::ptr::without_provenance::<u16>(1)'),encoding='utf-8')"
+          if ($LASTEXITCODE -ne 0) { throw 'Resource identifier correction failed' }
           if (Test-Path .github/rc33-refine.py) {
             python .github/rc33-refine.py
             if ($LASTEXITCODE -ne 0) { throw 'Correction failed' }
           }
+          python -c "import pathlib,zipfile,subprocess; paths=subprocess.check_output(['git','ls-files','-co','--exclude-standard','-z']).decode().split('\0'); z=zipfile.ZipFile('rc33-source.zip','w',zipfile.ZIP_DEFLATED); [z.write(p) for p in sorted(set(paths)) if p and pathlib.Path(p).is_file()]; z.close()"
+          if ($LASTEXITCODE -ne 0) { throw 'Source export failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RC33-source-snapshot
+          path: rc33-source.zip
+          retention-days: 7
+          if-no-files-found: error
       - name: Windows SDK resource compiler
         run: |
           $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
@@ -64,17 +75,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Format check failed' }
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace error' }
+          New-Item -ItemType Directory -Force artifacts/rc33-evidence | Out-Null
       - name: Clippy and Slint bindings
         run: |
-          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object clippy.log
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object artifacts/rc33-evidence/clippy.log
           if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
-          if (Select-String clippy.log -Pattern 'binding loop' -Quiet) { throw 'Slint binding loop' }
+          if (Select-String artifacts/rc33-evidence/clippy.log -Pattern 'binding loop' -Quiet) { throw 'Slint binding loop' }
       - name: Regression tests
-        run: cargo test --locked
+        run: |
+          cargo test --locked 2>&1 | Tee-Object artifacts/rc33-evidence/tests.log
+          if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed' }
       - name: Mobile JavaScript syntax
         run: node --check src/FlyPPTTimer/Web/app.js
       - name: Release build
-        run: cargo build --locked --release
+        run: |
+          cargo build --locked --release 2>&1 | Tee-Object artifacts/rc33-evidence/release.log
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
       - name: Software layout captures
         run: |
           foreach ($mode in @('settings','windows')) {
@@ -111,8 +127,10 @@ jobs:
           foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) {
             $source = Join-Path $env:WINDIR "System32\$dll"
             if (-not (Test-Path $source)) { throw "Runtime missing: $dll" }
+            $sig = Get-AuthenticodeSignature $source
+            if ($sig.Status -ne 'Valid') { throw "Runtime signature invalid: $dll" }
             Copy-Item $source $stage
-            Get-AuthenticodeSignature $source | Select-Object Path,Status | Format-Table
+            $sig | Select-Object Path,Status | Format-Table
           }
           $hash = (Get-FileHash (Join-Path $stage 'FlyPPTTimer.exe') -Algorithm SHA256).Hash
           @('FlyPPTTimer RC3.3 review build','Version: 1.13.0',"Product source SHA: $env:PATCHED_SOURCE_SHA",'Base source: fadf203 (RC3.2)',"Workflow run: $env:GITHUB_RUN_ID","EXE SHA256: $hash",'Verified: fmt; clippy; cargo test; JS syntax; release; software captures; hosted Windows independent-window checks.','Physical Windows11/phone/Office acceptance pending. Rare blank-window root cause remains unconfirmed.','No Release/Tag. Codex remains paused.') | Set-Content (Join-Path $stage 'BUILD.txt') -Encoding utf8
