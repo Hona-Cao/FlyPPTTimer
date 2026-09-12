@@ -333,20 +333,13 @@ component PercentageInput inherits LineEdit {
     changed value => { if !self.has-focus { self.text = "" + root.value; } }
     edited(text) => {
         if text.is-float() {
-            let value = text.to-float();
-            if value >= root.minimum && value <= root.maximum {
-                root.value-edited(round(value / root.step) * root.step);
-            }
+            root.value-edited(clamp(round(text.to-float() / root.step) * root.step, root.minimum, root.maximum));
         }
     }
     accepted(text) => { self.clear-focus(); }
     changed has-focus => {
-        if !self.has-focus {
-            let value = self.text.is-float() ? self.text.to-float() : root.value;
-            let normalized = clamp(round(value / root.step) * root.step, root.minimum, root.maximum);
-            self.text = "" + normalized;
-            root.value-edited(normalized);
-        }
+        // Valid input is already applied; never replay old text over a slider change.
+        if !self.has-focus { self.text = "" + root.value; }
     }
 }
 
@@ -771,6 +764,7 @@ component FieldRow inherits Rectangle {
             scroll-event(event) => {
                 let delta = event.delta-y != 0px ? event.delta-y : event.delta-x;
                 if delta == 0px { return reject; }
+                percent-input.clear-focus();
                 let value = clamp(percent.value + (delta > 0px ? 1 : -1), item.minimum, item.maximum);
                 root.edited(row-index, "" + (round(value / item.step) * item.step), false, 0);
                 return accept;
@@ -785,7 +779,7 @@ component FieldRow inherits Rectangle {
                 }
             }
         }
-        PercentageInput {
+        percent-input := PercentageInput {
             width: 72px; value: item.value.to-float();
             minimum: item.minimum; maximum: item.maximum; step: item.step;
             enabled: item.enabled && root.interactive;
