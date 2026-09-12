@@ -2,7 +2,7 @@ name: ChatGPT RC3.2 Review
 on:
   push:
     branches: [chatgpt/rc32-feedback]
-    paths: [.github/workflows/chatgpt-rc32.yml]
+    paths: [.github/workflows/chatgpt-rc32.yml, .github/rc32-refine.py]
 permissions:
   contents: write
 jobs:
