@@ -1,0 +1,18 @@
+name: RC34 usability review
+on:
+  push:
+    branches: [chatgpt/rc34-feedback]
+    paths: [.github/workflows/rc34-review.yml, .github/rc34-refine.py]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: git archive --format=zip --output=rc34-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RC34-source
+          path: rc34-source.zip
+          retention-days: 3
