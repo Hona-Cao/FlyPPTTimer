@@ -30,6 +30,19 @@ jobs:
             throw "Unexpected patched files: $($changed -join ', ')"
           }
 
+      - name: Locate Windows SDK resource compiler
+        shell: pwsh
+        run: |
+          $kits = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+          $rc = Get-ChildItem -LiteralPath $kits -Filter rc.exe -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\rc\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $rc) { throw "Windows SDK rc.exe not found" }
+          $rcDir = $rc.Directory.FullName
+          $rcDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Using Windows SDK resource compiler: $($rc.FullName)"
+
       - name: Install pinned Rust toolchain
         shell: pwsh
         run: |
@@ -37,6 +50,7 @@ jobs:
           rustup default 1.92.0
           rustc --version
           cargo --version
+          Get-Command rc.exe | Format-List Source
 
       - name: Rust format check
         run: cargo fmt --all -- --check
