@@ -37,24 +37,122 @@ pub fn escape_key_down() -> bool {
 '@
 
 Replace-Exact "src/config.rs" @'
-            mobile_hidden: false,
-            mobile_order: 0,
-            file_name: String::new(),
+            title_pattern: String::new(),
+            feature: String::new(),
+        }
+    }
+}
+
+pub(crate) fn parse_duration(value: &str) -> Option<Duration> {
 '@ @'
-            mobile_hidden: false,
-            // Missing metadata in legacy configs and rules added from desktop
-            // editors should naturally append after explicitly ordered mobile
-            // rules instead of jumping to the front as another order-0 item.
-            mobile_order: i32::MAX,
-            file_name: String::new(),
+            title_pattern: String::new(),
+            feature: String::new(),
+        }
+    }
+}
+
+pub(crate) fn next_mobile_order(rules: &[FileRule]) -> i32 {
+    rules
+        .iter()
+        .map(|rule| rule.mobile_order)
+        .max()
+        .unwrap_or(-1)
+        .saturating_add(1)
+}
+
+pub(crate) fn parse_duration(value: &str) -> Option<Duration> {
 '@
 
 Replace-Exact "src/config.rs" @'
         assert!(!c.rules[0].mobile_hidden);
         assert_eq!(c.rules[0].mobile_order, 0);
+    }
+
+    #[test]
+    fn save_updates_version_and_can_be_loaded_again() {
 '@ @'
         assert!(!c.rules[0].mobile_hidden);
-        assert_eq!(c.rules[0].mobile_order, i32::MAX);
+        assert_eq!(c.rules[0].mobile_order, 0);
+    }
+
+    #[test]
+    fn next_mobile_order_appends_after_existing_custom_order() {
+        let rules = vec![
+            FileRule {
+                mobile_order: 4,
+                ..FileRule::default()
+            },
+            FileRule {
+                mobile_order: 1,
+                ..FileRule::default()
+            },
+        ];
+        assert_eq!(next_mobile_order(&[]), 0);
+        assert_eq!(next_mobile_order(&rules), 5);
+    }
+
+    #[test]
+    fn save_updates_version_and_can_be_loaded_again() {
+'@
+
+Replace-Exact "src/app.rs" @'
+                    config.rules.push(crate::config::FileRule {
+                        file_name: std::path::Path::new(&full)
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| full.clone()),
+                        file_path: full,
+                        duration: default_duration.clone(),
+                        mode: default_mode,
+                        enabled: true,
+                        ..crate::config::FileRule::default()
+                    });
+'@ @'
+                    let mobile_order = crate::config::next_mobile_order(&config.rules);
+                    config.rules.push(crate::config::FileRule {
+                        mobile_order,
+                        file_name: std::path::Path::new(&full)
+                            .file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| full.clone()),
+                        file_path: full,
+                        duration: default_duration.clone(),
+                        mode: default_mode,
+                        enabled: true,
+                        ..crate::config::FileRule::default()
+                    });
+'@
+
+Replace-Exact "src/settings.rs" @'
+                            let full = path.to_string_lossy().to_string();
+                            draft.borrow_mut().rules.push(FileRule {
+                                file_name: path
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .to_string(),
+                                file_path: full,
+                                duration: duration.clone(),
+                                mode,
+                                enabled: true,
+                                ..FileRule::default()
+                            });
+'@ @'
+                            let full = path.to_string_lossy().to_string();
+                            let mobile_order = crate::config::next_mobile_order(&draft.borrow().rules);
+                            draft.borrow_mut().rules.push(FileRule {
+                                mobile_order,
+                                file_name: path
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .to_string(),
+                                file_path: full,
+                                duration: duration.clone(),
+                                mode,
+                                enabled: true,
+                                ..FileRule::default()
+                            });
 '@
 
 Replace-Exact "src/presentation.rs" @'
