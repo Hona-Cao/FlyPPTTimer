@@ -12,17 +12,20 @@ jobs:
   review:
     runs-on: windows-latest
     timeout-minutes: 40
+    env:
+      RUSTUP_TOOLCHAIN: 1.92.0
     defaults:
       run:
         shell: pwsh
     steps:
+      - name: Keep repository line endings before checkout
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Apply reviewed source refinement
         run: |
           $ErrorActionPreference = 'Stop'
-          git config core.autocrlf false
           python .github/rc331-refine.py
           if ($LASTEXITCODE -ne 0) { throw 'RC331 source refinement failed' }
       - name: Windows SDK resource compiler
@@ -43,12 +46,12 @@ jobs:
             target
           key: rc331-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
           restore-keys: |
+            rc331-windows-1.92-${{ hashFiles('Cargo.lock') }}-
             rc33-windows-1.92-${{ hashFiles('Cargo.lock') }}-
             rc32-windows-1.92-${{ hashFiles('Cargo.lock') }}-
       - name: Format and lint
         run: |
           cargo fmt --all
-          cargo fmt --all -- --check
           if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw 'Whitespace error' }
