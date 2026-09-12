@@ -1,0 +1,161 @@
+name: RC331 remote and picker review
+on:
+  push:
+    branches: [chatgpt/rc331-feedback]
+    paths: [.github/workflows/rc331-review.yml, .github/rc331.patch]
+permissions:
+  contents: write
+concurrency:
+  group: rc331-review
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply reviewed patch
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config core.autocrlf false
+          git apply --check .github/rc331.patch
+          if ($LASTEXITCODE -ne 0) { throw 'RC331 patch no longer applies' }
+          git apply .github/rc331.patch
+          if ($LASTEXITCODE -ne 0) { throw 'RC331 patch failed' }
+      - name: Windows SDK resource compiler
+        run: |
+          $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+          $rc = Get-ChildItem -LiteralPath $kits -Filter rc.exe -File -Recurse | Where-Object { $_.FullName -match '\\x64\\rc\.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'Windows SDK rc.exe missing' }
+          $rc.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Pinned Rust
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust setup failed' }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rc331-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            rc33-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+            rc32-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+      - name: Format and lint
+        run: |
+          cargo fmt --all
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace error' }
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+      - name: Regression tests
+        run: |
+          New-Item -ItemType Directory -Force artifacts/rc331-evidence | Out-Null
+          cargo test --locked 2>&1 | Tee-Object artifacts/rc331-evidence/tests.log
+          if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed' }
+          node --check src/FlyPPTTimer/Web/app.js
+          if ($LASTEXITCODE -ne 0) { throw 'JavaScript syntax failed' }
+      - name: Release build
+        run: |
+          cargo build --locked --release 2>&1 | Tee-Object artifacts/rc331-evidence/release.log
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+      - name: First-start delayed HTTP request smoke
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'rc331-first-start'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe $stage
+          $exe = Join-Path $stage 'FlyPPTTimer.exe'
+          $configPath = Join-Path $stage 'FlyPPTTimer.config.json'
+          $process = Start-Process $exe -WorkingDirectory $stage -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(15)
+            while (-not (Test-Path $configPath)) {
+              if ((Get-Date) -gt $deadline) { throw 'First-start config was not created' }
+              Start-Sleep -Milliseconds 100
+            }
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json
+            $port = [int]$config.RemoteControl.Port
+            $token = [string]$config.RemoteControl.Token
+            if ($port -le 0 -or [string]::IsNullOrWhiteSpace($token)) { throw 'Remote first-start config is invalid' }
+            $client = [System.Net.Sockets.TcpClient]::new()
+            $client.Connect('127.0.0.1', $port)
+            try {
+              # Deliberately wait after accept. The old inherited nonblocking client socket
+              # returned WSAEWOULDBLOCK/10035 before these request bytes arrived.
+              Start-Sleep -Milliseconds 250
+              $stream = $client.GetStream()
+              $stream.ReadTimeout = 8000
+              $stream.WriteTimeout = 8000
+              $request = "GET /?token=$token HTTP/1.1`r`nHost: localhost`r`nConnection: close`r`n`r`n"
+              $bytes = [Text.Encoding]::ASCII.GetBytes($request)
+              $stream.Write($bytes, 0, $bytes.Length)
+              $buffer = New-Object byte[] 8192
+              $builder = [Text.StringBuilder]::new()
+              while (($count = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                [void]$builder.Append([Text.Encoding]::UTF8.GetString($buffer, 0, $count))
+              }
+              $response = $builder.ToString()
+              if ($response -notmatch '^HTTP/1\.1 200' -or $response -notmatch 'FlyPPTTimer') {
+                throw "Unexpected first-start remote response: $response"
+              }
+              if ($response -match '10035|无法立即完成一个非阻止性套接字操作') {
+                throw 'WSAEWOULDBLOCK leaked to HTTP response'
+              }
+              $response | Set-Content artifacts/rc331-evidence/first-start-http.txt -Encoding utf8
+            } finally { $client.Dispose() }
+          } finally {
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+      - name: Commit verified product source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.toml src/remote.rs src/settings.rs
+          git commit -m 'fix: stabilize first remote scan and restore modern PPT picker'
+          if ($LASTEXITCODE -ne 0) { throw 'Verified product commit failed' }
+          $sha = (git rev-parse HEAD).Trim()
+          "PATCHED_SOURCE_SHA=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          git push origin "HEAD:refs/heads/chatgpt/rc331-verified-$env:GITHUB_RUN_ID"
+          if ($LASTEXITCODE -ne 0) { throw 'Verified source push failed' }
+      - name: Package portable
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'FlyPPTTimer-v1.13.0-rc331-win-x64'
+          $stage = Join-Path $env:RUNNER_TEMP $name
+          $out = Join-Path $PWD 'artifacts\review'
+          New-Item -ItemType Directory -Force $stage,$out | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe $stage
+          Copy-Item docs/default-config.json (Join-Path $stage 'FlyPPTTimer.config.json')
+          Copy-Item LICENSE $stage
+          foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) {
+            $source = Join-Path $env:WINDIR "System32\$dll"
+            if (-not (Test-Path $source)) { throw "Runtime missing: $dll" }
+            if ((Get-AuthenticodeSignature $source).Status -ne 'Valid') { throw "Runtime signature invalid: $dll" }
+            Copy-Item $source $stage
+          }
+          $hash = (Get-FileHash (Join-Path $stage 'FlyPPTTimer.exe') -Algorithm SHA256).Hash
+          @('FlyPPTTimer RC3.3.1 test build','Version: 1.13.0',"Product source SHA: $env:PATCHED_SOURCE_SHA",'Base: RC3.3 298d747',"Workflow run: $env:GITHUB_RUN_ID","EXE SHA256: $hash",'Changes: fix first-scan Winsock 10035 race; restore modern Windows PPT-only multi-select file picker.','Verified: fmt; clippy; cargo test; JS syntax; release build; delayed first-start HTTP request smoke.','Manual: first launch QR without service restart; modern file picker navigation and PPT-only filter.','No Release/Tag. Codex remains paused.') | Set-Content (Join-Path $stage 'BUILD.txt') -Encoding utf8
+          @('RC3.3.1 手测','1. 全新目录首次启动，直接打开 Remote 并扫码；不要先点重启服务。页面应一次打开，不出现 os error 10035。','2. 设置与 PC Remote 的“添加文件”应打开 Windows 现代资源管理器式文件选择窗口，支持多选；仅允许 .ppt/.pptx/.pptm，没有“所有文件”。','3. 选择其他类型文件不应加入受控列表。其他 RC3.3 已暂时通过项目无需重测。') | Set-Content (Join-Path $stage 'MANUAL_TEST.zh-CN.txt') -Encoding utf8
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $out "$name.zip") -CompressionLevel Optimal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlyPPTTimer-RC331-portable
+          path: artifacts/review/*.zip
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RC331-evidence
+          path: artifacts/rc331-evidence/**
+          if-no-files-found: warn
+          retention-days: 14
