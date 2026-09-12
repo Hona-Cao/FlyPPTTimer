@@ -24,11 +24,40 @@ fn main() {
         output.join("app.manifest"),
     )
     .expect("copy Windows manifest to build directory");
-    fs::write(
-        output.join("FlyPPTTimer.rc"),
-        "1 ICON \"app.ico\"\r\n1 24 \"app.manifest\"\r\n",
-    )
-    .expect("write Windows resource script");
+    let version = env::var("CARGO_PKG_VERSION").expect("package version");
+    let numeric_version = format!("{},0", version.replace('.', ","));
+    let resource = format!(
+        r#"1 ICON "app.ico"
+1 24 "app.manifest"
+1 VERSIONINFO
+FILEVERSION {numeric_version}
+PRODUCTVERSION {numeric_version}
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "FileDescription", "FlyPPTTimer"
+      VALUE "FileVersion", "{version}"
+      VALUE "InternalName", "FlyPPTTimer"
+      VALUE "OriginalFilename", "FlyPPTTimer.exe"
+      VALUE "ProductName", "FlyPPTTimer"
+      VALUE "ProductVersion", "{version}"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0409, 1200
+  END
+END
+"#
+    );
+    fs::write(output.join("FlyPPTTimer.rc"), resource).expect("write Windows resource script");
 
     let compiler = env::var_os("RC").unwrap_or_else(|| "rc.exe".into());
     let status = Command::new(compiler)

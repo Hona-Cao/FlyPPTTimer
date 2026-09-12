@@ -626,3 +626,8 @@ Review 分支：`codex/v1-06-manual-test`
 程序版本仍为 `1.13.0`；本轮包标识为 `v1.13.0-UX13-DialogsRemoteBatch-20260910`。便携目录：`E:/快传/计时器/tests/FlyPPTTimer-v1.13.0-UX13-DialogsRemoteBatch-20260910-win-x64/`，直接运行其中的 `FlyPPTTimer.exe`，不需要压缩包、安装或解压。这是 review 手测版，不是正式 Release/Tag。
 
 完成提交并推送后停止编码，等待审核。
+
+
+# v1.13.1 direct implementation
+
+User accepted RC3.4. Implemented V1131_DELIVERY.md: list boundary handoff and shared page gestures, wheel and numeric percentage entry, compact aligned Remote columns, ordinary Settings window lifetime, startup visibility reset and version 1.13.1. Exact validation and product source are recorded in CI logs and BUILD.txt.

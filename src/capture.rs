@@ -39,7 +39,6 @@ pub fn capture_all(output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
             output.join("preview.config.json"),
             Rc::new(|_| {}),
             Rc::new(|| {}),
-            false,
             Rc::clone(&remote),
         )?;
         preview.show()?;

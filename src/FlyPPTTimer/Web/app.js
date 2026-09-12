@@ -350,10 +350,25 @@ async function finishListGesture(cancelled=false){
   }
   renderListTools(lastState?.presentationState||{});renderPresentations(lastState?.presentationState?.presentations||[]);refreshPresentationButtons();
 }
-listHost.addEventListener('touchstart',event=>{if(event.touches.length!==1){finishListGesture(true);return}const t=event.touches[0];startListGesture(event.target,t.clientX,t.clientY)},{passive:true});
-listHost.addEventListener('touchmove',event=>{if(event.touches.length!==1){finishListGesture(true);return}const t=event.touches[0];moveListGesture(t.clientX,t.clientY,event)},{passive:false});
-listHost.addEventListener('touchend',()=>finishListGesture(false),{passive:true});
-listHost.addEventListener('touchcancel',()=>finishListGesture(true),{passive:true});
+// Native scrolling stays inside the list; transfer finger movement at either boundary.
+let listPan=null;
+function scrollListBoundary(x,y,event){
+  const pan=listPan;if(!pan)return;
+  const delta=pan.lastY-y;pan.lastY=y;
+  if(listGesture?.active||Math.abs(y-pan.y)<10||Math.abs(y-pan.y)<=Math.abs(x-pan.x))return;
+  const atBoundary=delta<0?listHost.scrollTop<=0:listHost.scrollTop+listHost.clientHeight>=listHost.scrollHeight-1;
+  if(atBoundary){if(event.cancelable)event.preventDefault();window.scrollBy(0,delta)}
+}
+listHost.addEventListener('touchstart',event=>{
+  if(event.touches.length!==1){listPan=null;finishListGesture(true);return}
+  const t=event.touches[0];listPan={x:t.clientX,y:t.clientY,lastY:t.clientY};startListGesture(event.target,t.clientX,t.clientY);
+},{passive:true});
+listHost.addEventListener('touchmove',event=>{
+  if(event.touches.length!==1){listPan=null;finishListGesture(true);return}
+  const t=event.touches[0];moveListGesture(t.clientX,t.clientY,event);scrollListBoundary(t.clientX,t.clientY,event);
+},{passive:false});
+listHost.addEventListener('touchend',()=>{listPan=null;finishListGesture(false)},{passive:true});
+listHost.addEventListener('touchcancel',()=>{listPan=null;finishListGesture(true)},{passive:true});
 listHost.addEventListener('pointerdown',event=>{if(event.pointerType==='touch'||event.button!==0)return;startListGesture(event.target,event.clientX,event.clientY)});
 document.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')moveListGesture(event.clientX,event.clientY,event)});
 document.addEventListener('pointerup',event=>{if(event.pointerType!=='touch')finishListGesture(false)});
@@ -452,8 +467,8 @@ function renderPage(index,animate=true){
 }
 function activatePage(pageId){renderPage(Math.max(0,pages.indexOf(pageId)),true)}
 document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>activatePage(tab.dataset.page)));
-pagesViewport.addEventListener('touchstart',event=>{if(event.touches.length!==1||event.target.closest('.confirm-panel,.presentation-list'))return;const touch=event.touches[0];swipeStart={x:touch.clientX,y:touch.clientY,time:performance.now(),baseX:freezeTrack(),dragging:false,lastX:touch.clientX,lastTime:performance.now()}},{passive:true});
-pagesViewport.addEventListener('touchmove',event=>{if(!swipeStart||!event.touches.length)return;const touch=event.touches[0],dx=touch.clientX-swipeStart.x,dy=touch.clientY-swipeStart.y;if(!swipeStart.dragging){const distance=Math.hypot(dx,dy);if(distance<SWIPE_DIRECTION_DISTANCE)return;const angle=Math.atan2(Math.abs(dy),Math.abs(dx))*180/Math.PI;if(angle>SWIPE_MAX_ANGLE_DEGREES){swipeStart=null;renderPage(pageIndex,true);return}swipeStart.dragging=true;suppressSwipeClick=true;clearTimeout(suppressSwipeClickTimer)}event.preventDefault();const width=Math.max(1,pagesViewport.clientWidth),minX=-(pages.length-1)*width;let nextX=swipeStart.baseX+dx;if(nextX>0)nextX*=.24;else if(nextX<minX)nextX=minX+(nextX-minX)*.24;pagesTrack.style.transition='none';pagesTrack.style.transform=`translate3d(${nextX}px,0,0)`;swipeStart.lastX=touch.clientX;swipeStart.lastTime=performance.now()},{passive:false});
+pagesViewport.addEventListener('touchstart',event=>{if(event.touches.length!==1||event.target.closest('.confirm-panel,input,select,textarea'))return;const touch=event.touches[0];swipeStart={x:touch.clientX,y:touch.clientY,time:performance.now(),baseX:readTrackX(),dragging:false,lastX:touch.clientX,lastTime:performance.now()}},{passive:true});
+pagesViewport.addEventListener('touchmove',event=>{if(!swipeStart||!event.touches.length)return;const touch=event.touches[0],dx=touch.clientX-swipeStart.x,dy=touch.clientY-swipeStart.y;if(!swipeStart.dragging){const distance=Math.hypot(dx,dy);if(distance<SWIPE_DIRECTION_DISTANCE)return;const angle=Math.atan2(Math.abs(dy),Math.abs(dx))*180/Math.PI;if(angle>SWIPE_MAX_ANGLE_DEGREES){swipeStart=null;return}swipeStart.baseX=freezeTrack();swipeStart.dragging=true;suppressSwipeClick=true;clearTimeout(suppressSwipeClickTimer)}event.preventDefault();const width=Math.max(1,pagesViewport.clientWidth),minX=-(pages.length-1)*width;let nextX=swipeStart.baseX+dx;if(nextX>0)nextX*=.24;else if(nextX<minX)nextX=minX+(nextX-minX)*.24;pagesTrack.style.transition='none';pagesTrack.style.transform=`translate3d(${nextX}px,0,0)`;swipeStart.lastX=touch.clientX;swipeStart.lastTime=performance.now()},{passive:false});
 pagesViewport.addEventListener('touchend',event=>{if(!swipeStart)return;const touch=event.changedTouches[0],now=performance.now(),x=touch?touch.clientX:swipeStart.lastX,dx=x-swipeStart.x,elapsed=Math.max(1,now-swipeStart.time),dragging=swipeStart.dragging,currentX=readTrackX(),width=Math.max(1,pagesViewport.clientWidth);swipeStart=null;if(!dragging){renderPage(pageIndex,true);return}const velocity=dx/elapsed,commit=Math.abs(dx)>=18||Math.abs(velocity)>=.12,position=-currentX/width;let target=Math.round(position);if(commit)target=dx<0?Math.floor(position)+1:Math.ceil(position)-1;renderPage(target,true);suppressSwipeClickTimer=setTimeout(()=>suppressSwipeClick=false,420)},{passive:true});
 pagesViewport.addEventListener('touchcancel',()=>{swipeStart=null;renderPage(pageIndex,true)},{passive:true});
 document.addEventListener('click',event=>{if(!suppressSwipeClick)return;suppressSwipeClick=false;clearTimeout(suppressSwipeClickTimer);event.preventDefault();event.stopPropagation() },true);

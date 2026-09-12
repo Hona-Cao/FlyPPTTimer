@@ -527,7 +527,6 @@ pub fn create(
     config_path: PathBuf,
     on_applied: Rc<dyn Fn(&AppConfig)>,
     _on_closed: Rc<dyn Fn()>,
-    exit_on_close: bool,
     remote: Rc<RemoteServer>,
 ) -> Result<SettingsWindow, slint::PlatformError> {
     let window = SettingsWindow::new()?;
@@ -1202,9 +1201,6 @@ pub fn create(
                 );
                 if close {
                     let _ = w.hide();
-                    if exit_on_close {
-                        let _ = slint::quit_event_loop();
-                    }
                 }
             }
         })
@@ -1243,11 +1239,11 @@ pub fn create(
         let selected_rules = selected_rules.clone();
         window.on_cancel(move || {
             if let Some(w)=weak.upgrade() {
-                if !w.get_dirty() { let _=w.hide(); if exit_on_close { let _=slint::quit_event_loop(); } return; }
+                if !w.get_dirty() { let _=w.hide(); return; }
                 let lang=ui_language;
                 match native::save_discard_cancel(t(lang, "设置中有未应用的更改。是：应用并关闭；否：放弃更改；取消：继续编辑。", "Settings contain unapplied changes. Yes: apply and close; No: discard changes; Cancel: continue editing.")) {
                     native::Choice::Yes => w.invoke_accept(),
-                    native::Choice::No => { *draft.borrow_mut()=applied.borrow().clone(); *baseline.borrow_mut()=draft.borrow().clone(); refresh(&w, &draft.borrow(), *page.borrow(), *selected_rule.borrow(), &selected_rules.borrow(), false, ui_language, &remote_for_cancel, &addresses_for_cancel); let _=w.hide(); if exit_on_close { let _=slint::quit_event_loop(); } },
+                    native::Choice::No => { *draft.borrow_mut()=applied.borrow().clone(); *baseline.borrow_mut()=draft.borrow().clone(); refresh(&w, &draft.borrow(), *page.borrow(), *selected_rule.borrow(), &selected_rules.borrow(), false, ui_language, &remote_for_cancel, &addresses_for_cancel); let _=w.hide(); },
                     native::Choice::Cancel => {}
                 }
             }

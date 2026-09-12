@@ -37,7 +37,7 @@ New-Item -ItemType Directory -Path $portable, $installerSource, $installerOutput
 
 $files = [ordered]@{
     "FlyPPTTimer.exe" = Join-Path $root "target\release\FlyPPTTimer.exe"
-    "FlyPPTTimer.config.json" = Join-Path $root "docs\default-config.json"
+    "FlyPPTTimer.config.json" = Join-Path $root "docs\v1131-default-config.json"
     "app.ico" = Join-Path $root "src\FlyPPTTimer\Assets\app.ico"
     "README.md" = Join-Path $root "README.md"
     "README.zh-CN.md" = Join-Path $root "README.zh-CN.md"

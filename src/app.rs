@@ -47,6 +47,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // position as this-run state so a stale monitor never wins on startup.
     {
         let mut startup_config = config.borrow_mut();
+        // A new process always shows the timer, even when the previous session hid it.
+        startup_config.placement.visible = true;
         startup_config.remote_control.window.has_value = false;
         startup_config
             .remote_control
@@ -119,7 +121,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             Rc::clone(&desktop),
             Rc::clone(&remote),
             Rc::clone(&display_rebuild),
-            true,
         )?;
         show_settings_ready(&settings)?;
         *settings_window.borrow_mut() = Some(settings);
@@ -503,7 +504,6 @@ fn create_settings(
     desktop: Rc<DesktopIntegration>,
     remote: Rc<RemoteServer>,
     display_rebuild: Rc<Cell<bool>>,
-    exit_on_close: bool,
 ) -> Result<SettingsWindow, slint::PlatformError> {
     let config_for_remote = Rc::clone(&config);
     let config_path_for_remote = config_path.clone();
@@ -536,7 +536,6 @@ fn create_settings(
         config_path,
         on_applied,
         Rc::new(|| {}),
-        exit_on_close,
         Rc::clone(&remote),
     )
 }
@@ -617,7 +616,6 @@ fn handle_desktop_event(
                 Rc::clone(desktop),
                 Rc::clone(remote),
                 Rc::clone(display_rebuild),
-                false,
             ) {
                 Ok(settings) => {
                     if let Err(error) =
@@ -900,6 +898,14 @@ fn create_presentation_window(
             "Clear list"
         } else {
             "清空列表"
+        }
+        .into(),
+    );
+    window.set_rule_file_text(
+        if english {
+            "File name / File path"
+        } else {
+            "文件名 / 文件路径"
         }
         .into(),
     );
@@ -2910,7 +2916,6 @@ mod remote_parity_tests {
             path.clone(),
             Rc::new(|_| {}),
             Rc::new(|| {}),
-            false,
             remote.clone(),
         )
         .unwrap();

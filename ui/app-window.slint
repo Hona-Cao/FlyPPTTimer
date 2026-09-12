@@ -320,6 +320,36 @@ component CommitLineEdit inherits LineEdit {
     accepted(value) => { self.clear-focus(); }
 }
 
+// Keep incomplete numeric input local, while valid edits preview immediately.
+component PercentageInput inherits LineEdit {
+    in property <float> value;
+    in property <float> minimum;
+    in property <float> maximum;
+    in property <float> step: 1;
+    callback value-edited(float);
+    text: "" + root.value;
+    input-type: decimal;
+    horizontal-alignment: right;
+    changed value => { if !self.has-focus { self.text = "" + root.value; } }
+    edited(text) => {
+        if text.is-float() {
+            let value = text.to-float();
+            if value >= root.minimum && value <= root.maximum {
+                root.value-edited(round(value / root.step) * root.step);
+            }
+        }
+    }
+    accepted(text) => { self.clear-focus(); }
+    changed has-focus => {
+        if !self.has-focus {
+            let value = self.text.is-float() ? self.text.to-float() : root.value;
+            let normalized = clamp(round(value / root.step) * root.step, root.minimum, root.maximum);
+            self.text = "" + normalized;
+            root.value-edited(normalized);
+        }
+    }
+}
+
 component RemoteButton inherits Rectangle {
     in property <string> text;
     in property <bool> enabled: true;
@@ -422,6 +452,7 @@ export component PresentationWindow inherits Window {
     in property <string> delete-file-text: "删除";
     in property <string> refresh-list-text: "刷新";
     in property <string> clear-list-text: "清空列表";
+    in property <string> rule-file-text: "文件名 / 文件路径";
     in property <string> rule-duration-text: "时长";
     in property <string> rule-mode-text: "模式";
     in property <string> rule-status-text: "状态";
@@ -555,9 +586,13 @@ export component PresentationWindow inherits Window {
         visible: root.current-page == 1;
         x: 24px; y: 88px; width: parent.width - 48px; height: root.height - 252px;
         background: DesktopTheme.surface; border-radius: 10px; border-width: 1px; border-color: DesktopTheme.border;
-        Text { x: 16px; y: 12px; width: 160px; height: 18px; text: root.rule-duration-text + " / " + root.rule-mode-text; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; }
-        Text { x: parent.width - 220px; y: 12px; width: 84px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
-        Text { x: parent.width - 120px; y: 12px; width: 100px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
+        // Header and rows share the data viewport width and scrollbar reservation.
+        Rectangle {
+            x: 26px; y: 12px; width: rules-scroll.visible-width - 54px; height: 18px;
+            Text { x: 12px; width: parent.width - 244px; height: 18px; text: root.rule-file-text; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; overflow: elide; }
+            Text { x: parent.width - 220px; width: 84px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
+            Text { x: parent.width - 120px; width: 100px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
+        }
         Rectangle {
             x: 8px; y: 34px; width: parent.width - 12px; height: parent.height - 42px;
             clip: true;
@@ -570,17 +605,17 @@ export component PresentationWindow inherits Window {
                     padding-left: 18px;
                     padding-right: 36px;
                     alignment: start;
-                    spacing: 6px;
+                    spacing: 4px;
                     for item[index] in root.presentations: Rectangle {
-                        height: 68px; border-radius: 8px;
+                        height: 52px; border-radius: 8px;
                         background: item.selected ? DesktopTheme.selected : transparent;
                         border-width: item.selected ? 1px : 0px;
                         border-color: DesktopTheme.accent;
-                        Text { x: 12px; y: 6px; width: parent.width - 244px; height: 20px; text: item.name; color: DesktopTheme.text; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
-                        Text { x: 12px; y: 32px; width: parent.width - 244px; height: 20px; text: item.path; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; overflow: elide; }
-                        Text { x: parent.width - 220px; y: 6px; width: 84px; height: 20px; text: item.duration; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
-                        Text { x: parent.width - 120px; y: 6px; width: 100px; height: 20px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
-                        Text { x: parent.width - 220px; y: 34px; width: 208px; height: 18px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? DesktopTheme.success : DesktopTheme.warning; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        Text { x: 12px; y: 3px; width: parent.width - 244px; height: 20px; text: item.name; color: DesktopTheme.text; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                        Text { x: 12px; y: 25px; width: parent.width - 244px; height: 20px; text: item.path; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 220px; y: 3px; width: 84px; height: 20px; text: item.duration; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 120px; y: 3px; width: 100px; height: 20px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 220px; y: 25px; width: 208px; height: 18px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? DesktopTheme.success : DesktopTheme.warning; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
                         TouchArea {
                             enabled: !root.modal-open;
                             x: 0px; y: 0px; width: parent.width; height: parent.height;
@@ -730,18 +765,33 @@ component FieldRow inherits Rectangle {
     if item.kind == 8: HorizontalLayout {
         x: root.control-x; y: (parent.height - 34px) / 2;
         width: root.control-width; height: 34px; spacing: 8px;
-        percent := Slider {
-            minimum: item.minimum; maximum: item.maximum; step: item.step;
-            value: item.value.to-float(); horizontal-stretch: 1;
+        TouchArea {
+            horizontal-stretch: 1;
             enabled: item.enabled && root.interactive;
-            changed(value) => {
+            scroll-event(event) => {
+                let delta = event.delta-y != 0px ? event.delta-y : event.delta-x;
+                if delta == 0px { return reject; }
+                let value = clamp(percent.value + (delta > 0px ? 1 : -1), item.minimum, item.maximum);
                 root.edited(row-index, "" + (round(value / item.step) * item.step), false, 0);
+                return accept;
+            }
+            percent := Slider {
+                width: parent.width; height: parent.height;
+                minimum: item.minimum; maximum: item.maximum; step: item.step;
+                value: item.value.to-float();
+                enabled: item.enabled && root.interactive;
+                changed(value) => {
+                    root.edited(row-index, "" + (round(value / item.step) * item.step), false, 0);
+                }
             }
         }
-        Text {
-            width: 58px; text: "" + (round(percent.value * 10) / 10) + "%";
-            color: DesktopTheme.text; horizontal-alignment: right; vertical-alignment: center;
+        PercentageInput {
+            width: 72px; value: item.value.to-float();
+            minimum: item.minimum; maximum: item.maximum; step: item.step;
+            enabled: item.enabled && root.interactive;
+            value-edited(value) => { root.edited(row-index, "" + value, false, 0); }
         }
+        Text { width: 12px; text: "%"; color: DesktopTheme.text; vertical-alignment: center; }
     }
 
     if item.kind == 7: HorizontalLayout {
