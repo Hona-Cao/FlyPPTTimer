@@ -101,8 +101,8 @@ pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
             },
             UI::Shell::{
                 Common::COMDLG_FILTERSPEC, FOS_ALLOWMULTISELECT, FOS_FILEMUSTEXIST,
-                FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_STRICTFILETYPES, FileOpenDialog,
-                IFileOpenDialog, SIGDN_FILESYSPATH,
+                FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FileOpenDialog, IFileOpenDialog,
+                SIGDN_FILESYSPATH,
             },
         },
         core::w,
@@ -129,11 +129,7 @@ pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
         Ok(options) => options,
         Err(_) => return Vec::new(),
     };
-    options |= FOS_ALLOWMULTISELECT
-        | FOS_FILEMUSTEXIST
-        | FOS_FORCEFILESYSTEM
-        | FOS_PATHMUSTEXIST
-        | FOS_STRICTFILETYPES;
+    options |= FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST;
     if unsafe { dialog.SetOptions(options) }.is_err() {
         return Vec::new();
     }
@@ -148,10 +144,10 @@ pub(crate) fn native_open_presentations() -> Vec<PathBuf> {
     let _ = unsafe { dialog.SetTitle(w!("选择 PPT 文件")) };
 
     let raw_owner = crate::window::app_dialog_owner();
-    let owner = if raw_owner.is_null() {
+    let owner: Option<HWND> = if raw_owner.is_null() {
         None
     } else {
-        Some(HWND(raw_owner))
+        Some(raw_owner)
     };
     if unsafe { dialog.Show(owner) }.is_err() {
         return Vec::new();
