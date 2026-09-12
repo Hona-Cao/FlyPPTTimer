@@ -1,198 +1,162 @@
-# 当前任务：第二轮用户反馈——演示流程、页码、自适应 Timer 与真实桌面收口
+# 当前任务：RC-3.1 终审阻断收口
 
-日期：2026-09-11。Review 分支：`codex/v1-06-manual-test`。版本先保持 `1.13.0`。完整用户反馈见 `docs/v1/USER_FEEDBACK_20260911_2.md`。
+日期：2026-09-12。Review 分支：`codex/v1-06-manual-test`。版本继续保持 `1.13.0`。
 
-## 0. 当前确定基点
+## 0. 审核基点与目标
 
-先拉取最新 `codex/v1-06-manual-test`，按 `AGENTS.md` 顺序阅读，并额外读 `USER_FEEDBACK_20260911_2.md`。
+本轮产品源码审核基点：
 
-ChatGPT 的第二轮直接小修已经完成，不再是待执行状态：
+`a644e74b82bf5a65474f027ef492fd6646456ac3`
 
-- 产品提交：`fdadde3ba8b4e88799cc2b67b049437001117a20`
-- 提交：`fix: streamline blackout audio and remote resilience`
-- Windows workflow：`Second feedback direct fixes`，run `34586469962`
-- 结果：fmt 通过；clippy `-D warnings` 通过；`cargo test --locked` **66 passed / 0 failed / 3 ignored**；`cargo build --locked --release` 通过。
+提交：`fix: integrate presentation switching and adaptive timer previews`
 
-因此 **Codex 的源码工作基点是 `fdadde3...`**。以下直接小修已进入源码，Codex 只做真实桌面/受影响回归，不得另写一套重复实现：
+ChatGPT 已复审该提交、`CODEX_RESULT.md` 以及 U07–U11 的关键实现。大部分实现方向接受：原子切换、手机规则管理、页码、Timer 自适应、限定字段实时预览、WPS 真机验证和 72 passed / 0 failed / 3 ignored 均保留，不重新实现。
 
-1. Settings / PC Remote 主 ScrollView 已扩大内容到滚动条的 gutter；
-2. FlyPPTTimer 自己的“时间到”全屏遮罩期间，PC 按 ESC 可解除；
-3. 单次提示音可听播放时间上限为 10 秒，TTS 不受此限制；
-4. 提示音复制仍进入程序目录，但保留用户选择文件的原 basename，并用每个 prompt slot 的子目录隔离同名文件；
-5. Web/mobile 的主动 `ppt.*` 操作在服务端执行前先解除 FlyPPTTimer TimeUp 遮罩，`ppt.refresh` 除外；
-6. Web Remote 对短时状态轮询失败容错，并在 online / focus / 页面回前台时立即重新同步；不会自动重放可能非幂等的 POST 命令。
+本轮**只收口下面 4 个审核发现**。不要重新做整仓库审计，不扩大 UI，不升级版本/依赖，不改已由用户确认通过的黑屏、音频、基本 Remote、最终跨屏尺寸稳定等功能。
 
-上述内容目前是**源码 + Windows CI 通过**，不等于全部真实手机/真实桌面体验已完成。真实可操作部分由 Codex 本轮补验。
+开始前：拉取最新分支，按 `AGENTS.md` 顺序读取交接文档；本任务覆盖旧 `CODEX_TASK.md`。
 
-用户已经真实确认上一包：跨屏最终尺寸稳定、ScrollView 不再遮挡、“作者的话”正常、手机 Remote 可用、音频可用、全屏黑屏可用。不要重做这些成功项。当前剩余跨屏问题仅是“鼠标仍按住跨 DPI 拖动时偶发瞬时错位，松开恢复”。
+## 1. P1：ESC 短按不能可靠解除 TimeUp 黑屏
 
-## 1. U01：消除跨 DPI 拖动期间的瞬时显示错位
+### 已确认问题
 
-保留 `bf00cf0` / `fdadde3` 已经验证的无累计尺寸漂移行为，不重新设计窗口尺寸流程。
+当前 `src/app.rs` 每 100ms 轮询一次 `window::escape_key_down()`，`src/window.rs` 只读取 `GetAsyncKeyState(VK_ESCAPE)` 的当前按下高位，并做 down-edge。
 
-在真实 150%/125%（或当前可用的混合 DPI）双屏，用 Settings 和 PC Remote 按用户的沿边/跨边路径复现**鼠标仍按住时**的瞬时错位。记录必要的应用窗口几何、`WM_DPICHANGED` / `WINDOWPOS` / client rect 与 Slint scale factor，不采集私人桌面。
+你自己的真实桌面结果已经记录：瞬时 SendKeys ESC pulse 没有被捕获，改为按住约 250ms 才成功。
 
-目标：跨 DPI 边界拖动过程中，Slint 内容、client rect 和原生外框在可见帧内同步，不再明显错位后等松手恢复。
+用户要求是“黑屏时电脑端支持按 ESC 关闭黑屏”，正常短按不能要求用户刻意长按。
 
-禁止：重新引入累计尺寸缩放、在 DPI handler 递归 `SetWindowPos`、循环延迟校正、固定窗口尺寸、禁用 Per-Monitor DPI、禁止用户跨屏拖动。
+### 要求
 
-回归：绕边至少 3 圈、反向至少 10 次、主动 resize 后跨屏、最大化/还原、同进程重开。最终尺寸必须继续稳定。
+- 用最小可靠实现捕获普通 ESC 短按；优先利用 Win32 已有键状态/消息机制，不引入全局低级键盘 hook 或复杂事件框架。
+- 仅 TimeUp 遮罩存在时执行解除；没有 TimeUp 时不得改变 Timer/Office/其他窗口状态。
+- 保留 F4 / Remote Reset / mobile `ppt.*` 的既有解除逻辑。
+- 不改变普通 Office/WPS 自己的 ESC 语义。
 
-## 2. U03：其他文本/确认弹窗统一真机检查
+### 验证
 
-“作者的话”用户已通过，不再改其文案。检查剩余文本/确认/错误弹窗：
+至少使用真实键盘注入/真实键盘完成 30–70ms 左右的 keydown/up 短按测试，证明无需 250ms 长按也能解除；再验证无 TimeUp 时同样按键无 FlyPPTTimer 副作用。
 
-- Settings 未应用修改、导入、恢复默认、错误提示；
-- PC Remote 批量设置、错误/确认；
-- 更新提示、Remote 错误等当前可安全触发的 Win32/Slint 消息；
-- Web Remote confirm panel 的长中文/英文。
+## 2. P1：目标文稿已经在放映但不是 ActivePresentation 时，“切换”会提前返回
 
-125%/150% 可用时各做一次，中英文覆盖典型长文本。要求：不裁字、不盖按钮；需滚动时能到末尾；Tab/Enter/Space/ESC 等既有键盘行为正常；modal 打开时背景不可误操作。
+### 已确认代码路径
 
-只修有证据的具体布局缺陷，不重做主题。
+当前 `Session::open(path)`：
 
-## 3. U07：切换/启动不同文稿时，原子地结束旧放映再处理目标
+1. `end_other_shows(&app, &path)`；
+2. 若 `matching_show_views(&app, &path, true)` 非空，立即 `return Ok("目标文稿已在放映")`；
+3. 只有后面的代码才查找/打开 presentation 并 Activate 目标编辑窗口。
 
-这是本轮最高优先的演示逻辑问题。用户真实复现：A.pptx 正在 Slide Show 时，手机直接打开/切换 B.pptx，B 被置顶但 A 仍在放映，计时生命周期继续被 A 占用。
+因此存在明确场景：
 
-不要在 Web 端连续发 `EndShow` + `Open` 两个独立 HTTP 命令。`PresentationService` 已有单 STA worker 和 busy 状态，应做一个**单个串行高层操作**（命名自定，保持小改动）：
+- A 已在 Slide Show；
+- 用户在电脑端激活了未放映的 B，使 `ActivePresentation=B`；
+- 手机上 A 一行会出现“切换”；
+- 点击 A 后 `open(A)` 因 A 已在放映而提前返回，A 并未重新成为 ActivePresentation；
+- 随后的 Next/Previous/Goto/黑白屏等命令按已修的 known-target 安全策略查看 ActivePresentation=B，并会拒绝匹配 A。
 
-- 若目标与当前正在放映的文稿不同，先结束旧 Slide Show；
-- 再打开/激活目标；
-- 若原请求是“从头放映/从当前页放映”，继续在同一 worker 操作中启动目标放映；
-- 切换本身不关闭旧文稿、不保存旧文稿、不改变旧文稿 dirty 状态；
-- 同一目标已处于需要状态时不做无意义 stop/reopen；
-- 新放映启动后 Timer 必须绑定新目标文件规则，不能继续占用旧规则/旧 round。
+不能通过恢复“唯一窗口随便控制”的旧回退来解决。
 
-同类流程优化：
+### 要求
 
-- 关闭一个**当前正在放映的目标文稿**时，在既有危险/关闭确认语义之后，同一高层关闭流程先结束该文稿放映再执行既有关闭；
-- Force Quit 继续保留危险确认；
-- Previous / Next / Goto 在没有放映时继续明确报错，不擅自自动启动放映；
-- 保留 `fdadde3` 的行为：所有 mobile `ppt.*` 主动操作先退出 FlyPPTTimer TimeUp 遮罩。
+- `Open/Switch` 即使目标已经在放映，也必须完成“目标文稿成为当前活动目标”的切换语义；
+- 如果目标自己的 Slide Show 已经运行，不停止、不重启、不重置 Timer；只完成必要的目标激活；
+- 保留“切换不同文稿先结束其他文稿放映”的 U07 语义；
+- 保留命令 known-target 安全：目标不匹配时仍不得任意控制第一个放映窗口；
+- `StartFromBeginning/StartFromCurrent` 对“同一目标已经在放映”的重复启动继续短路，不重启现有放映。
 
-用两份可丢弃三页文稿 A/B 做真实 PowerPoint 和 WPS（环境存在时）验证：A 放映+计时 -> 手机选 B -> A 不再放映；分别测试 Open、StartFromBeginning、StartFromCurrent，确认新目标 timer rule 接管。
+### 回归
 
-## 4. U08：手机演示文件列表支持隐藏 / 恢复 / 删除 / 添加 / 排序
+至少覆盖：
 
-保持手机演示页总体结构；PC Remote “演示文稿”页仍只做规则管理，不恢复 PC 放映控制按钮。
+1. A 已放映 + Active=B -> mobile Open/Switch A -> Active=A，A 放映不重启；随后 Next 能控制 A；
+2. A 放映 -> 切 B -> A 结束，B 激活；
+3. A 已放映且 Active=A -> 再 Open/Start A 不重启；
+4. 已知目标 Missing / B 未放映时仍不会误控唯一放映 A。
 
-### 隐藏 / 恢复
+真实 WPS 环境可用时用两份可丢弃三页文稿做一遍；原生 PowerPoint 若当前 COM 仍被 WPS 接管，只记录环境限制。
 
-- 隐藏只影响 mobile 演示列表可见性，**不能等价于 `FileRule.enabled=false`**；隐藏的规则仍能正常参与计时；
-- 提供隐藏项入口，可恢复；
-- 当前活动文稿即使规则已隐藏，顶部当前演示状态仍正常显示。
+## 3. P1：实际 CloseActive 出现 COM worker 超时，必须找到并收口阻塞路径
 
-### 删除
+### 已有证据
 
-- 删除的是 FlyPPTTimer 保存的列表/规则条目，必须确认；
-- 绝不能删除磁盘上的 PPT/PPTX/PDF；
-- 不因删除列表项自动关闭已打开 Office 文稿；
-- 对仅“已打开、尚未保存为规则”的临时项目，不显示容易误解成“删文件”的危险 Delete。
+`CODEX_RESULT.md` 已明确写明：本轮末尾追加“重新打开 A 再确认关闭”的真实测试中，presentation worker 超时，没有得到关闭路径通过证据。
 
-### 添加
+这不是要求架构重写，但发布前不能留下一个已实际发生、可能把单 STA worker 卡住的关闭路径。
 
-不要让手机获得任意浏览电脑文件系统的能力，也不要增加上传协议。优先安全实现：
+### 要求
 
-- 将“当前/已打开但尚未成为 FileRule 的演示文稿”直接加入受控列表；
-- 如现有架构能安全做到，可另提供“在电脑选择文件”，由电脑端现有原生文件选择器完成；不要让长时间阻塞的选择器导致手机 POST 被重复执行或误判两次。
+只使用可丢弃文稿，区分并记录至少：
 
-### 排序
+- FlyPPTTimer 自己打开/managed：clean、dirty；
+- 用户/Office 已经打开的 unmanaged：clean、dirty；
+- 上述文稿正在放映 / 未放映。
 
-- 自定义顺序持久保存并在重启/重连后保持；
-- 手机触控优先，可用上移/下移或稳定拖拽柄；
-- 每秒状态刷新不能重排用户列表；
-- unmanaged 已打开文稿可单独稳定显示，不污染持久规则顺序。
+定位超时是在 `end_show_for`、Saved 处理、Office/WPS Close 提示、还是其他 COM 调用。
 
-如果给 `FileRule` 增加 `mobile_hidden` / `mobile_order` 或等价字段：
+修复原则：
 
-- 必须 `serde(default)` 或等价默认，保证旧配置兼容；
-- 更新 Settings 的 `merge_rule_fields`，防止 Settings 打开后手机改隐藏/排序，随后 Settings Apply 又覆盖这些新字段；
-- 新 Remote 规则管理命令继续走现有 token 鉴权；
-- 删除逻辑只能改配置，测试要证明不会调用真实文件删除。
+- mobile 的 Close 当前已有明确“关闭且不保存”确认；在**已有明确确认的路径**内可以按既有产品语义避免 Office 再弹一个隐藏/阻塞保存询问；
+- 不能把未确认的用户 dirty 文稿静默丢弃；如果某调用路径没有足够的用户确认，宁可清晰拒绝并返回错误，也不能卡住 worker 或偷偷保存/丢弃；
+- 关闭正在放映的目标：先安全结束该目标放映，再关闭；
+- 一个失败/拒绝的 Close 之后，presentation worker 必须恢复可用，Refresh/Next/Open 等后续命令不能永久 Busy；
+- 不增加第二套 COM worker、kill/retry 大框架、任意超时强杀 Office。
 
-## 5. U09：Remote 稳定与断线自动恢复
+如果最终证明此次超时是测试环境一次性外因，也必须给出可复现尝试和后续 worker 可用性证据；不能只把超时删出报告。
 
-先验证 `fdadde3` 的客户端低风险修复是否已解决用户体验：短时状态 poll 失败不立即永久断线；连续失败才显示断开；online/focus/回前台立即重新同步；POST 不盲重放。
+## 4. P2：桌面新增规则会把 mobile 自定义顺序打乱
 
-真实手机条件可用时验证：
+### 已确认原因
 
-- 连续操作约 10 分钟；
-- 手机锁屏 20~30 秒再解锁；
-- 浏览器切后台再回来；
-- 临时关闭/恢复 Wi-Fi；
-- token/port 未改变时，网络恢复后无需重新扫码即可继续；
-- Next/Close 等命令不会因为重连执行两次。
+`FileRule::default().mobile_order == 0`。
 
-只有真实复现服务端问题时才最小修改 `remote.rs`。不要引入 WebSocket、数据库、公网服务、复杂 heartbeat/revision 框架，也不要关闭 token 或降低安全边界。
+mobile `rules.addOpen` 已先 normalize 再按末尾追加，但 Settings 和 PC Remote 的“添加文件”仍通过 `FileRule { ... ..Default::default() }` 创建，因此用户在手机排好 A/B/C 后，从桌面新增 D，D 会以 order=0 进入，mobile state 按 `mobile_order` 排序时可跳到前面/中间。
 
-## 6. U10：Timer 显示“当前页/总页数”，默认开启
+### 要求
 
-复用现有 `PresentationState.current_slide`、`total_slides`，不要建立第二套 Office 查询线程。
+- 所有新增 FileRule 的入口共享一致的“追加到 mobile 顺序末尾”语义：至少 Settings、PC Remote、mobile addOpen；
+- 保留已有规则的相对自定义顺序；
+- add/delete/move 后保证 order 可持久化且无重复/异常增长；
+- Settings stale draft merge 继续保留 mobile_hidden/mobile_order 的外部更新；
+- 不改变 PC Remote 本身的普通规则列表交互语义。
 
-新增 Appearance/Display 设置：**“显示当前页/总页数”**，默认开启。旧配置加载时也默认开启，并增加兼容测试。
+### 回归
 
-要求：
+至少增加：A/B/C 已有自定义 mobile 顺序 -> Settings 新增 D -> mobile 顺序 A/B/C/D；PC Remote 新增 E -> A/B/C/D/E；保存、重启/重新构建 remote state 后顺序不变。
 
-- 主时间在上，有有效演示页码时在下显示如 `1/23`；
-- 页码字号明显小于主时间、居中、视觉层级次要；
-- 仅 `current_slide > 0 && total_slides > 0` 显示，绝不出现 `0/0`；
-- 普通 Timer、多屏镜像 Timer 一致；大屏 Timer 也尽量一致，若真实验证会破坏当前大屏体验，在结果里说明后采取最小合理布局；
-- 翻页更新不能重置 timer、不能写配置、不能让窗口尺寸频繁抖动。
+## 5. 本轮不要修改的内容
 
-该开关需要支持下一节的 Settings 实时预览。
+- **不要**为家用机没有 150%/125% 条件而猜修 U01 drag-in-progress 瞬时错位；保留现有无累计漂移实现，把真实混合 DPI 继续留在最终手测边界。
+- 不恢复 PC Remote 演示控制按钮。
+- 不恢复随机端口 UI。
+- 不改 TimeUp 全屏覆盖语义。
+- 不改提示音 10 秒和原 basename 复制逻辑。
+- 不重做 mobile 列表 UI、Timer 页码、自适应尺寸、Settings 预览，只做上述受影响回归。
+- 不升级 Rust/Cargo 依赖，不修改版本，不创建 Release/Tag，不合并默认分支。
 
-## 7. U11：Timer 按内容自动适配 + 宽/高/字号实时预览
-
-先处理现有 `expand_timer_windows_if_needed`：它当前只会扩大，并把扩大结果写回 `Appearance.Width/Height`。**不要再叠一个新的 resize loop。**
-
-推荐的简单产品语义：
-
-- `Appearance.Width/Height` 保留为用户手工的**最小/基准尺寸**；
-- 实际 Timer 尺寸至少为该基准，同时足以容纳当前 time text 和可选页码行；
-- 内容变长时自动增大，内容变短/页码消失时可缩回基准；
-- 自动算出的瞬时实际尺寸不写回配置，不每秒产生磁盘写入；
-- 除非真实实现证明必要，不增加“自动尺寸”新开关；
-- `sync_timer_window_scale`、内容测量、混合 DPI 只保留一个明确的最终尺寸来源，避免多个循环争抢尺寸并恢复之前的跨屏漂移。
-
-### Settings 实时预览
-
-用户在 Settings 修改以下项目时，Timer 立即变化，不必点“应用”：
-
-- Width；
-- Height；
-- Font size；
-- “显示当前页/总页数”开关。
-
-这些字段只作为**运行态预览**应用到当前 Timer / mirrors / big screen；不得因此把整个 Settings draft 提前写入 shared applied config 或磁盘。Cancel / 选择放弃修改后恢复最后一次 Applied 值；Apply 才持久化。Settings 其他字段继续维持原 Apply 语义。
-
-真实回归至少覆盖：时间单行、时间+`1/23` 双行、超时前缀/较长时间文字、页码出现/消失、修改字号/宽高实时预览、Cancel 恢复、Apply 持久化、多屏镜像、125%/150% 跨屏后无新的累计尺寸异常与明显 resize jitter。
-
-## 8. 必补自动回归
-
-- 新 FileRule mobile metadata 的旧配置默认值与 Settings merge；
-- hide/unhide/delete/order 的纯配置逻辑，证明不删除磁盘文件；
-- A 放映 -> 原子切 B 能覆盖的 worker/状态逻辑；
-- page label 显示条件；
-- auto-size 的 time-only / time+page 计算，并证明自动尺寸不写回基准配置；
-- live preview 的 Cancel/Apply 状态边界；
-- 保留既有 Remote token、F3、rules merge、Import/Reset、Office range restore、COM unknown sample 等全部回归。
-
-## 9. 最终验证与交付
-
-由 Codex 使用真实 Windows / computer-use 尽量完成 U01/U03/U07/U08/U09/U10/U11 的可操作部分。Office 只用可丢弃文稿。
-
-最后统一执行：
+## 6. 必须执行的验证
 
 ```powershell
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
 cargo test --locked
 cargo build --locked --release
+node --check src/FlyPPTTimer/Web/app.js
 ```
 
-更新 `docs/v1/CODEX_RESULT.md`，逐项标记“真实桌面通过 / 自动或源码通过 / 环境限制 / 未解决”，并更新 `RC_MANUAL_TEST.md`，只留下客观上仍需要用户体验确认的最少项。
+此外完成本任务要求的真实 WPS/Office disposable-doc 测试和 ESC 短按验证。不要操作用户真实文稿。
 
-完成后 commit + push，停止等待 ChatGPT 审核。**不要生成多个让用户轮流测试的中间包**；本轮源码和真实桌面收口完成后只生成一个最终绿色 ZIP。
+## 7. 结果与交付
 
-未经用户明确批准：不创建 Release/Tag，不合并默认分支，不升级 Rust/Slint/依赖，不换技术栈，不删产品功能。
+更新 `docs/v1/CODEX_RESULT.md`，在最顶部新增 **RC-3.1 审核阻断收口**，逐项写：
+
+- ESC 短按实际时长/验证结果；
+- already-showing but inactive target 的切换结果；
+- CloseActive 超时根因、各 clean/dirty/managed/unmanaged 结果、失败后 worker 是否继续可用；
+- desktop-added rule 顺序结果；
+- fmt/clippy/test/release/node 检查结果；
+- 原生 PowerPoint / 混合 DPI 等当前环境限制继续如实保留。
+
+如果四项全部通过，只生成**一个**新的最终 review 绿色 ZIP，BUILD.txt 写产品源码 SHA 和 EXE SHA256。不要让用户测试中间包。
+
+完成后 commit、push 到 `codex/v1-06-manual-test`，停止等待 ChatGPT 审核。
