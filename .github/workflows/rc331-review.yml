@@ -2,7 +2,7 @@ name: RC331 remote and picker review
 on:
   push:
     branches: [chatgpt/rc331-feedback]
-    paths: [.github/workflows/rc331-review.yml, .github/rc331.patch]
+    paths: [.github/workflows/rc331-review.yml, .github/rc331-refine.py]
 permissions:
   contents: write
 concurrency:
@@ -19,14 +19,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply reviewed patch
+      - name: Apply reviewed source refinement
         run: |
           $ErrorActionPreference = 'Stop'
           git config core.autocrlf false
-          git apply --check .github/rc331.patch
-          if ($LASTEXITCODE -ne 0) { throw 'RC331 patch no longer applies' }
-          git apply .github/rc331.patch
-          if ($LASTEXITCODE -ne 0) { throw 'RC331 patch failed' }
+          python .github/rc331-refine.py
+          if ($LASTEXITCODE -ne 0) { throw 'RC331 source refinement failed' }
       - name: Windows SDK resource compiler
         run: |
           $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
@@ -89,8 +87,6 @@ jobs:
             $client = [System.Net.Sockets.TcpClient]::new()
             $client.Connect('127.0.0.1', $port)
             try {
-              # Deliberately wait after accept. The old inherited nonblocking client socket
-              # returned WSAEWOULDBLOCK/10035 before these request bytes arrived.
               Start-Sleep -Milliseconds 250
               $stream = $client.GetStream()
               $stream.ReadTimeout = 8000
@@ -104,12 +100,8 @@ jobs:
                 [void]$builder.Append([Text.Encoding]::UTF8.GetString($buffer, 0, $count))
               }
               $response = $builder.ToString()
-              if ($response -notmatch '^HTTP/1\.1 200' -or $response -notmatch 'FlyPPTTimer') {
-                throw "Unexpected first-start remote response: $response"
-              }
-              if ($response -match '10035|无法立即完成一个非阻止性套接字操作') {
-                throw 'WSAEWOULDBLOCK leaked to HTTP response'
-              }
+              if ($response -notmatch '^HTTP/1\.1 200' -or $response -notmatch 'FlyPPTTimer') { throw "Unexpected first-start remote response: $response" }
+              if ($response -match '10035|无法立即完成一个非阻止性套接字操作') { throw 'WSAEWOULDBLOCK leaked to HTTP response' }
               $response | Set-Content artifacts/rc331-evidence/first-start-http.txt -Encoding utf8
             } finally { $client.Dispose() }
           } finally {
