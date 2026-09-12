@@ -1,6 +1,8 @@
 const effectiveLanguage=navigator.language.toLowerCase().startsWith('zh')?'zh-CN':'en';
 document.documentElement.lang=effectiveLanguage;
 const webEnglish={
+  "界面主题":"Interface theme", "跟随电脑":"Follow computer", "浅色":"Light", "深色":"Dark",
+  "已保存":"Saved", "有未保存的时长修改":"Unsaved duration changes",
   "排序方式":"Sort by",
   "手动排序":"Manual order",
   "按名称排序":"Name",
@@ -114,6 +116,35 @@ const timerModeButtons=[...document.querySelectorAll('[data-timer-mode]')];
 let stateEpoch=0,lastPaintedRevision=-1,lastServerInstance=null,pollSequence=0,lastPaintedPoll=0;
 let connected=false,lastState=null,messageTimer=null,pollTimer=null,busy=false,pendingConfirmation=null,timerEditorDirty=false,selectedPresentationId=null,pollFailures=0;
 
+const systemDark=window.matchMedia('(prefers-color-scheme: dark)');
+let themeChoice='app';
+try { themeChoice=localStorage.getItem('flyppt-theme')||'app'; } catch (_) {}
+$('themeChoice').value=themeChoice;
+function applyTheme(){
+  const mode=themeChoice==='app'?(lastState?.uiTheme||'system'):themeChoice;
+  const dark=mode==='dark'||(mode==='system'&&systemDark.matches);
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  document.querySelector('meta[name="theme-color"]').content=dark?'#141a20':'#f4f7f8';
+}
+$('themeChoice').addEventListener('change',()=>{
+  themeChoice=$('themeChoice').value;
+  try { localStorage.setItem('flyppt-theme',themeChoice); } catch (_) {}
+  applyTheme();
+});
+systemDark.addEventListener('change',applyTheme);
+applyTheme();
+function durationStatus(){
+  $('durationHint').textContent=timerEditorDirty?'有未保存的时长修改':'已保存';
+  $('durationHint').classList.toggle('unsaved',timerEditorDirty);
+}
+document.addEventListener('keydown',event=>{
+  if(event.key==='Enter'&&event.target instanceof HTMLInputElement){event.preventDefault();event.target.blur()}
+});
+document.addEventListener('pointerdown',event=>{
+  const active=document.activeElement;
+  if(active instanceof HTMLInputElement&&active!==event.target&&!event.target.closest('input'))active.blur();
+});
+
 function url(path){return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token)}
 async function api(path,options={}){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),6000);
@@ -140,7 +171,7 @@ function paint(s){
   const revision=Number(s.revision);
   if(Number.isFinite(revision)&&revision<lastPaintedRevision)return false;
   if(Number.isFinite(revision))lastPaintedRevision=revision;
-  lastState=s;pollFailures=0;connection(true);const t=timerState(s),p=s.presentationState||{};
+  lastState=s;applyTheme();durationStatus();pollFailures=0;connection(true);const t=timerState(s),p=s.presentationState||{};
   $('timerText').textContent=t.displayText||'--:--';$('timerStatus').textContent=t.isOvertime?'已超时':(t.state||'停止');$('timerMode').textContent=t.mode||'倒计时';
   const muted=!!t.muted;$('muteButton').textContent=muted?'电脑已静音（点击恢复声音）':'电脑声音正常（点击静音）';$('muteButton').classList.toggle('selected',muted);$('muteButton').setAttribute('aria-pressed',String(muted));
   document.querySelector('.timer-card').classList.toggle('overtime',!!t.isOvertime);
@@ -429,15 +460,15 @@ document.addEventListener('click',event=>{if(!suppressSwipeClick)return;suppress
 pagesTrack.addEventListener('transitionend',event=>{if(event.propertyName==='transform')syncViewportHeight()});
 window.addEventListener('resize',()=>{renderPage(pageIndex,false);requestAnimationFrame(syncViewportHeight)});
 renderPage(0,false);
-$('confirmCancel').addEventListener('click',()=>{const pending=pendingConfirmation;if(pending?.durationChoice){closeConfirmation();command(pending.name,{...pending.extra,syncAllRules:false,confirmed:true}).then(ok=>{if(ok){timerEditorDirty=false;notify('已修改全局时长，文件规则保持不变')}})}else closeConfirmation()});
-$('confirmAccept').addEventListener('click',()=>{const pending=pendingConfirmation;closeConfirmation();if(pending)command(pending.name,{...pending.extra,...(pending.durationChoice?{syncAllRules:true}:{}),confirmed:true}).then(ok=>{if(ok&&pending.durationChoice){timerEditorDirty=false;notify('已同步修改全部文件规则时长')}})});
+$('confirmCancel').addEventListener('click',()=>{const pending=pendingConfirmation;if(pending?.durationChoice){closeConfirmation();command(pending.name,{...pending.extra,syncAllRules:false,confirmed:true}).then(ok=>{if(ok){timerEditorDirty=false;durationStatus();notify('已修改全局时长，文件规则保持不变')}})}else closeConfirmation()});
+$('confirmAccept').addEventListener('click',()=>{const pending=pendingConfirmation;closeConfirmation();if(pending)command(pending.name,{...pending.extra,...(pending.durationChoice?{syncAllRules:true}:{}),confirmed:true}).then(ok=>{if(ok&&pending.durationChoice){timerEditorDirty=false;durationStatus();notify('已同步修改全部文件规则时长')}})});
 commandButtons.forEach(button=>button.addEventListener('click',()=>{
   const name=button.dataset.command;
   command(name,['timer.restart','ppt.startFromBeginning','ppt.startFromCurrent'].includes(name)?{presentationId:selectedPresentationId}:{});
 }));
-$('durationHours').addEventListener('input',()=>timerEditorDirty=true);
-$('durationMinutes').addEventListener('input',()=>timerEditorDirty=true);
-$('durationSeconds').addEventListener('input',()=>timerEditorDirty=true);
+$('durationHours').addEventListener('input',()=>{const ms=(Number($('durationHours').value)*3600+Number($('durationMinutes').value)*60+Number($('durationSeconds').value))*1000;timerEditorDirty=ms!==Number(timerState(lastState||{}).durationMs);durationStatus()});
+$('durationMinutes').addEventListener('input',()=>{const ms=(Number($('durationHours').value)*3600+Number($('durationMinutes').value)*60+Number($('durationSeconds').value))*1000;timerEditorDirty=ms!==Number(timerState(lastState||{}).durationMs);durationStatus()});
+$('durationSeconds').addEventListener('input',()=>{const ms=(Number($('durationHours').value)*3600+Number($('durationMinutes').value)*60+Number($('durationSeconds').value))*1000;timerEditorDirty=ms!==Number(timerState(lastState||{}).durationMs);durationStatus()});
 $('applyDuration').addEventListener('click',async()=>{
   const hours=Number($('durationHours').value),minutes=Number($('durationMinutes').value),seconds=Number($('durationSeconds').value);
   if(!Number.isInteger(hours)||hours<0||hours>23||!Number.isInteger(minutes)||minutes<0||minutes>59||!Number.isInteger(seconds)||seconds<0||seconds>59){notify('请输入有效的时、分、秒',true);return}
@@ -445,7 +476,7 @@ $('applyDuration').addEventListener('click',async()=>{
   if(durationMs<=0){notify('计时时长必须大于 0 秒',true);return}
   const ruleCount=Number(timerState(lastState||{}).ruleCount)||0;
   if(ruleCount>0){requestDurationConfirmation(durationMs,ruleCount);return}
-  if(await command('timer.setDuration',{durationMs,syncAllRules:false})){timerEditorDirty=false;notify('计时时长已同步到电脑')}
+  if(await command('timer.setDuration',{durationMs,syncAllRules:false})){timerEditorDirty=false;durationStatus();notify('计时时长已同步到电脑')}
 });
 timerModeButtons.forEach(button=>button.addEventListener('click',async()=>{if(await command('timer.setMode',{mode:button.dataset.timerMode,presentationId:selectedPresentationId}))notify(`已切换为${button.dataset.timerMode==='countup'?'正计时':'倒计时'}`)}));
 $('gotoSlide').addEventListener('click',()=>{const input=$('slideNumber'),value=Number(input.value),max=Number(input.max);if(!Number.isInteger(value)||value<1||value>max){notify(`请输入 1 到 ${max} 之间的页码`,true);input.focus();return}command('ppt.gotoSlide',{slideNumber:value})});

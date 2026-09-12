@@ -1,3 +1,10 @@
+# RC3.4 implementation
+
+Implemented RC34_SCOPE.md from tested RC3.3.1. Windows fmt/clippy/test/release and software UI captures are required for delivery. This source note does not claim physical Windows/phone/Office validation; see BUILD.txt and the delivery report for the actual CI result. User hand test: RC34_MANUAL_TEST.zh-CN.md.
+
+---
+Historical results below.
+
 # RC3.3 - ChatGPT direct changes pending final validation
 
 Implemented the focused changes in USER_FEEDBACK_20260912_4.md. Codex remains paused. This source note is not a claim that Windows CI, physical phones, Office or all blank-window cases passed. The delivery report must record the final CI run, exact committed product source and download hashes.

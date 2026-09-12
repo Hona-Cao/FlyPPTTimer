@@ -119,6 +119,7 @@ pub struct RemoteState {
     pub version: String,
     pub revision: i64,
     pub server_instance: String,
+    pub ui_theme: String,
 }
 
 impl Default for RemoteState {
@@ -144,6 +145,7 @@ impl Default for RemoteState {
             version: env!("CARGO_PKG_VERSION").to_owned(),
             revision: 0,
             server_instance: String::new(),
+            ui_theme: "system".into(),
         }
     }
 }
@@ -920,6 +922,7 @@ pub fn remote_state(
         version: env!("CARGO_PKG_VERSION").to_owned(),
         revision: 0,
         server_instance: String::new(),
+        ui_theme: config.ui_theme.clone(),
     }
 }
 

@@ -1,4 +1,4 @@
-import { Button, CheckBox, ComboBox, LineEdit, ScrollView, Palette } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, Slider, Palette } from "std-widgets.slint";
 
 export struct SettingItem {
     key: string,
@@ -13,6 +13,9 @@ export struct SettingItem {
     button-text: string,
     row-height: int,
     color-preview: color,
+    minimum: float,
+    maximum: float,
+    step: float,
 }
 
 export struct RuleItem {
@@ -132,6 +135,10 @@ component TimerReadout inherits Rectangle {
 
 export component AppWindow inherits Window {
     icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
+    in-out property <int> native-opacity: -1;
+    in-out property <string> assigned-display;
+    in-out property <float> applied-offset-x;
+    in-out property <float> applied-offset-y;
     in property <length> content-width: 100px;
     in property <length> content-height: 35px;
     in property <string> page-text;
@@ -285,26 +292,32 @@ export component TimeUpWindow inherits Window {
 
 // Desktop management windows only. Timer colors remain driven by user configuration.
 global DesktopTheme {
-    out property <color> canvas: #eef2f7;
-    out property <color> surface: #ffffff;
-    out property <color> subtle: #f3f6fa;
-    out property <color> text: #1e293b;
-    out property <color> secondary: #475569;
-    out property <color> muted: #64748b;
-    out property <color> border: #e2e8f0;
-    out property <color> accent: #2563eb;
-    out property <color> accent-hover: #1d4ed8;
-    out property <color> accent-pressed: #1e40af;
-    out property <color> selected: #eff6ff;
-    out property <color> success: #15803d;
-    out property <color> warning: #b45309;
-    out property <color> danger: #b42318;
-    out property <color> danger-soft: #fff3f2;
-    out property <color> danger-hover: #fee4e2;
-    out property <color> danger-pressed: #fecdca;
-    out property <color> disabled-text: #94a3b8;
-    out property <color> pressed: #e2e8f0;
-    out property <color> scrim: #66000000;
+    in-out property <bool> dark: false;
+    out property <color> on-accent: #ffffff;
+    out property <color> canvas: dark ? #141820 : #eef2f7;
+    out property <color> surface: dark ? #1d2430 : #ffffff;
+    out property <color> subtle: dark ? #252e3c : #f3f6fa;
+    out property <color> text: dark ? #edf2fa : #1e293b;
+    out property <color> secondary: dark ? #d2dbe8 : #475569;
+    out property <color> muted: dark ? #a5b3c7 : #64748b;
+    out property <color> border: dark ? #3b495e : #e2e8f0;
+    out property <color> accent: dark ? #4285f4 : #2563eb;
+    out property <color> accent-hover: dark ? #3375e0 : #1d4ed8;
+    out property <color> accent-pressed: dark ? #2866c7 : #1e40af;
+    out property <color> selected: dark ? #243c60 : #eff6ff;
+    out property <color> success: dark ? #6ed6a0 : #15803d;
+    out property <color> warning: dark ? #ffd080 : #b45309;
+    out property <color> danger: dark ? #ff9b95 : #b42318;
+    out property <color> danger-soft: dark ? #402b30 : #fff3f2;
+    out property <color> danger-hover: dark ? #50323a : #fee4e2;
+    out property <color> danger-pressed: dark ? #613c43 : #fecdca;
+    out property <color> disabled-text: dark ? #718197 : #94a3b8;
+    out property <color> pressed: dark ? #36445b : #e2e8f0;
+    out property <color> scrim: dark ? #99000000 : #66000000;
+}
+
+component CommitLineEdit inherits LineEdit {
+    accepted(value) => { self.clear-focus(); }
 }
 
 component RemoteButton inherits Rectangle {
@@ -328,7 +341,7 @@ component RemoteButton inherits Rectangle {
         width: parent.width - 16px;
         height: parent.height;
         text: root.text;
-        color: !root.enabled ? DesktopTheme.disabled-text : root.primary ? DesktopTheme.surface : root.danger ? DesktopTheme.danger : DesktopTheme.secondary;
+        color: !root.enabled ? DesktopTheme.disabled-text : root.primary ? DesktopTheme.on-accent : root.danger ? DesktopTheme.danger : DesktopTheme.secondary;
         font-size: 12px;
         font-weight: root.primary ? 600 : 500;
         horizontal-alignment: center;
@@ -339,7 +352,7 @@ component RemoteButton inherits Rectangle {
     if keyboard.has-focus && root.enabled: Rectangle {
         x: 3px; y: 3px; width: parent.width - 6px; height: parent.height - 6px;
         background: transparent; border-radius: 4px; border-width: 2px;
-        border-color: root.primary ? DesktopTheme.surface : DesktopTheme.accent;
+        border-color: root.primary ? DesktopTheme.on-accent : DesktopTheme.accent;
     }
 
     keyboard := FocusScope {
@@ -360,14 +373,18 @@ component RemoteButton inherits Rectangle {
 
     hit := TouchArea {
         enabled: root.enabled;
-        clicked => { root.clicked(); }
+        clicked => { keyboard.focus(); root.clicked(); }
     }
 }
 
 export component PresentationWindow inherits Window {
     in-out property <int> show-generation: 0;
     icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
-    init => { Palette.color-scheme = ColorScheme.light; }
+    in property <bool> dark-theme: false;
+    in-out property <bool> theme-initialized: false;
+    init => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    changed dark-theme => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+
     in property <string> window-title: "远程控制";
     in property <[PresentationItem]> presentations;
     in-out property <int> selected-presentation: -1;
@@ -422,6 +439,11 @@ export component PresentationWindow inherits Window {
     in property <string> service-status-text;
     in property <string> current-port-text;
     in property <string> next-port-label: "下次服务端口";
+    in property <string> saved-port;
+    in property <string> unsaved-text: "有未保存的修改";
+    in property <string> saved-text: "已保存";
+    private property <bool> rule-dirty: root.selected-presentation >= 0 && (root.rule-duration != root.presentations[root.selected-presentation].duration || root.rule-mode != root.presentations[root.selected-presentation].mode);
+    private property <bool> port-dirty: root.next-port != root.saved-port;
     in-out property <string> next-port: "4080";
     in property <string> client-count-text;
     in property <string> recommended-url;
@@ -451,6 +473,8 @@ export component PresentationWindow inherits Window {
     min-width: 560px;
     min-height: 460px;
     background: DesktopTheme.canvas;
+    focus-sink := FocusScope { width: parent.width; height: parent.height; enabled: !root.modal-open; focus-on-tab-navigation: false; }
+
 
     Rectangle {
         x: 24px; y: 16px; width: parent.width - 48px; height: 40px;
@@ -462,8 +486,8 @@ export component PresentationWindow inherits Window {
         }
         Text { x: 0; width: parent.width / 2; height: parent.height; text: root.connection-page-text; color: DesktopTheme.text; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
         Text { x: parent.width / 2; width: parent.width / 2; height: parent.height; text: root.presentation-page-text; color: DesktopTheme.text; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-        TouchArea { enabled: !root.modal-open; x: 0; width: parent.width / 2; clicked => { root.current-page = 0; } }
-        TouchArea { enabled: !root.modal-open; x: parent.width / 2; width: parent.width / 2; clicked => { root.current-page = 1; } }
+        TouchArea { enabled: !root.modal-open; x: 0; width: parent.width / 2; clicked => { focus-sink.focus(); root.current-page = 0; } }
+        TouchArea { enabled: !root.modal-open; x: parent.width / 2; width: parent.width / 2; clicked => { focus-sink.focus(); root.current-page = 1; } }
     }
 
     Text {
@@ -474,7 +498,7 @@ export component PresentationWindow inherits Window {
 
     Rectangle {
         visible: root.current-page == 0;
-        x: 24px; y: 88px; width: parent.width - 48px; height: parent.height - 102px;
+        x: 24px; y: 88px; width: parent.width - 48px; height: parent.height - 128px;
         background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
 
         Rectangle {
@@ -502,7 +526,7 @@ export component PresentationWindow inherits Window {
                     HorizontalLayout {
                         height: 36px; spacing: 12px;
                         Text { width: 120px; text: root.next-port-label; color: DesktopTheme.secondary; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
-                        LineEdit { enabled: !root.confirm-exit; width: 96px; text <=> root.next-port; }
+                        CommitLineEdit { enabled: !root.confirm-exit; width: 96px; text <=> root.next-port; }
                     }
                     RemoteButton { enabled: !root.confirm-exit; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, false); } }
                     HorizontalLayout {
@@ -562,7 +586,7 @@ export component PresentationWindow inherits Window {
                             x: 0px; y: 0px; width: parent.width; height: parent.height;
                             pointer-event(event) => {
                                 if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
-                                    root.selected-presentation = index;
+                                    focus-sink.focus(); root.selected-presentation = index;
                                     root.presentation-selected(index, event.modifiers.control, event.modifiers.shift);
                                 }
                             }
@@ -577,7 +601,7 @@ export component PresentationWindow inherits Window {
         HorizontalLayout {
             x: 12px; y: 10px; width: parent.width - 24px; height: 34px; alignment: center; spacing: 10px;
             Text { width: 42px; text: root.rule-duration-text; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
-            LineEdit { enabled: !root.modal-open; width: 112px; text <=> root.rule-duration; }
+            CommitLineEdit { enabled: !root.modal-open; width: 112px; text <=> root.rule-duration; }
             Text { width: 42px; text: root.rule-mode-text; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
             ComboBox { enabled: !root.modal-open; width: 132px; model: root.timer-modes; current-index <=> root.rule-mode; }
             RemoteButton { enabled: !root.modal-open; width: 86px; text: root.save-rule-text; primary: true; clicked => { root.rule-action(4, root.rule-duration); } }
@@ -589,6 +613,13 @@ export component PresentationWindow inherits Window {
     RemoteButton { enabled: !root.modal-open; visible: root.current-page == 1; x: 40px + 2 * (parent.width - 76px) / 4; y: root.height - 78px; width: (parent.width - 76px) / 4; height: 36px; text: root.clear-list-text; clicked => { root.rule-action(3, ""); } }
     RemoteButton { enabled: (root.selected-presentation >= 0) && !root.modal-open; visible: root.current-page == 1; x: 48px + 3 * (parent.width - 76px) / 4; y: root.height - 78px; width: (parent.width - 76px) / 4; height: 36px; text: root.batch-rule-text; clicked => { root.rule-action(5, ""); } }
 
+    Text {
+        x: 28px; y: root.height - 32px; width: root.width - 56px; height: 22px;
+        text: (root.rule-dirty || root.port-dirty) ? root.unsaved-text : root.saved-text;
+        color: (root.rule-dirty || root.port-dirty) ? DesktopTheme.warning : DesktopTheme.muted;
+        font-size: 12px; vertical-alignment: center;
+    }
+
     if root.batch-open: Rectangle {
         init => { batch-input.focus(); }
         x: 0; y: 0; width: parent.width; height: parent.height; background: DesktopTheme.scrim;
@@ -599,7 +630,7 @@ export component PresentationWindow inherits Window {
             Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.batch-title; color: DesktopTheme.text; font-size: 20px; font-weight: 700; vertical-alignment: top; }
             Text { x: 24px; y: 58px; width: parent.width - 48px; text: root.batch-count-text; color: DesktopTheme.muted; font-size: 13px; vertical-alignment: top; }
             Text { x: 24px; y: 102px; width: 118px; text: root.batch-duration-text; color: DesktopTheme.secondary; vertical-alignment: top; }
-            batch-input := LineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
+            batch-input := CommitLineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
             Text { x: 24px; y: 150px; width: 118px; text: root.batch-mode-text; color: DesktopTheme.secondary; vertical-alignment: top; }
             ComboBox { x: 148px; y: 140px; width: 258px; height: 34px; model: root.timer-modes; current-index <=> root.batch-mode; }
             Text { x: 24px; y: 178px; width: parent.width - 48px; height: 22px; text: root.batch-error; color: DesktopTheme.danger; font-size: 12px; }
@@ -640,6 +671,8 @@ component FieldRow inherits Rectangle {
     border-width: item.kind == 0 ? 0px : 1px;
     border-color: DesktopTheme.border;
 
+    FocusScope { width: parent.width; height: parent.height; enabled: root.interactive; focus-on-tab-navigation: false; }
+
     if item.kind != 0: Rectangle {
         x: 16px; y: parent.height - 1px;
         width: parent.width - 32px; height: 1px;
@@ -659,7 +692,7 @@ component FieldRow inherits Rectangle {
     }
 
     field-label := Text {
-        visible: (item.kind >= 1 && item.kind <= 4) || item.kind == 7;
+        visible: (item.kind >= 1 && item.kind <= 4) || item.kind == 7 || item.kind == 8;
         x: 16px;
         y: 8px;
         width: root.control-x - 32px;
@@ -682,7 +715,7 @@ component FieldRow inherits Rectangle {
         toggled => { root.edited(row-index, "", self.checked, 0); }
     }
 
-    if item.kind == 2: LineEdit {
+    if item.kind == 2: CommitLineEdit {
         x: root.control-x;
         y: (parent.height - 32px) / 2;
         width: item.read-only || item.key == "" ? root.control-width : min(200px, root.control-width);
@@ -692,6 +725,23 @@ component FieldRow inherits Rectangle {
         enabled: item.enabled && root.interactive;
         opacity: item.read-only ? 0.72 : 1;
         edited(value) => { root.edited(row-index, value, false, 0); }
+    }
+
+    if item.kind == 8: HorizontalLayout {
+        x: root.control-x; y: (parent.height - 34px) / 2;
+        width: root.control-width; height: 34px; spacing: 8px;
+        percent := Slider {
+            minimum: item.minimum; maximum: item.maximum; step: item.step;
+            value: item.value.to-float(); horizontal-stretch: 1;
+            enabled: item.enabled && root.interactive;
+            changed(value) => {
+                root.edited(row-index, "" + (round(value / item.step) * item.step), false, 0);
+            }
+        }
+        Text {
+            width: 58px; text: "" + (round(percent.value * 10) / 10) + "%";
+            color: DesktopTheme.text; horizontal-alignment: right; vertical-alignment: center;
+        }
     }
 
     if item.kind == 7: HorizontalLayout {
@@ -706,7 +756,7 @@ component FieldRow inherits Rectangle {
             border-width: 1px; border-color: DesktopTheme.muted; border-radius: 4px;
             TouchArea { enabled: item.enabled && root.interactive; clicked => { root.action(row-index); } }
         }
-        LineEdit {
+        CommitLineEdit {
             min-width: 72px; horizontal-stretch: 1;
             text: item.value; enabled: item.enabled && root.interactive;
             edited(value) => { root.edited(row-index, value, false, 0); }
@@ -756,7 +806,17 @@ export component SettingsWindow inherits Window {
     in-out property <int> show-generation: 0;
     in-out property <bool> native-dialog-open: false;
     icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
-    init => { Palette.color-scheme = ColorScheme.light; }
+    in property <bool> dark-theme: false;
+    in-out property <bool> theme-initialized: false;
+    init => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    changed dark-theme => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+
+    in-out property <string> timer-preview-theme: "system";
+    in-out property <int> timer-preview-opacity: 88;
+    in-out property <string> timer-preview-shape;
+    in-out property <float> timer-preview-offset-x: 0;
+    in-out property <float> timer-preview-offset-y: 0;
+    in-out property <bool> timer-preview-position: false;
     in-out property <int> timer-preview-width: 100;
     in-out property <int> timer-preview-height: 35;
     in-out property <float> timer-preview-font: 18;
@@ -776,6 +836,7 @@ export component SettingsWindow inherits Window {
     in property <int> selected-rule-count: 0;
     in property <bool> dirty: false;
     in property <string> dirty-text;
+    in property <string> saved-text;
     in property <string> ok-text;
     in property <string> cancel-text;
     in property <string> apply-text;
@@ -825,6 +886,8 @@ export component SettingsWindow inherits Window {
     min-width: 760px;
     min-height: 520px;
     background: DesktopTheme.canvas;
+    focus-sink := FocusScope { width: parent.width; height: parent.height; enabled: !root.modal-open; focus-on-tab-navigation: false; }
+
 
     Rectangle {
         x: 0;
@@ -861,7 +924,7 @@ export component SettingsWindow inherits Window {
                 font-size: 14px;
                 vertical-alignment: center;
             }
-            TouchArea { enabled: !root.modal-open; clicked => { root.navigate(index); } }
+            TouchArea { enabled: !root.modal-open; clicked => { focus-sink.focus(); root.navigate(index); } }
         }
     }
 
@@ -951,7 +1014,7 @@ export component SettingsWindow inherits Window {
                                     x: parent.width - 112px; y: 4px; width: 104px; height: 20px;
                                     text: root.timer-modes[rule.mode]; color: DesktopTheme.secondary; vertical-alignment: center;
                                 }
-                                TouchArea { enabled: !root.modal-open; x: 32px; width: parent.width - 32px; pointer-event(event) => { if event.kind == PointerEventKind.up && event.button == PointerEventButton.left { root.rule-selected(index, event.modifiers.control, event.modifiers.shift); } } }
+                                TouchArea { enabled: !root.modal-open; x: 32px; width: parent.width - 32px; pointer-event(event) => { if event.kind == PointerEventKind.up && event.button == PointerEventButton.left { focus-sink.focus(); root.rule-selected(index, event.modifiers.control, event.modifiers.shift); } } }
                             }
                         }
                     }
@@ -983,7 +1046,7 @@ export component SettingsWindow inherits Window {
                             x: 16px; y: 10px; width: parent.width - 32px; height: 34px;
                             alignment: center; spacing: 8px;
                             Text { width: 44px; text: root.rule-duration-label; color: DesktopTheme.secondary; horizontal-alignment: center; vertical-alignment: center; }
-                            LineEdit { enabled: !root.modal-open; width: 156px;
+                            CommitLineEdit { enabled: !root.modal-open; width: 156px;
                                 text: root.rules[root.selected-rule].duration;
                                 edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
                             }
@@ -1007,6 +1070,13 @@ export component SettingsWindow inherits Window {
         background: transparent;
         border-radius: 0px;
         border-width: 0px;
+
+        Text {
+            x: 26px; y: 30px; width: max(120px, parent.width - 394px); height: 36px;
+            text: root.dirty ? root.dirty-text : root.saved-text;
+            color: root.dirty ? DesktopTheme.warning : DesktopTheme.muted;
+            font-size: 12px; vertical-alignment: center; wrap: word-wrap;
+        }
 
         HorizontalLayout {
             x: parent.width - 348px;
@@ -1033,7 +1103,7 @@ export component SettingsWindow inherits Window {
             Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.batch-title; color: DesktopTheme.text; font-size: 20px; font-weight: 700; vertical-alignment: top; }
             Text { x: 24px; y: 58px; width: parent.width - 48px; text: root.batch-count-text; color: DesktopTheme.muted; font-size: 13px; vertical-alignment: top; }
             Text { x: 24px; y: 102px; width: 118px; text: root.batch-duration-label; color: DesktopTheme.secondary; vertical-alignment: top; }
-            batch-input := LineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
+            batch-input := CommitLineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
             Text { x: 24px; y: 150px; width: 118px; text: root.batch-mode-label; color: DesktopTheme.secondary; vertical-alignment: top; }
             ComboBox { x: 148px; y: 140px; width: 258px; height: 34px; model: root.timer-modes; current-index <=> root.batch-mode; }
             Button { x: 222px; y: 202px; width: 88px; height: 36px; text: root.cancel-text; clicked => { root.batch-open = false; } }

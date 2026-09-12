@@ -15,6 +15,7 @@ mod presentation;
 mod remote;
 mod settings;
 mod single_instance;
+mod theme;
 mod timer;
 mod updater;
 mod window;

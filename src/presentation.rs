@@ -436,15 +436,9 @@ impl Session {
             self.opened_order.push(key);
             presentation
         };
-        let _ = put(&app, "WindowState", VARIANT::from(3));
-        if let Ok(windows) = get(&presentation, "Windows").and_then(dispatch)
-            && int(get(&windows, "Count")?).unwrap_or(0) > 0
-            && let Ok(window) = call(&windows, "Item", &[VARIANT::from(1)]).and_then(dispatch)
-        {
-            let _ = put(&window, "WindowState", VARIANT::from(3));
-            let _ = call(&window, "Activate", &[]);
+        if !already_showing {
+            show_document_maximized(&app, &presentation)?;
         }
-        let _ = put(&app, "Visible", VARIANT::from(true));
         if already_showing {
             Ok("目标文稿已在放映".into())
         } else {
@@ -584,6 +578,36 @@ impl Session {
         self.managed_paths.remove(&key);
         self.opened_order.retain(|candidate| candidate != &key);
     }
+}
+
+fn show_document_maximized(app: &IDispatch, presentation: &IDispatch) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GA_ROOT, GetAncestor, SW_MAXIMIZE, SetForegroundWindow, ShowWindow,
+    };
+    // Setting Visible after WindowState can restore Office/WPS's previous small window.
+    put(app, "Visible", VARIANT::from(true))?;
+    let windows = dispatch(get(presentation, "Windows")?)?;
+    let document = dispatch(call(&windows, "Item", &[VARIANT::from(1)])?)?;
+    call(&document, "Activate", &[])?;
+    let _ = put(app, "WindowState", VARIANT::from(3));
+    put(&document, "WindowState", VARIANT::from(3))?;
+    // WPS may accept the COM property without resizing the actual frame.
+    // Address only this document's frame; no desktop enumeration or focus retry loop.
+    if let Ok(handle) = get(&document, "HWND")
+        .or_else(|_| get(app, "HWND"))
+        .and_then(int)
+    {
+        let handle = handle as usize as windows_sys::Win32::Foundation::HWND;
+        if !handle.is_null() {
+            unsafe {
+                let root = GetAncestor(handle, GA_ROOT);
+                let frame = if root.is_null() { handle } else { root };
+                ShowWindow(frame, SW_MAXIMIZE);
+                SetForegroundWindow(frame);
+            }
+        }
+    }
+    Ok(())
 }
 
 fn run_with_restored_range(

@@ -16,6 +16,7 @@
       </div>
     </header>
 
+    <div class="theme-row"><label for="themeChoice">界面主题</label><select id="themeChoice"><option value="app">跟随电脑</option><option value="light">浅色</option><option value="dark">深色</option></select></div>
     <nav class="tabs" aria-label="遥控页面">
       <button class="tab active" data-page="timerPage">计时</button>
       <button class="tab" data-page="pptPage">演示</button>
@@ -42,7 +43,7 @@
           <button data-timer-mode="countdown">倒计时</button>
           <button data-timer-mode="countup">正计时</button>
         </div>
-        <p class="hint">修改后会立即保存到电脑端设置。</p>
+        <p id="durationHint" class="hint" role="status">已保存</p>
       </article>
       <article class="card control-grid">
         <button data-command="timer.start" class="primary">开始</button>

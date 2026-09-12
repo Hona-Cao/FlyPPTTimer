@@ -346,6 +346,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("failed to rebuild display windows: {error}");
             }
             let preview = settings::preview_config(&config, settings_for_updates.borrow().as_ref());
+            let dark = crate::theme::is_dark(&preview.ui_theme);
+            if let Some(settings) = settings_for_updates.borrow().as_ref() {
+                crate::theme::settings(settings, dark);
+            }
+            if let Some(control) = presentation_window_for_updates.borrow().as_ref() {
+                crate::theme::remote(control, dark);
+            }
             let label = page_label(preview.appearance.show_slide_numbers, presentation_state.current_slide, presentation_state.total_slides);
             if let Some(root) = weak_window.upgrade() { root.set_page_text(label.clone().into());
                 root.set_page_reserve(page_reserve(presentation_state.total_slides).into()); }
@@ -699,6 +706,7 @@ fn create_presentation_window(
     config_path: &std::path::Path,
 ) -> Result<PresentationWindow, slint::PlatformError> {
     let window = PresentationWindow::new()?;
+    crate::theme::remote(&window, crate::theme::is_dark(&config.borrow().ui_theme));
     window::restore_remote_window(window.window(), &config.borrow().remote_control.window);
     let english = crate::config::ui_is_english(&config.borrow().language);
     window.set_window_title(
@@ -1320,6 +1328,16 @@ fn create_presentation_window(
         }
         slint::CloseRequestResponse::HideWindow
     });
+    window.set_saved_port(config.borrow().remote_control.port.to_string().into());
+    window.set_unsaved_text(
+        if english {
+            "Unsaved changes"
+        } else {
+            "有未保存的修改"
+        }
+        .into(),
+    );
+    window.set_saved_text(if english { "Saved" } else { "已保存" }.into());
     window.set_next_port(config.borrow().remote_control.port.to_string().into());
     populate_remote_connection_window(&window, remote, &config.borrow(), true);
     Ok(window)
@@ -1426,6 +1444,7 @@ fn populate_remote_connection_window(
 ) {
     let english = crate::config::ui_is_english(&config.language);
     let info = remote.info();
+    window.set_saved_port(config.remote_control.port.to_string().into());
     window.set_service_status_text(
         if english {
             format!(
@@ -2093,6 +2112,9 @@ fn configure_timer_window(
     config: &AppConfig,
 ) -> Result<(), slint::PlatformError> {
     apply_config(window, config);
+    window.set_assigned_display(monitor.device_name.clone().into());
+    window.set_applied_offset_x(config.placement.offset_x_percent as f32);
+    window.set_applied_offset_y(config.placement.offset_y_percent as f32);
     let size = display::logical_size_physical(
         config.appearance.width,
         config.appearance.height,
@@ -2347,6 +2369,28 @@ fn update_window(
     let Some(window) = window.upgrade() else {
         return;
     };
+    let opacity = config.appearance.background_opacity.clamp(0, 100);
+    if window.get_native_opacity() != opacity {
+        window::set_opacity(window.window(), opacity);
+        window.set_native_opacity(opacity);
+    }
+    window.set_corner_radius(shape_radius(&config.appearance.shape));
+    let x = config.placement.offset_x_percent as f32;
+    let y = config.placement.offset_y_percent as f32;
+    if window.get_applied_offset_x() != x || window.get_applied_offset_y() != y {
+        if let Some(monitor) = display::monitors()
+            .iter()
+            .find(|m| m.device_name == window.get_assigned_display().as_str())
+        {
+            window.window().set_position(display::timer_position(
+                monitor,
+                &config.placement,
+                window.window().size(),
+            ));
+        }
+        window.set_applied_offset_x(x);
+        window.set_applied_offset_y(y);
+    }
     let overtime = snapshot.state == TimerState::Finished || snapshot.is_overtime;
     window.set_display_text(format_snapshot(snapshot, &config.appearance.overtime_prefix).into());
     window.set_timer_font_size(config.appearance.font_size.clamp(8.0, 180.0));
@@ -2645,13 +2689,7 @@ fn parse_color(value: &str, fallback: Color) -> Color {
 }
 
 fn shape_radius(shape: &str) -> f32 {
-    if !shape.contains("圆角") {
-        0.0
-    } else if shape.contains('大') {
-        14.0
-    } else {
-        7.0
-    }
+    crate::config::shape_radius(shape)
 }
 
 fn load_config(path: &std::path::Path) -> Result<AppConfig, Box<dyn std::error::Error>> {

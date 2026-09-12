@@ -36,6 +36,10 @@ fn localize(lang: Language, value: &str) -> &str {
         return value;
     }
     match value {
+        "界面主题" => "Interface theme",
+        "浅色" => "Light",
+        "深色" => "Dark",
+        "圆角矩形（中）" => "Rounded rectangle (medium)",
         "选择颜色" => "Choose color",
         "窗口大小" => "Window sizing",
         "自动" => "Automatic",
@@ -271,6 +275,9 @@ struct Row {
     read_only: bool,
     button: String,
     row_height: i32,
+    minimum: f32,
+    maximum: f32,
+    step: f32,
 }
 
 impl Row {
@@ -288,6 +295,15 @@ impl Row {
         Self {
             value: value.into(),
             ..Self::new(key, label, 2)
+        }
+    }
+    fn percent(key: &str, label: &str, value: f64, minimum: f32, maximum: f32, step: f32) -> Self {
+        Self {
+            value: value.to_string(),
+            minimum,
+            maximum,
+            step,
+            ..Self::new(key, label, 8)
         }
     }
     fn color(key: impl Into<String>, label: impl Into<String>, value: impl Into<String>) -> Self {
@@ -365,6 +381,9 @@ impl Row {
             read_only: false,
             button: String::new(),
             row_height: 0,
+            minimum: 0.0,
+            maximum: 100.0,
+            step: 1.0,
         }
     }
     fn read_only(mut self) -> Self {
@@ -404,6 +423,9 @@ impl Row {
             read_only: self.read_only,
             button_text: localize(lang, &self.button).into(),
             row_height: self.row_height,
+            minimum: self.minimum,
+            maximum: self.maximum,
+            step: self.step,
         }
     }
 }
@@ -580,7 +602,7 @@ pub fn create(
                         value.as_str()
                     };
                     update_field(&mut draft.borrow_mut(), &row.key, value, checked, selected);
-                    if row.kind == 7
+                    if matches!(row.kind, 7 | 8)
                         && let Some(mut item) = w.get_items().row_data(index as usize)
                     {
                         item.value = value.into();
@@ -588,6 +610,9 @@ pub fn create(
                             item.color_preview = color;
                         }
                         w.get_items().set_row_data(index as usize, item);
+                    }
+                    if matches!(row.key.as_str(), "placement.xoff" | "placement.yoff") {
+                        w.set_timer_preview_position(true);
                     }
                     set_timer_preview(&w, &draft.borrow());
                     let dirty = !configs_equal(&draft.borrow(), &baseline_for_field.borrow());
@@ -1353,7 +1378,11 @@ fn refresh(
     window.set_selected_rule(selected_rule);
     window.set_selected_rule_count(selected_rules.len() as i32);
     window.set_dirty(dirty);
-    window.set_dirty_text(localize(lang, "有未应用的更改").into());
+    window.set_dirty_text(t(lang, "有未保存的修改", "Unsaved changes").into());
+    window.set_saved_text(t(lang, "已保存", "Saved").into());
+    if !dirty {
+        window.set_timer_preview_position(false);
+    }
     window.set_ok_text(localize(lang, "确定").into());
     window.set_cancel_text(localize(lang, "取消").into());
     window.set_apply_text(localize(lang, "应用").into());
@@ -1617,6 +1646,17 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
         })
         .unwrap_or(0) as i32;
     vec![
+        Row::section("界面主题"),
+        Row::combo(
+            "ui_theme",
+            "界面主题",
+            vec!["跟随系统", "浅色", "深色"],
+            match c.ui_theme.as_str() {
+                "light" => 1,
+                "dark" => 2,
+                _ => 0,
+            },
+        ),
         Row::section("计时器窗口"),
         Row::check("placement.visible", "显示计时器窗口", c.placement.visible),
         Row::section("配色"),
@@ -1709,13 +1749,21 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
         Row::combo(
             "appearance.shape",
             "外观形状",
-            vec!["直角矩形", "圆角矩形（小）", "圆角矩形（大）"],
+            vec![
+                "直角矩形",
+                "圆角矩形（小）",
+                "圆角矩形（中）",
+                "圆角矩形（大）",
+            ],
             shape_index(&c.appearance.shape),
         ),
-        Row::text(
+        Row::percent(
             "appearance.opacity",
             "背景不透明度",
-            c.appearance.background_opacity.to_string(),
+            c.appearance.background_opacity as f64,
+            0.0,
+            100.0,
+            1.0,
         ),
         Row::section("多屏显示"),
         Row::check(
@@ -1757,15 +1805,21 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             ],
             c.placement.anchor as i32,
         ),
-        Row::text(
+        Row::percent(
             "placement.xoff",
             "水平微调百分比",
-            c.placement.offset_x_percent.to_string(),
+            c.placement.offset_x_percent,
+            -50.0,
+            50.0,
+            0.1,
         ),
-        Row::text(
+        Row::percent(
             "placement.yoff",
             "垂直微调百分比",
-            c.placement.offset_y_percent.to_string(),
+            c.placement.offset_y_percent,
+            -50.0,
+            50.0,
+            0.1,
         ),
         Row::action("placement.resetpos", "窗口位置", "重置计时窗口位置"),
     ]
@@ -1798,8 +1852,9 @@ fn scheme_index(scheme: &str) -> i32 {
 fn shape_index(shape: &str) -> i32 {
     match shape {
         "直角矩形" => 0,
-        "圆角矩形（小）" => 1,
-        _ => 2,
+        "RoundedSmall" => 1,
+        "圆角矩形（小）" | "圆角矩形（中）" => 2,
+        _ => 3,
     }
 }
 
@@ -2125,7 +2180,21 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
         "appearance.height" => c.appearance.height = int(),
         "appearance.font" => c.appearance.font_size = float() as f32,
         "appearance.shape" => {
-            c.appearance.shape = value.into();
+            c.appearance.shape = match selected {
+                1 => "RoundedSmall",
+                2 => "圆角矩形（中）",
+                3 => "圆角矩形（大）",
+                _ => "直角矩形",
+            }
+            .into();
+        }
+        "ui_theme" => {
+            c.ui_theme = match selected {
+                1 => "light",
+                2 => "dark",
+                _ => "system",
+            }
+            .into()
         }
         "appearance.opacity" => c.appearance.background_opacity = int(),
         "appearance.scheme" => {
@@ -2731,6 +2800,12 @@ fn wide(value: &str) -> Vec<u16> {
 }
 
 fn set_timer_preview(window: &SettingsWindow, config: &AppConfig) {
+    window.set_timer_preview_theme(config.ui_theme.clone().into());
+    crate::theme::settings(window, crate::theme::is_dark(&config.ui_theme));
+    window.set_timer_preview_opacity(config.appearance.background_opacity.clamp(0, 100));
+    window.set_timer_preview_shape(config.appearance.shape.clone().into());
+    window.set_timer_preview_offset_x(config.placement.offset_x_percent as f32);
+    window.set_timer_preview_offset_y(config.placement.offset_y_percent as f32);
     window.set_timer_preview_width(config.appearance.width.clamp(1, 2000));
     window.set_timer_preview_height(config.appearance.height.clamp(1, 1000));
     window.set_timer_preview_font(config.appearance.font_size.clamp(8.0, 180.0));
@@ -2761,6 +2836,13 @@ fn set_timer_preview(window: &SettingsWindow, config: &AppConfig) {
 pub(crate) fn preview_config(applied: &AppConfig, settings: Option<&SettingsWindow>) -> AppConfig {
     let mut preview = applied.clone();
     if let Some(settings) = settings.filter(|w| crate::window::is_visible(w.window())) {
+        preview.ui_theme = settings.get_timer_preview_theme().to_string();
+        preview.appearance.background_opacity = settings.get_timer_preview_opacity();
+        preview.appearance.shape = settings.get_timer_preview_shape().to_string();
+        if settings.get_timer_preview_position() {
+            preview.placement.offset_x_percent = settings.get_timer_preview_offset_x() as f64;
+            preview.placement.offset_y_percent = settings.get_timer_preview_offset_y() as f64;
+        }
         preview.appearance.width = settings.get_timer_preview_width();
         preview.appearance.height = settings.get_timer_preview_height();
         preview.appearance.font_size = settings.get_timer_preview_font();
@@ -2788,6 +2870,31 @@ pub(crate) fn preview_config(applied: &AppConfig, settings: Option<&SettingsWind
 #[cfg(test)]
 mod parity_tests {
     use super::*;
+
+    #[test]
+    fn percentage_rows_are_sliders_with_their_existing_ranges() {
+        let rows = appearance_rows(&AppConfig::default());
+        for (key, minimum, maximum) in [
+            ("appearance.opacity", 0.0, 100.0),
+            ("placement.xoff", -50.0, 50.0),
+            ("placement.yoff", -50.0, 50.0),
+        ] {
+            let row = rows.iter().find(|r| r.key == key).unwrap();
+            assert_eq!(row.kind, 8);
+            assert_eq!((row.minimum, row.maximum), (minimum, maximum));
+        }
+    }
+
+    #[test]
+    fn new_small_shape_and_theme_round_trip_without_changing_legacy_rounding() {
+        let mut c = AppConfig::default();
+        assert_eq!(shape_index(&c.appearance.shape), 2);
+        update_field(&mut c, "appearance.shape", "", false, 1);
+        update_field(&mut c, "ui_theme", "", false, 2);
+        let restored = AppConfig::from_json(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert_eq!(crate::config::shape_radius(&restored.appearance.shape), 3.0);
+        assert_eq!(restored.ui_theme, "dark");
+    }
 
     #[test]
     fn prompt_rows_preserve_time_up_labels_and_read_only_paths() {
@@ -3114,6 +3221,8 @@ mod rc32_tests {
         assert!(!has(&c, "appearance.height"));
         assert!(has(&c, "appearance.font"));
         assert!(has(&c, "appearance.page_font_follow"));
+        assert!(has(&c, "appearance.page_font"));
+        update_field(&mut c, "appearance.page_font_follow", "", true, 0);
         assert!(!has(&c, "appearance.page_font"));
         update_field(&mut c, "appearance.auto_size", "", false, 1);
         assert!(has(&c, "appearance.width"));
@@ -3139,7 +3248,7 @@ mod rc32_tests {
         assert_eq!(saved.appearance.page_font_size, Some(32.0));
         let defaults = AppearanceSettings::default();
         assert!(defaults.auto_size);
-        assert_eq!(defaults.page_font_size, None);
+        assert_eq!(defaults.page_font_size, Some(12.0));
         assert_eq!(defaults.page_text_color, None);
         assert_eq!(defaults.page_position, PagePosition::Below);
     }

@@ -239,7 +239,7 @@ pub fn apply_native_window(
             position_flags |= SWP_FRAMECHANGED;
         }
 
-        let alpha = ((opacity_percent.clamp(10, 100) * 255) / 100) as u8;
+        let alpha = ((opacity_percent.clamp(0, 100) * 255) / 100) as u8;
         SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA);
 
         SetWindowPos(
@@ -661,7 +661,8 @@ fn window_dpi(hwnd: HWND) -> u32 {
 }
 
 unsafe fn apply_shape(hwnd: HWND, shape: &str) {
-    if !shape.contains("圆角") {
+    let radius = crate::config::shape_radius(shape);
+    if radius == 0.0 {
         unsafe { SetWindowRgn(hwnd, std::ptr::null_mut(), 1) };
         return;
     }
@@ -670,8 +671,7 @@ unsafe fn apply_shape(hwnd: HWND, shape: &str) {
     if unsafe { GetClientRect(hwnd, &mut client) } == 0 {
         return;
     }
-    let diameter = if shape.contains('大') { 28 } else { 14 };
-    let diameter = (diameter as f32 * window_dpi(hwnd) as f32 / 96.0).round() as i32;
+    let diameter = (radius * 2.0 * window_dpi(hwnd) as f32 / 96.0).round() as i32;
     let region = unsafe {
         CreateRoundRectRgn(
             0,
@@ -788,4 +788,18 @@ pub fn log_management_window(label: &str, window: &slint::Window) {
         window.size(),
         window.scale_factor()
     ));
+}
+
+/// Update alpha without rebuilding the window or stealing focus while dragging a slider.
+pub fn set_opacity(window: &slint::Window, percent: i32) {
+    if let Some(hwnd) = hwnd(window) {
+        unsafe {
+            SetLayeredWindowAttributes(
+                hwnd,
+                0,
+                (percent.clamp(0, 100) * 255 / 100) as u8,
+                LWA_ALPHA,
+            );
+        }
+    }
 }

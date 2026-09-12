@@ -63,6 +63,7 @@ impl From<serde_json::Error> for ConfigError {
 pub struct AppConfig {
     pub version: String,
     pub language: String,
+    pub ui_theme: String,
     pub update: UpdateSettings,
     pub timer: TimerSettings,
     pub behavior: BehaviorSettings,
@@ -78,6 +79,7 @@ impl Default for AppConfig {
         Self {
             version: V1_CONFIG_VERSION.to_owned(),
             language: "auto".to_owned(),
+            ui_theme: "system".to_owned(),
             update: UpdateSettings::default(),
             timer: TimerSettings::default(),
             behavior: BehaviorSettings::default(),
@@ -349,10 +351,10 @@ impl Default for AppearanceSettings {
     fn default() -> Self {
         Self {
             auto_size: true,
-            page_font_size: None,
+            page_font_size: Some(12.0),
             page_text_color: None,
             page_italic: false,
-            page_alignment: PageAlignment::Center,
+            page_alignment: PageAlignment::Right,
             page_position: PagePosition::Below,
             show_slide_numbers: true,
             color_scheme: "医疗卫生（蓝白）".to_owned(),
@@ -376,6 +378,16 @@ impl Default for AppearanceSettings {
             borderless: true,
             always_on_top: true,
         }
+    }
+}
+
+/// Corner radius in logical pixels; legacy Small keeps its former Medium geometry.
+pub fn shape_radius(shape: &str) -> f32 {
+    match shape {
+        "RoundedSmall" => 3.0,
+        "圆角矩形（小）" | "圆角矩形（中）" => 7.0,
+        "圆角矩形（大）" => 14.0,
+        _ => 0.0,
     }
 }
 
@@ -631,6 +643,17 @@ mod tests {
     const V0302_DEFAULT_CONFIG: &str = include_str!("../docs/default-config.json");
 
     #[test]
+    fn rc34_portable_defaults_match_new_install_preferences() {
+        let c = AppConfig::from_json(include_str!("../docs/rc34-default-config.json")).unwrap();
+        assert_eq!(c.appearance.page_font_size, Some(12.0));
+        assert_eq!(c.appearance.page_alignment, PageAlignment::Right);
+        assert_eq!(c.appearance.page_position, PagePosition::Below);
+        assert_eq!(c.ui_theme, "system");
+        assert!(c.rules.is_empty());
+        assert!(c.remote_control.token.is_empty());
+    }
+
+    #[test]
     fn reads_real_v0302_default_configuration() {
         let config = AppConfig::from_json(V0302_DEFAULT_CONFIG).unwrap();
 
@@ -653,6 +676,7 @@ mod tests {
             ..AppConfig::default()
         };
         let mut actual = serde_json::to_value(config).unwrap();
+        actual.as_object_mut().unwrap().remove("UiTheme");
         // U10 explicitly adds this default; all pre-existing defaults still match.
         assert_eq!(actual["Appearance"]["ShowSlideNumbers"], true);
         actual["Appearance"]
@@ -677,6 +701,23 @@ mod tests {
         normalize_integral_numbers(&mut actual);
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn rc34_defaults_preserve_explicit_existing_page_preferences() {
+        let defaults = AppConfig::default();
+        assert_eq!(defaults.appearance.page_font_size, Some(12.0));
+        assert_eq!(defaults.appearance.page_alignment, PageAlignment::Right);
+        assert_eq!(defaults.appearance.page_position, PagePosition::Below);
+        let old = AppConfig::from_json(
+            r#"{"Appearance":{"PageFontSize":null,"PageAlignment":0,"PagePosition":0}}"#,
+        )
+        .unwrap();
+        assert_eq!(old.appearance.page_font_size, None);
+        assert_eq!(old.appearance.page_alignment, PageAlignment::Left);
+        assert_eq!(old.appearance.page_position, PagePosition::Above);
+        assert_eq!(shape_radius("RoundedSmall"), 3.0);
+        assert_eq!(shape_radius("圆角矩形（小）"), 7.0);
     }
 
     #[test]

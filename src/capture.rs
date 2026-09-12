@@ -29,6 +29,7 @@ pub fn capture_all(output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     for (language, language_name) in [("zh-CN", "zh-CN"), ("en", "en")] {
         let config = Rc::new(RefCell::new(AppConfig {
             language: language.to_owned(),
+            ui_theme: std::env::var("FLYPPT_CAPTURE_THEME").unwrap_or_else(|_| "light".into()),
             ..AppConfig::default()
         }));
         let (remote_sender, _remote_receiver) = std::sync::mpsc::channel();
@@ -57,6 +58,29 @@ pub fn capture_all(output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
                     part + 1,
                 );
                 write_png(output.join(file_name), &pixels)?;
+            }
+        }
+        preview.invoke_navigate(2);
+        let rows = preview.get_items();
+        for index in 0..rows.row_count() {
+            if rows
+                .row_data(index)
+                .is_some_and(|row| row.key.as_str() == "appearance.opacity")
+            {
+                preview.invoke_field_edited(index as i32, "63".into(), false, 0);
+                assert!(preview.get_dirty());
+                assert_eq!(preview.get_timer_preview_opacity(), 63);
+                preview.set_preview_scroll_y(-1100.0);
+                slint::platform::update_timers_and_animations();
+                HEADLESS_WINDOW.with(|window| window.request_redraw());
+                write_png(
+                    output.join(format!("rc34-unsaved-slider-{language_name}.png")),
+                    &preview.window().take_snapshot()?,
+                )?;
+                preview.invoke_apply();
+                assert!(!preview.get_dirty());
+                assert_eq!(config.borrow().appearance.background_opacity, 63);
+                break;
             }
         }
         // Reuse the production info callback, rather than a hand-written mock.
@@ -100,7 +124,7 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
     timer_window.set_page_text("1 / 23".into());
     timer_window.set_page_reserve("88 / 88".into());
     for (name, page_font, above, alignment, italic) in [
-        ("timer-rc32-default", 18.0, false, 1, false),
+        ("timer-rc34-default", 12.0, false, 2, false),
         ("timer-rc32-page-above", 12.0, true, 0, true),
         ("timer-rc32-page-large", 36.0, false, 2, true),
     ] {
@@ -128,6 +152,11 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
     // Remote PC 窗口两页 (700x620)
     HEADLESS_WINDOW.with(|window| window.set_size(PhysicalSize::new(700, 620)));
     let control = crate::app::PresentationWindow::new()?;
+    control.set_next_port("4080".into());
+    control.set_saved_port("4080".into());
+    control.set_saved_text("已保存".into());
+    control.set_unsaved_text("有未保存的修改".into());
+    control.set_dark_theme(std::env::var("FLYPPT_CAPTURE_THEME").as_deref() == Ok("dark"));
     control.set_window_title("远程控制".into());
     control.set_connection_page_text("远程连接".into());
     control.set_presentation_page_text("演示文稿".into());
@@ -169,8 +198,8 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
 fn page_offsets(page: usize) -> &'static [f32] {
     match page {
         0 | 4 => &[0.0],
-        1 => &[0.0, -500.0, -1_000.0, -1_500.0, -2_000.0],
-        2 | 3 | 5 => &[0.0, -500.0, -1_000.0],
+        1 | 2 => &[0.0, -500.0, -1_000.0, -1_500.0, -2_000.0],
+        3 | 5 => &[0.0, -500.0, -1_000.0],
         _ => &[0.0],
     }
 }
