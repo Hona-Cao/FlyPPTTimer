@@ -21,11 +21,14 @@ jobs:
       - name: Apply focused hotfix
         shell: pwsh
         run: |
-          git apply --check docs/v1/CHATGPT_RC31_HOTFIX.patch
-          if ($LASTEXITCODE -ne 0) { throw "RC3.1 hotfix patch no longer applies cleanly" }
-          git apply docs/v1/CHATGPT_RC31_HOTFIX.patch
+          ./scripts/apply-chatgpt-rc31-hotfix.ps1
           git diff --check
           if ($LASTEXITCODE -ne 0) { throw "Patched tree has whitespace errors" }
+          $changed = @(git diff --name-only)
+          $expected = @("src/config.rs","src/presentation.rs","src/window.rs")
+          if (@(Compare-Object $changed $expected).Count -ne 0) {
+            throw "Unexpected patched files: $($changed -join ', ')"
+          }
 
       - name: Install pinned Rust toolchain
         shell: pwsh
@@ -87,14 +90,14 @@ jobs:
             if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination (Join-Path $stage $dll) -Force }
           }
           $exeHash = (Get-FileHash (Join-Path $stage "FlyPPTTimer.exe") -Algorithm SHA256).Hash
-          $patchHash = (Get-FileHash "docs\v1\CHATGPT_RC31_HOTFIX.patch" -Algorithm SHA256).Hash
+          $hotfixHash = (Get-FileHash "scripts\apply-chatgpt-rc31-hotfix.ps1" -Algorithm SHA256).Hash
           @(
             "FlyPPTTimer ChatGPT RC3.1 review build",
             "Version: $version",
             "Base branch: codex/v1-06-manual-test",
             "Base SHA: f27ec3cd729cfaf3f7148bc28a1ca02761ced85a",
             "Patched source SHA: $env:PATCHED_SOURCE_SHA",
-            "Hotfix patch SHA-256: $patchHash",
+            "Hotfix script SHA-256: $hotfixHash",
             "EXE SHA-256: $exeHash",
             "Checks: cargo fmt / clippy -D warnings / cargo test --locked / node --check / cargo build --locked --release",
             "Not a Release or Tag. For manual review only."
