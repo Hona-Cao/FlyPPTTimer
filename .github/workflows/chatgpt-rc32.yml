@@ -1,0 +1,21 @@
+name: ChatGPT RC3.2 Review
+on:
+  push:
+    branches: [chatgpt/rc32-feedback]
+    paths: [.github/workflows/chatgpt-rc32.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5bc223bd7bea12339311bac4494f369bb3d363b1
+      - run: git archive --format=zip -o rc32-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc32-source
+          path: rc32-source.zip
+          retention-days: 1
