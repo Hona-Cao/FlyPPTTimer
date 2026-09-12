@@ -4,18 +4,111 @@ on:
     branches: [chatgpt/rc32-feedback]
     paths: [.github/workflows/chatgpt-rc32.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  source:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  review:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 5bc223bd7bea12339311bac4494f369bb3d363b1
-      - run: git archive --format=zip -o rc32-source.zip HEAD
+          fetch-depth: 0
+      - name: Decode and apply exact reviewed source patch
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config core.autocrlf false
+          git checkout-index --all --force
+          python -c "import pathlib,base64,lzma,hashlib; b=''.join(pathlib.Path(f'.github/rc32-patch-{i}.b64').read_text().strip() for i in range(4)); p=lzma.decompress(base64.b64decode(b,validate=True)); assert hashlib.sha256(p).hexdigest()=='1d4ffaa698955c189e6b108b2c1d48564868119ddea0bdd46f850b0ca43a00d4'; pathlib.Path('rc32.patch').write_bytes(p)"
+          if ($LASTEXITCODE -ne 0) { throw 'Patch integrity verification failed' }
+          git apply --unidiff-zero --check rc32.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Patch no longer applies cleanly' }
+          git apply --unidiff-zero rc32.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
+          Remove-Item rc32.patch
+      - name: Locate Windows SDK resource compiler
+        run: |
+          $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+          $rc = Get-ChildItem -LiteralPath $kits -Filter rc.exe -File -Recurse | Where-Object { $_.FullName -match '\\x64\\rc\.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'Windows SDK rc.exe missing' }
+          $rc.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Pinned Rust 1.92.0
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust setup failed' }
+          rustc --version
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rc32-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: rc32-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+      - name: Format and verify source
+        run: |
+          cargo fmt --all
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting check failed' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed' }
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Production regressions
+        run: cargo test --locked
+      - name: JavaScript syntax
+        run: node --check src/FlyPPTTimer/Web/app.js
+      - name: Release build
+        run: cargo build --locked --release
+      - name: Software-rendered layout evidence
+        run: |
+          $out = Join-Path $PWD 'artifacts\rc32-layout'
+          $process = Start-Process -FilePath 'target\release\FlyPPTTimer.exe' -ArgumentList @('--capture-windows', $out) -PassThru
+          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'Software capture timed out' }
+          if ($process.ExitCode -ne 0) { throw "Software capture failed: $($process.ExitCode)" }
+      - name: Commit verified source to isolated review branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/rc32-patch-0.b64 .github/rc32-patch-1.b64 .github/rc32-patch-2.b64 .github/rc32-patch-3.b64
+          git add src ui docs/v1
+          git commit -m 'feat: implement RC3.2 sizing typography and controlled mobile list'
+          if ($LASTEXITCODE -ne 0) { throw 'Source commit failed' }
+          $sha = (git rev-parse HEAD).Trim()
+          "PATCHED_SOURCE_SHA=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          git push origin "HEAD:refs/heads/chatgpt/rc32-verified-$env:GITHUB_RUN_ID"
+          if ($LASTEXITCODE -ne 0) { throw 'Verified source push failed' }
+      - name: Package portable test build
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'FlyPPTTimer-v1.13.0-chatgpt-rc32-win-x64'
+          $stage = Join-Path $env:RUNNER_TEMP $name
+          $out = Join-Path $PWD 'artifacts\review'
+          New-Item -ItemType Directory -Force -Path $stage,$out | Out-Null
+          Copy-Item 'target\release\FlyPPTTimer.exe' (Join-Path $stage 'FlyPPTTimer.exe')
+          Copy-Item 'docs\default-config.json' (Join-Path $stage 'FlyPPTTimer.config.json')
+          Copy-Item LICENSE (Join-Path $stage 'LICENSE')
+          Copy-Item 'docs\v1\RC32_MANUAL_TEST.zh-CN.md' (Join-Path $stage 'MANUAL_TEST.zh-CN.md')
+          Copy-Item 'docs\v1\USER_FEEDBACK_20260912_3.md' (Join-Path $stage 'CHANGES.md')
+          foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) {
+            $source = Join-Path $env:WINDIR "System32\$dll"
+            if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination (Join-Path $stage $dll) }
+          }
+          $exeHash = (Get-FileHash (Join-Path $stage 'FlyPPTTimer.exe') -Algorithm SHA256).Hash
+          @('FlyPPTTimer RC3.2 review only','Version: 1.13.0',"Patched source SHA: $env:PATCHED_SOURCE_SHA",'Base SHA: 5bc223bd7bea12339311bac4494f369bb3d363b1',"Workflow run: $env:GITHUB_RUN_ID", "EXE SHA-256: $exeHash",'Checks: fmt; clippy -D warnings; cargo test --locked; node --check; release build; software layout capture','Physical phone/Office/multiple-monitor acceptance pending. See MANUAL_TEST.zh-CN.md.','No Release or Tag; Codex remains paused.') | Set-Content (Join-Path $stage 'BUILD.txt') -Encoding utf8
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $out "$name.zip") -CompressionLevel Optimal
       - uses: actions/upload-artifact@v4
         with:
-          name: rc32-source
-          path: rc32-source.zip
-          retention-days: 1
+          name: FlyPPTTimer-v1.13.0-chatgpt-rc32-win-x64
+          path: artifacts/review/*.zip
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RC32-software-layout-evidence
+          path: artifacts/rc32-layout/*.png
+          if-no-files-found: error
+          retention-days: 7
