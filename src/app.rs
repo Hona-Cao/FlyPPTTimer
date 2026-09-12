@@ -205,6 +205,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     &time_up_for_updates,
                     &preserve_time_up_for_updates,
                     &config_path_for_updates,
+                    &remote_for_updates,
                 );
             }
             while let Some(response) = update_for_updates.try_recv() {
@@ -601,19 +602,6 @@ fn handle_desktop_event(
                 }
                 return;
             }
-            if let Some(control) = presentation_window.borrow().as_ref() {
-                if window::is_visible(control.window()) {
-                    let mut current = config.borrow_mut();
-                    window::capture_remote_window(
-                        control.window(),
-                        &mut current.remote_control.window,
-                    );
-                    save_config(&current, config_path);
-                }
-                if let Err(error) = control.hide() {
-                    eprintln!("failed to hide presentation control: {error}");
-                }
-            }
             match create_settings(
                 Rc::clone(config),
                 config_path.to_path_buf(),
@@ -636,11 +624,6 @@ fn handle_desktop_event(
             }
         }
         DesktopEvent::Remote => {
-            if let Some(settings) = settings_window.borrow().as_ref()
-                && let Err(error) = settings.hide()
-            {
-                eprintln!("failed to hide settings: {error}");
-            }
             let existing_visible = presentation_window
                 .borrow()
                 .as_ref()
@@ -1329,6 +1312,8 @@ fn create_presentation_window(
     let config_path_for_close = config_path.to_path_buf();
     window.window().on_close_requested(move || {
         if let Some(window) = weak.upgrade() {
+            window.set_show_generation(window.get_show_generation().wrapping_add(1));
+            window::log_management_window("Remote close", window.window());
             let mut config = config_for_close.borrow_mut();
             window::capture_remote_window(window.window(), &mut config.remote_control.window);
             save_config(&config, &config_path_for_close);
@@ -1555,6 +1540,7 @@ fn handle_remote_request(
     time_up_window: &Rc<RefCell<Vec<TimeUpWindow>>>,
     preserve_time_up: &Rc<Cell<bool>>,
     config_path: &std::path::Path,
+    remote: &RemoteServer,
 ) {
     let result = execute_remote_command(
         &request.command,
@@ -1572,14 +1558,14 @@ fn handle_remote_request(
         let snapshot = timer.borrow().snapshot();
         let config = config.borrow();
         (
-            crate::remote::remote_state(
+            remote.publish_state(crate::remote::remote_state(
                 &snapshot,
                 &config,
                 &presentation.state(),
                 format_snapshot(&snapshot, &config.appearance.overtime_prefix),
                 crate::audio::system_mute().unwrap_or(false),
                 preserve_time_up.get(),
-            ),
+            )),
             message,
         )
     });
@@ -2526,58 +2512,55 @@ fn show_settings_ready_at(
     window: &SettingsWindow,
     geometry: Option<(slint::PhysicalPosition, Option<slint::PhysicalSize>)>,
 ) -> Result<(), slint::PlatformError> {
-    // Defer native creation until the current desktop-event callback returns.
-    // Keep one Slint show/hide lifecycle for the native surface: nested
-    // show/hide timers can leave a stale white surface after a close/reopen.
-    if window::is_visible(window.window()) {
-        if let Err(error) = window.show() {
-            eprintln!("failed to refresh settings: {error}");
-            return Ok(());
-        }
+    let generation = window.get_show_generation().wrapping_add(1);
+    window.set_show_generation(generation);
+    if window.window().is_visible() && window::is_visible(window.window()) {
         window::foreground(window.window());
         window.window().request_redraw();
         return Ok(());
     }
-    // Keep the actual client pixels when reopening a resized window.  Using
-    // Slint's cached size here would apply the monitor scale factor twice on
-    // mixed-DPI desktops, so this path deliberately stays in physical pixels.
     let previous_size = geometry.as_ref().and_then(|(_, size)| *size);
     let position = geometry.map(|(position, _)| position);
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
-        if let Some(window) = weak.upgrade() {
-            if let Err(error) = window.show() {
-                eprintln!("failed to show settings: {error}");
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        if window.get_show_generation() != generation {
+            return;
+        }
+        if let Err(error) = window.show() {
+            crate::log::error(&format!("Settings show failed: {error}"));
+            return;
+        }
+        window::brand_native_window(window.window());
+        window.window().request_redraw();
+        // Keep the proven DPI settling boundary, but an old callback must never
+        // reveal or resize a window that was closed/reopened in the meantime.
+        let weak = window.as_weak();
+        slint::Timer::single_shot(Duration::from_millis(50), move || {
+            let Some(window) = weak.upgrade() else {
+                return;
+            };
+            if window.get_show_generation() != generation
+                || !window.window().is_visible()
+                || !window::is_visible(window.window())
+            {
                 return;
             }
-            // Wait for Winit to deliver the initial resize/DPI event before
-            // applying saved geometry. Otherwise the first reopen uses a
-            // fallback scale and the window drifts on every cycle.
-            let weak = window.as_weak();
-            slint::Timer::single_shot(Duration::from_millis(50), move || {
-                if let Some(window) = weak.upgrade() {
-                    // The HWND has received its DPI by this turn, so reuse
-                    // the saved physical client size directly. Converting it
-                    // through Slint's logical scale here would apply DPI a
-                    // second time and shrink on every reopen.
-                    if let Some(position) = position {
-                        window.window().set_position(position);
-                    } else {
-                        window::center_window_on_cursor(window.window(), window.window().size());
-                    }
-                    // Move to the saved monitor first so Winit finishes its DPI
-                    // change before receiving the saved physical client size.
-                    let physical_size = previous_size.unwrap_or_else(|| {
-                        window::logical_size_to_physical(window.window(), 900, 650)
-                    });
-                    window.window().set_size(physical_size);
-                    window::install_settings_dpi_stabilizer(window.window());
-                    window::set_visible(window.window(), true);
-                    window::foreground(window.window());
-                    window.window().request_redraw();
-                }
-            });
-        }
+            if let Some(position) = position {
+                window.window().set_position(position);
+            } else {
+                window::center_window_on_cursor(window.window(), window.window().size());
+            }
+            let physical_size = previous_size
+                .unwrap_or_else(|| window::logical_size_to_physical(window.window(), 900, 650));
+            window.window().set_size(physical_size);
+            window::install_settings_dpi_stabilizer(window.window());
+            window::foreground(window.window());
+            window.window().request_redraw();
+            window::log_management_window("Settings ready", window.window());
+        });
     });
     Ok(())
 }
@@ -2588,40 +2571,36 @@ fn show_presentation_ready(
     logical_height: i32,
     placement: crate::config::RemoteWindowPlacement,
 ) -> Result<(), slint::PlatformError> {
-    if window::is_visible(window.window()) {
-        if let Err(error) = window.show() {
-            eprintln!("failed to refresh remote control: {error}");
-            return Ok(());
-        }
+    let generation = window.get_show_generation().wrapping_add(1);
+    window.set_show_generation(generation);
+    if window.window().is_visible() && window::is_visible(window.window()) {
         window::foreground(window.window());
         window.window().request_redraw();
         return Ok(());
     }
     let weak = window.as_weak();
     slint::Timer::single_shot(Duration::from_millis(1), move || {
-        if let Some(window) = weak.upgrade() {
-            if let Err(error) = window.show() {
-                eprintln!("failed to show remote control: {error}");
-                return;
-            }
-            window::set_visible(window.window(), false);
-            window::restore_remote_window_position(window.window(), &placement);
-            // Remote placement is stored in 96-DPI logical pixels.  Submit
-            // the corresponding physical client size after the HWND knows
-            // its monitor DPI; sending LogicalSize here would apply the
-            // monitor scale a second time.
-            let physical_size =
-                window::logical_size_to_physical(window.window(), logical_width, logical_height);
-            window.window().set_size(physical_size);
-            window::install_settings_dpi_stabilizer(window.window());
-            window.window().set_maximized(placement.maximized);
-            if let Err(error) = window.show() {
-                eprintln!("failed to reveal remote control: {error}");
-                return;
-            }
-            window::foreground(window.window());
-            window.window().request_redraw();
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        if window.get_show_generation() != generation {
+            return;
         }
+        if let Err(error) = window.show() {
+            crate::log::error(&format!("Remote show failed: {error}"));
+            return;
+        }
+        // Exactly one Slint show. Win32 SW_HIDE followed by an idempotent
+        // Slint show can leave the backend's mapped/surface state out of sync.
+        window::brand_native_window(window.window());
+        window::restore_remote_window_position(window.window(), &placement);
+        let size = window::logical_size_to_physical(window.window(), logical_width, logical_height);
+        window.window().set_size(size);
+        window::install_settings_dpi_stabilizer(window.window());
+        window.window().set_maximized(placement.maximized);
+        window::foreground(window.window());
+        window.window().request_redraw();
+        window::log_management_window("Remote ready", window.window());
     });
     Ok(())
 }
@@ -2662,13 +2641,7 @@ fn format_duration(duration: Duration, force_hours: bool) -> String {
 }
 
 fn parse_color(value: &str, fallback: Color) -> Color {
-    let hex = value.strip_prefix('#').unwrap_or(value);
-    if hex.len() != 6 {
-        return fallback;
-    }
-    u32::from_str_radix(hex, 16).map_or(fallback, |rgb| {
-        Color::from_rgb_u8((rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8)
-    })
+    crate::color_picker::parse_hex(value).unwrap_or(fallback)
 }
 
 fn shape_radius(shape: &str) -> f32 {

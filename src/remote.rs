@@ -118,6 +118,7 @@ pub struct RemoteState {
     pub connected_clients: usize,
     pub version: String,
     pub revision: i64,
+    pub server_instance: String,
 }
 
 impl Default for RemoteState {
@@ -142,6 +143,7 @@ impl Default for RemoteState {
             connected_clients: 0,
             version: env!("CARGO_PKG_VERSION").to_owned(),
             revision: 0,
+            server_instance: String::new(),
         }
     }
 }
@@ -192,6 +194,7 @@ pub struct RemoteServer {
     token: Arc<Mutex<String>>,
     clients: Arc<Mutex<HashMap<IpAddr, Instant>>>,
     revision: Arc<AtomicI64>,
+    server_instance: String,
     sender: mpsc::Sender<RemoteRequest>,
 }
 
@@ -204,6 +207,7 @@ impl RemoteServer {
             token: Arc::new(Mutex::new(String::new())),
             clients: Arc::new(Mutex::new(HashMap::new())),
             revision: Arc::new(AtomicI64::new(0)),
+            server_instance: generate_token(),
             sender,
         }
     }
@@ -258,7 +262,6 @@ impl RemoteServer {
         let info = Arc::clone(&self.info);
         let token = Arc::clone(&self.token);
         let clients = Arc::clone(&self.clients);
-        let revision = Arc::clone(&self.revision);
         let sender = self.sender.clone();
         let active = Arc::new(AtomicUsize::new(0));
         let active_thread = Arc::clone(&active);
@@ -288,7 +291,6 @@ impl RemoteServer {
                                 state: Arc::clone(&state),
                                 token: Arc::clone(&token),
                                 clients: Arc::clone(&clients),
-                                revision: Arc::clone(&revision),
                                 sender: sender.clone(),
                             };
                             let active = Arc::clone(&active_thread);
@@ -350,14 +352,23 @@ impl RemoteServer {
         Ok(())
     }
 
-    pub fn update_state(&self, mut state: RemoteState) {
+    pub fn update_state(&self, state: RemoteState) {
+        self.publish_state(state);
+    }
+
+    /// Called only by the UI producer, for both commands and periodic samples.
+    /// A revision belongs to the snapshot stored with it, never to a GET request.
+    pub fn publish_state(&self, mut state: RemoteState) -> RemoteState {
         prune_clients(&self.clients);
         let count = self.clients.lock().unwrap().len();
         state.connected_clients = count;
-        state.revision = self.revision.load(Ordering::Relaxed);
-        *self.shared_state.lock().unwrap() = state;
-        let mut info = self.info.lock().unwrap();
-        info.connected_clients = count;
+        state.server_instance = self.server_instance.clone();
+        let mut current = self.shared_state.lock().unwrap();
+        state.revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
+        *current = state.clone();
+        drop(current);
+        self.info.lock().unwrap().connected_clients = count;
+        state
     }
 
     pub fn info(&self) -> RemoteInfo {
@@ -387,7 +398,6 @@ struct ConnectionContext {
     state: Arc<Mutex<RemoteState>>,
     token: Arc<Mutex<String>>,
     clients: Arc<Mutex<HashMap<IpAddr, Instant>>>,
-    revision: Arc<AtomicI64>,
     sender: mpsc::Sender<RemoteRequest>,
 }
 
@@ -526,7 +536,6 @@ fn route(
         ("GET", "/state") => {
             let mut state = context.state.lock().unwrap().clone();
             state.connected_clients = context.clients.lock().unwrap().len();
-            state.revision = context.revision.load(Ordering::Relaxed);
             Ok(HttpResponse::json(200, &state))
         }
         ("POST", "/command") => {
@@ -539,11 +548,9 @@ fn route(
                 .map_err(|_| "远程命令服务已关闭".to_owned())?;
             match receiver.recv_timeout(Duration::from_secs(20)) {
                 Ok(Ok((mut state, message))) => {
-                    let revision = context.revision.fetch_add(1, Ordering::Relaxed) + 1;
                     state.ok = true;
                     state.message = message;
                     state.connected_clients = context.clients.lock().unwrap().len();
-                    state.revision = revision;
                     Ok(HttpResponse::json(200, &state))
                 }
                 Ok(Err(error)) => {
@@ -895,6 +902,7 @@ pub fn remote_state(
         connected_clients: 0,
         version: env!("CARGO_PKG_VERSION").to_owned(),
         revision: 0,
+        server_instance: String::new(),
     }
 }
 
@@ -961,6 +969,9 @@ fn presentation_remote_state_with_config(
     unmanaged.sort_by_key(|item| id_for_path(&item.path));
     let mut available = Vec::new();
     for item in unmanaged {
+        if !crate::settings::is_supported_presentation_path(std::path::Path::new(&item.path)) {
+            continue;
+        }
         available.push(PresentationOption {
             id: id_for_path(&item.path),
             name: item.name.clone(),
@@ -1048,6 +1059,52 @@ pub fn id_for_path(path: &str) -> String {
 mod tests {
     use super::*;
     #[test]
+    fn command_snapshot_is_published_before_followup_get_and_keeps_its_revision() {
+        let (sender, _receiver) = mpsc::channel();
+        let server = RemoteServer::new(sender);
+        *server.token.lock().unwrap() = "test-token".into();
+        let old = server.publish_state(RemoteState::default());
+        let mut next = old.clone();
+        next.presentation_state.list_sort = "name".into();
+        next.presentation_state.presentations = vec![
+            PresentationOption {
+                id: "B".into(),
+                ..PresentationOption::default()
+            },
+            PresentationOption {
+                id: "A".into(),
+                ..PresentationOption::default()
+            },
+        ];
+        let acknowledged = server.publish_state(next);
+        assert!(acknowledged.revision > old.revision);
+        assert!(!acknowledged.server_instance.is_empty());
+        assert_eq!(old.server_instance, acknowledged.server_instance);
+        let context = ConnectionContext {
+            state: Arc::clone(&server.shared_state),
+            token: Arc::clone(&server.token),
+            clients: Arc::clone(&server.clients),
+            sender: server.sender.clone(),
+        };
+        // An independent token/client revision must not relabel old data as new.
+        server.revision.fetch_add(1, Ordering::Relaxed);
+        let response = route(
+            HttpRequest {
+                method: "GET".into(),
+                raw_url: "/state?token=test-token".into(),
+                body: vec![],
+            },
+            SocketAddr::from(([127, 0, 0, 1], 4080)),
+            &context,
+        )
+        .unwrap();
+        let actual: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(actual["revision"], acknowledged.revision);
+        assert_eq!(actual["presentationState"]["listSort"], "name");
+        assert_eq!(actual["presentationState"]["presentations"][0]["id"], "B");
+    }
+
+    #[test]
     fn office_verbatim_paths_keep_the_saved_rule_identity() {
         assert_eq!(
             id_for_path(r"C:\Decks\A.pptx"),
@@ -1114,7 +1171,6 @@ mod tests {
             state: Arc::clone(&server.shared_state),
             token: Arc::clone(&server.token),
             clients: Arc::clone(&server.clients),
-            revision: Arc::clone(&server.revision),
             sender: server.sender.clone(),
         };
         let address = SocketAddr::from(([127, 0, 0, 1], port));

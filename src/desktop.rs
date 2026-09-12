@@ -13,17 +13,17 @@ use windows_sys::Win32::{
             MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, RegisterHotKey, UnregisterHotKey,
         },
         Shell::{
-            NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY,
+            NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY,
             NOTIFYICONDATAW, Shell_NotifyIconW,
         },
         WindowsAndMessaging::{
             AppendMenuW, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateIconFromResourceEx,
             CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
-            DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, HMENU, IDI_APPLICATION,
-            LR_DEFAULTCOLOR, LoadIconW, MB_ICONWARNING, MB_OK, MF_SEPARATOR, MF_STRING, MSG,
-            MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW, SetForegroundWindow,
-            TPM_RIGHTBUTTON, TPM_VERTICAL, TrackPopupMenu, TranslateMessage, WM_APP, WM_CLOSE,
-            WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_LBUTTONDBLCLK, WM_RBUTTONUP, WNDCLASSW,
+            DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, HMENU, LR_DEFAULTCOLOR,
+            MB_ICONWARNING, MB_OK, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage,
+            RegisterClassW, SetForegroundWindow, TPM_RIGHTBUTTON, TPM_VERTICAL, TrackPopupMenu,
+            TranslateMessage, WM_APP, WM_CLOSE, WM_COMMAND, WM_DESTROY, WM_HOTKEY,
+            WM_LBUTTONDBLCLK, WM_RBUTTONUP, WNDCLASSW,
         },
     },
 };
@@ -112,7 +112,8 @@ impl DesktopIntegration {
             hWnd: self.hwnd,
             uID: TRAY_ID,
             uFlags: NIF_INFO,
-            dwInfoFlags: NIIF_INFO,
+            dwInfoFlags: windows_sys::Win32::UI::Shell::NIIF_USER,
+            hBalloonIcon: *TRAY_ICON.get_or_init(Default::default).lock().unwrap() as _,
             ..Default::default()
         };
         data.Anonymous.uTimeout = milliseconds;
@@ -479,7 +480,7 @@ unsafe fn register_hotkeys(hwnd: HWND) {
             let message = wide(&message);
             let title = wide("FlyPPTTimer");
             unsafe {
-                MessageBoxW(
+                crate::window::branded_message_box(
                     hwnd,
                     message.as_ptr(),
                     title.as_ptr(),
@@ -568,12 +569,29 @@ fn load_app_icon() -> windows_sys::Win32::UI::WindowsAndMessaging::HICON {
             )
         };
         (!icon.is_null()).then_some(icon)
-    })();
+    })()
+    .or_else(|| {
+        // If the ICO entry cannot be decoded, use the embedded product resource,
+        // not the stock Windows application icon. No LR_SHARED: we own this copy.
+        use windows_sys::Win32::UI::WindowsAndMessaging::{IMAGE_ICON, LoadImageW};
+        let icon = unsafe {
+            LoadImageW(
+                GetModuleHandleW(null()),
+                std::ptr::without_provenance::<u16>(1),
+                IMAGE_ICON,
+                16,
+                16,
+                LR_DEFAULTCOLOR,
+            )
+        };
+        (!icon.is_null()).then_some(icon)
+    });
     if let Some(icon) = custom {
         *TRAY_ICON.get_or_init(Default::default).lock().unwrap() = icon as isize;
         icon
     } else {
-        unsafe { LoadIconW(null_mut(), IDI_APPLICATION) }
+        crate::log::error("Unable to load either embedded product icon representation");
+        null_mut()
     }
 }
 

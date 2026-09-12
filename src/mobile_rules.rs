@@ -199,6 +199,9 @@ pub fn execute(
             .iter()
             .find(|p| id_for_path(&p.path) == id_for_path(id))
             .ok_or("只能添加当前已打开的演示文稿。")?;
+        if !crate::settings::is_supported_presentation_path(std::path::Path::new(&item.path)) {
+            return Err("只能添加 PowerPoint 文件（.ppt、.pptx、.pptm）。".into());
+        }
         if index.is_none() {
             let order = ordered_indices(config);
             write_order(config, &order);
@@ -304,6 +307,26 @@ mod tests {
             .map(|&i| c.rules[i].file_path.clone())
             .collect()
     }
+    #[test]
+    fn mobile_add_open_rejects_non_powerpoint_files() {
+        let mut config = AppConfig::default();
+        let state = PresentationState {
+            presentations: vec![crate::presentation::OpenPresentation {
+                name: "handout.pdf".into(),
+                path: "handout.pdf".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let command = RemoteCommand {
+            command: "rules.addOpen".into(),
+            presentation_id: Some("handout.pdf".into()),
+            ..Default::default()
+        };
+        assert!(execute(&mut config, &state, &command).is_err());
+        assert!(config.rules.is_empty());
+    }
+
     #[test]
     fn logical_name_sort_and_manual_drag_are_persisted() {
         let mut c = config();

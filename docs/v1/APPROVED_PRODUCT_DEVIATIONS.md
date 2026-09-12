@@ -69,3 +69,8 @@
 4. The controlled mobile list includes only explicit file rules. Open unlisted documents are offered separately under Add open file. Remove file requires confirmation, removes control membership, never deletes/saves/closes the disk or Office document. Backend rejects subsequent direct remote controls for unlisted targets. Global quit refuses unknown/mixed/shared Office processes rather than kill removed files.
 5. Name sorting uses Windows StrCmpLogicalW (numeric-aware, case-insensitive locale collation); size uses actual bytes; modified time uses actual file metadata. Both directions are available; unavailable metadata stays last. A manual move switches to manual sorting, persists compact order, and preserves PC list order. Hidden files remain controlled; removed files do not.
 6. Keyed mobile rows animate movement, mark the moved row, and support stationary long-press drag, a drag ghost, neighbor transitions and edge scroll. One command is submitted on drop, never on cancel. Stale orders are rejected. Normal swipe scroll remains available. Text selection/copy/context menus are disabled; numeric fields remain editable. Reduced-motion preference is respected.
+
+
+## 8. RC3.3 explicit user feedback
+
+Settings and PC Remote may coexist. Increase content/scrollbar/footer spacing. App-owned windows/dialogs use product icons. All exposed colors offer visual standard/custom choice and HEX input. Controlled-file additions are limited to .ppt/.pptx/.pptm, not PDF or arbitrary files; legacy configuration is not silently erased. Mobile file actions use one compact row; acknowledgement/polling must not roll ordering back or restart unchanged animations. The rare blank-window report requires evidence, not a speculative claim of complete repair.

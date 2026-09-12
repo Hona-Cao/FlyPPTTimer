@@ -4,6 +4,7 @@ mod alerts;
 mod app;
 mod audio;
 mod capture;
+mod color_picker;
 pub mod config;
 mod desktop;
 mod display;
