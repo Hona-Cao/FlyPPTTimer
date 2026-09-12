@@ -36,6 +36,23 @@ fn localize(lang: Language, value: &str) -> &str {
         return value;
     }
     match value {
+        "窗口大小" => "Window sizing",
+        "自动" => "Automatic",
+        "自动（按内容与字号）" => "Automatic (content and font)",
+        "自定义窗口尺寸" => "Custom window size",
+        "时间字号" => "Time font size",
+        "页数字号跟随时间" => "Match time font size",
+        "页数字号" => "Slide-number font size",
+        "页数颜色跟随时间" => "Match time color",
+        "页数颜色" => "Slide-number color",
+        "页数斜体" => "Italic slide numbers",
+        "页数对齐" => "Slide-number alignment",
+        "与时间左对齐" => "Align left with time",
+        "居中对齐" => "Center",
+        "与时间右对齐" => "Align right with time",
+        "页数位置" => "Slide-number position",
+        "时间上方" => "Above time",
+        "时间下方" => "Below time",
         "正在打开演示文稿" => "Opening presentation",
         "正在关闭最后打开的文稿" => "Closing the last-opened presentation",
         "正在结束放映" => "Ending slide show",
@@ -557,7 +574,13 @@ pub fn create(
                     let dirty = !configs_equal(&draft.borrow(), &baseline_for_field.borrow());
                     if matches!(
                         row.key.as_str(),
-                        "appearance.scheme" | "placement.all_screens" | "placement.big"
+                        "appearance.scheme"
+                            | "placement.all_screens"
+                            | "placement.big"
+                            | "appearance.auto_size"
+                            | "appearance.pages"
+                            | "appearance.page_font_follow"
+                            | "appearance.page_color_follow"
                     ) {
                         refresh(
                             &w,
@@ -1593,6 +1616,12 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             &c.appearance.flash_background_color,
         ),
         Row::section("窗口尺寸与字号"),
+        Row::combo(
+            "appearance.auto_size",
+            "窗口大小",
+            vec!["自动（按内容与字号）", "自定义窗口尺寸"],
+            i32::from(!c.appearance.auto_size),
+        ),
         Row::check(
             "appearance.pages",
             "显示当前页/总页数",
@@ -1602,8 +1631,51 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
         Row::text("appearance.height", "高", c.appearance.height.to_string()),
         Row::text(
             "appearance.font",
-            "字号",
+            "时间字号",
             c.appearance.font_size.to_string(),
+        ),
+        Row::check(
+            "appearance.page_font_follow",
+            "页数字号跟随时间",
+            c.appearance.page_font_size.is_none(),
+        ),
+        Row::text(
+            "appearance.page_font",
+            "页数字号",
+            c.appearance
+                .page_font_size
+                .unwrap_or(c.appearance.font_size)
+                .to_string(),
+        ),
+        Row::check(
+            "appearance.page_color_follow",
+            "页数颜色跟随时间",
+            c.appearance.page_text_color.is_none(),
+        ),
+        Row::text(
+            "appearance.page_color",
+            "页数颜色",
+            c.appearance
+                .page_text_color
+                .as_deref()
+                .unwrap_or(&c.appearance.text_color),
+        ),
+        Row::check(
+            "appearance.page_italic",
+            "页数斜体",
+            c.appearance.page_italic,
+        ),
+        Row::combo(
+            "appearance.page_alignment",
+            "页数对齐",
+            vec!["与时间左对齐", "居中对齐", "与时间右对齐"],
+            c.appearance.page_alignment as i32,
+        ),
+        Row::combo(
+            "appearance.page_position",
+            "页数位置",
+            vec!["时间上方", "时间下方"],
+            c.appearance.page_position as i32,
         ),
         Row::combo(
             "appearance.shape",
@@ -1668,6 +1740,19 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
         ),
         Row::action("placement.resetpos", "窗口位置", "重置计时窗口位置"),
     ]
+    .into_iter()
+    .filter(|row| appearance_row_visible(&c.appearance, &row.key))
+    .collect()
+}
+
+fn appearance_row_visible(a: &crate::config::AppearanceSettings, key: &str) -> bool {
+    match key {
+        "appearance.width" | "appearance.height" => !a.auto_size,
+        "appearance.page_font" => a.show_slide_numbers && a.page_font_size.is_some(),
+        "appearance.page_color" => a.show_slide_numbers && a.page_text_color.is_some(),
+        key if key.starts_with("appearance.page_") => a.show_slide_numbers,
+        _ => true,
+    }
 }
 
 fn scheme_index(scheme: &str) -> i32 {
@@ -1896,6 +1981,7 @@ fn normalize_before_save(c: &mut AppConfig) {
     c.appearance.width = c.appearance.width.clamp(1, 2000);
     c.appearance.height = c.appearance.height.clamp(1, 1000);
     c.appearance.font_size = c.appearance.font_size.clamp(8.0, 180.0);
+    c.appearance.page_font_size = c.appearance.page_font_size.map(|v| v.clamp(8.0, 180.0));
     c.appearance.background_opacity = c.appearance.background_opacity.clamp(0, 100);
     c.placement.offset_x_percent = c.placement.offset_x_percent.clamp(-50.0, 50.0);
     c.placement.offset_y_percent = c.placement.offset_y_percent.clamp(-50.0, 50.0);
@@ -1981,6 +2067,30 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
         "appearance.timeout_text" => c.appearance.timeout_text_color = value.into(),
         "appearance.timeout_background" => c.appearance.timeout_background_color = value.into(),
         "appearance.overtime_prefix" => c.appearance.overtime_prefix = value.into(),
+        "appearance.auto_size" => c.appearance.auto_size = selected == 0,
+        "appearance.page_font_follow" => {
+            c.appearance.page_font_size = (!checked).then_some(c.appearance.font_size)
+        }
+        "appearance.page_font" => c.appearance.page_font_size = Some(float() as f32),
+        "appearance.page_color_follow" => {
+            c.appearance.page_text_color = (!checked).then(|| c.appearance.text_color.clone())
+        }
+        "appearance.page_color" => c.appearance.page_text_color = Some(value.into()),
+        "appearance.page_italic" => c.appearance.page_italic = checked,
+        "appearance.page_alignment" => {
+            c.appearance.page_alignment = match selected {
+                0 => crate::config::PageAlignment::Left,
+                2 => crate::config::PageAlignment::Right,
+                _ => crate::config::PageAlignment::Center,
+            }
+        }
+        "appearance.page_position" => {
+            c.appearance.page_position = if selected == 0 {
+                crate::config::PagePosition::Above
+            } else {
+                crate::config::PagePosition::Below
+            }
+        }
         "appearance.pages" => c.appearance.show_slide_numbers = checked,
         "appearance.width" => c.appearance.width = int(),
         "appearance.height" => c.appearance.height = int(),
@@ -2279,7 +2389,10 @@ fn merge_rules(applied: &[FileRule], baseline: &[FileRule], draft: &[FileRule]) 
     for rule in draft {
         let id = presentation_identity(Path::new(&rule.file_path));
         if !baseline_by_id.contains_key(&id) && seen.insert(id) {
-            result.push(rule.clone());
+            let mut added = rule.clone();
+            // A stale Settings draft must append after the latest phone order.
+            added.mobile_order = crate::config::next_mobile_order(&result);
+            result.push(added);
         }
     }
     result
@@ -2508,6 +2621,27 @@ fn set_timer_preview(window: &SettingsWindow, config: &AppConfig) {
     window.set_timer_preview_height(config.appearance.height.clamp(1, 1000));
     window.set_timer_preview_font(config.appearance.font_size.clamp(8.0, 180.0));
     window.set_timer_preview_pages(config.appearance.show_slide_numbers);
+    window.set_timer_preview_auto(config.appearance.auto_size);
+    window.set_timer_preview_page_font(
+        config
+            .appearance
+            .page_font_size
+            .map(|v| v.clamp(8.0, 180.0))
+            .unwrap_or(0.0),
+    );
+    window.set_timer_preview_page_color(
+        config
+            .appearance
+            .page_text_color
+            .clone()
+            .unwrap_or_default()
+            .into(),
+    );
+    window.set_timer_preview_page_italic(config.appearance.page_italic);
+    window.set_timer_preview_page_alignment(config.appearance.page_alignment as i32);
+    window.set_timer_preview_page_above(
+        config.appearance.page_position == crate::config::PagePosition::Above,
+    );
 }
 
 pub(crate) fn preview_config(applied: &AppConfig, settings: Option<&SettingsWindow>) -> AppConfig {
@@ -2517,6 +2651,22 @@ pub(crate) fn preview_config(applied: &AppConfig, settings: Option<&SettingsWind
         preview.appearance.height = settings.get_timer_preview_height();
         preview.appearance.font_size = settings.get_timer_preview_font();
         preview.appearance.show_slide_numbers = settings.get_timer_preview_pages();
+        preview.appearance.auto_size = settings.get_timer_preview_auto();
+        let font = settings.get_timer_preview_page_font();
+        preview.appearance.page_font_size = (font > 0.0).then_some(font);
+        let color = settings.get_timer_preview_page_color().to_string();
+        preview.appearance.page_text_color = (!color.is_empty()).then_some(color);
+        preview.appearance.page_italic = settings.get_timer_preview_page_italic();
+        preview.appearance.page_alignment = match settings.get_timer_preview_page_alignment() {
+            0 => crate::config::PageAlignment::Left,
+            2 => crate::config::PageAlignment::Right,
+            _ => crate::config::PageAlignment::Center,
+        };
+        preview.appearance.page_position = if settings.get_timer_preview_page_above() {
+            crate::config::PagePosition::Above
+        } else {
+            crate::config::PagePosition::Below
+        };
     }
     preview
 }
@@ -2801,5 +2951,87 @@ mod parity_tests {
         for path in ["notes.docx", "image.png", "audio.mp3", "deck"] {
             assert!(!is_supported_presentation_path(Path::new(path)));
         }
+    }
+}
+
+#[cfg(test)]
+mod rc32_tests {
+    use super::*;
+    use crate::config::{AppearanceSettings, PageAlignment, PagePosition};
+    #[test]
+    fn automatic_and_page_follow_options_hide_only_relevant_rows() {
+        let mut c = AppConfig::default();
+        let has = |c: &AppConfig, key: &str| appearance_rows(c).iter().any(|r| r.key == key);
+        assert!(!has(&c, "appearance.width"));
+        assert!(!has(&c, "appearance.height"));
+        assert!(has(&c, "appearance.font"));
+        assert!(has(&c, "appearance.page_font_follow"));
+        assert!(!has(&c, "appearance.page_font"));
+        update_field(&mut c, "appearance.auto_size", "", false, 1);
+        assert!(has(&c, "appearance.width"));
+        update_field(&mut c, "appearance.page_font_follow", "", false, 0);
+        update_field(&mut c, "appearance.page_font", "32", false, 0);
+        update_field(&mut c, "appearance.page_color_follow", "", false, 0);
+        update_field(&mut c, "appearance.page_color", "#cc5500", false, 0);
+        update_field(&mut c, "appearance.page_italic", "", true, 0);
+        update_field(&mut c, "appearance.page_alignment", "", false, 2);
+        update_field(&mut c, "appearance.page_position", "", false, 0);
+        assert!(has(&c, "appearance.page_font"));
+        assert!(has(&c, "appearance.page_color"));
+        assert_eq!(c.appearance.page_font_size, Some(32.0));
+        assert_eq!(c.appearance.page_text_color.as_deref(), Some("#cc5500"));
+        assert!(c.appearance.page_italic);
+        assert_eq!(c.appearance.page_alignment, PageAlignment::Right);
+        assert_eq!(c.appearance.page_position, PagePosition::Above);
+        update_field(&mut c, "appearance.pages", "", false, 0);
+        assert!(!has(&c, "appearance.page_font_follow"));
+        assert!(!has(&c, "appearance.page_color"));
+        assert!(has(&c, "appearance.width"));
+        let saved = AppConfig::from_json(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert_eq!(saved.appearance.page_font_size, Some(32.0));
+        let defaults = AppearanceSettings::default();
+        assert!(defaults.auto_size);
+        assert_eq!(defaults.page_font_size, None);
+        assert_eq!(defaults.page_text_color, None);
+        assert_eq!(defaults.page_position, PagePosition::Below);
+    }
+    #[test]
+    fn stale_settings_addition_preserves_latest_mobile_order() {
+        let baseline = vec![
+            FileRule {
+                file_path: "A.pptx".into(),
+                mobile_order: 0,
+                ..FileRule::default()
+            },
+            FileRule {
+                file_path: "B.pptx".into(),
+                mobile_order: 1,
+                ..FileRule::default()
+            },
+        ];
+        let mut draft = baseline.clone();
+        draft.push(FileRule {
+            file_path: "D.pptx".into(),
+            mobile_order: 2,
+            ..FileRule::default()
+        });
+        let mut applied = baseline.clone();
+        applied[0].mobile_order = 1;
+        applied[1].mobile_order = 0;
+        applied.push(FileRule {
+            file_path: "C.pptx".into(),
+            mobile_order: 2,
+            ..FileRule::default()
+        });
+        let merged = merge_rules(&applied, &baseline, &draft);
+        let c = AppConfig {
+            rules: merged,
+            ..AppConfig::default()
+        };
+        let names: Vec<_> = crate::mobile_rules::ordered_indices(&c)
+            .iter()
+            .map(|&i| c.rules[i].file_path.as_str())
+            .collect();
+        assert_eq!(names, ["B.pptx", "A.pptx", "C.pptx", "D.pptx"]);
     }
 }

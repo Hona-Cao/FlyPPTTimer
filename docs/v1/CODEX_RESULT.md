@@ -1,3 +1,14 @@
+# RC3.2 - ChatGPT direct implementation
+
+Implemented the 2026-09-12 user feedback on automatic/custom sizing, page typography/position/alignment, large-screen overlay exclusion, metadata sorting, controlled-file removal, animated mobile reordering/long press and non-selectable mobile text. Requirements and scope: USER_FEEDBACK_20260912_3.md. Codex did not implement this round and remains paused.
+
+This source note does not predeclare CI success. The final Windows run must pass fmt, clippy -D warnings, production regression tests, node --check and release build before packaging. BUILD.txt records the exact patched-source commit and EXE SHA256. Chromium mock-HTTP interaction checks and software Slint captures are separate from physical mobile/Office/mixed-DPI acceptance.
+
+Earlier unmentioned items are provisionally passed according to the user, not newly retested by ChatGPT. Only RC32_MANUAL_TEST.md items require focused user feedback.
+
+---
+## Historical results below
+
 # 第二轮反馈：家用 Windows 整合与交付
 
 日期：2026-09-12。分支：`codex/v1-06-manual-test`，版本保持 `1.13.0`。本轮唯一源码基点为从 GitHub 拉取的 `b193befab4d67f0f7dbec0cd84ca0ebe61b445ff`；未使用办公室工作区、未提交状态、构建产物或日志。下方旧日期内容仅为历史记录，不是本机验证证据。用户已确认的最终尺寸、滚动条、作者说明、手机基本控制、音频和全屏黑屏继续视为通过。

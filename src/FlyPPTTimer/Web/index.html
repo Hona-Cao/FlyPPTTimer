@@ -67,7 +67,22 @@
 
       <article class="card">
         <div class="eyebrow">演示文稿列表</div>
-        <div id="presentationList" class="presentation-list"></div>
+        <div class="list-toolbar">
+          <label for="listSort">排序方式</label>
+          <select id="listSort" aria-label="排序方式">
+            <option value="manual">手动排序</option><option value="name">按名称排序</option>
+            <option value="size">按文件大小排序</option><option value="modified">按修改时间排序</option>
+          </select>
+          <button id="listSortDirection" type="button">升序</button>
+          <button id="listShowHidden" type="button">显示隐藏项</button>
+        </div>
+        <p class="list-help">长按文件或拖动手柄调整顺序</p>
+        <div id="presentationList" class="presentation-list" aria-label="受控文件列表"></div>
+        <p id="listEmpty" class="hint" hidden>暂无受控文件</p>
+        <details id="addOpenDetails" class="add-open">
+          <summary>添加已打开文件</summary>
+          <div class="add-open-controls"><select id="availablePresentations" aria-label="已打开但未受控的文件"></select><button id="addOpenFile" type="button">加入列表</button></div>
+        </details>
         <p id="presentationHint" class="hint"></p>
       </article>
 

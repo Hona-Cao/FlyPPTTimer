@@ -59,3 +59,13 @@
 ## 使用规则
 
 只有用户批准的变化写入本文件；不作为增加新功能的授权。实现与验证状态必须另行如实记录。未来用户再次明确改变要求时，先同步本文件与任务书，避免后续按旧需求回改。
+
+
+## 7. RC3.2 explicit user approval (2026-09-12)
+
+1. Automatic sizing (default) measures current time/page content and fonts; width/height settings are hidden. Custom sizing uses the saved exact width/height, shows the fields, and does not silently grow. Too-small custom sizes can clip; switch to Automatic for full fit. Custom dimensions survive switching modes.
+2. Time and page rows share one vertically centered block with equal top/bottom layout margins. Page size and color follow time by default, with independent overrides; italic, left/center/right alignment and above/below placement are configurable. These fields preview together; Apply saves and Cancel discards. The page-width reserve prevents jitter during pagination.
+3. A display occupied by the full-screen timer is excluded from small overlays, including mirrored overlays, show/hide hotkeys and refresh. Disabling/closing the large timer restores eligible small overlays. Display selection still requires an extended screen.
+4. The controlled mobile list includes only explicit file rules. Open unlisted documents are offered separately under Add open file. Remove file requires confirmation, removes control membership, never deletes/saves/closes the disk or Office document. Backend rejects subsequent direct remote controls for unlisted targets. Global quit refuses unknown/mixed/shared Office processes rather than kill removed files.
+5. Name sorting uses Windows StrCmpLogicalW (numeric-aware, case-insensitive locale collation); size uses actual bytes; modified time uses actual file metadata. Both directions are available; unavailable metadata stays last. A manual move switches to manual sorting, persists compact order, and preserves PC list order. Hidden files remain controlled; removed files do not.
+6. Keyed mobile rows animate movement, mark the moved row, and support stationary long-press drag, a drag ghost, neighbor transitions and edge scroll. One command is submitted on drop, never on cancel. Stale orders are rejected. Normal swipe scroll remains available. Text selection/copy/context menus are disabled; numeric fields remain editable. Reduced-motion preference is respected.

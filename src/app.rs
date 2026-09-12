@@ -352,7 +352,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let displays = display_windows_for_updates.borrow();
                 for overlay in &displays.overlays { overlay.set_page_text(label.clone().into());
                     overlay.set_page_reserve(page_reserve(presentation_state.total_slides).into()); }
-                if let Some(big) = &displays.big_screen { big.set_page_text(label.into()); }
+                if let Some(big) = &displays.big_screen {
+                    big.set_page_text(label.into());
+                    big.set_page_reserve(page_reserve(presentation_state.total_slides).into());
+                }
             }
             update_display_windows(
                 &weak_window,
@@ -1615,6 +1618,9 @@ fn execute_remote_command(
         hide_time_up(time_up_window);
     }
     if name.starts_with("rules.") {
+        if presentation.state().operation.busy {
+            return Err("演示操作正在进行，请稍后修改列表。".into());
+        }
         let mut updated = config.borrow().clone();
         crate::mobile_rules::execute(&mut updated, &presentation.state(), command)?;
         updated
@@ -1623,6 +1629,24 @@ fn execute_remote_command(
         *config.borrow_mut() = updated;
         return Ok("列表已更新".into());
     }
+    if name.starts_with("ppt.") {
+        crate::mobile_rules::validate_presentation_command(
+            &config.borrow(),
+            &presentation.state(),
+            command,
+        )?;
+    }
+    let queue_remote = |operation| {
+        presentation.queue_remote(
+            operation,
+            config
+                .borrow()
+                .rules
+                .iter()
+                .map(|r| r.file_path.clone())
+                .collect(),
+        )
+    };
     match name {
         "window.show" => {
             if let Some(w) = window.upgrade() {
@@ -1665,7 +1689,7 @@ fn execute_remote_command(
             hide_time_up(time_up_window);
             Ok("已退出“时间到”黑屏".to_owned())
         }
-        "ppt.refresh" => presentation.queue(PresentationCommand::Refresh),
+        "ppt.refresh" => queue_remote(PresentationCommand::Refresh),
         "ppt.openPresentation" => {
             let path = command
                 .presentation_id
@@ -1675,7 +1699,7 @@ fn execute_remote_command(
             let command = path
                 .map(PresentationCommand::Open)
                 .ok_or("请先选择演示文稿。")?;
-            presentation.queue(command)
+            queue_remote(command)
         }
         "ppt.startFromBeginning" => {
             let path = command
@@ -1683,7 +1707,7 @@ fn execute_remote_command(
                 .as_deref()
                 .and_then(remote_path)
                 .map(PathBuf::from);
-            presentation.queue(PresentationCommand::StartFromBeginning(path))
+            queue_remote(PresentationCommand::StartFromBeginning(path))
         }
         "ppt.startFromCurrent" => {
             let path = command
@@ -1691,24 +1715,24 @@ fn execute_remote_command(
                 .as_deref()
                 .and_then(remote_path)
                 .map(PathBuf::from);
-            presentation.queue(PresentationCommand::StartFromCurrent(path))
+            queue_remote(PresentationCommand::StartFromCurrent(path))
         }
-        "ppt.previous" => presentation.queue(PresentationCommand::Previous),
-        "ppt.next" => presentation.queue(PresentationCommand::Next),
+        "ppt.previous" => queue_remote(PresentationCommand::Previous),
+        "ppt.next" => queue_remote(PresentationCommand::Next),
         "ppt.gotoSlide" => {
             let slide = command.slide_number.ok_or("请输入有效页码。")?;
-            presentation.queue(PresentationCommand::GoToSlide(slide))
+            queue_remote(PresentationCommand::GoToSlide(slide))
         }
-        "ppt.blackScreenToggle" => presentation.queue(PresentationCommand::ToggleBlackScreen),
-        "ppt.whiteScreenToggle" => presentation.queue(PresentationCommand::ToggleWhiteScreen),
-        "ppt.endShow" => presentation.queue(PresentationCommand::EndShow),
-        "ppt.closeActivePresentation" => presentation.queue(PresentationCommand::CloseActive),
-        "ppt.closeCurrentPresentation" => presentation.queue(PresentationCommand::CloseLastOpened),
+        "ppt.blackScreenToggle" => queue_remote(PresentationCommand::ToggleBlackScreen),
+        "ppt.whiteScreenToggle" => queue_remote(PresentationCommand::ToggleWhiteScreen),
+        "ppt.endShow" => queue_remote(PresentationCommand::EndShow),
+        "ppt.closeActivePresentation" => queue_remote(PresentationCommand::CloseActive),
+        "ppt.closeCurrentPresentation" => queue_remote(PresentationCommand::CloseLastOpened),
         "ppt.forceQuitAll" => {
             if command.confirmed != Some(true) {
                 return Err("强制退出会丢失所有未保存内容，请再次确认。".to_owned());
             }
-            presentation.queue(PresentationCommand::ForceQuitAll { confirmed: true })
+            queue_remote(PresentationCommand::ForceQuitAll { confirmed: true })
         }
         _ => Err(format!("命令不被允许: {name}")),
     }
@@ -2029,6 +2053,11 @@ fn rebuild_display_windows(
         let _ = big_screen.hide();
     }
 
+    let big_target = display::big_screen_target(&monitors, &config.placement);
+    let excluded = big_target
+        .map(|m| m.device_name.as_str())
+        .unwrap_or_default();
+    root.set_excluded_display(excluded.into());
     let targets = display::timer_targets(&monitors, &config.placement);
     configure_timer_window(root, targets[0], config)?;
     update_window(&root.as_weak(), snapshot, config, frame);
@@ -2036,6 +2065,7 @@ fn rebuild_display_windows(
 
     for monitor in targets.into_iter().skip(1) {
         let overlay = AppWindow::new()?;
+        overlay.set_excluded_display(excluded.into());
         apply_config(&overlay, config);
         update_window(&overlay.as_weak(), snapshot, config, frame);
         connect_drag(&overlay, Rc::clone(&config_state), config_path.clone());
@@ -2045,17 +2075,7 @@ fn rebuild_display_windows(
         displays.overlays.push(overlay);
     }
 
-    let extended = display::extended_monitors(&monitors);
-    if config.placement.big_screen_enabled && !extended.is_empty() {
-        let monitor = extended
-            .iter()
-            .copied()
-            .find(|monitor| {
-                monitor
-                    .device_name
-                    .eq_ignore_ascii_case(&config.placement.big_screen_device_name)
-            })
-            .unwrap_or(extended[0]);
+    if let Some(monitor) = big_target {
         let big_screen = BigScreenWindow::new()?;
         big_screen.window().on_close_requested(|| {
             crate::desktop::request_close_big_screen();
@@ -2154,7 +2174,7 @@ fn configure_timer_window(
             );
             window::refresh_shape(window.window(), &shape);
             window::handle_timer_frame_paint(window.window());
-            window::set_visible(window.window(), visible);
+            set_window_visible(&window, visible);
         }
     });
     Ok(())
@@ -2167,6 +2187,18 @@ fn update_display_windows(
     config: &AppConfig,
     frame: FlashFrame,
 ) {
+    let excluded = holder
+        .borrow()
+        .big_screen
+        .as_ref()
+        .and_then(|w| window::monitor_device_name(w.window()))
+        .unwrap_or_default();
+    if let Some(root_window) = root.upgrade() {
+        root_window.set_excluded_display(excluded.clone().into());
+    }
+    for overlay in &holder.borrow().overlays {
+        overlay.set_excluded_display(excluded.clone().into());
+    }
     update_window(root, snapshot, config, frame);
     if let Some(root_window) = root.upgrade() {
         sync_timer_window_scale(&root_window, config);
@@ -2231,28 +2263,47 @@ fn update_big_screen(window: &BigScreenWindow, snapshot: &TimerSnapshot, config:
     window.set_timer_font_size(
         (logical_height * 0.30 * config.appearance.font_size / 18.0).clamp(24.0, 360.0),
     );
+    window.set_page_font_ratio(
+        config
+            .appearance
+            .page_font_size
+            .unwrap_or(config.appearance.font_size)
+            .clamp(8.0, 180.0)
+            / config.appearance.font_size.clamp(8.0, 180.0),
+    );
+    window.set_page_color(
+        config
+            .appearance
+            .page_text_color
+            .as_deref()
+            .map(|v| parse_color(v, window.get_foreground_color()))
+            .unwrap_or(window.get_foreground_color()),
+    );
+    window.set_page_italic(config.appearance.page_italic);
+    window.set_page_alignment(config.appearance.page_alignment as i32);
+    window.set_page_above(config.appearance.page_position == crate::config::PagePosition::Above);
     window.set_keep_on_top(config.appearance.always_on_top);
 }
 
 fn connect_timer_visibility(window: &AppWindow, visible: bool) {
+    let visible = timer_visibility_allowed(window, visible);
     if window::is_visible(window.window()) != visible {
         set_window_visible(window, visible);
     }
 }
 
 fn timer_content_size(config: &AppConfig, required_width: f32, required_height: f32) -> (i32, i32) {
-    (
-        config
-            .appearance
-            .width
-            .max(required_width.ceil() as i32)
-            .clamp(1, 2000),
-        config
-            .appearance
-            .height
-            .max(required_height.ceil() as i32)
-            .clamp(1, 1000),
-    )
+    if config.appearance.auto_size {
+        (
+            (required_width.ceil() as i32).clamp(1, 2000),
+            (required_height.ceil() as i32).clamp(1, 1000),
+        )
+    } else {
+        (
+            config.appearance.width.clamp(1, 2000),
+            config.appearance.height.clamp(1, 1000),
+        )
+    }
 }
 
 fn page_reserve(total: i32) -> String {
@@ -2312,7 +2363,17 @@ fn update_window(
     };
     let overtime = snapshot.state == TimerState::Finished || snapshot.is_overtime;
     window.set_display_text(format_snapshot(snapshot, &config.appearance.overtime_prefix).into());
-    window.set_timer_font_size(config.appearance.font_size);
+    window.set_timer_font_size(config.appearance.font_size.clamp(8.0, 180.0));
+    window.set_page_font_size(
+        config
+            .appearance
+            .page_font_size
+            .unwrap_or(config.appearance.font_size)
+            .clamp(8.0, 180.0),
+    );
+    window.set_page_italic(config.appearance.page_italic);
+    window.set_page_alignment(config.appearance.page_alignment as i32);
+    window.set_page_above(config.appearance.page_position == crate::config::PagePosition::Above);
     let color = if overtime {
         parse_color(
             &config.appearance.timeout_text_color,
@@ -2336,6 +2397,14 @@ fn update_window(
         )
     };
     window.set_foreground_color(color);
+    window.set_page_color(
+        config
+            .appearance
+            .page_text_color
+            .as_deref()
+            .map(|v| parse_color(v, color))
+            .unwrap_or(color),
+    );
     window.set_surface_color(Brush::SolidColor(background));
     window.set_flash_text_visible(flash.text_visible);
     window.set_flash_background_active(flash.background_active);
@@ -2432,7 +2501,17 @@ fn connect_close(window: &AppWindow, config: Rc<RefCell<AppConfig>>, path: PathB
     });
 }
 
+fn timer_visibility_allowed(window: &AppWindow, visible: bool) -> bool {
+    let excluded = window.get_excluded_display();
+    display::overlay_allowed(
+        visible,
+        &window::monitor_device_name(window.window()).unwrap_or_default(),
+        &excluded,
+    )
+}
+
 fn set_window_visible(window: &AppWindow, visible: bool) {
+    let visible = timer_visibility_allowed(window, visible);
     if visible && let Err(error) = window.show() {
         eprintln!("failed to show timer window: {error}");
     }
@@ -2724,9 +2803,12 @@ mod remote_parity_tests {
         }
         let config = AppConfig::default();
         let before = serde_json::to_value(&config).unwrap();
-        assert_eq!(timer_content_size(&config, 85.0, 30.0), (100, 35));
+        assert_eq!(timer_content_size(&config, 85.0, 30.0), (85, 30));
         assert_eq!(timer_content_size(&config, 120.2, 54.1), (121, 55));
-        assert_eq!(timer_content_size(&config, 85.0, 30.0), (100, 35));
+        assert_eq!(timer_content_size(&config, 85.0, 30.0), (85, 30));
+        let mut custom = config.clone();
+        custom.appearance.auto_size = false;
+        assert_eq!(timer_content_size(&custom, 120.2, 54.1), (100, 35));
         assert_eq!(serde_json::to_value(&config).unwrap(), before);
     }
 
@@ -2761,8 +2843,25 @@ mod remote_parity_tests {
         assert!(overlay.get_content_height() > 35.0);
         overlay.set_page_text("".into());
         sync_timer_window_scale(&overlay, &baseline);
-        assert_eq!(overlay.get_content_width(), 100.0);
-        assert_eq!(overlay.get_content_height(), 35.0);
+        assert_eq!(
+            overlay.get_content_width(),
+            overlay.get_required_text_width().ceil()
+        );
+        assert_eq!(
+            overlay.get_content_height(),
+            overlay.get_required_text_height().ceil()
+        );
+        for above in [false, true] {
+            overlay.set_page_text("1/23".into());
+            overlay.set_page_above(above);
+            for font in [12.0, 18.0, 36.0] {
+                overlay.set_page_font_size(font);
+                sync_timer_window_scale(&overlay, &baseline);
+                assert!(
+                    (overlay.get_text_top_space() - overlay.get_text_bottom_space()).abs() < 0.1
+                );
+            }
+        }
         assert_eq!(baseline.appearance.width, 100);
         assert_eq!(baseline.appearance.height, 35);
 
@@ -2791,6 +2890,8 @@ mod remote_parity_tests {
         }));
         let (sender, _receiver) = std::sync::mpsc::channel();
         let remote = Rc::new(RemoteServer::new(sender));
+        // This existing callback regression edits explicit width/height.
+        config.borrow_mut().appearance.auto_size = false;
         let service = Rc::new(PresentationService::start().unwrap());
         let control = create_presentation_window(&config, &service, &remote, &path).unwrap();
         let settings = settings::create(

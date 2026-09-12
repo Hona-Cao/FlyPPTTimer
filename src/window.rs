@@ -498,6 +498,10 @@ fn monitor_entries() -> Vec<(String, RECT)> {
     entries
 }
 
+pub fn monitor_device_name(window: &slint::Window) -> Option<String> {
+    monitor_for_window(window).map(|(name, _)| name)
+}
+
 pub fn normal_window_geometry(window: &slint::Window) -> (PhysicalPosition, PhysicalSize) {
     hwnd(window)
         .and_then(normal_window_bounds)

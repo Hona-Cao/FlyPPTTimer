@@ -1,6 +1,27 @@
 const effectiveLanguage=navigator.language.toLowerCase().startsWith('zh')?'zh-CN':'en';
 document.documentElement.lang=effectiveLanguage;
 const webEnglish={
+  "排序方式":"Sort by",
+  "手动排序":"Manual order",
+  "按名称排序":"Name",
+  "按文件大小排序":"File size",
+  "按修改时间排序":"Date modified",
+  "升序":"Ascending",
+  "降序":"Descending",
+  "长按文件或拖动手柄调整顺序":"Long-press a file or its drag handle to reorder",
+  "受控文件列表":"Controlled files",
+  "暂无受控文件":"No controlled files",
+  "添加已打开文件":"Add an open file",
+  "已打开但未受控的文件":"Open files not in the controlled list",
+  "移除文件":"Remove file",
+  "长按拖动排序":"Long-press to drag; arrow keys also reorder",
+  "顺序已保存":"Order saved",
+  "没有可添加的已打开文件":"No open files to add",
+  "所有文件已隐藏":"All files are hidden",
+  "移除后不再显示在受控列表，也不能远程打开或关闭。不删除磁盘文件，不关闭当前文稿；需要时可重新加入。":"Removes the file from remote control. It can no longer be opened or closed remotely until added again. The disk file and any open document are kept.",
+  "当前文稿未受控，请先加入列表。":"The current presentation is not controlled. Add it to the list first.",
+  "受控文件":"Controlled file",
+
   '隐藏':'Hide','恢复':'Restore','显示隐藏项':'Show hidden items','收起隐藏项':'Hide hidden items',
   '移除规则':'Remove rule','加入列表':'Add to list','上移':'Move up','下移':'Move down',
   '列表已更新':'List updated','删除列表规则':'Remove list rule',
@@ -90,6 +111,7 @@ const token=window.FLYPPT_TOKEN||'';
 const $=id=>document.getElementById(id);
 const commandButtons=[...document.querySelectorAll('[data-command]')];
 const timerModeButtons=[...document.querySelectorAll('[data-timer-mode]')];
+let stateEpoch=0;
 let connected=false,lastState=null,messageTimer=null,pollTimer=null,busy=false,pendingConfirmation=null,timerEditorDirty=false,selectedPresentationId=null,pollFailures=0;
 
 function url(path){return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(token)}
@@ -123,45 +145,187 @@ function paint(s){
   $('pptName').textContent=p.presentationName||(p.powerPointRunning?'未打开演示文稿':'未检测到 PowerPoint');$('pptPath').textContent=p.presentationPath||'';$('pptPath').title=p.presentationPath||'';
   $('pptShowState').textContent=p.isSlideShowRunning?'正在放映':'未放映';$('pptSlide').textContent=`${p.currentSlide||0} / ${p.totalSlides||0}`;$('pptScreen').textContent=p.screenMode||'正常';
   $('blackScreenButton').classList.toggle('selected',p.screenMode==='黑屏');$('whiteScreenButton').classList.toggle('selected',p.screenMode==='白屏');
-  renderPresentations(p.presentations||[]);setAvailability(t,p);updatePresentationHint(p);requestAnimationFrame(syncViewportHeight);if(s.message)notify(s.message);
+  document.querySelector('.presentation-card').classList.toggle('is-showing',!!p.isSlideShowRunning);
+  renderListTools(p);renderPresentations(p.presentations||[]);setAvailability(t,p);updatePresentationHint(p);requestAnimationFrame(syncViewportHeight);if(s.message)notify(s.message);
 }
-let showHiddenPresentations=false;
-function renderPresentations(items){
-  const activeItem=items.find(x=>x.isActive);
-  if(activeItem)selectedPresentationId=activeItem.id;
-  else if(selectedPresentationId&&!items.some(x=>x.id===selectedPresentationId))selectedPresentationId=null;
-  const host=$('presentationList'),signature=JSON.stringify([showHiddenPresentations,items]);
-  if(host.dataset.signature!==signature){
-    host.dataset.signature=signature;host.innerHTML='';
-    if(!items.length)host.innerHTML='<div class="hint">没有已打开或文件规则中已启用的演示文稿</div>';
-    const toggle=document.createElement('button');toggle.textContent=showHiddenPresentations?'收起隐藏项':'显示隐藏项';
-    toggle.addEventListener('click',()=>{showHiddenPresentations=!showHiddenPresentations;renderPresentations(items);requestAnimationFrame(syncViewportHeight)});host.append(toggle);
-    items.filter(item=>showHiddenPresentations||!item.mobileHidden).forEach(item=>{
-      const row=document.createElement('div');row.className='presentation-item';row.dataset.active=String(!!item.isActive);row.dataset.open=String(!!item.isOpen);
-      const text=document.createElement('div'),title=document.createElement('strong'),meta=document.createElement('span');
-      title.textContent=item.name;title.title=[item.name,item.directory].filter(Boolean).join('\n');
-      meta.textContent=(item.directory?item.directory+' · ':'')+(item.isActive?'当前活动':item.isOpen?'已打开':'文件规则');meta.title=item.directory||'';
-      text.append(title,meta);
-      const button=document.createElement('button');button.dataset.presentationButton='true';button.textContent=item.isActive?'当前':item.isOpen?'切换':'打开';button.addEventListener('click',()=>{selectedPresentationId=item.id;command('ppt.openPresentation',{presentationId:item.id})});
-      const actions=document.createElement('div');actions.className='presentation-actions';actions.append(button);
-      const addAction=(label,name)=>{const action=document.createElement('button');action.textContent=label;action.dataset.ruleButton='true';action.addEventListener('click',()=>command(name,{presentationId:item.id}));actions.append(action)};
-      if(item.isRule){
-        addAction(item.mobileHidden?'恢复':'隐藏',item.mobileHidden?'rules.restore':'rules.hide');
-        addAction('上移','rules.moveUp');addAction('下移','rules.moveDown');addAction('移除规则','rules.delete');
-      }else{addAction('加入列表','rules.addOpen')}
-      row.append(text,actions);host.append(row);
-    });
+let showHiddenPresentations=false,listGesture=null,listCommit=false,lastMovedId=null,suppressListClickUntil=0;
+const listHost=$('presentationList');
+const reducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function text(el,value){if(el.textContent!==value)el.textContent=value}
+function listRows(){return [...listHost.children].filter(el=>el.classList.contains('presentation-item'))}
+function positions(){return new Map(listRows().map(el=>[el.dataset.id,el.getBoundingClientRect().top]))}
+function animateOrder(before){
+  for(const row of listRows()){
+    const old=before.get(row.dataset.id);
+    row.getAnimations().forEach(a=>a.cancel());
+    const dy=old===undefined?0:old-row.getBoundingClientRect().top;
+    if(!reducedMotion()&&Math.abs(dy)>0.5)row.animate([{transform:`translateY(${dy}px)`},{transform:'translateY(0)'}],{duration:280,easing:'cubic-bezier(.22,.75,.25,1)'});
+    if(row.dataset.id===lastMovedId){row.classList.add('just-moved');setTimeout(()=>row.classList.remove('just-moved'),650)}
   }
-  refreshPresentationButtons();
+  lastMovedId=null;
+}
+function fileInfo(item){
+  const parts=[];
+  if(item.fileSize!=null){const size=Number(item.fileSize);parts.push(size<1024?`${size} B`:size<1048576?`${(size/1024).toFixed(1)} KB`:`${(size/1048576).toFixed(1)} MB`)}
+  if(item.modifiedMs!=null)parts.push(new Date(Number(item.modifiedMs)).toLocaleString(effectiveLanguage,{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}));
+  return parts.join(' \u00b7 ');
+}
+function newPresentationRow(item){
+  const row=document.createElement('div');row.className='presentation-item';row.dataset.id=item.id;
+  const info=document.createElement('div');info.className='file-info';
+  for(const cls of ['file-name','file-state','file-directory','file-details']){
+    const el=document.createElement(cls==='file-name'?'strong':'span');el.className=cls;info.append(el);
+  }
+  const handle=document.createElement('button');handle.type='button';handle.className='drag-handle';handle.textContent=String.fromCodePoint(0x283f);
+  handle.setAttribute('aria-label',wt("长按拖动排序"));handle.title=wt("长按拖动排序");
+  const actions=document.createElement('div');actions.className='presentation-actions';
+  function action(label,name,kind){
+    const button=document.createElement('button');button.type='button';button.dataset.action=name;
+    if(kind==='open')button.dataset.presentationButton='true';else button.dataset.ruleButton='true';
+    text(button,wt(label));button.addEventListener('click',()=>{
+      if(performance.now()<suppressListClickUntil)return;
+      const current=row._item;
+      if(kind==='open'){selectedPresentationId=current.id;command('ppt.openPresentation',{presentationId:current.id});return}
+      const actual=name==='hide'?(current.mobileHidden?'rules.restore':'rules.hide'):name;
+      if(actual.startsWith('rules.move'))lastMovedId=current.id;
+      command(actual,{presentationId:current.id,includeHidden:showHiddenPresentations});
+    });actions.append(button);
+  }
+  action("打开",'ppt.openPresentation','open');
+  action("隐藏",'hide');
+  action("上移",'rules.moveUp');
+  action("下移",'rules.moveDown');
+  action("移除文件",'rules.delete');
+  handle.addEventListener('keydown',event=>{
+    if(event.key==='ArrowUp'||event.key==='ArrowDown'){
+      event.preventDefault();lastMovedId=row.dataset.id;
+      command(event.key==='ArrowUp'?'rules.moveUp':'rules.moveDown',{presentationId:row.dataset.id,includeHidden:showHiddenPresentations});
+    }
+  });
+  row.append(info,handle,actions);return row;
+}
+function renderPresentations(items){
+  if(listGesture?.active||listCommit)return;
+  const controlled=items.filter(x=>x.isRule!==false),active=controlled.find(x=>x.isActive);
+  if(active)selectedPresentationId=active.id;
+  else if(!controlled.some(x=>x.id===selectedPresentationId))selectedPresentationId=null;
+  const before=positions(),visible=controlled.filter(x=>showHiddenPresentations||!x.mobileHidden),ids=new Set(visible.map(x=>x.id));
+  for(const row of listRows())if(!ids.has(row.dataset.id))row.remove();
+  const existing=new Map(listRows().map(el=>[el.dataset.id,el]));
+  visible.forEach((item,index)=>{
+    const row=existing.get(item.id)||newPresentationRow(item);row._item=item;
+    row.dataset.active=String(!!item.isActive);row.dataset.showing=String(!!item.isSlideShowRunning);
+    if(item.isSlideShowRunning)row.setAttribute('aria-current','true');else row.removeAttribute('aria-current');
+    text(row.querySelector('.file-name'),item.name);row.querySelector('.file-name').title=item.name;
+    text(row.querySelector('.file-state'),wt(item.isSlideShowRunning?"正在放映":item.isActive?"当前活动":item.isOpen?"已打开":"受控文件"));
+    text(row.querySelector('.file-directory'),item.directory||'');row.querySelector('.file-directory').title=item.directory||'';
+    text(row.querySelector('.file-details'),fileInfo(item));
+    text(row.querySelector('[data-presentation-button]'),wt(item.isActive?"当前":item.isOpen?"切换":"打开"));
+    text(row.querySelector('[data-action="hide"]'),wt(item.mobileHidden?"恢复":"隐藏"));
+    row.querySelector('[data-action="rules.moveUp"]').dataset.edge=String(index===0);
+    row.querySelector('[data-action="rules.moveDown"]').dataset.edge=String(index===visible.length-1);
+    if(listHost.children[index]!==row)listHost.insertBefore(row,listHost.children[index]||null);
+  });
+  $('listEmpty').hidden=visible.length>0;text($('listEmpty'),wt(controlled.length?"所有文件已隐藏":"暂无受控文件"));
+  animateOrder(before);refreshPresentationButtons();
+}
+function renderListTools(p){
+  if(!listGesture?.active&&!listCommit){
+    $('listSort').value=p.listSort||'manual';
+    text($('listSortDirection'),wt(p.listSortDescending?"降序":"升序"));
+    text($('listShowHidden'),wt(showHiddenPresentations?"收起隐藏项":"显示隐藏项"));
+    $('listShowHidden').setAttribute('aria-pressed',String(showHiddenPresentations));
+  }
+  const select=$('availablePresentations'),available=p.availablePresentations||[],signature=JSON.stringify(available.map(x=>[x.id,x.name]));
+  if(select.dataset.signature!==signature){
+    const selected=select.value;select.replaceChildren();select.dataset.signature=signature;
+    if(!available.length){const option=document.createElement('option');option.value='';text(option,wt("没有可添加的已打开文件"));select.append(option)}
+    for(const item of available){const option=document.createElement('option');option.value=item.id;option.textContent=item.name;select.append(option)}
+    if(available.some(x=>x.id===selected))select.value=selected;
+  }
 }
 function refreshPresentationButtons(){
-  document.querySelectorAll('[data-rule-button]').forEach(button=>button.disabled=busy||!connected);
-  document.querySelectorAll('[data-presentation-button]').forEach(button=>{
-    const row=button.closest('.presentation-item'),active=row?.dataset.active==='true';button.disabled=busy||!connected||active;
-  });
+  const blocked=busy||!connected||!!lastState?.presentationState?.isOperationBusy||!!listGesture?.active||listCommit;
+  document.querySelectorAll('[data-rule-button]').forEach(button=>button.disabled=blocked||button.dataset.edge==='true');
+  document.querySelectorAll('[data-presentation-button]').forEach(button=>button.disabled=blocked||button.closest('.presentation-item')?.dataset.active==='true');
+  document.querySelectorAll('.drag-handle').forEach(button=>button.disabled=blocked&&!listGesture?.active);
+  $('listSort').disabled=blocked;$('listSortDirection').disabled=blocked||$('listSort').value==='manual';$('listShowHidden').disabled=blocked;
+  $('availablePresentations').disabled=blocked||!$('availablePresentations').value;$('addOpenFile').disabled=blocked||!$('availablePresentations').value;
 }
+$('listSort').addEventListener('change',async()=>{
+  const ok=await command('rules.sort',{sortBy:$('listSort').value,descending:false});
+  if(!ok)renderListTools(lastState?.presentationState||{});
+});
+$('listSortDirection').addEventListener('click',()=>command('rules.sort',{sortBy:$('listSort').value,descending:!lastState?.presentationState?.listSortDescending}));
+$('listShowHidden').addEventListener('click',()=>{showHiddenPresentations=!showHiddenPresentations;renderListTools(lastState?.presentationState||{});renderPresentations(lastState?.presentationState?.presentations||[]);requestAnimationFrame(syncViewportHeight)});
+$('addOpenFile').addEventListener('click',()=>{const id=$('availablePresentations').value;if(id)command('rules.addOpen',{presentationId:id})});
+$('addOpenDetails').addEventListener('toggle',()=>requestAnimationFrame(syncViewportHeight));
+
+// A stationary hold enters drag mode; ordinary swipes still scroll the list.
+// Only one POST is sent on drop; cancellation, polling and reconnection send none.
+function startListGesture(target,x,y){
+  if(listGesture||busy||!connected||lastState?.presentationState?.isOperationBusy||listCommit)return;
+  const row=target.closest('.presentation-item');
+  if(!row||target.closest('.presentation-actions')||target.closest('input,select'))return;
+  listGesture={row,id:row.dataset.id,x,y,startX:x,startY:y,active:false,timer:null,raf:null,ghost:null,
+    expected:(lastState?.presentationState?.presentations||[]).map(x=>x.id),original:listRows().map(x=>x.dataset.id)};
+  listGesture.timer=setTimeout(()=>{
+    const g=listGesture;if(!g||!g.row.isConnected)return;
+    g.active=true;const r=g.row.getBoundingClientRect();g.offset=y-r.top;g.left=r.left;
+    g.ghost=g.row.cloneNode(true);g.ghost.classList.add('drag-ghost');g.ghost.inert=true;g.ghost.setAttribute('aria-hidden','true');
+    Object.assign(g.ghost.style,{width:`${r.width}px`,left:`${r.left}px`,top:`${r.top}px`});document.body.append(g.ghost);
+    g.row.classList.add('drag-placeholder');swipeStart=null;refreshPresentationButtons();
+    function tick(){
+      if(listGesture!==g||!g.active)return;
+      const bounds=listHost.getBoundingClientRect(),edge=36;
+      const delta=g.y<bounds.top+edge?-10:g.y>bounds.bottom-edge?10:0;
+      if(delta){const old=listHost.scrollTop;listHost.scrollTop+=delta;if(old!==listHost.scrollTop)placeDraggedRow(g)}
+      g.raf=requestAnimationFrame(tick);
+    }
+    g.raf=requestAnimationFrame(tick);
+  },360);
+}
+function placeDraggedRow(g){
+  const bounds=listHost.getBoundingClientRect();
+  const before=listRows().filter(row=>row!==g.row).find(row=>g.y<bounds.top+row.offsetTop-listHost.scrollTop+row.offsetHeight/2)||null;
+  if(before===g.row.nextElementSibling||(!before&&!g.row.nextElementSibling))return;
+  const old=positions();listHost.insertBefore(g.row,before);animateOrder(old);
+}
+function moveListGesture(x,y,event){
+  const g=listGesture;if(!g)return;
+  if(!g.active){if(Math.hypot(x-g.startX,y-g.startY)>8)finishListGesture(true);return}
+  if(event.cancelable)event.preventDefault();
+  g.x=x;g.y=y;g.ghost.style.top=`${y-g.offset}px`;placeDraggedRow(g);
+}
+async function finishListGesture(cancelled=false){
+  const g=listGesture;if(!g)return;clearTimeout(g.timer);cancelAnimationFrame(g.raf);
+  if(!g.active){listGesture=null;return}
+  const before=g.row.nextElementSibling?.dataset.id||null,current=listRows().map(x=>x.dataset.id),changed=JSON.stringify(current)!==JSON.stringify(g.original);
+  g.ghost?.remove();g.row.classList.remove('drag-placeholder');listGesture=null;suppressListClickUntil=performance.now()+650;
+  if(!cancelled&&changed&&connected&&!busy){
+    listCommit=true;
+    const ok=await command('rules.move',{presentationId:g.id,beforePresentationId:before,expectedOrder:g.expected,includeHidden:showHiddenPresentations});
+    listCommit=false;
+    if(ok){lastMovedId=g.id;notify(wt("顺序已保存"))}
+  }
+  renderListTools(lastState?.presentationState||{});renderPresentations(lastState?.presentationState?.presentations||[]);refreshPresentationButtons();
+}
+listHost.addEventListener('touchstart',event=>{if(event.touches.length!==1){finishListGesture(true);return}const t=event.touches[0];startListGesture(event.target,t.clientX,t.clientY)},{passive:true});
+listHost.addEventListener('touchmove',event=>{if(event.touches.length!==1){finishListGesture(true);return}const t=event.touches[0];moveListGesture(t.clientX,t.clientY,event)},{passive:false});
+listHost.addEventListener('touchend',()=>finishListGesture(false),{passive:true});
+listHost.addEventListener('touchcancel',()=>finishListGesture(true),{passive:true});
+listHost.addEventListener('pointerdown',event=>{if(event.pointerType==='touch'||event.button!==0)return;startListGesture(event.target,event.clientX,event.clientY)});
+document.addEventListener('pointermove',event=>{if(event.pointerType!=='touch')moveListGesture(event.clientX,event.clientY,event)});
+document.addEventListener('pointerup',event=>{if(event.pointerType!=='touch')finishListGesture(false)});
+document.addEventListener('pointercancel',event=>{if(event.pointerType!=='touch')finishListGesture(true)});
+document.addEventListener('click',event=>{if(performance.now()<suppressListClickUntil&&event.target.closest('.presentation-list')){event.preventDefault();event.stopPropagation()}},true);
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&listGesture)finishListGesture(true)});
+window.addEventListener('blur',()=>finishListGesture(true));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)finishListGesture(true)});
+for(const name of ['copy','cut','selectstart','contextmenu'])document.addEventListener(name,event=>event.preventDefault());
+
 function setAvailability(t,p){
-  const show=!!p.isSlideShowRunning,has=!!p.hasPresentation,state=t.state||'',running=!!t.running,paused=state.includes('暂停'),stopped=!running&&!paused,operationBusy=!!p.isOperationBusy;
+  const controlled=!!p.currentControllable,show=!!p.isSlideShowRunning&&controlled,has=controlled||!!selectedPresentationId,state=t.state||'',running=!!t.running,paused=state.includes('暂停'),stopped=!running&&!paused,operationBusy=!!p.isOperationBusy;
   commandButtons.forEach(button=>{
     const cmd=button.dataset.command;let disabled=busy||operationBusy||!connected;
     if(cmd==='timer.start')disabled||=!stopped;
@@ -171,7 +335,9 @@ function setAvailability(t,p){
     else if(cmd.startsWith('ppt.')){
       if(['ppt.previous','ppt.next','ppt.gotoSlide','ppt.endShow','ppt.blackScreenToggle','ppt.whiteScreenToggle'].includes(cmd))disabled||=!show;
       if(['ppt.startFromBeginning','ppt.startFromCurrent'].includes(cmd))disabled||=!has;
-      if(['ppt.closeActivePresentation','ppt.closeCurrentPresentation'].includes(cmd))disabled||=!(Number(p.openPresentationCount)>0||(p.presentations||[]).some(x=>x.isOpen));
+      if(cmd==='ppt.closeActivePresentation')disabled||=!controlled;
+      if(cmd==='ppt.closeCurrentPresentation')disabled||=!p.canCloseLast;
+      if(cmd==='ppt.forceQuitAll')disabled||=!p.canQuitAll;
     }
     button.disabled=disabled;
   });
@@ -182,12 +348,14 @@ function setAvailability(t,p){
 }
 function updatePresentationHint(p){
   const updated=p.updatedAt?new Date(p.updatedAt).getTime():0,stale=updated>0&&Date.now()-updated>3000;
-  $('presentationHint').textContent=p.error||(!p.powerPointInstalled?'本机未安装 Microsoft PowerPoint':!p.hasPresentation?'请先打开或从上方列表选择演示文稿':stale?'PowerPoint 状态可能已过期，计时控制仍可使用':'');
+  $('presentationHint').textContent=p.error||(p.hasPresentation&&!p.currentControllable?"当前文稿未受控，请先加入列表。":!p.powerPointInstalled?'本机未安装 Microsoft PowerPoint':!p.hasPresentation?'请先打开或从上方列表选择演示文稿':stale?'PowerPoint 状态可能已过期，计时控制仍可使用':'');
 }
 function schedulePoll(delay=1000){clearTimeout(pollTimer);pollTimer=setTimeout(poll,delay)}
 async function poll(){
-  try{paint(await api('/state'));schedulePoll(1000)}
+  const epoch=stateEpoch;
+  try{const result=await api('/state');if(epoch===stateEpoch&&!busy)paint(result);schedulePoll(1000)}
   catch(e){
+    if(epoch!==stateEpoch||busy){schedulePoll(1000);return}
     pollFailures+=1;
     if(pollFailures>=3){
       connection(false);setAvailability({},{});refreshPresentationButtons();
@@ -198,7 +366,7 @@ async function poll(){
 }
 function requestConfirmation(name,extra){
   const details={
-    'rules.delete':['删除列表规则','只移除 FlyPPTTimer 的列表规则，不删除磁盘文件，也不关闭已打开文稿。'],
+    'rules.delete':["移除文件", "移除后不再显示在受控列表，也不能远程打开或关闭。不删除磁盘文件，不关闭当前文稿；需要时可重新加入。"],
     'ppt.endShow':['结束放映','仅结束电脑端当前放映，不关闭文稿或 PowerPoint。'],
     'ppt.closeActivePresentation':['关闭当前文稿','关闭当前活动文稿且不保存；其他已打开文稿保持不变。'],
     'ppt.closeCurrentPresentation':['关闭最后打开的文稿','将按打开顺序关闭最后打开的文稿且不保存；每次只关闭一个。'],
@@ -228,7 +396,7 @@ function requestDurationConfirmation(durationMs,ruleCount){
 async function command(name,extra={}){
   if(!connected||busy){if(!connected)notify('当前已断开，命令未发送',true);return false}
   if(!extra.confirmed&&requestConfirmation(name,extra))return false;
-  busy=true;setAvailability(timerState(lastState||{}),(lastState||{}).presentationState||{});
+  stateEpoch+=1;busy=true;setAvailability(timerState(lastState||{}),(lastState||{}).presentationState||{});
   try{paint(await api('/command',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:name,...extra})}));return true}
   catch(e){notify(e.message,true);return false}finally{busy=false;setAvailability(timerState(lastState||{}),(lastState||{}).presentationState||{});schedulePoll(100)}
 }
@@ -244,7 +412,7 @@ function renderPage(index,animate=true){
 }
 function activatePage(pageId){renderPage(Math.max(0,pages.indexOf(pageId)),true)}
 document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>activatePage(tab.dataset.page)));
-pagesViewport.addEventListener('touchstart',event=>{if(event.touches.length!==1||event.target.closest('.confirm-panel'))return;const touch=event.touches[0];swipeStart={x:touch.clientX,y:touch.clientY,time:performance.now(),baseX:freezeTrack(),dragging:false,lastX:touch.clientX,lastTime:performance.now()}},{passive:true});
+pagesViewport.addEventListener('touchstart',event=>{if(event.touches.length!==1||event.target.closest('.confirm-panel,.presentation-list'))return;const touch=event.touches[0];swipeStart={x:touch.clientX,y:touch.clientY,time:performance.now(),baseX:freezeTrack(),dragging:false,lastX:touch.clientX,lastTime:performance.now()}},{passive:true});
 pagesViewport.addEventListener('touchmove',event=>{if(!swipeStart||!event.touches.length)return;const touch=event.touches[0],dx=touch.clientX-swipeStart.x,dy=touch.clientY-swipeStart.y;if(!swipeStart.dragging){const distance=Math.hypot(dx,dy);if(distance<SWIPE_DIRECTION_DISTANCE)return;const angle=Math.atan2(Math.abs(dy),Math.abs(dx))*180/Math.PI;if(angle>SWIPE_MAX_ANGLE_DEGREES){swipeStart=null;renderPage(pageIndex,true);return}swipeStart.dragging=true;suppressSwipeClick=true;clearTimeout(suppressSwipeClickTimer)}event.preventDefault();const width=Math.max(1,pagesViewport.clientWidth),minX=-(pages.length-1)*width;let nextX=swipeStart.baseX+dx;if(nextX>0)nextX*=.24;else if(nextX<minX)nextX=minX+(nextX-minX)*.24;pagesTrack.style.transition='none';pagesTrack.style.transform=`translate3d(${nextX}px,0,0)`;swipeStart.lastX=touch.clientX;swipeStart.lastTime=performance.now()},{passive:false});
 pagesViewport.addEventListener('touchend',event=>{if(!swipeStart)return;const touch=event.changedTouches[0],now=performance.now(),x=touch?touch.clientX:swipeStart.lastX,dx=x-swipeStart.x,elapsed=Math.max(1,now-swipeStart.time),dragging=swipeStart.dragging,currentX=readTrackX(),width=Math.max(1,pagesViewport.clientWidth);swipeStart=null;if(!dragging){renderPage(pageIndex,true);return}const velocity=dx/elapsed,commit=Math.abs(dx)>=18||Math.abs(velocity)>=.12,position=-currentX/width;let target=Math.round(position);if(commit)target=dx<0?Math.floor(position)+1:Math.ceil(position)-1;renderPage(target,true);suppressSwipeClickTimer=setTimeout(()=>suppressSwipeClick=false,420)},{passive:true});
 pagesViewport.addEventListener('touchcancel',()=>{swipeStart=null;renderPage(pageIndex,true)},{passive:true});
@@ -256,7 +424,7 @@ $('confirmCancel').addEventListener('click',()=>{const pending=pendingConfirmati
 $('confirmAccept').addEventListener('click',()=>{const pending=pendingConfirmation;closeConfirmation();if(pending)command(pending.name,{...pending.extra,...(pending.durationChoice?{syncAllRules:true}:{}),confirmed:true}).then(ok=>{if(ok&&pending.durationChoice){timerEditorDirty=false;notify('已同步修改全部文件规则时长')}})});
 commandButtons.forEach(button=>button.addEventListener('click',()=>{
   const name=button.dataset.command;
-  command(name,name==='timer.restart'?{presentationId:selectedPresentationId}:{});
+  command(name,['timer.restart','ppt.startFromBeginning','ppt.startFromCurrent'].includes(name)?{presentationId:selectedPresentationId}:{});
 }));
 $('durationHours').addEventListener('input',()=>timerEditorDirty=true);
 $('durationMinutes').addEventListener('input',()=>timerEditorDirty=true);

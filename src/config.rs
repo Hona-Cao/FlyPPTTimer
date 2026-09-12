@@ -316,6 +316,12 @@ impl Default for PromptSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
 pub struct AppearanceSettings {
+    pub auto_size: bool,
+    pub page_font_size: Option<f32>,
+    pub page_text_color: Option<String>,
+    pub page_italic: bool,
+    pub page_alignment: PageAlignment,
+    pub page_position: PagePosition,
     pub show_slide_numbers: bool,
     pub color_scheme: String,
     pub font_family: String,
@@ -342,6 +348,12 @@ pub struct AppearanceSettings {
 impl Default for AppearanceSettings {
     fn default() -> Self {
         Self {
+            auto_size: true,
+            page_font_size: None,
+            page_text_color: None,
+            page_italic: false,
+            page_alignment: PageAlignment::Center,
+            page_position: PagePosition::Below,
             show_slide_numbers: true,
             color_scheme: "医疗卫生（蓝白）".to_owned(),
             font_family: "Microsoft YaHei UI".to_owned(),
@@ -365,6 +377,23 @@ impl Default for AppearanceSettings {
             always_on_top: true,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum PageAlignment {
+    Left = 0,
+    #[default]
+    Center = 1,
+    Right = 2,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum PagePosition {
+    Above = 0,
+    #[default]
+    Below = 1,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -434,6 +463,8 @@ pub enum CloseButtonBehavior {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
 pub struct RemoteControlSettings {
+    pub list_sort: String,
+    pub list_sort_descending: bool,
     pub enabled: bool,
     pub use_random_port: bool,
     pub port: u16,
@@ -444,6 +475,8 @@ pub struct RemoteControlSettings {
 impl Default for RemoteControlSettings {
     fn default() -> Self {
         Self {
+            list_sort: "manual".into(),
+            list_sort_descending: false,
             enabled: true,
             use_random_port: false,
             port: 4080,
@@ -627,6 +660,19 @@ mod tests {
             .unwrap()
             .remove("ShowSlideNumbers");
 
+        for key in [
+            "AutoSize",
+            "PageFontSize",
+            "PageTextColor",
+            "PageItalic",
+            "PageAlignment",
+            "PagePosition",
+        ] {
+            actual["Appearance"].as_object_mut().unwrap().remove(key);
+        }
+        for key in ["ListSort", "ListSortDescending"] {
+            actual["RemoteControl"].as_object_mut().unwrap().remove(key);
+        }
         normalize_integral_numbers(&mut expected);
         normalize_integral_numbers(&mut actual);
 

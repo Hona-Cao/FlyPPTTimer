@@ -16,10 +16,13 @@ use serde::{Deserialize, Serialize};
 use slint::{Image, Rgba8Pixel, SharedPixelBuffer};
 
 use crate::{
-    config::{AppConfig, FileRule},
+    config::AppConfig,
     presentation::{PresentationApp, PresentationState},
     timer::{TimerMode, TimerSnapshot, TimerState},
 };
+
+#[cfg(test)]
+use crate::config::FileRule;
 
 const INDEX_HTML: &str = include_str!("FlyPPTTimer/Web/index.html");
 const APP_CSS: &str = include_str!("FlyPPTTimer/Web/app.css");
@@ -57,6 +60,8 @@ pub struct PresentationOption {
     pub is_active: bool,
     pub is_slide_show_running: bool,
     pub is_managed: bool,
+    pub file_size: Option<u64>,
+    pub modified_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -82,6 +87,12 @@ pub struct PresentationRemoteState {
     pub is_current_presentation_managed: bool,
     pub open_presentation_count: usize,
     pub wps_detected: bool,
+    pub available_presentations: Vec<PresentationOption>,
+    pub current_controllable: bool,
+    pub can_close_last: bool,
+    pub can_quit_all: bool,
+    pub list_sort: String,
+    pub list_sort_descending: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -147,6 +158,11 @@ pub struct RemoteCommand {
     pub confirmed: Option<bool>,
     pub sync_all_rules: Option<bool>,
     pub operation_id: Option<String>,
+    pub sort_by: Option<String>,
+    pub descending: Option<bool>,
+    pub before_presentation_id: Option<String>,
+    pub expected_order: Option<Vec<String>>,
+    pub include_hidden: Option<bool>,
 }
 
 pub struct RemoteRequest {
@@ -858,7 +874,7 @@ pub fn remote_state(
         time_up_blackout_active: time_up,
         rule_count: config.rules.len(),
     };
-    let presentation_state = presentation_remote_state(presentation, &config.rules);
+    let presentation_state = presentation_remote_state_with_config(presentation, config);
     RemoteState {
         ok: true,
         message: String::new(),
@@ -882,14 +898,28 @@ pub fn remote_state(
     }
 }
 
+#[cfg(test)]
 fn presentation_remote_state(
     state: &PresentationState,
     rules: &[FileRule],
 ) -> PresentationRemoteState {
-    let mut ordered = rules.iter().collect::<Vec<_>>();
-    ordered.sort_by_key(|rule| rule.mobile_order);
+    let config = AppConfig {
+        rules: rules.to_vec(),
+        ..AppConfig::default()
+    };
+    presentation_remote_state_with_config(state, &config)
+}
+
+fn presentation_remote_state_with_config(
+    state: &PresentationState,
+    config: &AppConfig,
+) -> PresentationRemoteState {
+    let rules = &config.rules;
+    let ordered = crate::mobile_rules::ordered_indices(config);
     let mut options = Vec::new();
-    for rule in ordered {
+    for index in ordered {
+        let rule = &rules[index];
+        let metadata = crate::mobile_rules::file_metadata(&rule.file_path);
         let open = state
             .presentations
             .iter()
@@ -909,6 +939,8 @@ fn presentation_remote_state(
                 .parent()
                 .map(|p| p.display().to_string())
                 .unwrap_or_default(),
+            file_size: metadata.0,
+            modified_ms: metadata.1,
             is_rule: true,
             mobile_hidden: rule.mobile_hidden,
             is_open: open.is_some(),
@@ -927,8 +959,9 @@ fn presentation_remote_state(
         })
         .collect::<Vec<_>>();
     unmanaged.sort_by_key(|item| id_for_path(&item.path));
+    let mut available = Vec::new();
     for item in unmanaged {
-        options.push(PresentationOption {
+        available.push(PresentationOption {
             id: id_for_path(&item.path),
             name: item.name.clone(),
             directory: std::path::Path::new(&item.path)
@@ -959,6 +992,14 @@ fn presentation_remote_state(
         .to_owned(),
         updated_at: utc_timestamp(),
         error: state.error.clone(),
+        current_controllable: crate::mobile_rules::is_controlled(config, &state.presentation_path),
+        can_close_last: options.iter().any(|item| item.is_open && item.is_managed),
+        can_quit_all: !state.state_unavailable
+            && !state.presentations.is_empty()
+            && available.is_empty(),
+        available_presentations: available,
+        list_sort: config.remote_control.list_sort.clone(),
+        list_sort_descending: config.remote_control.list_sort_descending,
         presentations: options,
         operation: state.operation.name.clone(),
         operation_message: state.operation.message.clone(),

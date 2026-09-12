@@ -141,6 +141,7 @@ enum Request {
         PresentationCommand,
         String,
         mpsc::SyncSender<Result<String, String>>,
+        Option<Vec<String>>,
     ),
     Stop,
 }
@@ -174,7 +175,7 @@ impl PresentationService {
     #[allow(dead_code)]
     pub fn execute(&self, command: PresentationCommand) -> Result<String, String> {
         let (sender, receiver) = mpsc::sync_channel(1);
-        self.enqueue(command, sender)?;
+        self.enqueue(command, sender, None)?;
         receiver
             .recv_timeout(Duration::from_secs(15))
             .map_err(|_| "PowerPoint 响应超时，计时遥控仍可继续使用。".to_owned())?
@@ -182,13 +183,23 @@ impl PresentationService {
 
     pub fn queue(&self, command: PresentationCommand) -> Result<String, String> {
         let (sender, _receiver) = mpsc::sync_channel(1);
-        self.enqueue(command, sender)
+        self.enqueue(command, sender, None)
+    }
+
+    pub fn queue_remote(
+        &self,
+        command: PresentationCommand,
+        allowed_paths: Vec<String>,
+    ) -> Result<String, String> {
+        let (sender, _receiver) = mpsc::sync_channel(1);
+        self.enqueue(command, sender, Some(allowed_paths))
     }
 
     fn enqueue(
         &self,
         command: PresentationCommand,
         reply: mpsc::SyncSender<Result<String, String>>,
+        allowed_paths: Option<Vec<String>>,
     ) -> Result<String, String> {
         if matches!(
             command,
@@ -212,11 +223,11 @@ impl PresentationService {
             message: message.into(),
             started_at: Some(crate::remote::utc_timestamp()),
             id: id.clone(),
-            busy: name != "Idle",
+            busy: name != "Idle" || allowed_paths.is_some(),
         };
         if self
             .sender
-            .send(Request::Execute(command, id, reply))
+            .send(Request::Execute(command, id, reply, allowed_paths))
             .is_err()
         {
             let result = Err("演示控制服务已关闭。".to_owned());
@@ -243,8 +254,8 @@ fn presentation_thread(receiver: mpsc::Receiver<Request>, state: Arc<Mutex<Prese
     let mut session = Session::default();
     loop {
         match receiver.recv_timeout(Duration::from_millis(500)) {
-            Ok(Request::Execute(command, operation_id, reply)) => {
-                let result = session.execute(command);
+            Ok(Request::Execute(command, operation_id, reply, allowed_paths)) => {
+                let result = session.execute_scoped(command, allowed_paths.as_deref());
                 match &result {
                     Ok(message) => session.message = message.clone(),
                     Err(error) => session.message = error.clone(),
@@ -313,6 +324,48 @@ impl Session {
                 ..PresentationState::default()
             },
         }
+    }
+
+    fn execute_scoped(
+        &mut self,
+        command: PresentationCommand,
+        allowed: Option<&[String]>,
+    ) -> Result<String, String> {
+        if let Some(paths) = allowed {
+            let accepts = |path: &str| {
+                paths
+                    .iter()
+                    .any(|p| crate::remote::id_for_path(p) == crate::remote::id_for_path(path))
+            };
+            match &command {
+                PresentationCommand::Refresh => {}
+                PresentationCommand::Open(path)
+                | PresentationCommand::StartFromBeginning(Some(path))
+                | PresentationCommand::StartFromCurrent(Some(path)) => {
+                    if !accepts(&path.to_string_lossy()) {
+                        return Err("文件不在受控列表中，请先重新加入。".into());
+                    }
+                }
+                PresentationCommand::CloseActive => return self.close_active_scoped(Some(paths)),
+                PresentationCommand::CloseLastOpened => {
+                    return self.close_last_opened_scoped(Some(paths));
+                }
+                PresentationCommand::ForceQuitAll { confirmed: true } => {
+                    return force_quit_controlled(paths);
+                }
+                PresentationCommand::ForceQuitAll { confirmed: false } => {
+                    return Err("请先确认关闭并放弃未保存修改。".into());
+                }
+                _ => {
+                    let (_, app) = running_application().ok_or("演示软件未运行。")?;
+                    let path = active_presentation_path(&app).ok_or("无法确定当前文稿。")?;
+                    if !accepts(&path) {
+                        return Err("当前文稿不在受控列表中，请先重新加入。".into());
+                    }
+                }
+            }
+        }
+        self.execute(command)
     }
 
     fn execute(&mut self, command: PresentationCommand) -> Result<String, String> {
@@ -456,9 +509,22 @@ impl Session {
     }
 
     fn close_active(&mut self) -> Result<String, String> {
+        self.close_active_scoped(None)
+    }
+
+    fn close_active_scoped(&mut self, allowed: Option<&[String]>) -> Result<String, String> {
         let (_, app) = running_application().ok_or("PowerPoint 或 WPS 演示未运行。")?;
         let presentation = dispatch(get(&app, "ActivePresentation")?)?;
         let path = string(get(&presentation, "FullName")?)?;
+        // Validate the very object that will be closed, not an earlier active
+        // window lookup which may change while the user switches Office focus.
+        if allowed.is_some_and(|paths| {
+            !paths
+                .iter()
+                .any(|p| crate::remote::id_for_path(p) == crate::remote::id_for_path(&path))
+        }) {
+            return Err("当前文稿不在受控列表中，请先重新加入。".into());
+        }
         end_show_for(&app, &path)?;
         close_without_saving(&presentation)?;
         self.remove_managed(&path);
@@ -466,20 +532,29 @@ impl Session {
     }
 
     fn close_last_opened(&mut self) -> Result<String, String> {
-        while let Some(path) = self.opened_order.pop() {
-            let Some((_, app)) = running_application() else {
-                break;
-            };
-            let presentations = dispatch(get(&app, "Presentations")?)?;
+        self.close_last_opened_scoped(None)
+    }
+
+    fn close_last_opened_scoped(&mut self, allowed: Option<&[String]>) -> Result<String, String> {
+        let (_, app) = running_application().ok_or("演示软件未运行。")?;
+        let presentations = dispatch(get(&app, "Presentations")?)?;
+        for path in self.opened_order.clone().into_iter().rev() {
+            if allowed.is_some_and(|paths| {
+                !paths
+                    .iter()
+                    .any(|p| crate::remote::id_for_path(p) == crate::remote::id_for_path(&path))
+            }) {
+                continue;
+            }
             if let Some(presentation) = find_presentation(&presentations, &path)? {
                 end_show_for(&app, &path)?;
                 close_without_saving(&presentation)?;
-                self.managed_paths.remove(&path);
+                self.remove_managed(&path);
                 return Ok(format!("已关闭最后打开的文稿：{}。", file_name(&path)));
             }
-            self.managed_paths.remove(&path);
+            self.remove_managed(&path);
         }
-        Err("当前没有 FlyPPTTimer 打开的文稿。".to_owned())
+        Err("当前没有可关闭的受控文稿。".into())
     }
 
     fn exit_application(&mut self) -> Result<String, String> {
@@ -1103,6 +1178,57 @@ fn file_name(path: &str) -> String {
         .unwrap_or_default()
         .to_string_lossy()
         .into_owned()
+}
+
+// A remote quit may not kill an excluded deck in a second Office instance.
+// Target only a positively identified single presentation process, never /IM or /T.
+fn force_quit_controlled(paths: &[String]) -> Result<String, String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowThreadProcessId, IsWindow};
+    let (_, app) = running_application().ok_or("演示软件未运行。")?;
+    let handle = int(get(&app, "HWND")?)? as usize as windows_sys::Win32::Foundation::HWND;
+    let mut pid = 0;
+    if unsafe { IsWindow(handle) } == 0
+        || unsafe { GetWindowThreadProcessId(handle, &mut pid) } == 0
+        || pid == 0
+    {
+        return Err("无法确认演示进程，未执行远程退出。".into());
+    }
+    let processes = process_names();
+    if !processes.get(&pid).is_some_and(|n| {
+        n.eq_ignore_ascii_case("POWERPNT.EXE") || n.eq_ignore_ascii_case("wpp.exe")
+    }) || processes.iter().any(|(&other, n)| {
+        other != pid
+            && ["POWERPNT.EXE", "wpp.exe", "WPSOffice.exe", "wps.exe"]
+                .iter()
+                .any(|p| n.eq_ignore_ascii_case(p))
+    }) {
+        return Err("存在其他或共享 Office 进程，请在电脑上退出演示软件。".into());
+    }
+    let decks = dispatch(get(&app, "Presentations")?)?;
+    let count = int(get(&decks, "Count")?)?;
+    if count <= 0 {
+        return Err("当前没有可关闭的受控文稿。".into());
+    }
+    for i in 1..=count {
+        let deck = dispatch(call(&decks, "Item", &[VARIANT::from(i)])?)?;
+        let path = string(get(&deck, "FullName")?)?;
+        if path.is_empty()
+            || !paths
+                .iter()
+                .any(|p| crate::remote::id_for_path(p) == crate::remote::id_for_path(&path))
+        {
+            return Err("存在未受控文稿，未执行远程退出。".into());
+        }
+    }
+    let status = std::process::Command::new("taskkill")
+        .args(["/F", "/PID", &pid.to_string()])
+        .status()
+        .map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok("已退出受控演示进程。".into())
+    } else {
+        Err("退出演示进程失败。".into())
+    }
 }
 
 fn force_quit_all() -> Result<String, String> {

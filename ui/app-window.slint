@@ -33,6 +33,102 @@ export struct PresentationItem {
     selected: bool,
 }
 
+// Both rows form one measured block; outer top/bottom space is identical.
+component TimerReadout inherits Rectangle {
+    // Content measurements are outputs, not constraints fed into the host window.
+    // Keep every inferred layout constraint independent of fullscreen font fit.
+    min-width: 0px;
+    min-height: 0px;
+    max-width: 65535px;
+    max-height: 65535px;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
+    preferred-width: 1px;
+    preferred-height: 1px;
+    in property <string> display-text;
+    in property <string> page-text;
+    in property <string> page-reserve;
+    in property <length> timer-font-size: 18px;
+    in property <length> page-font-size: root.timer-font-size;
+    in property <string> font-family: "Microsoft YaHei UI";
+    in property <int> font-weight: 700;
+    in property <bool> font-italic: false;
+    in property <bool> page-italic: false;
+    in property <color> foreground-color;
+    in property <color> page-color: root.foreground-color;
+    in property <int> page-alignment: 1;
+    in property <bool> page-above: false;
+    in property <bool> text-visible: true;
+    private property <length> row-gap: root.page-text == "" ? 0px : 2px;
+    private property <length> page-height: root.page-text == "" ? 0px : page-measure.preferred-height;
+    private property <length> block-height: time-measure.preferred-height + root.page-height + root.row-gap;
+    private property <length> block-width: max(time-measure.preferred-width, max(page-measure.preferred-width, page-actual.preferred-width));
+    private property <length> available-width: max(1px, root.width - 16px);
+    private property <length> draw-width: min(root.block-width, root.available-width);
+    private property <length> block-top: (root.height - root.block-height) / 2;
+    out property <length> required-width: root.block-width + 16px;
+    out property <length> required-height: root.block-height + 12px;
+    out property <length> top-space: root.block-top;
+    out property <length> bottom-space: root.height - root.block-top - root.block-height;
+    clip: true;
+    time-measure := Text {
+        text: root.display-text;
+        font-family: root.font-family;
+        font-size: root.timer-font-size;
+        font-weight: root.font-weight;
+        font-italic: root.font-italic;
+        visible: false;
+    }
+    page-measure := Text {
+        text: root.page-text == "" ? "" : root.page-reserve;
+        font-family: root.font-family;
+        font-size: root.page-font-size;
+        font-weight: root.font-weight;
+        font-italic: root.page-italic;
+        visible: false;
+    }
+    page-actual := Text {
+        text: root.page-text;
+        font-family: root.font-family;
+        font-size: root.page-font-size;
+        font-weight: root.font-weight;
+        font-italic: root.page-italic;
+        visible: false;
+    }
+    Text {
+        x: (root.width - root.draw-width) / 2;
+        y: root.block-top + (root.page-above ? root.page-height + root.row-gap : 0px);
+        width: root.draw-width;
+        height: time-measure.preferred-height;
+        text: root.display-text;
+        font-family: root.font-family;
+        font-size: root.timer-font-size;
+        font-weight: root.font-weight;
+        font-italic: root.font-italic;
+        color: root.foreground-color;
+        horizontal-alignment: root.page-alignment == 0 ? left : root.page-alignment == 2 ? right : center;
+        vertical-alignment: center;
+        overflow: clip;
+        visible: root.text-visible;
+    }
+    Text {
+        x: (root.width - root.draw-width) / 2;
+        y: root.block-top + (root.page-above ? 0px : time-measure.preferred-height + root.row-gap);
+        width: root.draw-width;
+        height: root.page-height;
+        text: root.page-text;
+        font-family: root.font-family;
+        font-size: root.page-font-size;
+        font-weight: root.font-weight;
+        font-italic: root.page-italic;
+        color: root.page-color;
+        horizontal-alignment: root.page-alignment == 0 ? left : root.page-alignment == 2 ? right : center;
+        vertical-alignment: center;
+        overflow: clip;
+        visible: root.page-text != "" && root.text-visible;
+    }
+}
+
 export component AppWindow inherits Window {
     in property <length> content-width: 100px;
     in property <length> content-height: 35px;
@@ -42,6 +138,12 @@ export component AppWindow inherits Window {
     in property <brush> surface-color: #f3f8fc;
     in property <color> foreground-color: #0b3a66;
     in property <length> timer-font-size: 18px;
+    in property <length> page-font-size: root.timer-font-size;
+    in property <color> page-color: root.foreground-color;
+    in property <bool> page-italic: false;
+    in property <int> page-alignment: 1;
+    in property <bool> page-above: false;
+    in property <string> excluded-display;
     in property <string> timer-font-family: "Microsoft YaHei UI";
     in property <int> timer-font-weight: 700;
     in property <bool> timer-font-italic: false;
@@ -52,21 +154,20 @@ export component AppWindow inherits Window {
     in property <bool> flash-background-active: false;
     in property <bool> flash-border-active: false;
     in property <color> flash-color: #4ea3d8;
-    out property <length> required-text-width: max(time-text.preferred-width, page-measure.preferred-width) + 12px;
-    out property <length> required-text-height: time-text.preferred-height + (root.page-text == "" ? 0px : page-measure.preferred-height + 2px) + 8px;
-
+    out property <length> required-text-width: readout.required-width;
+    out property <length> required-text-height: readout.required-height;
+    out property <length> text-top-space: readout.top-space;
+    out property <length> text-bottom-space: readout.bottom-space;
     callback begin-drag();
     callback drag-move();
     callback end-drag();
     callback show-menu();
-
     title: "";
     width: root.content-width;
     height: root.content-height;
     no-frame: true;
     always-on-top: root.keep-on-top;
     background: root.flash-background-active ? root.flash-color : root.surface-color;
-
     Rectangle {
         width: root.width;
         height: root.height;
@@ -74,104 +175,83 @@ export component AppWindow inherits Window {
         border-radius: root.corner-radius;
         border-width: root.flash-border-active ? 3px : 0px;
         border-color: root.flash-color;
-
-        page-measure := Text {
-            text: root.page-text == "" ? "" : root.page-reserve;
+        readout := TimerReadout {
+            width: parent.width;
+            height: parent.height;
+            display-text: root.display-text;
+            page-text: root.page-text;
+            page-reserve: root.page-reserve;
+            timer-font-size: root.timer-font-size;
+            page-font-size: root.page-font-size;
             font-family: root.timer-font-family;
-            font-size: root.timer-font-size * 0.55;
-            visible: false;
-        }
-        Text {
-            x: 6px;
-            y: (parent.height + time-text.preferred-height - page-measure.preferred-height) / 2 + 1px;
-            width: parent.width - 12px;
-            height: page-measure.preferred-height;
-            text: root.page-text;
-            font-family: root.timer-font-family;
-            font-size: root.timer-font-size * 0.55;
-            color: root.foreground-color;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            visible: root.page-text != "" && root.flash-text-visible;
-        }
-        time-text := Text {
-            x: 4px;
-            width: parent.width - 8px;
-            height: parent.height - (root.page-text == "" ? 0px : page-measure.preferred-height + 2px);
-            text: root.display-text;
-            color: root.foreground-color;
-            font-family: root.timer-font-family;
-            font-size: root.timer-font-size;
             font-weight: root.timer-font-weight;
             font-italic: root.timer-font-italic;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            overflow: elide;
-            visible: root.flash-text-visible;
+            page-italic: root.page-italic;
+            foreground-color: root.foreground-color;
+            page-color: root.page-color;
+            page-alignment: root.page-alignment;
+            page-above: root.page-above;
+            text-visible: root.flash-text-visible;
         }
-
         TouchArea {
-            enabled: true;
             pointer-event(event) => {
-                if root.drag-enabled && event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
-                    root.begin-drag();
-                }
-                if root.drag-enabled && event.kind == PointerEventKind.move {
-                    root.drag-move();
-                }
-                if root.drag-enabled && ((event.button == PointerEventButton.left && event.kind == PointerEventKind.up) || event.kind == PointerEventKind.cancel) {
-                    root.end-drag();
-                }
-                if event.button == PointerEventButton.right && event.kind == PointerEventKind.up {
-                    root.show-menu();
-                }
+                if root.drag-enabled && event.button == PointerEventButton.left && event.kind == PointerEventKind.down { root.begin-drag(); }
+                if root.drag-enabled && event.kind == PointerEventKind.move { root.drag-move(); }
+                if root.drag-enabled && ((event.button == PointerEventButton.left && event.kind == PointerEventKind.up) || event.kind == PointerEventKind.cancel) { root.end-drag(); }
+                if event.button == PointerEventButton.right && event.kind == PointerEventKind.up { root.show-menu(); }
             }
         }
     }
 }
 export component BigScreenWindow inherits Window {
+    max-width: 65535px;
+    max-height: 65535px;
     in property <string> page-text;
+    in property <string> page-reserve;
     in property <string> display-text: "08:00";
     in property <brush> surface-color: #f3f8fc;
     in property <color> foreground-color: #0b3a66;
+    in property <color> page-color: root.foreground-color;
+    in property <float> page-font-ratio: 1;
+    in property <bool> page-italic: false;
+    in property <int> page-alignment: 1;
+    in property <bool> page-above: false;
     in property <string> timer-font-family: "Microsoft YaHei UI";
     in property <bool> keep-on-top: true;
     in property <length> timer-font-size: 162px;
-
+    // Fit the entire measured block rather than clipping the second line.
+    private property <float> fit: min(1, min(max(1px, root.width - 32px) / big-measure.required-width, max(1px, root.height - 32px) / big-measure.required-height));
     title: "FlyPPTTimer";
     preferred-width: 960px;
     preferred-height: 540px;
     min-width: 640px;
     min-height: 360px;
-    no-frame: false;
     always-on-top: root.keep-on-top;
     background: root.surface-color;
-
-    Rectangle {
-        background: root.surface-color;
-        Text {
-            y: parent.height * 0.65;
-            width: parent.width;
-            height: parent.height * 0.25;
-            text: root.page-text;
-            font-family: root.timer-font-family;
-            font-size: root.timer-font-size * 0.45;
-            color: root.foreground-color;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-        Text {
-            width: parent.width;
-            height: parent.height * (root.page-text == "" ? 1 : 0.7);
-            text: root.display-text;
-            color: root.foreground-color;
-            font-family: root.timer-font-family;
-            font-size: root.timer-font-size;
-            font-weight: 700;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            overflow: elide;
-        }
+    big-measure := TimerReadout {
+        display-text: root.display-text;
+        page-text: root.page-text;
+        page-reserve: root.page-reserve;
+        timer-font-size: root.timer-font-size;
+        page-font-size: root.timer-font-size * root.page-font-ratio;
+        font-family: root.timer-font-family;
+        page-italic: root.page-italic;
+        visible: false;
+    }
+    TimerReadout {
+        width: parent.width;
+        height: parent.height;
+        display-text: root.display-text;
+        page-text: root.page-text;
+        page-reserve: root.page-reserve;
+        timer-font-size: root.timer-font-size * root.fit;
+        page-font-size: root.timer-font-size * root.page-font-ratio * root.fit;
+        font-family: root.timer-font-family;
+        page-italic: root.page-italic;
+        foreground-color: root.foreground-color;
+        page-color: root.page-color;
+        page-alignment: root.page-alignment;
+        page-above: root.page-above;
     }
 }
 
@@ -648,6 +728,12 @@ export component SettingsWindow inherits Window {
     in-out property <int> timer-preview-height: 35;
     in-out property <float> timer-preview-font: 18;
     in-out property <bool> timer-preview-pages: true;
+    in-out property <bool> timer-preview-auto: true;
+    in-out property <float> timer-preview-page-font: 0;
+    in-out property <string> timer-preview-page-color;
+    in-out property <bool> timer-preview-page-italic: false;
+    in-out property <int> timer-preview-page-alignment: 1;
+    in-out property <bool> timer-preview-page-above: false;
     in property <string> settings-title: "FlyPPTTimer Settings";
     in property <[string]> pages;
     in property <[SettingItem]> items;

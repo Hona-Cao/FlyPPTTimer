@@ -110,6 +110,28 @@ pub fn signature(monitors: &[DisplayMonitor]) -> String {
         .join("|")
 }
 
+pub fn big_screen_target<'a>(
+    monitors: &'a [DisplayMonitor],
+    placement: &WindowPlacement,
+) -> Option<&'a DisplayMonitor> {
+    if !placement.big_screen_enabled {
+        return None;
+    }
+    let extended = extended_monitors(monitors);
+    extended
+        .iter()
+        .copied()
+        .find(|m| {
+            m.device_name
+                .eq_ignore_ascii_case(&placement.big_screen_device_name)
+        })
+        .or_else(|| extended.first().copied())
+}
+
+pub fn overlay_allowed(visible: bool, monitor: &str, excluded: &str) -> bool {
+    visible && (excluded.is_empty() || !monitor.eq_ignore_ascii_case(excluded))
+}
+
 pub fn timer_targets<'a>(
     monitors: &'a [DisplayMonitor],
     placement: &WindowPlacement,
@@ -281,5 +303,17 @@ mod tests {
             position
         );
         assert!(placement.has_custom_placement);
+    }
+}
+
+#[cfg(test)]
+mod rc32_tests {
+    use super::*;
+    #[test]
+    fn fullscreen_display_exclusion_never_overrides_user_visibility() {
+        assert!(!overlay_allowed(true, "DISPLAY2", "display2"));
+        assert!(overlay_allowed(true, "DISPLAY1", "DISPLAY2"));
+        assert!(overlay_allowed(true, "DISPLAY2", ""));
+        assert!(!overlay_allowed(false, "DISPLAY1", "DISPLAY2"));
     }
 }

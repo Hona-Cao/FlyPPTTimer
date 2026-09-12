@@ -96,6 +96,32 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
     HEADLESS_WINDOW.with(|window| window.request_redraw());
     let pixels = timer_window.window().take_snapshot()?;
     write_png(output.join("timer-window.png"), &pixels)?;
+    // Production Slint readout evidence, not a mock or a physical-display test.
+    timer_window.set_page_text("1 / 23".into());
+    timer_window.set_page_reserve("88 / 88".into());
+    for (name, page_font, above, alignment, italic) in [
+        ("timer-rc32-default", 18.0, false, 1, false),
+        ("timer-rc32-page-above", 12.0, true, 0, true),
+        ("timer-rc32-page-large", 36.0, false, 2, true),
+    ] {
+        timer_window.set_page_font_size(page_font);
+        timer_window.set_page_above(above);
+        timer_window.set_page_alignment(alignment);
+        timer_window.set_page_italic(italic);
+        timer_window.set_page_color(slint::Color::from_rgb_u8(164, 60, 30));
+        let width = timer_window.get_required_text_width().ceil();
+        let height = timer_window.get_required_text_height().ceil();
+        timer_window.set_content_width(width);
+        timer_window.set_content_height(height);
+        HEADLESS_WINDOW
+            .with(|window| window.set_size(PhysicalSize::new(width as u32, height as u32)));
+        slint::platform::update_timers_and_animations();
+        HEADLESS_WINDOW.with(|window| window.request_redraw());
+        write_png(
+            output.join(format!("{name}.png")),
+            &timer_window.window().take_snapshot()?,
+        )?;
+    }
     timer_window.hide()?;
     drop(timer_window);
 

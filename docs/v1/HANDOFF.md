@@ -1,3 +1,10 @@
+# Current RC3.2 review handoff
+
+ChatGPT directly implements USER_FEEDBACK_20260912_3.md from the tested RC3.1 source `5bc223bd7bea12339311bac4494f369bb3d363b1`. Source is on an independent review branch; Codex stays paused; do not merge into main. Prior unmentioned items are provisionally accepted by the user. Latest automation/binary identity are in the RC3.2 workflow and package BUILD.txt; physical acceptance is still pending for the newly changed UI/gestures. See RC32_MANUAL_TEST.md. Version/dependencies are unchanged.
+
+---
+## Historical handoff below (not the current task)
+
 # FlyPPTTimer V1 — 当前交接
 
 ## 最新状态：a644e74 第二轮整合主体接受，RC-3.1 仍有 3 个 P1 + 1 个 P2 需收口
