@@ -12,12 +12,19 @@ def replace_once(path: str, old: str, new: str) -> None:
 replace_once('src/remote.rs', '    config::{AppConfig, FileRule},', '    config::AppConfig,')
 replace_once('src/remote.rs', 'const INDEX_HTML:', '#[cfg(test)]\nuse crate::config::FileRule;\n\nconst INDEX_HTML:')
 replace_once('ui/app-window.slint', 'component TimerReadout inherits Rectangle {', '''component TimerReadout inherits Rectangle {
-    // Content measurements are outputs, not a minimum fed into the host window.
-    // Keep the fullscreen font-fit calculation independent of layout constraints.
+    // Content measurements are outputs, not constraints fed into the host window.
+    // Keep every inferred layout constraint independent of fullscreen font fit.
     min-width: 0px;
     min-height: 0px;
+    max-width: 65535px;
+    max-height: 65535px;
+    horizontal-stretch: 1;
+    vertical-stretch: 1;
     preferred-width: 1px;
     preferred-height: 1px;''')
+replace_once('ui/app-window.slint', 'export component BigScreenWindow inherits Window {', '''export component BigScreenWindow inherits Window {
+    max-width: 65535px;
+    max-height: 65535px;''')
 replace_once('src/presentation.rs', '                PresentationCommand::CloseLastOpened => return self.close_last_opened_scoped(Some(paths)),', '''                PresentationCommand::CloseActive => return self.close_active_scoped(Some(paths)),
                 PresentationCommand::CloseLastOpened => return self.close_last_opened_scoped(Some(paths)),''')
 replace_once('src/presentation.rs', '    fn close_active(&mut self) -> Result<String, String> {', '''    fn close_active(&mut self) -> Result<String, String> {
