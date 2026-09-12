@@ -1,0 +1,140 @@
+name: RC33 focused Windows review
+on:
+  push:
+    branches: [chatgpt/rc33-feedback]
+    paths: [.github/workflows/rc33-review.yml, .github/rc33-refine.py]
+permissions:
+  contents: write
+concurrency:
+  group: rc33-review
+  cancel-in-progress: true
+jobs:
+  review:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply exact reviewed patch
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config core.autocrlf false
+          git checkout-index --all --force
+          python -c "import pathlib,base64,lzma,hashlib; b=''.join(pathlib.Path(f'.github/rc33-patch-{i}.b64').read_text().strip() for i in range(3)); p=lzma.decompress(base64.b64decode(b,validate=True)); assert hashlib.sha256(p).hexdigest()=='fd670078fa93f3727d68609e3e664dfb30444822764acf5418ba57385eb30d77'; pathlib.Path('rc33.patch').write_bytes(p)"
+          if ($LASTEXITCODE -ne 0) { throw 'Patch integrity check failed' }
+          git apply --unidiff-zero --check rc33.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Patch no longer applies' }
+          git apply --unidiff-zero rc33.patch
+          if ($LASTEXITCODE -ne 0) { throw 'Patch failed' }
+          Remove-Item rc33.patch
+          if (Test-Path .github/rc33-refine.py) {
+            python .github/rc33-refine.py
+            if ($LASTEXITCODE -ne 0) { throw 'Correction failed' }
+          }
+      - name: Windows SDK resource compiler
+        run: |
+          $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+          $rc = Get-ChildItem -LiteralPath $kits -Filter rc.exe -File -Recurse | Where-Object { $_.FullName -match '\\x64\\rc\.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'Windows SDK rc.exe missing' }
+          $rc.Directory.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Pinned Rust
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust setup failed' }
+          rustc --version
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rc33-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            rc33-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+            rc32-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+      - name: Format
+        run: |
+          cargo fmt --all
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Format check failed' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace error' }
+      - name: Clippy and Slint bindings
+        run: |
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object clippy.log
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+          if (Select-String clippy.log -Pattern 'binding loop' -Quiet) { throw 'Slint binding loop' }
+      - name: Regression tests
+        run: cargo test --locked
+      - name: Mobile JavaScript syntax
+        run: node --check src/FlyPPTTimer/Web/app.js
+      - name: Release build
+        run: cargo build --locked --release
+      - name: Software layout captures
+        run: |
+          foreach ($mode in @('settings','windows')) {
+            $out = Join-Path $PWD "artifacts\rc33-evidence\$mode"
+            $p = Start-Process target/release/FlyPPTTimer.exe -ArgumentList @("--capture-$mode", $out) -PassThru
+            if (-not $p.WaitForExit(90000)) { $p.Kill(); throw 'Layout capture timeout' }
+            if ($p.ExitCode -ne 0) { throw 'Layout capture failed' }
+          }
+      - name: Native independent-window reopen smoke
+        run: ./scripts/rc33-native-smoke.ps1
+      - name: Commit verified source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src ui docs/v1 scripts/rc33-native-smoke.ps1
+          git commit -m 'fix: RC3.3 concurrent windows color picking and stable remote snapshots'
+          if ($LASTEXITCODE -ne 0) { throw 'Verified source commit failed' }
+          $sha = (git rev-parse HEAD).Trim()
+          "PATCHED_SOURCE_SHA=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          git push origin "HEAD:refs/heads/chatgpt/rc33-verified-$env:GITHUB_RUN_ID"
+          if ($LASTEXITCODE -ne 0) { throw 'Verified source push failed' }
+      - name: Package portable
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = 'FlyPPTTimer-v1.13.0-rc33-win-x64'
+          $stage = Join-Path $env:RUNNER_TEMP $name
+          $out = Join-Path $PWD 'artifacts\review'
+          New-Item -ItemType Directory -Force $stage,$out | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe $stage
+          Copy-Item docs/default-config.json (Join-Path $stage 'FlyPPTTimer.config.json')
+          Copy-Item LICENSE $stage
+          Copy-Item docs/v1/RC33_MANUAL_TEST.zh-CN.md (Join-Path $stage 'MANUAL_TEST.zh-CN.md')
+          Copy-Item docs/v1/USER_FEEDBACK_20260912_4.md (Join-Path $stage 'CHANGES.md')
+          foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) {
+            $source = Join-Path $env:WINDIR "System32\$dll"
+            if (-not (Test-Path $source)) { throw "Runtime missing: $dll" }
+            Copy-Item $source $stage
+            Get-AuthenticodeSignature $source | Select-Object Path,Status | Format-Table
+          }
+          $hash = (Get-FileHash (Join-Path $stage 'FlyPPTTimer.exe') -Algorithm SHA256).Hash
+          @('FlyPPTTimer RC3.3 review build','Version: 1.13.0',"Product source SHA: $env:PATCHED_SOURCE_SHA",'Base source: fadf203 (RC3.2)',"Workflow run: $env:GITHUB_RUN_ID","EXE SHA256: $hash",'Verified: fmt; clippy; cargo test; JS syntax; release; software captures; hosted Windows independent-window checks.','Physical Windows11/phone/Office acceptance pending. Rare blank-window root cause remains unconfirmed.','No Release/Tag. Codex remains paused.') | Set-Content (Join-Path $stage 'BUILD.txt') -Encoding utf8
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $out "$name.zip") -CompressionLevel Optimal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlyPPTTimer-RC33-portable
+          path: artifacts/review/*.zip
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RC33-evidence
+          path: artifacts/rc33-evidence/**
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rc33-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
