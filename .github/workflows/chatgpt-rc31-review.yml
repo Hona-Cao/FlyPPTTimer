@@ -1,0 +1,112 @@
+name: ChatGPT RC3.1 Review Build
+
+on:
+  push:
+    branches:
+      - chatgpt/rc31-build
+
+permissions:
+  contents: write
+
+jobs:
+  build-review:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout review branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply focused hotfix
+        shell: pwsh
+        run: |
+          git apply --check docs/v1/CHATGPT_RC31_HOTFIX.patch
+          if ($LASTEXITCODE -ne 0) { throw "RC3.1 hotfix patch no longer applies cleanly" }
+          git apply docs/v1/CHATGPT_RC31_HOTFIX.patch
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw "Patched tree has whitespace errors" }
+
+      - name: Install pinned Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+          rustup default 1.92.0
+          rustc --version
+          cargo --version
+
+      - name: Rust format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Tests
+        run: cargo test --locked
+
+      - name: Web JavaScript syntax
+        run: node --check src/FlyPPTTimer/Web/app.js
+
+      - name: Release build
+        run: cargo build --locked --release
+
+      - name: Commit green patched source to review branch
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/window.rs src/config.rs src/presentation.rs
+          git commit -m "fix: stabilize RC3.1 review blockers"
+          if ($LASTEXITCODE -ne 0) { throw "Could not create patched-source commit" }
+          $sha = (git rev-parse HEAD).Trim()
+          "PATCHED_SOURCE_SHA=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          git push origin HEAD:refs/heads/chatgpt/rc31-applied --force
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Source branch push failed; artifact remains valid for testing."
+          }
+
+      - name: Package portable test build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $metadata = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json)
+          $rootManifest = [IO.Path]::GetFullPath((Join-Path $PWD "Cargo.toml"))
+          $package = @($metadata.packages | Where-Object { [IO.Path]::GetFullPath($_.manifest_path) -eq $rootManifest })
+          if ($package.Count -ne 1) { throw "Could not resolve root package version" }
+          $version = $package[0].version
+          $name = "FlyPPTTimer-v$version-chatgpt-rc31-win-x64"
+          $stage = Join-Path $env:RUNNER_TEMP $name
+          $out = Join-Path $PWD "artifacts\review"
+          New-Item -ItemType Directory -Force -Path $stage,$out | Out-Null
+          Copy-Item "target\release\FlyPPTTimer.exe" (Join-Path $stage "FlyPPTTimer.exe") -Force
+          Copy-Item "docs\default-config.json" (Join-Path $stage "FlyPPTTimer.config.json") -Force
+          Copy-Item "LICENSE" (Join-Path $stage "LICENSE") -Force
+          Copy-Item "docs\v1\RC31_MANUAL_TEST.md" (Join-Path $stage "MANUAL_TEST.md") -Force
+          foreach ($dll in @("vcruntime140.dll","vcruntime140_1.dll","msvcp140.dll")) {
+            $source = Join-Path $env:WINDIR "System32\$dll"
+            if (Test-Path -LiteralPath $source) { Copy-Item -LiteralPath $source -Destination (Join-Path $stage $dll) -Force }
+          }
+          $exeHash = (Get-FileHash (Join-Path $stage "FlyPPTTimer.exe") -Algorithm SHA256).Hash
+          $patchHash = (Get-FileHash "docs\v1\CHATGPT_RC31_HOTFIX.patch" -Algorithm SHA256).Hash
+          @(
+            "FlyPPTTimer ChatGPT RC3.1 review build",
+            "Version: $version",
+            "Base branch: codex/v1-06-manual-test",
+            "Base SHA: f27ec3cd729cfaf3f7148bc28a1ca02761ced85a",
+            "Patched source SHA: $env:PATCHED_SOURCE_SHA",
+            "Hotfix patch SHA-256: $patchHash",
+            "EXE SHA-256: $exeHash",
+            "Checks: cargo fmt / clippy -D warnings / cargo test --locked / node --check / cargo build --locked --release",
+            "Not a Release or Tag. For manual review only."
+          ) | Set-Content (Join-Path $stage "BUILD.txt") -Encoding utf8
+          $zip = Join-Path $out "$name.zip"
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -CompressionLevel Optimal -Force
+          Get-Item $zip | Select-Object FullName,Length
+
+      - name: Upload review package
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlyPPTTimer-v1.13.0-chatgpt-rc31-win-x64
+          path: artifacts/review/FlyPPTTimer-v1.13.0-chatgpt-rc31-win-x64.zip
+          if-no-files-found: error
+          retention-days: 14
