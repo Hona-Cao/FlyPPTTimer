@@ -38,7 +38,7 @@ jobs:
         run: |
           rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
           if ($LASTEXITCODE -ne 0) { throw 'Rust setup failed' }
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
@@ -67,14 +67,24 @@ jobs:
         run: |
           cargo build --locked --release 2>&1 | Tee-Object artifacts/rc34-evidence/release.log
           if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+      - name: Save compiled cache before UI captures
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rc34-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
       - name: Light and dark production software captures
         run: |
           foreach ($theme in @('light','dark')) {
             $env:FLYPPT_CAPTURE_THEME = $theme
-            & target/release/FlyPPTTimer.exe --capture-settings "artifacts/rc34-evidence/$theme/settings"
-            if ($LASTEXITCODE -ne 0) { throw "Settings capture failed: $theme" }
-            & target/release/FlyPPTTimer.exe --capture-windows "artifacts/rc34-evidence/$theme/windows"
-            if ($LASTEXITCODE -ne 0) { throw "Window capture failed: $theme" }
+            foreach ($mode in @('settings','windows')) {
+              $out = Join-Path $PWD "artifacts/rc34-evidence/$theme/$mode"
+              New-Item -ItemType Directory -Force $out | Out-Null
+              $p = Start-Process target/release/FlyPPTTimer.exe -ArgumentList @("--capture-$mode", $out) -Wait -PassThru -RedirectStandardOutput "$out/stdout.log" -RedirectStandardError "$out/stderr.log"
+              if ($p.ExitCode -ne 0) { throw "Capture failed: $theme/$mode exit $($p.ExitCode)" }
+            }
           }
           Remove-Item Env:FLYPPT_CAPTURE_THEME
       - name: First-start delayed HTTP request smoke
