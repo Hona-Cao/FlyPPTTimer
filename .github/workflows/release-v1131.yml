@@ -4,51 +4,190 @@ on:
     branches: [publish/v1.13.1]
     paths: [.github/workflows/release-v1131.yml]
 permissions:
-  contents: read
+  contents: write
+  actions: read
+concurrency:
+  group: publish-v1131
+  cancel-in-progress: false
 jobs:
-  screenshots:
+  documentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      source: ${{ steps.commit.outputs.source }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply prepared bilingual documentation
+        shell: python
+        run: |
+          from pathlib import Path
+          import base64, json, lzma
+          chunks = [Path(f'.github/release-docs-{i}.b64') for i in range(6)]
+          if chunks[0].exists():
+              data = json.loads(lzma.decompress(base64.b64decode(''.join(p.read_text().strip() for p in chunks))))
+              for name, text in data['files'].items():
+                  p = Path(name)
+                  p.parent.mkdir(parents=True, exist_ok=True)
+                  p.write_text(text, encoding='utf-8', newline='\n')
+              for name, prefix in data['prepend'].items():
+                  p = Path(name)
+                  text = p.read_text(encoding='utf-8')
+                  if name == 'CHANGELOG.md' and data.get('strip_changelog_heading'):
+                      text = text.removeprefix('# CHANGELOG\n\n')
+                  p.write_text(prefix + text, encoding='utf-8', newline='\n')
+              for name, suffix in data['append'].items():
+                  p = Path(name)
+                  p.write_text(p.read_text(encoding='utf-8') + suffix, encoding='utf-8', newline='\n')
+              for p in chunks:
+                  p.unlink()
+              print('Prepared documentation applied; temporary transport files removed.')
+      - uses: actions/download-artifact@v4
+        with:
+          name: v1131-release-desktop-cjk
+          run-id: 34728745140
+          github-token: ${{ github.token }}
+          path: desktop-captures
+      - name: Select production desktop GUI renders
+        run: python scripts/select-doc-captures.py desktop-captures
+      - name: Prepare mobile documentation renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Render shipping mobile GUI with public example data
+        run: python scripts/capture-mobile.py
+      - name: Commit documentation and preserve development history
+        id: commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md README.zh-CN.md CHANGELOG.md CONTRIBUTING.md docs scripts installer .github
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'docs: publish detailed bilingual v1.13.1 guides, current GUI and real iteration history'
+          fi
+          git push origin HEAD:refs/heads/publish/v1.13.1
+          echo "source=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git archive --format=zip --output=release-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1131-published-documentation-source
+          path: release-source.zip
+          retention-days: 14
+  package-and-publish:
+    needs: documentation
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     env:
-      RUSTUP_TOOLCHAIN: 1.92.0
+      PRODUCT_SOURCE_SHA: e625c809f8cf7515f0143fab476bb4467d2fe1d7
     defaults:
       run:
         shell: pwsh
     steps:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
-      - name: Rust and Windows SDK
-        run: |
-          rustup toolchain install 1.92.0 --profile minimal
-          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter rc.exe -Recurse | Where-Object FullName -Match '\\x64\\rc.exe$' | Sort-Object FullName -Descending | Select-Object -First 1
-          $rc.Directory.FullName | Out-File $env:GITHUB_PATH -Append -Encoding utf8
-      - uses: actions/cache@v4
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: publish-v1131-${{ hashFiles('Cargo.lock') }}
-      - name: Prepare disposable documentation renderer
+          ref: ${{ needs.documentation.outputs.source }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: FlyPPTTimer-v1.13.1-portable-win-x64
+          run-id: 34709344878
+          github-token: ${{ github.token }}
+          path: accepted
+      - name: Use unchanged user-accepted application
         run: |
-          Invoke-WebRequest 'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' -OutFile doc-font.otf
-          python scripts/prepare-doc-capture.py
-          cargo build --locked
-          if ($LASTEXITCODE -ne 0) { throw 'Documentation renderer build failed' }
-      - name: Render current GUI for documentation
+          $ErrorActionPreference = 'Stop'
+          Expand-Archive accepted/FlyPPTTimer-v1.13.1-portable-win-x64.zip accepted/app
+          $actual = (Get-FileHash accepted/app/FlyPPTTimer.exe -Algorithm SHA256).Hash
+          if ($actual -ne 'B9D7A3DF6BE322DFBCDBB58AF7C8759DD6000AA4939F117D51183CCEB0D758A6') { throw 'Accepted executable does not match' }
+      - name: Package portable ZIP and installer ZIP
         run: |
-          $exe = (Resolve-Path target/debug/FlyPPTTimer.exe).Path
-          foreach ($theme in @('light','dark')) {
-            $env:FLYPPT_CAPTURE_THEME = $theme
-            foreach ($view in @('settings','windows')) {
-              $out = Join-Path $PWD "captures/$theme/$view"
-              New-Item -ItemType Directory -Force $out | Out-Null
-              $p = Start-Process $exe -ArgumentList "--capture-$view",$out -Wait -PassThru
-              if ($p.ExitCode -ne 0) { throw "Capture failed: $theme/$view" }
-            }
+          ./scripts/build-release.ps1 -ApplicationDirectory accepted/app
+      - name: Installer and upgrade smoke check
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $PWD 'artifacts/publish-evidence'
+          New-Item -ItemType Directory -Force $evidence | Out-Null
+          $setup = (Resolve-Path 'artifacts/release/v1.13.1/installer-output/FlyPPTTimer-v1.13.1-setup-win-x64.exe').Path
+          $install = Join-Path $env:RUNNER_TEMP 'FlyPPTTimer-publication-install'
+          $arguments = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$install",'/TASKS=',"/LOG=$evidence/installer.log")
+          $p = Start-Process $setup -ArgumentList $arguments -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer failed: $($p.ExitCode)" }
+          $installedExe = Join-Path $install 'FlyPPTTimer.exe'
+          if ((Get-FileHash $installedExe).Hash -ne (Get-FileHash accepted/app/FlyPPTTimer.exe).Hash) { throw 'Installed application differs' }
+          foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) {
+            if (-not (Test-Path (Join-Path $install $dll))) { throw "Installed runtime missing: $dll" }
           }
+          $config = Join-Path $install 'FlyPPTTimer.config.json'
+          Add-Content -LiteralPath $config -Value ' '
+          $before = (Get-FileHash $config).Hash
+          $p = Start-Process $setup -ArgumentList $arguments -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or (Get-FileHash $config).Hash -ne $before) { throw 'Upgrade did not preserve existing configuration' }
+          $app = Start-Process $installedExe -WorkingDirectory $install -PassThru
+          try {
+            Start-Sleep -Seconds 2
+            if ($app.HasExited) { throw 'Installed application exited unexpectedly' }
+            @('Installer: success','Upgrade preserves existing config: success','Installed executable matches accepted application: success','Required runtime DLLs installed: success','Installed application starts: success') | Set-Content (Join-Path $evidence 'installation.txt')
+          } finally {
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          }
+          $uninstall = Join-Path $install 'unins000.exe'
+          Start-Process $uninstall -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
       - uses: actions/upload-artifact@v4
         with:
-          name: v1131-release-desktop-cjk
-          path: captures/**/*.png
-          retention-days: 7
+          name: FlyPPTTimer-v1.13.1-public-packages
+          path: artifacts/release/v1.13.1/*.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Fast-forward main and publish the two requested ZIPs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git fetch origin main
+          if ($LASTEXITCODE -ne 0) { throw 'Main fetch failed' }
+          git merge-base --is-ancestor origin/main HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Main changed independently; refusing to overwrite history' }
+          git push origin HEAD:refs/heads/main
+          if ($LASTEXITCODE -ne 0) { throw 'Main fast-forward failed' }
+          $sha = (git rev-parse HEAD).Trim()
+          gh release create v1.13.1 artifacts/release/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip artifacts/release/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip --repo $env:GITHUB_REPOSITORY --target $sha --title 'FlyPPTTimer v1.13.1' --notes-file docs/RELEASE_NOTES_v1.13.1.md --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
+          gh release view v1.13.1 --repo $env:GITHUB_REPOSITORY --json url,tagName,isDraft,isPrerelease,assets,targetCommitish | Set-Content artifacts/publish-evidence/release.json
+      - name: Apply repository discovery metadata where permission permits
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import json, os, urllib.request, urllib.error
+          from pathlib import Path
+          settings = json.loads(Path('.github/repository-discovery.json').read_text(encoding='utf-8'))
+          base = os.environ['GITHUB_API_URL'] + '/repos/' + os.environ['GITHUB_REPOSITORY']
+          headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'}
+          results = {}
+          for name, url, method, data in [
+              ('about', base, 'PATCH', {k: settings[k] for k in ('description', 'homepage')}),
+              ('topics', base + '/topics', 'PUT', {'names': settings['topics']})
+          ]:
+              request = urllib.request.Request(url, json.dumps(data).encode(), headers, method=method)
+              try:
+                  with urllib.request.urlopen(request) as response:
+                      results[name] = {'status': response.status, 'applied': True}
+              except urllib.error.HTTPError as error:
+                  results[name] = {'status': error.code, 'applied': False, 'message': error.read().decode()}
+                  print('::notice::Repository ' + name + ' metadata could not be updated with this workflow permission.')
+          Path('artifacts/publish-evidence/repository-metadata.json').write_text(json.dumps(results, indent=2), encoding='utf-8')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v1131-publication-evidence
+          path: artifacts/publish-evidence/**
+          if-no-files-found: warn
+          retention-days: 14
