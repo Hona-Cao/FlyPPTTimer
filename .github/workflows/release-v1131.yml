@@ -146,7 +146,7 @@ jobs:
           path: artifacts/release/v1.13.1/*.zip
           if-no-files-found: error
           retention-days: 14
-      - name: Fast-forward main and publish the two requested ZIPs
+      - name: Publish the two requested ZIPs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -154,9 +154,8 @@ jobs:
           git fetch origin main
           if ($LASTEXITCODE -ne 0) { throw 'Main fetch failed' }
           git merge-base --is-ancestor origin/main HEAD
-          if ($LASTEXITCODE -ne 0) { throw 'Main changed independently; refusing to overwrite history' }
-          git push origin HEAD:refs/heads/main
-          if ($LASTEXITCODE -ne 0) { throw 'Main fast-forward failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Main changed independently' }
+          # Main is fast-forwarded through the authorized GitHub connector after this job succeeds.
           $sha = (git rev-parse HEAD).Trim()
           gh release create v1.13.1 artifacts/release/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip artifacts/release/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip --repo $env:GITHUB_REPOSITORY --target $sha --title 'FlyPPTTimer v1.13.1' --notes-file docs/RELEASE_NOTES_v1.13.1.md --latest
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed' }
