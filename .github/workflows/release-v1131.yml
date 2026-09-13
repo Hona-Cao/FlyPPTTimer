@@ -5,25 +5,54 @@ on:
     paths: [.github/workflows/release-v1131.yml]
 permissions:
   contents: read
+  actions: read
 jobs:
-  source:
-    runs-on: ubuntu-latest
+  screenshots:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: pwsh
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
-      - name: Export current source and real development history
+          name: FlyPPTTimer-v1.13.1-portable-win-x64
+          run-id: 34709344878
+          github-token: ${{ github.token }}
+          path: accepted
+      - name: Unpack accepted executable
         run: |
-          git archive --format=zip --output=source.zip HEAD
-          git log --all --date=iso-strict --format='%H%x09%aI%x09%an%x09%s' > development-history.tsv
-          git merge-base --is-ancestor origin/main HEAD && echo 'main is an ancestor of the accepted release' > ancestry.txt
-          git log --oneline origin/main..HEAD > release-commits.txt
+          Expand-Archive accepted/FlyPPTTimer-v1.13.1-portable-win-x64.zip accepted/app
+      - name: Install CJK font for documentation rendering only
+        run: |
+          $font = Join-Path $env:WINDIR 'Fonts\NotoSansCJKsc-Regular.otf'
+          Invoke-WebRequest 'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' -OutFile $font
+          Set-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts' -Name 'Noto Sans CJK SC (OpenType)' -Value 'NotoSansCJKsc-Regular.otf'
+          Add-Type @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class DocFonts {
+              [DllImport("gdi32.dll", CharSet=CharSet.Unicode)] public static extern int AddFontResourceW(string path);
+              [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
+          }
+          '@
+          [void][DocFonts]::AddFontResourceW($font)
+          [void][DocFonts]::SendMessageW([IntPtr]0xffff, 0x001d, [IntPtr]::Zero, [IntPtr]::Zero)
+      - name: Capture unchanged accepted desktop UI
+        run: |
+          $exe = (Resolve-Path accepted/app/FlyPPTTimer.exe).Path
+          foreach ($theme in @('light','dark')) {
+            $env:FLYPPT_CAPTURE_THEME = $theme
+            foreach ($view in @('settings','windows')) {
+              $out = Join-Path $PWD "captures/$theme/$view"
+              New-Item -ItemType Directory -Force $out | Out-Null
+              $p = Start-Process $exe -ArgumentList "--capture-$view",$out -Wait -PassThru
+              if ($p.ExitCode -ne 0) { throw "Capture failed: $theme/$view" }
+            }
+          }
       - uses: actions/upload-artifact@v4
         with:
-          name: v1131-release-source
-          path: |
-            source.zip
-            development-history.tsv
-            release-commits.txt
-            ancestry.txt
+          name: v1131-release-desktop-captures
+          path: captures/**/*.png
           retention-days: 7
