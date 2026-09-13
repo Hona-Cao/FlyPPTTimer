@@ -1,0 +1,76 @@
+name: User guide screenshots
+on:
+  push:
+    branches: [docs/v1.13.1-guide]
+    paths: [.github/workflows/docs-guide-v1131.yml]
+permissions:
+  contents: write
+jobs:
+  screenshots:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      RUSTUP_TOOLCHAIN: 1.92.0
+      FLYPPT_CAPTURE_THEME: light
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - name: Documentation renderer toolchain
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter rc.exe -Recurse | Where-Object FullName -Match '\\x64\\rc.exe$' | Sort-Object FullName -Descending | Select-Object -First 1
+          $rc.Directory.FullName | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: publish-v1131-${{ hashFiles('Cargo.lock') }}
+      - name: Prepare disposable, taller GUI renderer
+        run: |
+          Invoke-WebRequest 'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' -OutFile doc-font.otf
+          python scripts/prepare-doc-capture.py
+          python -c "from pathlib import Path; p=Path('src/capture.rs'); s=p.read_text(encoding='utf-8').replace('PhysicalSize::new(900, 650)', 'PhysicalSize::new(900, 800)'); p.write_text(s, encoding='utf-8', newline='\n')"
+          cargo build --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Documentation renderer build failed' }
+      - name: Capture every settings page
+        run: |
+          $exe = (Resolve-Path target/debug/FlyPPTTimer.exe).Path
+          $out = Join-Path $PWD 'guide-captures'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          $p = Start-Process $exe -ArgumentList '--capture-settings',$out -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Settings capture failed' }
+          git restore src/capture.rs ui/app-window.slint
+          Remove-Item doc-font.otf
+      - name: Store complete light-theme settings illustrations
+        shell: python
+        run: |
+          from pathlib import Path
+          import shutil
+          out = Path('docs/media/v1.13.1/settings')
+          out.mkdir(parents=True, exist_ok=True)
+          for source in sorted(Path('guide-captures').glob('settings-*.png')):
+              shutil.copyfile(source, out / source.name.removeprefix('settings-'))
+          print('Saved light-theme settings screenshots only.')
+      - name: Commit documentation images only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/media/v1.13.1/settings
+          if (git diff --cached --name-only) {
+            git commit -m 'docs: add full light-theme settings page captures'
+            git push origin HEAD:refs/heads/docs/v1.13.1-guide
+            if ($LASTEXITCODE -ne 0) { throw 'Image commit push failed' }
+          }
+          git rev-parse HEAD | Set-Content guide-captures/SOURCE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1131-guide-settings-light
+          path: |
+            docs/media/v1.13.1/settings/*.png
+            guide-captures/SOURCE.txt
+          retention-days: 14
