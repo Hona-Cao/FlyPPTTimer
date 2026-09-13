@@ -17,12 +17,12 @@
 <a id="download"></a>
 ## 下载与安装
 
-| 版本 | 下载 | 使用方式 |
-|---|---|---|
-| 便携版 | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
-| 安装版 | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
+**中国大陆用户建议从 [Gitee 发布页](https://gitee.com/hona-cao/fly-ppttimer/releases) 下载。** Gitee 是本项目的国内镜像，并同步正式 Release 附件；如果当前网络可以正常访问 GitHub，也可以使用右侧的 GitHub 直链。
 
-[GitHub 下载页](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest) · [Gitee 下载页](https://gitee.com/hona-cao/fly-ppttimer/releases)
+| 版本 | 中国大陆下载 | GitHub 下载 | 使用方式 |
+|---|---|---|---|
+| 便携版 | [Gitee 发布页（选择便携版）](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
+| 安装版 | [Gitee 发布页（选择安装版）](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
 
 <a id="quick-start"></a>
 ## 快速开始
