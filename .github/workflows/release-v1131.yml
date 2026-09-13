@@ -33,16 +33,16 @@ jobs:
               for name, text in data['files'].items():
                   p = Path(name)
                   p.parent.mkdir(parents=True, exist_ok=True)
-                  p.write_text(text, encoding='utf-8', newline='\n')
+                  p.write_text(text.rstrip() + '\n', encoding='utf-8', newline='\n')
               for name, prefix in data['prepend'].items():
                   p = Path(name)
                   text = p.read_text(encoding='utf-8')
                   if name == 'CHANGELOG.md' and data.get('strip_changelog_heading'):
                       text = text.removeprefix('# CHANGELOG\n\n')
-                  p.write_text(prefix + text, encoding='utf-8', newline='\n')
+                  p.write_text((prefix + text).rstrip() + '\n', encoding='utf-8', newline='\n')
               for name, suffix in data['append'].items():
                   p = Path(name)
-                  p.write_text(p.read_text(encoding='utf-8') + suffix, encoding='utf-8', newline='\n')
+                  p.write_text((p.read_text(encoding='utf-8') + suffix).rstrip() + '\n', encoding='utf-8', newline='\n')
               for p in chunks:
                   p.unlink()
               print('Prepared documentation applied; temporary transport files removed.')
