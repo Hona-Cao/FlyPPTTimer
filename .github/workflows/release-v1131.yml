@@ -1,0 +1,29 @@
+name: Publish FlyPPTTimer v1.13.1
+on:
+  push:
+    branches: [publish/v1.13.1]
+    paths: [.github/workflows/release-v1131.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Export current source and real development history
+        run: |
+          git archive --format=zip --output=source.zip HEAD
+          git log --all --date=iso-strict --format='%H%x09%aI%x09%an%x09%s' > development-history.tsv
+          git merge-base --is-ancestor origin/main HEAD && echo 'main is an ancestor of the accepted release' > ancestry.txt
+          git log --oneline origin/main..HEAD > release-commits.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1131-release-source
+          path: |
+            source.zip
+            development-history.tsv
+            release-commits.txt
+            ancestry.txt
+          retention-days: 7
