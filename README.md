@@ -17,12 +17,12 @@
 <a id="download"></a>
 ## Download and install
 
-| Edition | Download | Instructions |
-|---|---|---|
-| Portable | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
-| Setup | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
+**For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases).** Gitee is the mainland mirror and carries the official release assets. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
 
-[GitHub downloads](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest) · [Gitee downloads](https://gitee.com/hona-cao/fly-ppttimer/releases)
+| Edition | Mainland China | GitHub | Instructions |
+|---|---|---|---|
+| Portable | [Gitee Releases — choose Portable](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
+| Setup | [Gitee Releases — choose Setup](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
 
 <a id="quick-start"></a>
 ## Quick start
