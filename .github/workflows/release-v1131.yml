@@ -5,43 +5,39 @@ on:
     paths: [.github/workflows/release-v1131.yml]
 permissions:
   contents: read
-  actions: read
 jobs:
   screenshots:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
+    env:
+      RUSTUP_TOOLCHAIN: 1.92.0
     defaults:
       run:
         shell: pwsh
     steps:
+      - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Rust and Windows SDK
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter rc.exe -Recurse | Where-Object FullName -Match '\\x64\\rc.exe$' | Sort-Object FullName -Descending | Select-Object -First 1
+          $rc.Directory.FullName | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - uses: actions/cache@v4
         with:
-          name: FlyPPTTimer-v1.13.1-portable-win-x64
-          run-id: 34709344878
-          github-token: ${{ github.token }}
-          path: accepted
-      - name: Unpack accepted executable
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: publish-v1131-${{ hashFiles('Cargo.lock') }}
+      - name: Prepare disposable documentation renderer
         run: |
-          Expand-Archive accepted/FlyPPTTimer-v1.13.1-portable-win-x64.zip accepted/app
-      - name: Install CJK font for documentation rendering only
+          Invoke-WebRequest 'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' -OutFile doc-font.otf
+          python scripts/prepare-doc-capture.py
+          cargo build --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Documentation renderer build failed' }
+      - name: Render current GUI for documentation
         run: |
-          $font = Join-Path $env:WINDIR 'Fonts\NotoSansCJKsc-Regular.otf'
-          Invoke-WebRequest 'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' -OutFile $font
-          Set-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts' -Name 'Noto Sans CJK SC (OpenType)' -Value 'NotoSansCJKsc-Regular.otf'
-          Add-Type @'
-          using System;
-          using System.Runtime.InteropServices;
-          public static class DocFonts {
-              [DllImport("gdi32.dll", CharSet=CharSet.Unicode)] public static extern int AddFontResourceW(string path);
-              [DllImport("user32.dll")] public static extern IntPtr SendMessageW(IntPtr hwnd, uint msg, IntPtr wp, IntPtr lp);
-          }
-          '@
-          [void][DocFonts]::AddFontResourceW($font)
-          [void][DocFonts]::SendMessageW([IntPtr]0xffff, 0x001d, [IntPtr]::Zero, [IntPtr]::Zero)
-      - name: Capture unchanged accepted desktop UI
-        run: |
-          $exe = (Resolve-Path accepted/app/FlyPPTTimer.exe).Path
+          $exe = (Resolve-Path target/debug/FlyPPTTimer.exe).Path
           foreach ($theme in @('light','dark')) {
             $env:FLYPPT_CAPTURE_THEME = $theme
             foreach ($view in @('settings','windows')) {
@@ -53,6 +49,6 @@ jobs:
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: v1131-release-desktop-captures
+          name: v1131-release-desktop-cjk
           path: captures/**/*.png
           retention-days: 7
