@@ -1,3 +1,11 @@
+# v1.13.1 publication preparation — 2026-09-13
+
+The user accepted v1.13.1 and authorized main/Release publication. Bilingual READMEs and detailed guides, GUI-based documentation captures, portable/installer ZIP packaging and chronological development records are prepared. Accepted application source remains e625c809f8cf7515f0143fab476bb4467d2fe1d7 (Windows CI 34709344878: 90 passed, 3 ignored).
+
+Public release and installer-smoke status must be read from the publication workflow and release record, not predeclared from this source note. Earlier observations/limitations are preserved verbatim below.
+
+---
+
 # RC3.4 implementation
 
 Implemented RC34_SCOPE.md from tested RC3.3.1. Windows fmt/clippy/test/release and software UI captures are required for delivery. This source note does not claim physical Windows/phone/Office validation; see BUILD.txt and the delivery report for the actual CI result. User hand test: RC34_MANUAL_TEST.zh-CN.md.

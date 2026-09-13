@@ -16,7 +16,7 @@ AppVerName=FlyPPTTimer {#MyVersion}
 AppPublisher=Cao Hunan
 AppPublisherURL=https://github.com/Hona-Cao/FlyPPTTimer
 AppSupportURL=https://github.com/Hona-Cao/FlyPPTTimer/issues
-AppUpdatesURL=https://gitee.com/hona-cao/fly-ppttimer/releases
+AppUpdatesURL=https://github.com/Hona-Cao/FlyPPTTimer/releases/latest
 VersionInfoVersion={#MyVersion}.0
 VersionInfoCompany=FlyPPTTimer
 VersionInfoDescription=FlyPPTTimer presentation timer installer
@@ -55,6 +55,15 @@ Source: "{#SourceDir}\FlyPPTTimer.config.json"; DestDir: "{app}"; Flags: onlyifd
 Source: "{#SourceDir}\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README.zh-CN.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\CONTRIBUTING.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\BUILD.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\msvcp140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\src\FlyPPTTimer\Assets\app.png"; DestDir: "{app}\src\FlyPPTTimer\Assets"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce

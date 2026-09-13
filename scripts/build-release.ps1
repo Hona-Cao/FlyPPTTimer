@@ -1,89 +1,79 @@
 param(
+    [string]$ApplicationDirectory = "",
     [string]$IsccPath = ""
 )
-
+# Build normally, or package an explicitly supplied, already validated application.
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$manifest = Join-Path $root "Cargo.toml"
-$metadataJson = cargo metadata --no-deps --format-version 1 --manifest-path $manifest
-if ($LASTEXITCODE -ne 0) {
-    throw "cargo metadata failed with exit code $LASTEXITCODE"
-}
-$metadata = ($metadataJson -join "`n") | ConvertFrom-Json
-$package = @($metadata.packages | Where-Object {
-    [IO.Path]::GetFullPath($_.manifest_path) -eq [IO.Path]::GetFullPath($manifest)
-})
-if ($package.Count -ne 1 -or [string]::IsNullOrWhiteSpace($package[0].version)) {
-    throw "Could not determine the root Cargo package version."
-}
-$version = $package[0].version
-$artifacts = Join-Path $root "artifacts\release\v$version"
-$portable = Join-Path $artifacts "FlyPPTTimer-v$version-portable-win-x64"
-$installerSource = Join-Path $artifacts "installer-source"
-$installerOutput = Join-Path $artifacts "installer-output"
+$version = [regex]::Match((Get-Content (Join-Path $root "Cargo.toml") -Raw), '(?m)^version = "([^"]+)"').Groups[1].Value
+if (-not $version) { throw "Package version missing from Cargo.toml" }
 
-Push-Location $root
-try {
-    cargo build --release
-    if ($LASTEXITCODE -ne 0) {
-        throw "cargo build --release failed with exit code $LASTEXITCODE"
-    }
+if (-not $ApplicationDirectory) {
+    Push-Location $root
+    try {
+        cargo build --locked --release
+        if ($LASTEXITCODE -ne 0) { throw "Release build failed" }
+    } finally { Pop-Location }
+    $ApplicationDirectory = Join-Path $root "target\release"
 }
-finally {
-    Pop-Location
+$ApplicationDirectory = (Resolve-Path $ApplicationDirectory).Path
+$exe = Join-Path $ApplicationDirectory "FlyPPTTimer.exe"
+if ((Get-Item $exe).VersionInfo.ProductVersion -ne $version) {
+    throw "Application executable does not match package version $version"
 }
 
-New-Item -ItemType Directory -Path $portable, $installerSource, $installerOutput -Force | Out-Null
+$out = Join-Path $root "artifacts\release\v$version"
+$stage = Join-Path $out "portable"
+$setupOut = Join-Path $out "installer-output"
+if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+New-Item -ItemType Directory -Force $stage,$setupOut | Out-Null
+Copy-Item $exe $stage
+Copy-Item (Join-Path $root "docs\v1131-default-config.json") (Join-Path $stage "FlyPPTTimer.config.json")
+Copy-Item (Join-Path $root "src\FlyPPTTimer\Assets\app.ico") $stage
+foreach ($file in @("README.md","README.zh-CN.md","LICENSE","CHANGELOG.md","CONTRIBUTING.md")) {
+    Copy-Item (Join-Path $root $file) $stage
+}
+foreach ($dll in @("vcruntime140.dll","vcruntime140_1.dll","msvcp140.dll")) {
+    $source = Join-Path $ApplicationDirectory $dll
+    if (-not (Test-Path $source)) { $source = Join-Path $env:WINDIR "System32\$dll" }
+    Copy-Item $source $stage
+}
+$docs = Join-Path $stage "docs"
+New-Item -ItemType Directory -Force $docs | Out-Null
+foreach ($file in @("USER_GUIDE.en.md","USER_GUIDE.zh-CN.md","BUILDING.md","DEVELOPMENT_HISTORY.md","RELEASE_NOTES_v1.13.1.md","development-commits.tsv")) {
+    Copy-Item (Join-Path $root "docs\$file") $docs
+}
+New-Item -ItemType Directory -Force (Join-Path $docs "v1") | Out-Null
+Copy-Item (Join-Path $root "docs\v1\*.md") (Join-Path $docs "v1")
+New-Item -ItemType Directory -Force (Join-Path $docs "media") | Out-Null
+Copy-Item (Join-Path $root "docs\media\v1.13.1") (Join-Path $docs "media") -Recurse
+foreach ($file in @("donate-alipay.jpg","donate-wechat.png")) {
+    Copy-Item (Join-Path $root "docs\media\$file") (Join-Path $docs "media")
+}
+# Preserve the icon's README-relative path for offline documentation.
+$assets = Join-Path $stage "src\FlyPPTTimer\Assets"
+New-Item -ItemType Directory -Force $assets | Out-Null
+Copy-Item (Join-Path $root "src\FlyPPTTimer\Assets\app.png") $assets
+$sourceSha = if ($env:PRODUCT_SOURCE_SHA) { $env:PRODUCT_SOURCE_SHA } else { (git -C $root rev-parse HEAD).Trim() }
+@(
+    "FlyPPTTimer v$version"
+    "Executable source: $sourceSha"
+    "Release documentation: https://github.com/Hona-Cao/FlyPPTTimer/releases/tag/v$version"
+    "Both editions contain the same application executable."
+    "Settings and imported alert sounds are local. Back up personal configuration before upgrading."
+    "Read README.md or README.zh-CN.md and docs/USER_GUIDE.*.md."
+) | Set-Content (Join-Path $stage "BUILD.txt") -Encoding utf8
 
-$files = [ordered]@{
-    "FlyPPTTimer.exe" = Join-Path $root "target\release\FlyPPTTimer.exe"
-    "FlyPPTTimer.config.json" = Join-Path $root "docs\v1131-default-config.json"
-    "app.ico" = Join-Path $root "src\FlyPPTTimer\Assets\app.ico"
-    "README.md" = Join-Path $root "README.md"
-    "README.zh-CN.md" = Join-Path $root "README.zh-CN.md"
-}
-foreach ($item in $files.GetEnumerator()) {
-    if (-not (Test-Path -LiteralPath $item.Value)) {
-        throw "Release file is missing: $($item.Value)"
-    }
-    Copy-Item -LiteralPath $item.Value -Destination (Join-Path $portable $item.Key) -Force
-    Copy-Item -LiteralPath $item.Value -Destination (Join-Path $installerSource $item.Key) -Force
-}
+$portableZip = Join-Path $out "FlyPPTTimer-v$version-portable-win-x64.zip"
+Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $portableZip -CompressionLevel Optimal -Force
 
-$portableZip = Join-Path $artifacts "FlyPPTTimer-v$version-portable-win-x64.zip"
-Compress-Archive -LiteralPath @($files.Keys | ForEach-Object { Join-Path $portable $_ }) -DestinationPath $portableZip -CompressionLevel Optimal -Force
-
-if ([string]::IsNullOrWhiteSpace($IsccPath)) {
-    $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
-    $candidates = @(
-        "D:\APP\Inno Setup 6\ISCC.exe",
-        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
-        (Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"),
-        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
-    )
-    $IsccPath = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace($IsccPath)) {
-        $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-        if ($command) {
-            $IsccPath = $command.Source
-        }
-    }
+if (-not $IsccPath) {
+    $candidate = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+    $IsccPath = if (Test-Path $candidate) { $candidate } else { (Get-Command ISCC.exe -ErrorAction Stop).Source }
 }
-if ([string]::IsNullOrWhiteSpace($IsccPath) -or -not (Test-Path -LiteralPath $IsccPath)) {
-    throw "Inno Setup 6 compiler was not found."
-}
-
-$iss = Join-Path $root "installer\FlyPPTTimer.iss"
-& $IsccPath /Qp "/DSourceDir=$installerSource" "/DOutputDir=$installerOutput" "/DMyVersion=$version" $iss
-if ($LASTEXITCODE -ne 0) {
-    throw "Inno Setup compilation failed with exit code $LASTEXITCODE"
-}
-$installer = Join-Path $installerOutput "FlyPPTTimer-v$version-setup-win-x64.exe"
-if (-not (Test-Path -LiteralPath $installer)) {
-    throw "Inno Setup did not create the expected installer."
-}
-$finalInstaller = Join-Path $artifacts "FlyPPTTimer-v$version-setup-win-x64.exe"
-Copy-Item -LiteralPath $installer -Destination $finalInstaller -Force
-
-Get-Item -LiteralPath (Join-Path $root "target\release\FlyPPTTimer.exe"), $portableZip, $finalInstaller |
-    Select-Object FullName, Length
+& $IsccPath /Qp "/DSourceDir=$stage" "/DOutputDir=$setupOut" "/DMyVersion=$version" (Join-Path $root "installer\FlyPPTTimer.iss")
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
+$installer = Join-Path $setupOut "FlyPPTTimer-v$version-setup-win-x64.exe"
+$setupZip = Join-Path $out "FlyPPTTimer-v$version-setup-win-x64.zip"
+Compress-Archive -LiteralPath $installer -DestinationPath $setupZip -CompressionLevel Optimal -Force
+Get-Item $portableZip,$setupZip | Select-Object FullName,Length

@@ -98,3 +98,8 @@ No main merge, release/tag, dependency upgrade or expanded broad regression camp
 - Package, application, Remote API, manifest and Windows file/product versions are 1.13.1, without an RC/test suffix.
 
 No dependency upgrade, main merge, tag or public GitHub Release. Previous accepted features remain unchanged. CI logs and BUILD.txt identify the validated product source. Physical Windows/phone interaction confirmation remains separate from automated checks.
+
+
+## Public v1.13.1 publication authorization (2026-09-13)
+
+The user explicitly accepted v1.13.1, authorized integrating the accepted history into main and publishing a public GitHub Release, requested comprehensive bilingual usage documentation and current PC/mobile GUI screenshots, and requested only portable ZIP and installer ZIP release assets, not separate SHA256 files. This supersedes earlier stage-specific instructions not to release yet. It does not authorize unrelated runtime changes, fabrication of historical activity, or publication to a separate external release service.

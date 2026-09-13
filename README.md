@@ -1,224 +1,154 @@
-# FlyPPTTimer
+# FlyPPTTimer — PowerPoint & WPS Presentation Timer / PPT 计时器
 
-**English** | [简体中文](README.zh-CN.md)
-
-<p align="center">
-  <img src="src/FlyPPTTimer/Assets/app.png" width="88" alt="FlyPPTTimer logo">
-</p>
+**English** · [简体中文](README.zh-CN.md) · [User guide](docs/USER_GUIDE.en.md) · [中文详细教程](docs/USER_GUIDE.zh-CN.md)
 
 <p align="center">
-  <strong>A presentation timer and remote-control toolkit for Windows</strong><br>
-  PowerPoint / WPS · Phone and browser remote · Countdown and count-up · Multi-display timer
+  <img src="src/FlyPPTTimer/Assets/app.png" width="88" alt="FlyPPTTimer presentation timer application icon">
 </p>
 
-<p align="center">
-  <a href="https://github.com/Hona-Cao/FlyPPTTimer/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Hona-Cao/FlyPPTTimer?display_name=tag&sort=semver"></a>
-  <a href="https://github.com/Hona-Cao/FlyPPTTimer/actions/workflows/windows-ci.yml"><img alt="Windows CI" src="https://github.com/Hona-Cao/FlyPPTTimer/actions/workflows/windows-ci.yml/badge.svg"></a>
-  <img alt="Windows 10/11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows">
-  <img alt=".NET 8" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet">
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-green.svg"></a>
+**A free, open-source Windows PPT timer with a floating countdown, slide numbers, phone remote control and multi-monitor output.** Use it for conference talks, thesis defenses, classroom teaching, clinical presentations, training and meetings—without adding a countdown to every PowerPoint slide.
+
+[![Latest release](https://img.shields.io/github/v/release/Hona-Cao/FlyPPTTimer?sort=semver)](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)
+[![Windows CI](https://github.com/Hona-Cao/FlyPPTTimer/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/Hona-Cao/FlyPPTTimer/actions/workflows/windows-ci.yml)
+[![Windows 10 / 11 x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download-v1131)
+[![Rust + Slint](https://img.shields.io/badge/Built%20with-Rust%20%2B%20Slint-orange)](docs/BUILDING.md)
+[![MIT license](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
+**Current version: v1.13.1.** The desktop app has been rebuilt in Rust + Slint; the old v0.30.2 .NET instructions and screenshots are not the instructions for this version. [What changed](CHANGELOG.md) · [Development history, including UX and RC builds](docs/DEVELOPMENT_HISTORY.md)
+
+## Download v1.13.1
+
+| Package | Download | How to use |
+|---|---|---|
+| Portable ZIP | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | Extract the entire ZIP to a writable folder, then run `FlyPPTTimer.exe`. Keep the DLLs beside it. |
+| Installer ZIP | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | Extract it, run the included setup EXE, choose English or Simplified Chinese, and follow the wizard. |
+
+[Release page](https://github.com/Hona-Cao/FlyPPTTimer/releases/tag/v1.13.1) · [All releases](https://github.com/Hona-Cao/FlyPPTTimer/releases)
+
+Windows 10/11 x64 is the target platform. Both packages include the required application-local Microsoft VC runtime DLLs; **.NET is not required** for v1.13.1. Microsoft PowerPoint or WPS Presentation must be installed on the PC for supported presentation-control functions; the independent timer does not require Office. Your phone only needs a browser on the same trusted local network.
+
+The release provides exactly two uploaded packages: portable ZIP and installer ZIP. GitHub also displays its automatically generated source-code archives.
+
+## Start in three minutes
+
+1. **Start the timer.** Run the app. Its small floating timer appears immediately. Press **F3** to start/pause and **F4** to stop and reset.
+2. **Set the duration.** Right-click the timer or its notification-area icon → **Settings → Timer**. Enter `00:08:00` for eight minutes, choose countdown or count-up, and click **Apply**.
+3. **Add your slides.** In the same page, click **Add file**, select `.ppt`, `.pptx` or `.pptm` files, set a duration/mode per file, and save. Files are identified by full path; adding a rule does not alter the slide deck.
+4. **Connect a phone.** Right-click → **Remote Control**. Keep the PC and phone on the same Wi-Fi, or connect the PC to the phone's hotspot. Scan the displayed QR code. Do not replace the displayed PC address with the hotspot gateway.
+5. **Present.** On the phone, open **Presentation**, choose a controlled file and tap **Open**, then **Start from beginning** or **Start from current slide**. Automatic timing on entering full screen is enabled by default.
+
+For timing only, steps 3–5 are optional. Close a settings window with **OK**; use the tray's **Exit** command to quit the application.
+
+## See the current interface
+
+### Desktop: settings and precise percentage controls
+
+![FlyPPTTimer v1.13.1 desktop timer settings with countdown, time-up actions and presentation rules](docs/media/v1.13.1/settings-en-timer.png)
+
+![FlyPPTTimer v1.13.1 dark appearance settings with opacity slider and editable percentage](docs/media/v1.13.1/settings-en-dark-opacity.png)
+
+### PC Remote: QR connection and compact file rules
+
+![FlyPPTTimer v1.13.1 PC Remote local-network connection screen](docs/media/v1.13.1/pc-remote-connection.png)
+
+![FlyPPTTimer v1.13.1 compact presentation rules with aligned file, duration and mode columns](docs/media/v1.13.1/pc-remote-rules.png)
+
+### Phone: timer and PowerPoint controls
+
+<p>
+  <img src="docs/media/v1.13.1/mobile-en-light-timer.png" width="310" alt="FlyPPTTimer phone browser countdown timer, duration editor, pause, reset and mute controls">
+  <img src="docs/media/v1.13.1/mobile-en-dark-presentation.png" width="310" alt="FlyPPTTimer dark phone browser presentation list, sorting, slide navigation and PowerPoint controls">
 </p>
 
-FlyPPTTimer combines an always-on-top timer, presentation-specific timing rules, local-network remote control, alerts, and multi-display output in one desktop application. It is free, open source, and works without a cloud account.
+These are renders of the v1.13.1 GUI, not concept drawings. Desktop images use the production UI and callbacks in a disposable documentation build with an explicit CJK font to correct missing glyphs on the build host; that build is never shipped. Mobile images use the unchanged HTML/CSS/JavaScript at a phone-sized viewport. Document names, paths and connection data are examples. [Screenshot provenance and reproduction](docs/media/v1.13.1/README.md)
 
-The latest release is **v0.30.2**. See [CHANGELOG.md](CHANGELOG.md) for the version history.
+## What you can do
 
-## Where it fits
-
-- Talks, conferences, defenses, and public speaking
-- Classroom teaching, training, and workshops
-- Meetings, ceremonies, debates, and timed activities
-- Medical, nursing, and clinical case presentations
-- Interviews, recruitment sessions, and assessment rooms using a dedicated large-screen timer
-- Events where an assistant needs to control timing or slides from a phone
-
-## Download
-
-| Edition | Best for | GitHub | Gitee |
-|---|---|---|---|
-| Installer | Regular Windows installation, shortcuts, and future in-app updates | [Download v0.30.2 installer](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v0.30.2/FlyPPTTimer-v0.30.2-setup-win-x64.exe) | [Gitee v0.30.2 release](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v0.30.2) |
-| Portable | Extract and run; settings remain beside the application | [Download v0.30.2 portable ZIP](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v0.30.2/FlyPPTTimer-v0.30.2-portable-win-x64.zip) | [Gitee v0.30.2 release](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v0.30.2) |
-
-[All GitHub releases](https://github.com/Hona-Cao/FlyPPTTimer/releases) · [All Gitee releases](https://gitee.com/hona-cao/fly-ppttimer/releases)
-
-The current packages support Windows 10/11 x64 and include the required .NET runtime.
-
-- The installer detects the Windows display language and lets you choose English or Simplified Chinese before installation.
-- The portable edition follows the Windows display language on first launch.
-- Upgrading the installer edition preserves the existing configuration.
-
-## Screenshots
-
-| Timer and presentation rules | Appearance and display |
+| Need | Feature and entry point |
 |---|---|
-| <img src="docs/media/settings-duration.png" alt="Timer and presentation-rule settings" width="100%"> | <img src="docs/media/settings-appearance.png" alt="Appearance and display settings" width="100%"> |
+| Keep a talk on time | Countdown/count-up, start/pause/resume, stop/reset, restart and overtime colors. See [timer controls](docs/USER_GUIDE.en.md#timer-controls). |
+| Time different speakers | Presentation-specific duration, mode and enabled state; Ctrl/Shift selection and batch changes. See [file rules](docs/USER_GUIDE.en.md#presentation-rules). |
+| See progress without looking away | Always-on-top floating timer, current/total slide numbers, independent page font, colors, opacity, shape and positioning. See [appearance](docs/USER_GUIDE.en.md#appearance-and-percentage-controls). |
+| Receive advance warnings | Two configurable pre-end reminders and a time-up reminder; speech, imported audio, flashing, a full-screen time-up cover or ending the slide show. See [alerts](docs/USER_GUIDE.en.md#alerts-and-time-up-actions). |
+| Control slides from a phone | Browser-based PowerPoint/WPS remote: open/switch controlled decks, start shows, previous/next, jump to slide, black/white screen and end show. See [phone control](docs/USER_GUIDE.en.md#phone-and-browser-remote). |
+| Organize a session | Name/size/date sorting, long-press reordering, hide/restore and removal from the controlled list. See [mobile list](docs/USER_GUIDE.en.md#organize-the-mobile-presentation-list). |
+| Use a projector or confidence monitor | All-screen or selected-screen overlays plus a dedicated large timer on an extended display. See [multiple displays](docs/USER_GUIDE.en.md#multiple-displays). |
+| Match the room | System/light/dark theme on desktop and a local theme choice on the phone. See [themes and language](docs/USER_GUIDE.en.md#themes-and-language). |
+| Keep preferences | Local configuration import/export, reset, logs and preserved settings on upgrade. See [configuration and upgrading](docs/USER_GUIDE.en.md#configuration-and-upgrading). |
 
-| Remote connection | Presentation control |
+**PC Remote and phone Remote have different roles.** The PC's **Presentation** page manages file rules; it is not a duplicate slide-control panel. Open, previous/next, black/white screen and close-document actions are on the phone/browser page.
+
+## Defaults worth knowing
+
+New configurations use an **eight-minute countdown**. Slide numbers are on, with an independent **12-point size**, **below** the time and **right-aligned**. The timer sizes itself to its content; custom size remains available. Theme follows the system.
+
+**Every app launch shows the timer.** Hiding it only affects the current session. F5 toggles it again. Existing explicit appearance and timing preferences are preserved when a configuration is reused.
+
+The three main shortcut selectors are in **Settings → Controls**:
+
+| Shortcut | Default action |
 |---|---|
-| <img src="docs/media/remote-connect.png" alt="Desktop remote connection and QR code" width="100%"> | <img src="docs/media/remote-presentations.png" alt="Desktop presentation control" width="100%"> |
+| F3 | Start/pause; resume a paused timer |
+| F4 | Stop and reset |
+| F5 | Show/hide the ordinary timer |
 
-<p align="center">
-  <img src="docs/media/mobile-timer.jpg" width="310" alt="Mobile timer controls">
-  &nbsp;&nbsp;
-  <img src="docs/media/mobile-presentation.jpg" width="310" alt="Mobile presentation controls">
-</p>
+Additional default shortcuts, including flash, mute and duration presets, are listed in the [guide](docs/USER_GUIDE.en.md#keyboard-shortcuts).
 
-## Features
+## Common questions
 
-### Timer and alerts
+**Is this a PowerPoint add-in?** No. It is a separate Windows application. You do not need to insert timer objects or macros into every slide.
 
-- Countdown and count-up modes
-- Start, pause, resume, stop, reset, and immediate restart
-- Configurable duration presets and presentation-specific durations
-- Continue into overtime with a separate color, or stop at zero
-- Two advance alerts and one time-up alert
-- Optional speech, custom audio, flashing, full-screen time-up display, or automatic slide-show ending
-- Compact always-on-top timer with configurable size, font, colors, opacity, and shape
-- A switch to run timing tasks without showing the regular timer window
+**Can I use it without PowerPoint?** Yes, as an independent countdown/count-up timer. Supported slide detection and controls require a compatible desktop PowerPoint/WPS installation. Browser slides or PDF viewers are not added as controlled PPT files.
 
-### PowerPoint, WPS, and presentation rules
+**My phone cannot connect.** Use the current QR code, make sure both devices are on the same network, and check guest-network isolation, VPN/proxy routing and Windows firewall permission for the displayed port. Do not disable the firewall. [Step-by-step troubleshooting](docs/USER_GUIDE.en.md#troubleshooting)
 
-- Automatic timer behavior when a supported presentation enters or leaves full screen
-- Independent duration, timer mode, and enabled state for each presentation
-- Batch editing for multiple presentation rules
-- Open a presentation, start from the beginning or current slide, navigate slides, show black/white screens, and end the slide show
-- Separate actions for closing the current presentation and the last-opened presentation
-- Read-only opening for presentations managed by FlyPPTTimer
-- Capability detection for WPS Presentation, so unavailable actions remain disabled
+**Will removing a file delete it?** No. Removing it revokes its membership in FlyPPTTimer's controlled list. It does not delete the disk file or close an open document. Closing a document is a separate action with a warning about unsaved work.
 
-### Phone and browser remote
+**Does a slider save as I drag?** It previews while dragging; the wheel changes it by one percentage point and the adjacent number accepts precise input. **Apply/OK saves; Cancel discards**. Finishing text entry is not the same as saving.
 
-- No mobile app is required
-- Scan the QR code or open the local address from a phone, tablet, or another computer
-- Control the timer, duration, mode, visibility, flashing, and computer mute state
-- Restart timing immediately from the current presentation rule, falling back to the global duration
-- Browse presentations, start a slide show, change slides, use black/white screens, end the show, and close the current document
-- Automatic phone/browser language based on the device language
-- Per-installation access token and a command to disconnect all remote devices
+**Why is the file picker light when the app is dark?** Windows-owned dialogs use the operating system's theme. The app theme does not replace those dialogs.
 
-### Displays and large-screen timing
+**How do I upgrade from the older version?** Exit the old program and back up its configuration and `alert-sounds` folder. The installer preserves existing configuration; portable users should copy their configuration/sounds into the newly extracted folder. Old file paths must still be valid. [Full upgrade instructions](docs/USER_GUIDE.en.md#configuration-and-upgrading)
 
-- Show the regular timer on one display or all displays
-- Nine anchor positions with horizontal and vertical percentage adjustment
-- Per-monitor DPI support for common Windows scaling levels
-- A separate resizable large-screen timer window with minimize and maximize controls
-- Large-screen timing is available on extended displays and never takes over the primary display
-- Useful for interviews, recruitment, examinations, training rooms, and stage countdowns
+**Does “Check for updates” check this GitHub release?** In the accepted v1.13.1 executable it still checks **Gitee**. GitHub publishing does not imply a matching Gitee release. Use the GitHub download links above for this release; this installer ZIP is installed manually after extraction.
 
-### Desktop controls and reliability
+## Privacy and sensible use
 
-- English, Simplified Chinese, and **Follow system**
-- Language changes take effect after restart without overwriting timing rules
-- Global hotkeys for timer operations, visibility, flashing, mute, timer mode, and duration presets
-- Responsive Settings and Remote Control windows for different sizes and display scaling
-- Atomic configuration writes, backup recovery, rotating local logs, and single-instance operation
-- Optional update checks; automatic checking is off by default
+Timer operation and LAN remote control require no cloud account. Configuration, rules, logs and imported sounds remain local; the app does not upload presentation content. Update checks and project links need internet access.
 
-## Quick start
+The Remote URL contains an access token. Use a **trusted local network**, keep the URL/QR private, and do not forward the control port to the public internet. Before posting logs, check them for local file paths. Close/quit presentation commands may discard unsaved work; save in Office first.
 
-### Basic timing
+## Development has continued
 
-1. Install FlyPPTTimer or extract the portable ZIP.
-2. Run `FlyPPTTimer.exe`.
-3. Right-click the timer or tray icon and open **Settings**.
-4. Set the default duration, timer mode, alerts, colors, and display position.
-5. Use `F3` to start or pause and `F4` to stop and reset.
+The v1.13.1 release brings the real V1 development history onto `main`, including the UX iterations, RC1/RC2 fixes, RC3.1, RC3.2, RC3.3, RC3.3.1, RC3.4 and final v1.13.1 changes. Original commit authors and dates are retained.
 
-### Use a presentation rule
+[Readable development timeline](docs/DEVELOPMENT_HISTORY.md) · [Full changelog](CHANGELOG.md) · [Original implementation reports](docs/v1/CODEX_RESULT.md)
 
-1. Open **Settings → Duration Settings**.
-2. Add a PowerPoint or WPS presentation.
-3. Set its duration and timer mode, then enable the rule.
-4. Open or start the presentation from the Remote Control window, or start it normally in PowerPoint/WPS.
+The accepted application build passed **90 automated tests**, with **3 environment-dependent tests ignored**. The ignored Office/audio tests are not counted as passes. Interface renders are not a substitute for physical device testing; the maintainer has approved v1.13.1 for publication after use.
 
-### Control from a phone
+## Build, contribute and contact
 
-1. Open **Remote Control** from the tray menu.
-2. Keep the phone and computer on the same Wi-Fi, Ethernet LAN, or phone/computer hotspot.
-3. Scan the QR code.
-4. Use the browser page to control timing and presentations.
-
-Windows may ask for network access the first time remote control is enabled. Allow private-network access only when remote control is needed.
-
-### Use the large-screen timer
-
-1. Connect an extended display.
-2. Open **Settings → Appearance & Display → Large-screen timer mode**.
-3. Enable the large-screen timer and choose an extended display.
-4. Move, resize, minimize, or maximize the large-screen window as needed.
-
-## Compatibility
-
-| Capability | Microsoft PowerPoint | WPS Presentation | Other full-screen applications |
-|---|---:|---:|---:|
-| Automatic full-screen timer behavior | Supported | Top-level window detection | Optional allowlist detection |
-| Open a presentation | Supported | Supported | Not applicable |
-| Start from beginning/current slide | Supported | Depends on the available WPS interface | Not applicable |
-| Navigation, jump, black/white screen | Supported | Depends on the available WPS interface | Not applicable |
-| Read-only managed files and controlled closing | Supported | Provided when detected | Not applicable |
-
-WPS capabilities differ between versions. FlyPPTTimer enables only the operations detected on the current computer.
-
-## Local files
-
-- `FlyPPTTimer.config.json` — settings and presentation rules
-- `logs/` — local diagnostic logs
-- `alert-sounds/` — copies of selected custom alert sounds
-
-Installer upgrades keep the existing configuration. Before an important event, test the presentation, display placement, audio, and remote connection on the actual equipment.
-
-## Default hotkeys
-
-| Key | Action |
-|---|---|
-| `F3` | Start or pause |
-| `F4` | Stop and reset |
-| `F5` | Show or hide the regular timer |
-
-Additional hotkeys can be viewed and changed in Settings.
-
-## Privacy and network safety
-
-- No cloud account is required.
-- Presentation contents are not uploaded by FlyPPTTimer.
-- Settings, rules, selected sounds, and logs remain on the local computer.
-- Remote control is intended for a trusted local network and requires an access token.
-- Do not forward the remote-control port to the public Internet.
-- Do not publish an active QR code, full remote URL, or token.
-- Check file paths and other local information before sharing logs or screenshots.
-
-## Build from source
-
-Requirements: Windows 10/11, PowerShell, and the .NET 8 SDK. Inno Setup 6 is required to build the installer.
+The current application uses **Rust 1.92.0, Slint 1.17.1 and the Windows MSVC toolchain**. The retained C# files describe the older implementation; do not use the old .NET packaging commands for V1.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File .\package_release.ps1
+rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+cargo +1.92.0 test --locked
+cargo +1.92.0 build --release --locked
 ```
 
-Run the test suite:
+See [complete build/package instructions](docs/BUILDING.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues). When reporting a bug, include version, Windows/Office version, display scaling, reproduction steps and a redacted screenshot.
 
-```powershell
-dotnet test tests\FlyPPTTimer.Tests\FlyPPTTimer.Tests.csproj -c Release
-```
+Created by **Hunan Cao (曹虎男)**. Contact: [caohunan@smail.nju.edu.cn](mailto:caohunan@smail.nju.edu.cn).
 
-## Project
+## Support the project
 
-FlyPPTTimer was created by **Hunan Cao (曹虎男)** after seeing the practical need for reliable timing and remote presentation control in teaching, meetings, and clinical work.
+Stars, useful issue reports, documentation and contributions are welcome. Donations are optional and do not unlock features or change the free software.
 
-- Contact: [caohunan@smail.nju.edu.cn](mailto:caohunan@smail.nju.edu.cn)
-- Bugs and feature requests: [GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues)
-- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Version history: [CHANGELOG.md](CHANGELOG.md)
-
-Stars, issue reports, testing feedback, documentation improvements, and pull requests are all welcome.
-
-## Support
-
-If FlyPPTTimer saves you preparation or stage-management time, you can support its continued testing and maintenance through the donation options in the [Chinese README](README.zh-CN.md). The application remains free and open source whether or not you donate.
+<p>
+  <img src="docs/media/donate-alipay.jpg" width="220" alt="Optional Alipay donation to the FlyPPTTimer author">
+  <img src="docs/media/donate-wechat.png" width="220" alt="Optional WeChat donation to the FlyPPTTimer author">
+</p>
 
 ## License
 
-FlyPPTTimer is available under the [MIT License](LICENSE).
-
-Copyright © 2026 Cao Hunan（曹虎男）
+[MIT License](LICENSE). Copyright © 2026 Cao Hunan. Third-party components retain their respective licenses.

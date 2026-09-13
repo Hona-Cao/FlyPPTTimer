@@ -1,0 +1,24 @@
+{
+  "description": "PPT计时器 / PowerPoint & WPS presentation timer for Windows: countdown, slide numbers, phone LAN remote, multi-monitor, dark mode. Rust + Slint.",
+  "homepage": "https://github.com/Hona-Cao/FlyPPTTimer/releases/latest",
+  "topics": [
+    "ppt-timer",
+    "powerpoint-timer",
+    "presentation-timer",
+    "countdown-timer",
+    "speaker-timer",
+    "speech-timer",
+    "presentation-tools",
+    "powerpoint",
+    "wps-office",
+    "wps-presentation",
+    "windows",
+    "multi-monitor",
+    "remote-control",
+    "lan",
+    "slint",
+    "rust",
+    "teaching",
+    "conference-timer"
+  ]
+}

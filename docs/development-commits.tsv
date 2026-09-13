@@ -1,0 +1,199 @@
+commit	author_timestamp	author	subject
+e625c809f8cf7515f0143fab476bb4467d2fe1d7	2026-09-12T17:53:16Z	github-actions[bot]	fix: synchronize percentage entry wheel and drag in v1.13.1
+099eb7bbf3c0d2d7d0e17c0878a51f212cdd2d08	2026-09-13T01:48:51+08:00	Hona-Cao	ci: build v1.13.1 from committed product source
+ef7951fd51821d79c06c5408a9b7da0f1723594b	2026-09-13T01:48:09+08:00	Hona-Cao	fix: keep percentage editing synchronized with wheel and drag [skip ci]
+99f0916ea060b2aa93efa1ec02b9bdcf0d485480	2026-09-12T17:47:31Z	github-actions[bot]	fix: v1.13.1 mobile gestures precise percentages and window lifecycle
+2504f2917e3b0fde5dfda3d811e64afa5527fc22	2026-09-13T01:32:12+08:00	Hona-Cao	ci: build and package FlyPPTTimer v1.13.1
+9213a0a1375dfcbd4ed831ba2bdf3f21c8b57053	2026-09-13T01:31:22+08:00	Hona-Cao	fix: prepare v1.13.1 interactions and product metadata [skip ci]
+ab2978f3b3a1a2eee6da818df2385c1122874502	2026-09-13T01:20:13+08:00	Hona-Cao	ci: prepare v1.13.1 from accepted RC3.4 source
+ea123cda7f2e73778c2c1a3a5b04839fbd3afae4	2026-09-12T16:51:21Z	github-actions[bot]	feat: RC3.4 percentage previews dark theme and editing usability
+f9f276ee7975e91392332ee4f8452664cab64bcc	2026-09-13T00:41:04+08:00	Hona-Cao	ci: wait for GUI capture processes and retain compiled cache before capture
+20b73edbbd57dfe57fa62c9812bd6269da7959fd	2026-09-13T00:40:25+08:00	Hona-Cao	test: include bottom percentage controls in RC34 captures [skip ci]
+acef6ea187e35263f5b1789b4c448b1c2bbe8921	2026-09-13T00:23:33+08:00	Hona-Cao	fix: reuse system-theme translation and align Remote capture state
+6b0d9a9f8dbcde77db1913d14e06d8a7485b1b7e	2026-09-13T00:16:59+08:00	Hona-Cao	ci: validate and package RC3.4 usability and dark theme build
+9ae2e3c5a8087998e2954273d3f73efb1ccd6763	2026-09-13T00:16:31+08:00	Hona-Cao	build: apply RC3.4 reviewed source changes [skip ci]
+e8d22fbaab4222086fb48ed07ef5e2d1947cf96d	2026-09-13T00:16:24+08:00	Hona-Cao	build: stage RC3.4 user feedback changes 3/3 [skip ci]
+dc06c1f5187b22f50259da73a89f47505e297f6e	2026-09-13T00:15:45+08:00	Hona-Cao	build: stage RC3.4 user feedback changes 2/3 [skip ci]
+d98255019926d8dc97ca7e3eca5f1ff6d6b1acbc	2026-09-13T00:14:49+08:00	Hona-Cao	build: stage RC3.4 user feedback changes 1/3 [skip ci]
+c32acd91285d8f3272c8a6208eccfdac268d3266	2026-09-13T00:06:42+08:00	Hona-Cao	ci: prepare RC3.4 source workspace from tested RC3.3.1
+19bd8d13e98851223a8290cb052b9de4f8e4a09f	2026-09-12T15:20:48Z	github-actions[bot]	fix: stabilize first remote scan and restore modern PPT picker
+ae3a34b60e257319490bfc9b76dfb7c3557be2d2	2026-09-12T23:06:51+08:00	Hona-Cao	ci: fix Windows checkout line endings and run RC331 on pinned Rust
+27c18362b163b2286e0a160933cf5594b9a8ebd2	2026-09-12T23:06:14+08:00	Hona-Cao	fix: share the real PPT filter and convert the native dialog owner [skip ci]
+9f41176023bc22c5104d1d82d34e9cc25bf3ed27	2026-09-12T20:34:49+08:00	Hona-Cao	ci: fix modern picker bindings for windows 0.62
+220f6f4c1b1ab33b02a7cb8c8bf17a730f575d8d	2026-09-12T20:33:05+08:00	Hona-Cao	ci: apply RC3.3.1 source refinement robustly
+60fa0f3242970f47b08a1061dc96dbdab9687525	2026-09-12T20:32:42+08:00	Hona-Cao	ci: add robust RC3.3.1 source refinement
+360dd34be90dd684f965d8e961a3537e595dd884	2026-09-12T20:31:30+08:00	Hona-Cao	ci: verify RC3.3.1 remote startup and modern picker
+99ffd66a0eb1498c0a552f1bad97b3d80f39fef5	2026-09-12T20:31:02+08:00	Hona-Cao	test: stage RC3.3.1 remote and modern file picker patch
+298d74772b8fdc879e397239f1abe1bb0bdd753b	2026-09-12T11:58:32Z	github-actions[bot]	fix: RC3.3 concurrent windows color picking and stable remote snapshots
+b6f3543f1c30921d3ceb2f10cebcf53f44ead9a1	2026-09-12T19:51:57+08:00	Hona-Cao	ci: preserve LF when applying Windows review refinements
+58de843d0a55afd897d5180d8b2e31d6f5889404	2026-09-12T19:47:57+08:00	Hona-Cao	fix: enforce scroll gutters with layout padding after rendered review
+70deec8659a9db90a614e60af018abae74d64faf	2026-09-12T19:45:11+08:00	Hona-Cao	fix: keep all app icons branded and fit compact English actions
+7a0d4f3a34040d6896586a51b99bae95b5e240d7	2026-09-12T19:32:20+08:00	Hona-Cao	ci: preserve Win32 icon resource identifiers and export review evidence
+3ad0127086b082b3ddebc1a91178fda6345c1f9b	2026-09-12T19:03:12+08:00	Hona-Cao	ci: verify and package focused RC3.3 changes on Windows
+1ff5cbe86fa26368f76d2981fdda256ce6ea7e39	2026-09-12T19:02:37+08:00	Hona-Cao	docs: record focused RC3.3 user checks
+9b802981e526ccb4c764327ce37004953ba0ccf7	2026-09-12T19:02:15+08:00	Hona-Cao	build: stage reviewed RC3.3 patch part 3
+dfa5b493f44ab4f71352e4a497d253b24a49858b	2026-09-12T19:01:07+08:00	Hona-Cao	build: stage reviewed RC3.3 patch part 2
+8f562745b9e5cd8edf2e4242c260ec3b6297ecc2	2026-09-12T18:59:24+08:00	Hona-Cao	build: stage reviewed RC3.3 patch part 1
+2b2256bde0a7ac199b125aeeda57be2102bc1004	2026-09-12T18:46:40+08:00	Hona-Cao	ci: export pinned RC3.2 source for focused RC3.3 review
+359a09364fa8c36310084236ec8d3fa3a0382160	2026-09-12T18:23:00+08:00	Hona-Cao	docs: finalize RC3.2 validation and package provenance
+fadf20323d5ed3ce42845bcf16017deb4eae2207	2026-09-12T10:14:23Z	github-actions[bot]	feat: implement RC3.2 sizing typography and controlled mobile list
+0911943a8843975f100ae5a08a3f6b6f4adbc4ad	2026-09-12T18:02:13+08:00	Hona-Cao	ci: verify static layout constraints and build final RC3.2 candidate
+15cf19f9079a1c220cad4a23d1646b2a2b7879a5	2026-09-12T18:01:34+08:00	Hona-Cao	fix: break inferred maximum-size feedback in fullscreen typography
+99cf046733d737fc19dab8076236fbdf7958f81d	2026-09-12T17:54:36+08:00	Hona-Cao	ci: enforce loop-free Slint layout and verify native corrections
+24b5f493ddf60cbccd0c8881d33f35f374070c8c	2026-09-12T17:53:56+08:00	Hona-Cao	fix: isolate font-fit constraints and bind confirmed close to checked document
+f68b10609b167a9a4b22ebd8a8241645ffe0fb1a	2026-09-12T17:49:23+08:00	Hona-Cao	ci: verify render and build RC3.2 portable test package
+2f7364b3d52cd5750b9e95c4b07963ed4c6665c5	2026-09-12T17:48:19+08:00	Hona-Cao	docs: record RC3.2 focused acceptance and existing provisional passes
+0dedc12634e5f4daa4522fce1e2020f173517b03	2026-09-12T17:47:21+08:00	Hona-Cao	build: stage verified RC3.2 patch segment 4 of 4
+6004b01b07241a7d4e4ccf1c7de2ceb878e33a6a	2026-09-12T17:46:34+08:00	Hona-Cao	build: stage verified RC3.2 patch segment 3 of 4
+4e430c61ba37992cb3423f3fb40337b59571951f	2026-09-12T17:44:54+08:00	Hona-Cao	build: stage verified RC3.2 patch segment 2 of 4
+339123d675f8c2adc2b5b304a8aefb4b7fff96f1	2026-09-12T17:43:25+08:00	Hona-Cao	build: stage verified RC3.2 patch segment 1 of 4
+9c8d89adc703bf08768a009c389c4419de6063c3	2026-09-12T17:21:18+08:00	Hona-Cao	ci: prepare RC3.2 source workspace for requested UI changes
+5bc223bd7bea12339311bac4494f369bb3d363b1	2026-09-12T08:12:22Z	github-actions[bot]	fix: stabilize RC3.1 review blockers
+41b1772ce44651e1e5d8a4ac34f4cedc2a9b6a0c	2026-09-12T15:57:35+08:00	Hona-Cao	ci: format applied RC3.1 hotfix before verification
+b4aa124bb889db3ac7ceab57f8a5f504a13ba62d	2026-09-12T15:56:29+08:00	Hona-Cao	ci: validate final RC3.1 source scope
+196e9bcd446c5842949d54b2508051384fe2d257	2026-09-12T15:56:14+08:00	Hona-Cao	fix: preserve legacy order defaults and append desktop rules explicitly
+5164fb8630f4dbc243c955eecc8e01e0f3690309	2026-09-12T15:48:07+08:00	Hona-Cao	ci: expose Windows SDK resource compiler
+2691d4da200d33efba7e8f8224964f1159e8bf5c	2026-09-12T15:43:15+08:00	Hona-Cao	ci: apply RC3.1 hotfix with deterministic script
+c136c0bdec45b424355beea9934aa2f94d94364d	2026-09-12T15:42:57+08:00	Hona-Cao	ci: apply RC3.1 hotfix with exact replacements
+871bcf9c513e533a406470e71c93e0959f35cef5	2026-09-12T15:42:16+08:00	Hona-Cao	ci: build ChatGPT RC3.1 review package
+ea130d66b97de23e44596afd6f750d3b56ba45f6	2026-09-12T15:41:54+08:00	Hona-Cao	test: add RC3.1 focused manual checklist
+77c727f1e129c32b1b1fb92f987c9a9226152ba9	2026-09-12T15:41:27+08:00	Hona-Cao	test: add ChatGPT RC3.1 hotfix patch
+f27ec3cd729cfaf3f7148bc28a1ca02761ced85a	2026-09-12T15:02:21+08:00	Hona-Cao	docs: hand off final audit blockers
+08889319ea6a02b01fb83c33608b3a49b7ea4d71	2026-09-12T15:02:00+08:00	Hona-Cao	docs: narrow final audit blockers
+a644e74b82bf5a65474f027ef492fd6646456ac3	2026-09-12T13:42:05+08:00	Hona-Cao	fix: integrate presentation switching and adaptive timer previews
+b193befab4d67f0f7dbec0cd84ca0ebe61b445ff	2026-09-11T18:10:57+08:00	Hona-Cao	docs: mark direct fixes green for second feedback
+34aa0ca6876b30d8b84b17ce1908b4799f1afbdf	2026-09-11T18:10:27+08:00	Hona-Cao	docs: start second feedback integration from green direct fixes
+fdadde3ba8b4e88799cc2b67b049437001117a20	2026-09-11T10:06:17Z	github-actions[bot]	fix: streamline blackout audio and remote resilience
+874bf6071f8a1f5c2deb071dbf57c7f27e74bd8e	2026-09-11T18:01:36+08:00	Hona-Cao	docs: hand off second feedback phase
+10532c4b7b9f6b24e1191185747ff5123f5dd8fa	2026-09-11T18:00:49+08:00	Hona-Cao	docs: queue second feedback interaction upgrades
+109c9ce2099f4b7dbc2b22811c752ce966b132bb	2026-09-11T17:57:58+08:00	Hona-Cao	docs: record second user acceptance feedback
+a19be3f30d59a23429a41af9f2ed1d6a9c9ec2bb	2026-09-11T17:53:18+08:00	Hona-Cao	build: validate second feedback direct fixes
+1507b2090d50a6cd856d896a54b24a742aa87ded	2026-09-11T17:52:57+08:00	Hona-Cao	build: stage second feedback direct fixes
+6164653f8deed158ca478481600dba67c693e5d9	2026-09-11T16:35:45+08:00	Hona-Cao	docs: hand off computer-use first acceptance pass
+2d880964754dae5d6574a051371da325acf9e5ed	2026-09-11T16:35:16+08:00	Hona-Cao	test: maximize Codex real desktop acceptance
+ed0382dfc0346c749fd7eb6b02c6140c9a98470b	2026-09-11T16:31:21+08:00	Hona-Cao	docs: hand off final feedback acceptance state
+fe53a475f03a1eafb4f54667c9bf02ea123c7061	2026-09-11T16:30:50+08:00	Hona-Cao	docs: freeze code pending final user acceptance
+eeb4ed6315d956c1a1e3aeace01abb6894107d59	2026-09-11T16:27:51+08:00	Hona-Cao	build: assemble final feedback portable runtime package
+bf00cf0dc6ccec337141520f385f8e37d5dab639	2026-09-11T12:15:16+08:00	Hona-Cao	fix: stabilize mixed-DPI windows and complete feedback fixes
+5c1cfa9fdd3e3c9c5af0e3c69ac28639a02f625b	2026-09-11T02:43:48Z	github-actions[bot]	fix: feedback layout clipping native audio and assigned LAN address
+3ef6a9151b7035d1c58bffbfb4af56dafa7bd9ad	2026-09-11T10:39:46+08:00	Hona-Cao	docs: pinpoint loopback button separately from hotspot address selection
+c935ee834edead2a7ede8783af14dfc1bbf21209	2026-09-11T10:34:27+08:00	Hona-Cao	docs: replace repeated manual testing with post-fix acceptance for reported failures
+94370a17e1bdd0b0a9b20a720d2279c6cafe9a8f	2026-09-11T10:32:15+08:00	Hona-Cao	docs: hand off reproduced UI DPI hotspot and blackout failures
+fbe0856f107b40097ae79e7430073d1b44350e4c	2026-09-11T10:31:34+08:00	Hona-Cao	docs: preserve user-approved single connection native audio and full-screen blackout requirements
+9e90e7c4589040435632c72156cd7f05f9546b09	2026-09-11T10:30:47+08:00	Hona-Cao	build: correct Slint fixed-height constraint before validation
+9414530d031da8c0d5e5ae9e062357a3336f3918	2026-09-11T10:27:34+08:00	Hona-Cao	docs: assign measured DPI full-screen blackout and hotspot fixes from user feedback
+a8e8e43ca22571130ffafbb89783b996a7b88da0	2026-09-11T10:26:48+08:00	Hona-Cao	docs: record reproducible user feedback and split direct fixes from native verification
+361130f1edb4dfda64e92e311f16196b76b523c9	2026-09-11T10:26:09+08:00	Hona-Cao	build: tighten import patch anchor and preserve review evidence
+79f12f0300a775488fb01d03aa6ca5f03d8d5668	2026-09-11T10:24:23+08:00	Hona-Cao	build: verify and commit scoped user feedback fixes on Windows
+8cc851a3d75546d8ba01b608297bf58bbfe2375a	2026-09-11T10:24:03+08:00	Hona-Cao	test: include author dialog in existing headless capture path
+b60bf5c651583012675be65ae3fec66a9dcbf783	2026-09-11T10:23:29+08:00	Hona-Cao	build: stage bounded fixes for user-reported layout audio and address issues
+d914c8917622dcf4ee98a27c2bea900574f198fa	2026-09-11T09:41:59+08:00	Hona-Cao	docs: record verified portable test package with app-local runtime
+1a624723288b1f9538d6c213902a86ebde67d140	2026-09-11T09:39:09+08:00	Hona-Cao	docs: record verified direct fixes and portable runtime delivery
+41ab7247746d9a7cf1764dccba397439b85b22d7	2026-09-11T09:37:03+08:00	Hona-Cao	build: assemble app-local runtime for verified portable test exe
+9a71d703d67c2da66facb6f7a27cf0b90ff4532e	2026-09-11T09:30:51+08:00	Hona-Cao	docs: distinguish direct-fix test build from prior frozen RC2
+efee58d65c17f2ad07bb6c868272e2ffa1cf39d0	2026-09-11T09:24:51+08:00	Hona-Cao	docs: consolidate manual acceptance for direct-fix test build
+32ef7e55006bf8eeedf6ec79cc2a7e95c6b2b353	2026-09-11T09:22:26+08:00	Hona-Cao	docs: update handoff after user-authorized direct source fixes
+068139e8944996be1ebeebf3cf10233c6000a17a	2026-09-11T09:21:46+08:00	Hona-Cao	docs: hand off direct fixes and scoped Windows verification
+96273ddf0e34fe73902f9fcd3ea4a6f356138c18	2026-09-11T09:21:06+08:00	Hona-Cao	style: apply rustfmt layout to new slideshow regression test
+c0b5e37a71849f451e4c71cc7b158791165d436b	2026-09-11T09:18:16+08:00	Hona-Cao	fix: avoid empty-path timer restarts and reject mismatched slideshow targets
+0d5e53506bfc1048ec098060f944227c3e07b564	2026-09-11T09:15:40+08:00	Hona-Cao	build: add scoped Windows portable review build for requested test exe
+9f495cfa03cad1375bb80266152e322d9c4f87d4	2026-09-11T09:05:30+08:00	Hona-Cao	docs: hand off final manual acceptance and stop proactive implementation
+a0975ea238611f5a54a7634e9419e9b82b68e7dd	2026-09-11T09:05:08+08:00	Hona-Cao	docs: record final reviewer acceptance with explicit manual release gates
+2b2e38f4758e25f87b22c34e8782ee5a72dec267	2026-09-11T09:04:46+08:00	Hona-Cao	docs: freeze implementation after RC2 final review pending user acceptance
+a214930cedf988c6a2b364c2bab5fb7dd9953d39	2026-09-11T09:04:30+08:00	Hona-Cao	docs: consolidate final RC2 review and remaining manual acceptance
+633a830d78ca02be05994364d86f93eaf40a263e	2026-09-11T08:49:44+08:00	Hona-Cao	docs: record RC-2 integration verification and freeze candidate
+952226d4c114b59334b13d0a7b44c60d89b9f030	2026-09-11T00:15:22+08:00	Hona-Cao	docs: hand off RC2 candidate validation
+08de8187d89c6890061e32987cf73a821d6f851c	2026-09-11T00:14:52+08:00	Hona-Cao	docs: start RC2 final integration validation
+72b7a42e9be1598e671c6a67e40799a4b3235118	2026-09-11T00:07:29+08:00	Hona-Cao	fix: preserve ambiguous slideshow state
+5d1eac26ba37a019483bd36cc6f8171bcbef2266	2026-09-10T23:48:49+08:00	Hona-Cao	docs: hand off RC1.1 slideshow state fix
+b79cad91b6d39d9a18f4de75fcdc51e5764c3445	2026-09-10T23:48:15+08:00	Hona-Cao	docs: target RC1 ambiguous slideshow state regression
+988358cef27c93b696fb65915fc7e86ecd7c0fe8	2026-09-10T23:34:04+08:00	Hona-Cao	fix: target active slideshow presentation window
+40d6e81df5dfc72aca3d34c0e59eee89d609b585	2026-09-10T22:29:05+08:00	Hona-Cao	docs: update handoff for RC1 review stage
+0bade6263e28477e4840eb4979f79ad31676fe5c	2026-09-10T22:27:35+08:00	Hona-Cao	docs: start RC1 presentation targeting and acceptance pass
+7d0a01e0ff88efd8f7590db208b14b1e3ef844d7	2026-09-10T22:25:56+08:00	Hona-Cao	docs: make approved deviations part of agent baseline
+d8bf1c9690eaf21cb599dae83fc20444ef88cee8	2026-09-10T22:25:41+08:00	Hona-Cao	docs: record approved V1 product deviations
+829c8c79b430d92bbd1e7e37fa6d301d07ad40cb	2026-09-10T22:04:16+08:00	Hona-Cao	fix: close RC config and remote auth gaps
+b28e14df40ac62503d67b15b282431d5e73e5e18	2026-09-10T21:23:55+08:00	Hona-Cao	docs: hand off RC config and auth follow-up
+a5226d6e070a0906b0053d94755c95b55cd7b89f	2026-09-10T21:23:17+08:00	Hona-Cao	docs: queue RC config and remote auth fixes
+8e8b9cd972b3aef3f32cda5ce903274bd678986d	2026-09-10T21:14:14+08:00	Hona-Cao	fix: stabilize UX13 timer and configuration editors
+ec30b3179ac7154d34f95e4f7cd18a868d110fdf	2026-09-10T20:53:19+08:00	Hona-Cao	docs: update handoff for UX13 stability pass
+501b198ec14e4f742a6329f8c7814a419e7fdd15	2026-09-10T20:52:21+08:00	Hona-Cao	chore: queue UX13 stability fixes and environment preflight
+007f4dc2aab1c9e5c6e81cfa53961263c013f2e5	2026-09-10T18:27:43+08:00	Hona-Cao	fix settings and remote rules UX13 layout
+e1be4e425fdf9132670b700bd3291c9e3a8c0829	2026-09-09T18:13:16+08:00	Hona-Cao	docs: record UX12 real package repro and verification
+c1da90b07da6c422cbc3fe6e40cb0a1ae652033d	2026-09-09T18:12:00+08:00	Hona-Cao	fix settings reopen DPI sizing and footer spacing
+ad15ee812e30ec227b76d5a9e3ed112ba661f373	2026-09-09T16:52:58+08:00	Hona-Cao	docs: record layout isolation UX11
+e962010358d125a9e1dd18609c49272d1bd0a766	2026-09-09T16:52:26+08:00	Hona-Cao	refine settings and remote spacing
+8274cb781db5d677f839ad8e4e11c7ba0b659e0e	2026-09-09T16:30:37+08:00	Hona-Cao	docs: record layout and file filter UX10
+62e18299c24f8c770a8117158970eea606f9ab5d	2026-09-09T16:30:02+08:00	Hona-Cao	fix settings footer and presentation file filtering
+e08ddcfceaac8ae10d471af22098c3fa2b75fd13	2026-09-09T11:42:34+08:00	Hona-Cao	docs: record remote selection UX09
+f6ee291f3e0964dfe682b1c4a5928e6052035829	2026-09-09T11:41:01+08:00	Hona-Cao	fix remote rule selection and window placement
+1eae6d7fd79c0d2fb845c2af3afa61cf89e5a218	2026-09-09T11:09:40+08:00	Hona-Cao	docs: record grouped action routing fix
+cbc140d723c1602b0e3562a53576b509bc80cd14	2026-09-09T11:09:09+08:00	Hona-Cao	fix grouped settings action routing
+13b0349c549f3be1b44027ad4450aacf0a900a66	2026-09-09T11:05:06+08:00	Hona-Cao	docs: record settings density UX08
+887f0510e132570fc561d0fe4fce0267ccb82bcb	2026-09-09T11:03:58+08:00	Hona-Cao	fix settings density and remote resizing
+2be1c7d586cb0c7892cef3b56f0589b44834aeb1	2026-09-09T10:16:10+08:00	Hona-Cao	docs: record settings display UX07
+7c039a8d37b534c57583401712bfa9b8349ee1b1	2026-09-09T10:15:55+08:00	Hona-Cao	fix settings repaint and desktop UI layout
+a833755af4e2eac1f32e8af54ff7d9b308641692	2026-09-09T09:52:18+08:00	Hona-Cao	docs: record settings remote rules manual test
+46eac11c190b03ad1027f3d18ef8c3fcf08f4348	2026-09-09T09:50:34+08:00	Hona-Cao	fix settings remote cross-screen rules UX
+e57ba0fb54290944d7f97f5a4a56c3c6ee7c6cc4	2026-09-09T09:03:33+08:00	Hona-Cao	fix: stabilize settings and remote UX regressions
+f5e12eab621291ba9c1d2e0a8fb5b1bad8014c29	2026-09-09T08:06:48+08:00	Hona-Cao	docs: align UX progress with DPI review
+d26ece59e560ae0f4c9333009442118300c3b75a	2026-09-09T08:06:27+08:00	Hona-Cao	docs: finalize DPI source review and correct review cadence
+d6a3473716ccf80f007165886f7a9324ddb36bce	2026-09-09T00:48:44+08:00	Hona-Cao	docs: review settings DPI fix and require real-machine validation
+7d970a111e1959d13a050b04fb108888b4b754e3	2026-09-09T00:03:17+08:00	Hona-Cao	fix: correct settings initial size and synchronize cross-monitor DPI
+4825b975e12991e701a666c3606f82525c1cf4ed	2026-09-08T23:53:28+08:00	Hona-Cao	docs: record UX-04 package ready for manual validation
+db2f4755517b42fd008145c29e47bd0d5189b1b1	2026-09-08T14:51:31+08:00	Hona-Cao	docs: record UX-04 local test package delivery
+3a17239b00298f155edfc7e79c42131ea9a0cbd0	2026-09-08T14:44:29+08:00	Hona-Cao	docs: mark UX-04 source review passed and wait for UX-05 repro
+401f6501fae5c387c88568201835cbd7a6c8b680	2026-09-08T14:41:55+08:00	Hona-Cao	fix: add Remote button keyboard access and isolate modal interactions
+8d11f63ee2c221b87b2b7e05ef6308eb1b09c5a3	2026-09-08T14:35:28+08:00	Hona-Cao	docs: advance review branch to UX-04 interaction usability
+66a65bfa28371390a8d9df6dd6a773fee07f4de6	2026-09-08T14:32:41+08:00	Hona-Cao	style: improve PC Remote readability and control grouping
+5cdaea1dfa8aa2d5970e8a7a9f9166f22c544193	2026-09-08T14:27:07+08:00	Hona-Cao	docs: advance V1 UX work to UX-03
+bd088f79b2a2cfa42a2d6189b1736f6f9c32b11d	2026-09-08T14:24:39+08:00	Hona-Cao	style: group settings fields and allow native Remote resizing
+978379247128ee35bed1ee35db8adb45943e943c	2026-09-08T14:21:18+08:00	Hona-Cao	docs: advance UX-02 and add resizable remote window
+3b372797b35a9140d0f4d02c5f913a89c4d58197	2026-09-08T14:07:58+08:00	Hona-Cao	docs: record UX-01 local test package delivery
+c0f13455f9a9e81e2f7f695cbc92d8173290eb7c	2026-09-08T11:25:11+08:00	Hona-Cao	docs: mark UX-01 source review passed
+c11553ee5ef484bcbc99f683ef52ed1dd0935e45	2026-09-08T11:23:18+08:00	Hona-Cao	style: unify desktop palette and remote button states for UX-01
+d758d1a31deffa5262ef4c1bb3edcf68fcd0aebf	2026-09-08T11:21:21+08:00	Hona-Cao	docs: plan phased desktop UX improvements and start UX-01
+c87391612dd880484c7687a903d0258fb02751ff	2026-09-08T11:04:04+08:00	Hona-Cao	docs: adopt risk-based verification policy
+06fa440ff872a2c90989345033698a6acd9b995f	2026-09-08T10:57:13+08:00	Hona-Cao	fix: align remote duration mode and restart feedback with legacy
+70fef2e59e25e531788769912e1744c4dd5193b0	2026-09-08T10:52:13+08:00	Hona-Cao	docs: add audit fixes for remote parity
+79013d433e7abdca0416fc995c84168889bb3c1b	2026-09-08T10:43:26+08:00	Hona-Cao	fix: restore V1 settings and remote timer parity
+5e86b4db722ae5b74f31f720a25f00ec9ad0d57c	2026-09-08T09:41:01+08:00	Hona-Cao	docs: forbid over-defensive V1 implementation
+4b168bfc8793c0173498784f72b2d3b72a9beae0	2026-09-08T09:37:50+08:00	Hona-Cao	docs: assign V1 parity regression fixes
+e234f0d00a5a0e263461643b29f610ba5489c8d7	2026-09-08T09:24:46+08:00	Hona-Cao	docs: pause Codex task for new-session handoff
+59c416ae001d97ed36f79792b8570e7827ff6f05	2026-09-08T09:24:25+08:00	Hona-Cao	docs: point new agents to V1 handoff
+0367b93c6384f51add8319fb0f7bb8d7e8ffdde1	2026-09-08T09:24:17+08:00	Hona-Cao	docs: add V1 session handoff
+1e799444afe828a36b668686fb01903646362355	2026-09-04T18:16:11+08:00	Hona-Cao	docs: record remote window fix validation
+8a39205066e3224a00624ac2b5c4921fbae391ad	2026-09-04T18:15:48+08:00	Hona-Cao	fix: stabilize remote control window reopen and DPI
+ff9dcd3aee3f4844c546b595d8d9c65c8b9ef390	2026-09-04T17:10:41+08:00	Hona-Cao	fix: make settings window resizable across DPI monitors
+946b229a678cd8a989b6ceedbd48e2b41825d888	2026-09-04T14:48:55+08:00	Hona-Cao	fix: keep settings window size stable across DPI monitors
+aa59e2352163143f261b0a5a183cda6f140eb4f5	2026-09-04T11:28:28+08:00	Hona-Cao	docs: record file rule layout version
+8d6eb16fb30b048a960d4a080c33b3e166941e63	2026-09-04T11:27:25+08:00	Hona-Cao	fix: place file rule actions below list
+140936c2b289e7d0ac667065b2e401d7dfa8a28c	2026-09-04T11:12:00+08:00	Hona-Cao	docs: record local 1.9.0 desktop verification
+4bebc8a807d939287c92d79c320715e45f17ce96	2026-09-04T09:30:52+08:00	Hona-Cao	docs: record review branch tip
+d9493d84dcd0e7ac6d65b621bbdbdb833201b0e1	2026-09-04T09:26:35+08:00	Hona-Cao	docs: record 1.9.0 manual-test version status
+77d7573d016c57640d02f2c99265d8827b70cd57	2026-09-04T09:23:52+08:00	Hona-Cao	build: sync lockfile for 1.9.0 manual test
+0a473f4bd7f5898e1d1bc95fe50bd8ece9dc928a	2026-09-04T09:22:52+08:00	Hona-Cao	build: bump manual-test version to 1.9.0
+5e6e02f4b43081a8a8e0c09026479a6abc83cf5b	2026-09-04T09:21:17+08:00	Hona-Cao	docs: record window entry follow-up result
+93f8f3a2f10714efd0751d3d73f7630c4be1dbae	2026-09-04T09:12:27+08:00	Hona-Cao	fix: avoid flicker when reopening windows
+ec69f063f1515be3aad815c314317d986506f247	2026-09-04T09:09:25+08:00	Hona-Cao	fix: defer settings and remote window creation
+02fb47cd54020c924756a58e8ac97ac43dd4117a	2026-09-04T09:06:48+08:00	Hona-Cao	fix: avoid reentrant settings and remote window flash
+f25b4a814ef109fa8465b83204a5285622046841	2026-09-03T17:46:19+08:00	Hona-Cao	docs: record manual test repair result
+61e3158bf09009f7a3b21f56111c9e6b74b3be85	2026-09-03T17:46:07+08:00	Hona-Cao	fix: restore remote presentation controls and window behavior
+4faff3533e3c7a37d4449678f6e2a0979e9bd41b	2026-09-03T15:50:50+08:00	Hona-Cao	build: bump test version to 1.8.0
+931ae2c08f6a67810aee9a65a8e494715377d5ef	2026-09-03T16:19:41+08:00	Hona-Cao	docs: set next manual-test repair task
+8e9a5eef7efc7c739302918bef0a0cade5824d3a	2026-09-03T15:45:57+08:00	Hona-Cao	docs: record right-click audit result
+e2c156395bbe154c7d768e4660028a35dadae341	2026-09-03T15:45:49+08:00	Hona-Cao	fix: suppress native caption paint on timer menu
+31d82806df5336fa188f38b85392057179d3c437	2026-09-03T14:42:13+08:00	Hona-Cao	docs: focus window audit on right-click transition
+ba878698a975fd5571ee5cd11d9d764396a43e5d	2026-09-03T14:34:08+08:00	Hona-Cao	docs: switch timer window fix to isolation-based diagnosis
+db92f8a0a05734529557106cc7ef0764626dbd2d	2026-09-03T14:29:52+08:00	Hona-Cao	docs: record scoped v1.07 window fix and manual-test handoff
+b5ecf5a0f54d8555944e67056ea0516c44a32087	2026-09-03T14:28:01+08:00	Hona-Cao	fix: restore frameless timer style only when it changes
+b19f4fca51983d1c66668ef355a753991e0b21c5	2026-09-03T14:17:49+08:00	Hona-Cao	docs: focus Codex task on timer window regression
+5168b1e41095f207c4eb97235a972d8b9348a849	2026-09-03T11:44:16+08:00	Hona-Cao	docs: record v1.06 candidate results and manual-test limitations
+68d9090636227401cd9a97008f57cb141deb54c4	2026-09-03T11:39:41+08:00	Hona-Cao	fix: prepare v1.06 window audit and manual-test candidate
+4660ae624fb2ccf7568388f8db96f25f186f6823	2026-09-03T11:15:03+08:00	Hona-Cao	docs: simplify Codex validation scope
+03efa1104ecfce543369aac00438a19f4334a524	2026-09-03T11:13:06+08:00	Hona-Cao	docs: simplify current Codex task
+4de7e7c8a7828724e8352ab24fa965a079ae7ac3	2026-09-03T11:12:43+08:00	Hona-Cao	docs: simplify Codex agent guidance
+f6f5717fe6c2f958c8e833749bcd45ba10f7bc34	2026-09-03T11:08:28+08:00	Hona-Cao	docs: add Codex result handoff template
+b48e59dc5490485a9658a4d6c5459e605b7f7690	2026-09-03T11:08:19+08:00	Hona-Cao	docs: add next Codex manual-test candidate task
+6eb5689d481e193fdbac2b1dc0c4cd70aced2f72	2026-09-03T11:07:46+08:00	Hona-Cao	docs: route Codex through GitHub task and result files
+57144e3c494618d94128d91d2f46caff851d006e	2026-09-03T10:44:34+08:00	Hona-Cao	feat: add V1 Rust Slint implementation for window audit

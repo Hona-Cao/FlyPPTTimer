@@ -1,4 +1,59 @@
-# CHANGELOG
+# CHANGELOG / 更新记录
+
+## 1.13.1 — 2026-09-13
+
+Public release of the user-accepted V1 Rust + Slint application. 完整保留此前 UX/RC 实际提交；[逐轮时间线与提交链接](docs/DEVELOPMENT_HISTORY.md)。
+
+- 手机演示列表支持横滑切换页面，纵向滚动与整个页面衔接；保留长按排序。
+- 百分比滑块支持悬停滚轮每格1个百分点、精确输入、即时预览和保存／取消。
+- 电脑 Remote 表头与文件名/路径、时长、模式对齐，缩小列表行高。
+- 修复语言重启后关闭设置意外退出程序；启动总是显示计时器，隐藏仅本次生效。
+- 更新中英文README、完整教程、当前桌面/手机GUI图、开发历史、Rust CI与运行库完整的便携/安装ZIP。
+- Mobile list gestures/scroll chaining; wheel and exact percentage entry; aligned compact Remote rows; language-restart/window lifecycle and startup visibility fixes.
+- Public downloads are portable ZIP and setup ZIP only; existing personal settings are preserved. [Release notes](docs/RELEASE_NOTES_v1.13.1.md).
+
+## RC3.4 — 2026-09-12 (development build / 开发交付)
+
+- 页数字号默认独立12、下方右对齐；新增真正小圆角，旧“小”更名“中”而保留外观。
+- 百分比拖动预览、结束输入焦点、未保存提示；桌面和手机浅色/深色主题。
+- 打开目标文稿时最大化并请求前置，不自动开始放映。
+- Independent page typography defaults, small/medium/large corners, live percentages, editing/dirty state, app/browser themes, maximized target document opening.
+
+## RC3.3.1 — 2026-09-12 (development build)
+
+- 现代 Windows 多选文件选择器，保留PPT类型限制与正常目录导航。
+- Accepted client streams are explicitly blocking with timeouts; fixes the first HTTP request's Winsock 10035 race.
+- 修复 Windows checkout 换行造成的 CI 阻塞。
+
+## RC3.3 — 2026-09-12 (development build)
+
+- 设置和PC Remote可同时使用；底栏、滚动条和内容留白；可视颜色选择与HEX。
+- 添加受控文件仅允许PPT扩展名；移动列表命令确认/轮询不回滚新排序。
+- Concurrent management windows, visual color selection, PPT-only additions and stable mobile state snapshots.
+
+## RC3.2 — 2026-09-12 (development build)
+
+- 自动/自定义浮窗尺寸，页码独立字号颜色、位置对齐与斜体。
+- 大屏所在显示器排除小浮窗；受控列表与已打开文稿分离。
+- 元数据排序、移动/隐藏/移除与控制撤销，长按拖拽及排序动画。
+- Automatic/custom sizing, page typography, fullscreen exclusion, controlled membership, metadata sorting and mobile reorder.
+
+## RC3.1 and direct-feedback builds — 2026-09-11/12
+
+- 定向处理窗口/DPI、提示音、全屏到时、文稿切换和列表交互反馈。
+- 明确区分未完成的现场测试和自动回归结果；原始反馈与报告保留在docs/v1。
+- Focused window/Office/audio/blackout/list corrections with scoped validation records, not a claim of exhaustive device coverage.
+
+## RC1 / RC1.1 / RC2 and UX-01–UX-13
+
+Desktop palette, grouping, keyboard/modal access, DPI/reopen behavior, rule selection/filtering, footer spacing, timer/configuration editing, presentation targeting and authentication were iterated in real review commits.
+桌面配色、设置分组、键盘交互、跨屏与重开、规则选择/过滤、底栏留白、计时/配置编辑和演示鉴权逐轮完成。各阶段代表提交、日期和原始报告见[开发历史](docs/DEVELOPMENT_HISTORY.md)，不是补造的公开版本或提交日期。
+
+---
+
+## Legacy releases / 旧版发布记录
+
+以下保留旧版原始变更，描述的是当时的实现；当前产品说明以v1.13.1教程为准。
 
 ## 0.30.2
 
