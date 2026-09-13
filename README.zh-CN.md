@@ -1,154 +1,172 @@
 # FlyPPTTimer — PPT 计时器、PowerPoint / WPS 演讲倒计时与手机遥控
 
-[English](README.md) · **简体中文** · [中文详细教程](docs/USER_GUIDE.zh-CN.md) · [English user guide](docs/USER_GUIDE.en.md)
+[English](README.md) · **简体中文** · [完整使用教程](docs/USER_GUIDE.zh-CN.md)
 
-<p align="center">
-  <img src="src/FlyPPTTimer/Assets/app.png" width="88" alt="FlyPPTTimer PPT计时器应用图标">
-</p>
-
-**免费、开源的 Windows 演示计时工具。** 用一个悬浮计时器显示倒计时、正计时和当前页数，再用手机浏览器控制计时与 PowerPoint / WPS 演示。适合会议发言、论文答辩、课堂教学、培训、临床病例汇报和多人轮流演讲，不用逐页往 PPT 里插入倒计时。
+**免费、开源的 Windows 演示计时工具。** 显示倒计时、正计时和 PPT 页数，用手机浏览器控制演示与时间。适合会议发言、论文答辩、课堂教学、培训和多人轮流演讲，无需往每张幻灯片里插入计时器。
 
 [![最新版本](https://img.shields.io/github/v/release/Hona-Cao/FlyPPTTimer?sort=semver)](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)
-[![Windows CI](https://github.com/Hona-Cao/FlyPPTTimer/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/Hona-Cao/FlyPPTTimer/actions/workflows/windows-ci.yml)
-[![Windows 10 / 11 x64](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#下载-v1131)
-[![Rust + Slint](https://img.shields.io/badge/Built%20with-Rust%20%2B%20Slint-orange)](docs/BUILDING.md)
-[![MIT 开源许可](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download)
+[![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**当前版本：v1.13.1。** 桌面程序已重构为 Rust + Slint。旧版 v0.30.2 的 .NET 构建说明、旧界面截图，不再代表本版用法。[版本更新](CHANGELOG.md) · [从 UX、RC 到正式版的开发记录](docs/DEVELOPMENT_HISTORY.md)
+**当前版本：v1.13.1。** 支持 Windows 10 / 11 x64，无需安装 .NET。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机无需安装 App。
 
-## 下载 v1.13.1
+## 导航
 
-| 版本 | 下载 | 怎么使用 |
+[下载与安装](#download) · [快速开始](#quick-start) · [六个设置模块](#settings) · [手机遥控](#phone) · [常见问题](#faq) · [完整教程](docs/USER_GUIDE.zh-CN.md)
+
+<a id="download"></a>
+## 下载与安装
+
+| 版本 | 下载 | 使用方式 |
 |---|---|---|
-| 便携版 ZIP | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | **完整解压**到可写文件夹，双击 `FlyPPTTimer.exe`。不要只复制 EXE，旁边的 DLL 也要保留。 |
-| 安装版 ZIP | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | 解压后运行里面的安装 EXE，选择中文或英文，按向导安装。适合日常固定使用。 |
+| 便携版 | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
+| 安装版 | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
 
-[打开本版 Release 页面](https://github.com/Hona-Cao/FlyPPTTimer/releases/tag/v1.13.1) · [所有版本](https://github.com/Hona-Cao/FlyPPTTimer/releases)
+[GitHub 下载页](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest) · [Gitee 下载页](https://gitee.com/hona-cao/fly-ppttimer/releases)
 
-支持目标为 **Windows 10 / 11 x64**。两个包均带有所需的应用本地 Microsoft VC 运行库，v1.13.1 **不需要安装 .NET**。演示联动需要电脑安装兼容的桌面版 PowerPoint 或 WPS 演示；独立计时不需要 Office。手机只需浏览器，不用安装手机 App。
+<a id="quick-start"></a>
+## 快速开始
 
-Release 上传的文件只有上述两个 ZIP；页面中的 Source code 是 GitHub 自动生成的源码归档，不是运行软件所需的下载项。
+1. 运行程序，计时浮窗自动显示。**F3** 开始／暂停，**F4** 停止重置。
+2. 右键浮窗或通知区图标 → **设置 → 时长设置**。八分钟填 `00:08:00`，选倒计时，点“应用”。
+3. 需要每份文稿使用不同时长时，在“文件规则”添加 PPT，填写各自时长和模式并保存。
+4. 手机和电脑连接同一网络，从电脑右键菜单打开“远程控制”，用手机扫描实时二维码。
+5. 在手机“演示”页打开文稿，再选“从头放映”或“从当前页放映”。
 
-## 三分钟开始使用
+只需要独立计时，完成前两步即可。默认是 **8 分钟倒计时**。每次启动都会显示计时浮窗，本次运行中按 **F5** 可显示／隐藏。
 
-1. **先跑起来。** 双击程序后会出现小计时浮窗。按 **F3** 开始／暂停，按 **F4** 停止并重置。
-2. **设置这次要讲多久。** 右键计时器或任务栏通知区图标 → **设置 → 时长设置**。八分钟写 `00:08:00`，选“倒计时”或“正计时”，点击“应用”。
-3. **不同文件用不同时间。** 在同页“文件规则”里点“添加文件”，选择 `.ppt / .pptx / .pptm`，为每份文稿设置时长、模式并保存。这里只登记规则，不会修改 PPT 文件内容。
-4. **手机连接电脑。** 右键 → **远程控制**。电脑和手机连同一个 Wi-Fi，或电脑连接手机热点，再用手机扫描窗口里的二维码。使用窗口给出的电脑地址，不要改成热点的网关地址。
-5. **开始演示。** 手机切到“演示”页，在受控列表选择文件并“打开”，再点“从头放映”或“从当前页放映”。默认会在进入符合条件的全屏演示时自动开始计时。
+<a id="settings"></a>
+## 六个设置模块
 
-只用独立计时，不必添加 PPT，也不必连接手机。设置完成后点“确定”只是关闭设置；要完全退出软件，请用托盘菜单里的“退出”。
+打开方式：**右键计时浮窗或任务栏通知区图标 → 设置**。
 
-## 本版界面
+**应用**保存但不关闭；**确定**保存并关闭设置；**取消**放弃未应用的修改。底栏显示是否有未保存内容。外观可实时预览，满意后仍需应用或确定。
 
-### 电脑：时长、文件规则与外观设置
+| 页面 | 主要用途 |
+|---|---|
+| [时长设置](#settings-timer) | 默认时长、计时模式、超时、到时动作、每份 PPT 的规则。 |
+| [行为设置](#settings-behavior) | 全屏自动计时、暂停闪烁、两组提前提醒、到时提醒和超时样式。 |
+| [外观与显示](#settings-appearance) | 主题、配色、尺寸、页数排版、圆角、不透明度、多屏和位置。 |
+| [远程控制](#settings-remote) | 服务开关、端口、连接设备、访问地址和连接管理。 |
+| [控制设置](#settings-controls) | 快捷键、鼠标穿透、窗口锁定、托盘和关闭行为。 |
+| [其他设置](#settings-other) | 语言、更新、配置导入导出、恢复默认、配置与日志位置。 |
 
-![FlyPPTTimer v1.13.1 中文时长设置，包含默认时长、倒计时模式、时间到操作和文件规则](docs/media/v1.13.1/settings-zh-CN-timer.png)
+<a id="settings-timer"></a>
+### 1. 时长设置
 
-![FlyPPTTimer v1.13.1 暗黑外观设置，包含背景不透明度滑块和可输入的百分比](docs/media/v1.13.1/settings-zh-CN-dark-opacity.png)
+![时长设置与文稿规则](docs/media/v1.13.1/settings/zh-CN-01-timer-part-1.png)
 
-### 电脑 Remote：连接入口与紧凑文件列表
+**基础计时**决定一轮讲多久。输入格式为“小时:分钟:秒”：三分钟是 `00:03:00`，十五分钟是 `00:15:00`。倒计时从预设时长减到零；正计时从零累计，两种模式都可以按预设时长提醒。
 
-![FlyPPTTimer v1.13.1 电脑远程连接页面与局域网连接信息](docs/media/v1.13.1/pc-remote-connection.png)
+**时间到后的操作**有三种：仅提示、黑屏显示“时间到”、退出放映。需要继续显示超时，选“继续显示超时”并配合“仅提示”。黑屏或退出放映会结束放映，并停止重置计时。
 
-![FlyPPTTimer v1.13.1 文件名文件路径、时长、模式对齐的远程控制文件规则列表](docs/media/v1.13.1/pc-remote-rules.png)
+**文件规则**让每份文稿有自己的时长和模式。添加 `.ppt / .pptx / .pptm` 后编辑并启用规则；Ctrl／Shift 多选可以批量设置。删除规则不会删除磁盘上的 PPT。
 
-### 手机：计时控制与演示文稿控制
+[详细了解时长、到时动作、文件规则和批量设置](docs/USER_GUIDE.zh-CN.md#timer)
+
+<a id="settings-behavior"></a>
+### 2. 行为设置
+
+![自动计时与提前提醒](docs/media/v1.13.1/settings/zh-CN-02-behavior-part-1.png)
+
+**全局与启动**控制进入符合条件的全屏演示时是否自动开始，以及退出时是否停止、重置。只想手动计时，可以关闭自动开始；开启“暂停时闪烁当前时间”，能清楚区分暂停状态。
+
+**提示 1、提示 2、计时结束**是三组独立提醒。提前量填写“还剩多少秒”：八分钟报告填 `120`，会在讲到六分钟时提醒；第二组填 `30`，会在最后半分钟提醒。
+
+每组可以使用语音、自选短音频、文字／背景／边框闪烁，并调整闪现、隐藏间隔和总持续时间。只要无声提醒时，关闭语音、清除自选声音，保留闪烁。超时文字颜色、背景和前缀用于突出超时读数。
+
+[查看三组提醒的全部参数、音频和闪烁设置截图](docs/USER_GUIDE.zh-CN.md#behavior)
+
+<a id="settings-appearance"></a>
+### 3. 外观与显示
+
+![时间字号与页数排版](docs/media/v1.13.1/settings/zh-CN-03-appearance-part-2.png)
+
+| 功能 | 使用方法 |
+|---|---|
+| 界面主题、配色 | 界面可跟随系统或选浅色／深色；浮窗文字、背景、闪烁颜色单独设置，支持选色和颜色值输入。 |
+| 自动／自定义尺寸 | 自动按内容和字号调整；选自定义后填写宽高。调大字号时留足空间。 |
+| 时间与页数 | 页数字号和颜色可跟随时间，也可独立设置；支持斜体、左右居中对齐和时间上下位置。默认页数为字号 12、下方、右对齐。 |
+| 形状、不透明度 | 直角或小／中／大圆角。背景不透明度 0–100%，支持拖动、悬停滚轮每格 1 个百分点、右侧精确输入。 |
+| 多屏、大屏 | 普通浮窗显示在全部屏幕或指定一屏；扩展屏可以单独全屏显示大字计时。 |
+| 位置微调 | 先选九宫格基准点，再调水平和垂直偏移。正数向右／向下，也可拖动或重置位置。 |
+
+大屏计时需要在 Windows 中启用扩展显示，会占满所选屏幕。为主持人设置专用屏时，注意不要误选观众的 PPT 显示屏。
+
+[查看配色、页数、透明度、多屏、大屏与位置分段图解](docs/USER_GUIDE.zh-CN.md#appearance)
+
+<a id="settings-remote"></a>
+### 4. 远程控制
+
+![服务操作、地址和防火墙工具](docs/media/v1.13.1/settings/zh-CN-04-remote-part-2.png)
+
+启用遥控并保存后，可查看服务状态、当前端口和连接数量。修改“下次服务端口”后，点击“重启远程服务并应用端口”，再让手机重新连接。
+
+“复制推荐 URL”用于同网设备访问；“打开本机控制页”用于在电脑浏览器操作。“重新生成令牌”和“断开所有远程设备”会使原连接信息失效，之后使用新的二维码或地址。
+
+连接失败时先确认同网、服务已启动，再检查当前端口的 Windows 防火墙许可。软件提供防火墙命令复制功能；复制本身不改变系统设置。
+
+[查看所有遥控操作按钮和手机连接步骤](docs/USER_GUIDE.zh-CN.md#remote)
+
+<a id="settings-controls"></a>
+### 5. 控制设置
+
+![主要快捷键与窗口行为](docs/media/v1.13.1/settings/zh-CN-05-controls-part-1.png)
+
+三个主要快捷键可选择 F1–F12：默认 **F3 开始／暂停、F4 停止重置、F5 显示／隐藏**。F7 触发闪烁，F8 切换电脑主输出静音。
+
+**鼠标穿透**让点击穿过浮窗，操作后面的 PPT；**锁定窗口**防止误拖动。开启穿透后，可从通知区图标进入设置。
+
+“托盘最小化”让设置窗口最小化时收进通知区；“关闭按钮行为”决定关闭计时浮窗时退出程序还是收起到托盘。设置窗口的“确定”只保存并关闭设置。
+
+[查看完整快捷键表和窗口行为说明](docs/USER_GUIDE.zh-CN.md#controls)
+
+<a id="settings-other"></a>
+### 6. 其他设置
+
+![语言、版本检查和配置管理](docs/media/v1.13.1/settings/zh-CN-06-other-part-1.png)
+
+**语言**可选跟随系统、English、简体中文，保存后按提示重启。**软件更新**可手动检查或启动时检查，使用 Gitee 发布页。
+
+**配置导出**备份设置与文件规则，**配置导入**恢复配置，**恢复默认**重新开始设置。导出的 JSON 不包含文稿和自选音频；搬电脑时还要复制 PPT 和 `alert-sounds`。
+
+**文件位置**提供配置和日志入口。页面下方可查看版本、项目与作者信息，或打开项目网站和发送邮件。
+
+[查看备份、文件位置、升级和卸载方法](docs/USER_GUIDE.zh-CN.md#other)
+
+<a id="phone"></a>
+## 手机遥控
+
+手机和电脑接入同一 Wi-Fi，或让电脑连接手机热点。右键计时器 → **远程控制**，扫描自己电脑上的实时二维码。
 
 <p>
-  <img src="docs/media/v1.13.1/mobile-zh-CN-light-timer.png" width="310" alt="手机浏览器中的PPT倒计时控制，时长输入、暂停、重置和电脑静音">
-  <img src="docs/media/v1.13.1/mobile-zh-CN-dark-presentation.png" width="310" alt="暗黑主题手机PPT遥控，受控文稿列表、排序、翻页和放映控制">
+<img src="docs/media/v1.13.1/mobile-zh-CN-light-timer.png" width="310" alt="手机计时页：时长、暂停、重置和声音控制">
+<img src="docs/media/v1.13.1/mobile-zh-CN-light-presentation.png" width="310" alt="手机演示页：文件列表、排序、放映和翻页">
 </p>
 
-图片来自 **v1.13.1 实际 GUI 的渲染**，不是概念图。电脑图使用本版生产界面和回调的离屏渲染，文档专用构建显式选择中文字体以解决构建机缺字；该临时构建不进入发布包。手机图由本版原始网页在手机尺寸视口中生成。文件名、路径、连接状态是说明用示例，不包含有效的个人连接令牌。[截图来源与重新生成方法](docs/media/v1.13.1/README.md)
+**计时页**可设置时长和模式，开始、暂停、继续、停止重置、重新计时，显示／隐藏浮窗，触发闪烁和控制电脑静音。
 
-## 功能与入口
+**演示页**可打开列表中的文稿，从头或当前页放映，翻页、跳页、黑屏／白屏与恢复、结束放映；文件可以排序、长按拖动、隐藏与恢复。移除列表项目不会删除磁盘文件。
 
-| 你要做什么 | 去哪里操作 |
-|---|---|
-| 演讲倒计时、会议正计时 | 设置时长与模式；开始、暂停、继续、停止重置、重新计时；超时后可继续显示或停止。[计时说明](docs/USER_GUIDE.zh-CN.md#计时控制) |
-| 多位讲者各用不同时间 | “文件规则”为每份 PPT 保存时长、模式和启用状态；支持 Ctrl／Shift 多选及批量设置。[文件规则](docs/USER_GUIDE.zh-CN.md#文件规则与批量设置) |
-| 浮窗同时显示时间与页数 | 调整时间字号、独立页数字号、页数颜色、上下位置和对齐方式；自动／自定义尺寸。[外观设置](docs/USER_GUIDE.zh-CN.md#浮窗外观与百分比调整) |
-| 提前提醒或时间到提醒 | 两组提前提示、一组到时提示；语音、自选音频、文字／背景／边框闪烁、全屏“时间到”或退出放映。[提醒设置](docs/USER_GUIDE.zh-CN.md#提前提醒与时间到操作) |
-| 用手机翻 PPT | 同一局域网中扫码，用浏览器打开／切换文稿、从头或当前页放映、翻页、跳页、黑白屏、结束放映。[手机遥控](docs/USER_GUIDE.zh-CN.md#手机与浏览器遥控) |
-| 调整演示文件出场顺序 | 按名称、大小、修改时间排序；长按拖动；隐藏、恢复或移出受控列表。[手机列表管理](docs/USER_GUIDE.zh-CN.md#手机文稿列表排序与滑动) |
-| 投影屏与讲者屏分别显示 | 普通浮窗可显示在所有屏幕或指定屏幕，扩展屏可启用大屏计时器。[多屏用法](docs/USER_GUIDE.zh-CN.md#多显示器与大屏计时) |
-| 使用暗黑模式或英文界面 | 桌面跟随系统／浅色／深色，手机可单独选择；中文／英文／跟随系统语言。[主题与语言](docs/USER_GUIDE.zh-CN.md#主题与语言) |
-| 搬电脑、升级、找日志 | 导入／导出配置，恢复默认，打开配置和日志目录。[配置与升级](docs/USER_GUIDE.zh-CN.md#配置备份升级与卸载) |
+左右滑动切换计时／演示，上下滑动先滚动文件列表，到边界后继续滚动页面。电脑 Remote 的“演示文稿”页用于规则管理；放映按钮在手机／浏览器的“演示”页。[完整手机教程](docs/USER_GUIDE.zh-CN.md#phone)
 
-**电脑 Remote 和手机 Remote 分工不同。** 电脑“演示文稿”页用于管理文件规则；打开文稿、翻页、黑白屏等操作在手机／浏览器“演示”页，不必在电脑窗口寻找同一组放映按钮。
+<a id="faq"></a>
+## 常见问题
 
-## 几个重要默认值
+**手机连不上？** 确认服务启动、两台设备同网并重新扫码，再检查访客网络隔离、VPN 和防火墙端口许可。[连接排查](docs/USER_GUIDE.zh-CN.md#faq)
 
-全新配置默认 **8 分钟倒计时**。页数默认显示，**不跟随时间字号**，使用独立字号 **12**，在**时间下方、右对齐**。浮窗按内容自动确定大小，也可切成自定义尺寸。主题默认跟随系统。
+**浮窗点不到或拖不动？** 从通知区打开控制设置，检查鼠标穿透和锁定窗口。
 
-**每次启动，计时浮窗都会重新显示。** 隐藏只对本次运行有效，按 F5 可切回显示。复用旧配置时，已有的个人配色、字号、时长等明确设置不会被新默认值强行覆盖。
+**输入的数值怎样保存？** 回车或点击其他位置结束输入，再点击应用或确定保存；取消放弃未应用的预览。
 
-三个主要快捷键可在“设置 → 控制设置”更改：
+**大屏选项灰色？** 在 Windows 显示设置中启用扩展屏，而不是复制屏。
 
-| 快捷键 | 默认操作 |
-|---|---|
-| F3 | 开始／暂停，暂停后可继续 |
-| F4 | 停止并重置 |
-| F5 | 显示／隐藏普通计时浮窗 |
+**如何升级？** 先备份配置和提示音并退出。安装版运行安装向导；便携版完整解压后迁移个人配置及 `alert-sounds`。[升级步骤](docs/USER_GUIDE.zh-CN.md#other)
 
-闪烁、静音、加减时长和预设时长等其他默认键位见[完整快捷键表](docs/USER_GUIDE.zh-CN.md#快捷键)。
+## 帮助与项目资料
 
-## 常见疑问
+[完整中文教程](docs/USER_GUIDE.zh-CN.md) · [English guide](docs/USER_GUIDE.en.md) · [反馈问题](https://github.com/Hona-Cao/FlyPPTTimer/issues) · [版本记录](CHANGELOG.md) · [开发阶段文档](docs/development/README.md) · [构建与贡献](docs/BUILDING.md)
 
-**这是 PowerPoint 插件吗？** 不是。这是独立 Windows 软件，不必给每张幻灯片插入计时器，也不需要往 PPT 里放宏。
+反馈问题时提供版本、操作步骤和相关截图，遮住连接信息、私人路径和敏感文稿内容。设置和规则保存在本机，局域网遥控无需云账户；检查更新和打开网站需要联网。
 
-**没有 PowerPoint 能用吗？** 可以单独计时。PPT 页码识别与演示控制需要兼容的桌面 PowerPoint／WPS。PDF、网页演示不等于受控 PPT，不能从 PPT 文件选择器加入。
-
-**手机连不上怎么办？** 先重新扫码、确认同网，再排查访客 Wi-Fi 隔离、代理／VPN 和 Windows 防火墙对当前端口的许可。不要直接关闭防火墙。[按顺序排查](docs/USER_GUIDE.zh-CN.md#排查常见问题)
-
-**“移除文件”会不会删掉我的 PPT？** 不会。它移除的是受控列表成员资格，不删除磁盘文件，也不关闭已打开文稿。“关闭文稿”是另一项操作，使用前注意未保存内容。
-
-**滑块一动就保存了吗？** 不是。拖动时实时预览；悬停滚轮每格变化 1 个百分点，右侧可以输入精确值。点击“应用／确定”才保存，“取消”放弃。输入框光标退出只表示编辑结束，不代表已经保存。
-
-**软件深色了，文件选择窗口为什么还是浅色？** Windows 自带的文件选择、颜色等对话框跟随操作系统主题，不由本软件强行换肤。
-
-**旧版本怎样升级？** 先退出旧版并备份配置及 `alert-sounds`。安装版保留已有配置；便携版把配置和自选提示音复制到新目录。文件规则中的路径必须在新电脑上仍然存在。[迁移教程](docs/USER_GUIDE.zh-CN.md#配置备份升级与卸载)
-
-**程序里“检测新版本”能看到这次 GitHub 发布吗？** 已验收的 v1.13.1 内置检测源仍为 **Gitee**。GitHub 发布不表示 Gitee 已同步；请以本页的 GitHub 下载为准。本次安装版为 ZIP，解压后手动运行安装器。
-
-## 隐私与使用边界
-
-计时和局域网遥控不需要云账户。设置、文件规则、自选提示音和日志保存在电脑本地，软件不会主动上传演示文稿内容；检查更新和打开项目链接需要互联网。
-
-遥控地址和二维码含有访问令牌。请只在**可信局域网**使用，不要公开有效二维码、完整连接地址，不要把控制端口映射到公网。发日志前检查文件路径。关闭／退出演示软件可能丢失未保存修改，先在 Office 内保存。
-
-## 持续开发记录
-
-v1.13.1 将实际的 V1 开发历史带入 `main`，保留 UX 阶段、RC1／RC2、RC3.1、RC3.2、RC3.3、RC3.3.1、RC3.4 及 v1.13.1 的原始提交和日期。
-
-[按阶段阅读开发时间线](docs/DEVELOPMENT_HISTORY.md) · [完整版本更新](CHANGELOG.md) · [原始实现与验证报告](docs/v1/CODEX_RESULT.md)
-
-本版已验收程序的自动测试结果为 **90 通过、3 项依赖环境的测试忽略**，忽略项不算通过。GUI 渲染图不等于实机测试；维护者在实际使用后已批准 v1.13.1 正式发布。
-
-## 开发与参与
-
-当前程序使用 **Rust 1.92.0、Slint 1.17.1、Windows MSVC 工具链**。仓库保留旧 C# 源码用于历史追溯；构建 V1 不要再用旧版 .NET 打包命令。
-
-```powershell
-rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
-cargo +1.92.0 test --locked
-cargo +1.92.0 build --release --locked
-```
-
-完整步骤见[构建与打包](docs/BUILDING.md)、[贡献说明](CONTRIBUTING.md)。反馈问题请提供软件版本、Windows／Office 版本、显示缩放、操作步骤和去除隐私信息的截图：[GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues)。
-
-项目由 **曹虎男（Hunan Cao）** 发起。邮箱：[caohunan@smail.nju.edu.cn](mailto:caohunan@smail.nju.edu.cn)。
-
-## 赞赏
-
-欢迎 Star、反馈问题、完善文档、参与开发。赞赏完全自愿，不影响免费使用，也不会解锁额外功能。
-
-<p>
-  <img src="docs/media/donate-alipay.jpg" width="220" alt="自愿支持 FlyPPTTimer 作者的支付宝赞赏码">
-  <img src="docs/media/donate-wechat.png" width="220" alt="自愿支持 FlyPPTTimer 作者的微信赞赏码">
-</p>
-
-## 开源许可
-
-[MIT License](LICENSE)。Copyright © 2026 Cao Hunan（曹虎男）。第三方组件保留各自许可。
+[MIT License](LICENSE)。第三方组件保留各自许可。
