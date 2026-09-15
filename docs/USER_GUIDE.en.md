@@ -2,13 +2,73 @@
 
 [Home](../README.md) · [简体中文](USER_GUIDE.zh-CN.md)
 
-For **v1.13.1 · Windows 10 / 11 x64**.
+For **v1.14.0 · Windows 10 / 11 x64**.
 
 Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to show slide numbers, use a different duration for each presentation, and control your talk from a phone browser. This guide follows the six Settings pages, then covers phone controls and everyday maintenance.
 
 ## Contents
 
 [Getting started](#start) · [Saving settings](#save) · [1. Timer](#timer) · [2. Behavior](#behavior) · [3. Appearance & Display](#appearance) · [4. Remote Control](#remote) · [5. Controls](#controls) · [6. Other](#other) · [Phone controls](#phone) · [Troubleshooting](#faq)
+
+<a id="v1140"></a>
+## 1.14.0: slide timing, computer file browsing, and full update notes
+
+### Enable the slide stopwatch
+
+Choose **Settings → Appearance → Show slide stopwatch**, then Apply. It is optional and off in a fresh configuration; ordinary slide numbers remain on. Enable either or both.
+
+A fixed row below the main timer places **slide seconds on the left and slide numbers on the right**. The old slide-number alignment and above/below choices are removed. The stopwatch follows the slide-number size by default. Turn off the font-follow switch for a custom size. Its color follows the main timer unless you disable that switch and pick a custom color.
+
+![Idle timer with 00 and -/- placeholders](media/v1.14.0/timer-idle.png)
+![Slide stopwatch and page numbers](media/v1.14.0/timer-slide.png)
+
+Before a presentation can be read, enabled fields show `00` and `-/-`. Automatic sizing reserves the row from startup, rather than revealing a clipped extra row only after slideshow detection. Use automatic sizing when increasing fonts; a deliberately tiny fixed window can still be too small.
+
+### Current visit versus accumulated slide time
+
+The stopwatch counts seconds during an actual slideshow: `09`, `65`, `123`, without changing to minutes/seconds. Moving to a different slide resets the current-visit display to zero. It measures slideshow dwell time independently of the main timer; pausing the main timer does not pause it.
+
+Expand **Presentation → Slide times for this show** on the phone for per-slide totals. Spending 20 seconds on slide 1 and returning for 10 seconds gives a 30-second total, while the floating stopwatch shows the current visit's 10 seconds.
+
+Ending the show retains the last table and resets the small display to `00`. A new show or a different presentation starts a new record. Records are session-only, not written into the PPT, and not automatically exported. Valid slideshow/page information is required; missing samples are not filled with guessed time.
+
+### Add a computer PPT from the phone
+
+1. Connect through the computer Remote QR code on the same trusted local network.
+2. In desktop **Settings → Remote control**, enable **Allow phone to browse computer PPT files**, then Apply. This additional permission is off by default.
+3. On the phone, open **Presentation → Browse computer PPT files** below the controlled list.
+4. Choose Home or a local disk and open folders. **Up one level** returns to the parent; **This computer** returns to drive roots.
+5. Filter searches names in the current folder only, not the whole disk. Only directories and `.ppt / .pptx / .pptm` files appear.
+6. Choose **Add to list** beside a PPT. Existing entries are not duplicated. Close the browser and then open/select/start the file from the controlled list.
+
+<img src="media/v1.14.0/mobile-en-light-browser.png" width="360" alt="Phone browser for computer PPT folders and adding a file to the controlled list">
+
+New entries use the global duration and mode and append to the list. Adding does not open the file, start a show, change existing rules or modify the original presentation.
+
+This is not remote desktop or file transfer. It provides no arbitrary download, upload, delete, rename, editing or network-share access. It uses the existing Remote token: anyone holding a valid QR URL can see folder/PPT names while this permission is on. Use trusted networks/devices, never forward the port to the public internet, and disable the permission after use if it is no longer needed.
+
+### Mobile layout and consistent selectors
+
+Navigation and slideshow-management buttons now precede the file list. Existing list scrolling, scroll chaining and long-press reordering remain available.
+
+Theme, sorting and available-file selectors share the same rounded shape, palette, animation and light/dark styling. Click outside or press Escape to dismiss; with a keyboard, use arrows, Home, End and Enter.
+
+### Complete release notes and startup checks
+
+Startup update checks are on by default. The first migration from a configuration older than 1.14 enables the preference once; later explicit choices in 1.14 are preserved.
+
+Checks run off the UI thread, compare available GitHub/Gitee stable releases and prompt only for a newer version. No-update and temporary connectivity failures stay silent on startup; manual checks still report their result. When mirrors differ, the newer reachable stable version is selected.
+
+The update window can be resized. Its complete release body wraps and scrolls, with fixed action buttons; the old 600-character limit is gone. ZIP releases open their download page. Extract the package and run the installer or migrate the portable edition. No update installs without confirmation.
+
+![Resizable update window with full release notes](media/v1.14.0/update-notes.png)
+
+### Positioning and spacing
+
+New horizontal/vertical offsets default to **0%**. Center anchors use the full width of each monitor, including when a side taskbar reduces its work area. Auto-size changes re-center the timer, and DPI/negative monitor coordinates are accounted for. Zero means no extra offset, not removal of the standard edge padding.
+
+Existing custom offsets remain. To use the new position, choose a centered anchor, set both offsets to zero and Apply; reset the timer position if needed. Settings and desktop Remote reduce vertical whitespace while keeping usable input/button targets.
+
 
 <a id="start"></a>
 ## Getting started
@@ -60,7 +120,7 @@ Buttons such as Import configuration, Restore defaults, and Regenerate token per
 <a id="timer"></a>
 ## 1. Timer: choose how long a talk should run
 
-![Timer settings with duration, mode, time-up action and presentation rules](media/v1.13.1/settings/en-01-timer-part-1.png)
+![Timer settings with duration, mode, time-up action and presentation rules](media/v1.14.0/settings/en-01-timer-part-1.png)
 
 ### Basic Timer
 
@@ -102,14 +162,14 @@ Use **Ctrl+click** for non-adjacent rules and **Shift+click** for a continuous r
 
 You can also edit rules in **desktop Remote Control → Presentations**. Click **Save** in that window after editing. The filename and path appear on the left, with duration and mode in their own columns.
 
-![Desktop Remote presentation rules](media/v1.13.1/pc-remote-rules.png)
+![Desktop Remote presentation rules](media/v1.14.0/pc-remote-rules.png)
 
 <a id="behavior"></a>
 ## 2. Behavior: automatic timing and reminders
 
 ### Global & Startup
 
-![Behavior settings with fullscreen integration and the first alert](media/v1.13.1/settings/en-02-behavior-part-1.png)
+![Behavior settings with fullscreen integration and the first alert](media/v1.14.0/settings/en-02-behavior-part-1.png)
 
 | Setting | What enabling it does | When to use it |
 |---|---|---|
@@ -139,7 +199,7 @@ Alert 1 and Alert 2 are advance reminders. Time Up is the reminder at the preset
 | Hidden interval (ms) | The gap between flashes. A larger value makes the rhythm slower. |
 | Flash duration (seconds) | How long the visual reminder runs overall; for example, `3` means approximately three seconds. |
 
-![Alert 1 sound and flash settings](media/v1.13.1/settings/en-02-behavior-part-2.png)
+![Alert 1 sound and flash settings](media/v1.14.0/settings/en-02-behavior-part-2.png)
 
 | Flash style | Typical use |
 |---|---|
@@ -152,9 +212,9 @@ Alert 1 and Alert 2 are advance reminders. Time Up is the reminder at the preset
 <details>
 <summary>Show Alert 2 and Time Up settings</summary>
 
-![Alert 2 threshold, speech, sound and flashing](media/v1.13.1/settings/en-02-behavior-part-3.png)
+![Alert 2 threshold, speech, sound and flashing](media/v1.14.0/settings/en-02-behavior-part-3.png)
 
-![Time-up speech, sound and flashing](media/v1.13.1/settings/en-02-behavior-part-4.png)
+![Time-up speech, sound and flashing](media/v1.14.0/settings/en-02-behavior-part-4.png)
 
 </details>
 
@@ -162,7 +222,7 @@ For quiet visual reminders, turn speech off, clear the custom sound, and select 
 
 ### Overtime colors and prefix
 
-![Overtime text color, background and prefix](media/v1.13.1/settings/en-02-behavior-part-5.png)
+![Overtime text color, background and prefix](media/v1.14.0/settings/en-02-behavior-part-5.png)
 
 Overtime text color and Overtime background color distinguish an overrun from normal timing. Overtime prefix is the text placed before the overtime readout; `-` makes an overrun easy to recognize.
 
@@ -173,7 +233,7 @@ Use these settings with **Timer → Continue into overtime + Alert only**. The b
 
 ### Interface theme, visibility, and colors
 
-![Interface theme, timer visibility and color scheme](media/v1.13.1/settings/en-03-appearance-part-1.png)
+![Interface theme, timer visibility and color scheme](media/v1.14.0/settings/en-03-appearance-part-1.png)
 
 | Setting | Purpose |
 |---|---|
@@ -188,7 +248,7 @@ Click a color swatch or Choose color, or type a hexadecimal color such as `#0B3A
 
 ### Window size and slide-number layout
 
-![Time font, independent slide-number size and layout](media/v1.13.1/settings/en-03-appearance-part-2.png)
+![Time font, independent slide-number size and layout](media/v1.14.0/settings/en-03-appearance-part-2.png)
 
 | Setting | Purpose and operation |
 |---|---|
@@ -199,16 +259,14 @@ Click a color swatch or Choose color, or type a hexadecimal color such as `#0B3A
 | Match time font size | Uses the time font size for slide numbers. Turn it off to reveal Slide-number font size. |
 | Match time color | Uses the time color for slide numbers. Turn it off to reveal Slide-number color. |
 | Italic slide numbers | Visually separates slide numbers from the main time. |
-| Slide-number alignment | Aligns slide numbers left, center, or right relative to the time. |
-| Slide-number position | Places slide numbers above or below the time. |
 
-The default slide-number size is **12**, **below** the time and **right-aligned**. Turning slide numbers off also hides their related settings.
+The default slide-number size is **12**, fixed below the main time on the right. The slide stopwatch occupies the left of the same row. Position/alignment choices have been removed. Idle placeholders are `-/-` and `00`; enabling either reserves the row. Either readout can be enabled independently.
 
 For a prominent time and smaller slide counter, disable Match time font size, increase the time font, keep slide numbers at 12, and use Automatic window sizing.
 
 ### Shape and opacity
 
-![Corner size, background opacity and display selection](media/v1.13.1/settings/en-03-appearance-part-3.png)
+![Corner size, background opacity and display selection](media/v1.14.0/settings/en-03-appearance-part-3.png)
 
 Window shape offers a rectangle or a small, medium, or large rounded rectangle. Small corners look more square; large corners are more rounded.
 
@@ -239,7 +297,7 @@ When the full-screen option is disabled or says Extended display required, check
 
 ### Default position and offsets
 
-![Full-screen timer, anchor positions and horizontal/vertical offsets](media/v1.13.1/settings/en-03-appearance-part-4.png)
+![Full-screen timer, anchor positions and horizontal/vertical offsets](media/v1.14.0/settings/en-03-appearance-part-4.png)
 
 | Setting | Purpose |
 |---|---|
@@ -255,7 +313,7 @@ Offsets are relative to the selected display's work area and range from **-50% t
 
 ### Local Web Remote and ports
 
-![Remote enable switch, service state, ports and connected devices](media/v1.13.1/settings/en-04-remote-part-1.png)
+![Remote enable switch, service state, ports and connected devices](media/v1.14.0/settings/en-04-remote-part-1.png)
 
 | Setting | Meaning |
 |---|---|
@@ -270,7 +328,7 @@ The application reuses the saved port when available. When it cannot use that po
 
 ### Actions and firewall help
 
-![Service actions, token controls, address copying and firewall help](media/v1.13.1/settings/en-04-remote-part-2.png)
+![Service actions, token controls, address copying and firewall help](media/v1.14.0/settings/en-04-remote-part-2.png)
 
 | Button | When to use it | What happens next |
 |---|---|---|
@@ -290,14 +348,14 @@ Allow only the required application/port; do not turn off the entire firewall. G
 3. Confirm the service has started and scan the **live QR code on your own computer**.
 4. Open the page in the phone browser. Try starting/pausing the timer before using presentation controls.
 
-![Desktop remote connection window](media/v1.13.1/pc-remote-connection.png)
+![Desktop remote connection window](media/v1.14.0/pc-remote-connection.png)
 
 The URL's IP address identifies the computer on the local network. Do not replace it with the hotspot gateway address. The full URL and QR code contain connection credentials; keep them private.
 
 <a id="controls"></a>
 ## 5. Controls: shortcuts and window behavior
 
-![Controls including function keys, click-through, locking, tray behavior and close action](media/v1.13.1/settings/en-05-controls-part-1.png)
+![Controls including function keys, click-through, locking, tray behavior and close action](media/v1.14.0/settings/en-05-controls-part-1.png)
 
 ### Main shortcuts
 
@@ -331,13 +389,13 @@ Closing Settings leaves timing and remote control available. To end the applicat
 
 ### Language and updates
 
-![Other settings with language, update checking and configuration management](media/v1.13.1/settings/en-06-other-part-1.png)
+![Other settings with language, update checking and configuration management](media/v1.14.0/settings/en-06-other-part-1.png)
 
 | Setting | How to use it |
 |---|---|
 | Interface language | Select System, English, or Simplified Chinese. Save and restart when prompted. |
-| Check for updates on startup | Checks for an available update when the application starts. Requires network access. |
-| Check for updates now | Checks immediately using the Gitee release page. |
+| Check for updates on startup | On by default. Checks GitHub/Gitee stable releases and only prompts for a newer version. No-update and temporary network failures stay silent. |
+| Check for updates now | Checks GitHub/Gitee immediately; full release notes appear in a resizable, scrollable window. |
 
 For a ZIP update, extract it first. Run the installer inside a setup ZIP, or extract the complete portable edition and migrate your configuration.
 
@@ -353,7 +411,7 @@ An exported configuration **does not contain the actual PPT files or custom soun
 
 ### File locations, About, and contact actions
 
-![Configuration/log locations, current version and author contact actions](media/v1.13.1/settings/en-06-other-part-2.png)
+![Configuration/log locations, current version and author contact actions](media/v1.14.0/settings/en-06-other-part-2.png)
 
 | Entry | Purpose |
 |---|---|
@@ -380,7 +438,7 @@ Switch between **Timer** and **Presentation** at the top. You can also swipe lef
 
 ### Timer page
 
-<img src="media/v1.13.1/mobile-en-light-timer.png" width="360" alt="Phone timer page with duration, timer actions and computer audio control">
+<img src="media/v1.14.0/mobile-en-light-timer.png" width="360" alt="Phone timer page with duration, timer actions and computer audio control">
 
 | Control | Purpose |
 |---|---|
@@ -395,7 +453,7 @@ Switch between **Timer** and **Presentation** at the top. You can also swipe lef
 
 ### Presentation page
 
-<img src="media/v1.13.1/mobile-en-light-presentation.png" width="360" alt="Phone presentation page with file order, navigation and slide-show controls">
+<img src="media/v1.14.0/mobile-en-light-presentation.png" width="360" alt="Phone presentation page with file order, navigation and slide-show controls">
 
 1. Add files to the computer's presentation rules and save. For a document already open on the computer, you can also use **Add open presentation → Add to list** on the phone.
 2. Select a listed presentation and use **Open**. Its editing window opens on the computer.

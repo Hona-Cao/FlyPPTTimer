@@ -40,6 +40,14 @@ Dates below are the original author dates normalized to **UTC**. A linked commit
 | RC3.4 | 2026-09-12 | [ea123cd](https://github.com/Hona-Cao/FlyPPTTimer/commit/ea123cda7f2e73778c2c1a3a5b04839fbd3afae4) | 页数新默认值、小圆角、百分比预览、结束编辑、未保存提示、暗黑主题和打开文稿最大化。 / Page defaults, small corners, percentages, editing/unsaved state, dark theme and maximized presentation opening. |
 | v1.13.1 | 2026-09-12 | [e625c80](https://github.com/Hona-Cao/FlyPPTTimer/commit/e625c809f8cf7515f0143fab476bb4467d2fe1d7) | 移动列表横滑与滚动衔接、滚轮/精确百分比输入、紧凑对齐表头、语言重启后设置关闭修复、启动始终显示。 / Mobile gestures, precise percentage entry, aligned compact rows and window lifecycle fixes. |
 
+## v1.14.0 — 2026-09-15
+
+[Source and release](https://github.com/Hona-Cao/FlyPPTTimer/releases/tag/v1.14.0) · [Changes](RELEASE_NOTES_v1.14.0.md)
+
+在 1.13.1 正式发布之后继续开发：逐页秒表与累计用时、手机 PPT 文件夹浏览、完整更新说明、默认更新检测、多屏居中和控件布局统一。`release/v1.14.0` 的实现、修复、构建和文档提交按真实时间保留，不改写此前标签。
+
+Continued work after 1.13.1: slide timing/history, opt-in phone PPT browsing, complete update notes, startup checking, monitor centering and cohesive controls. Original implementation/fix/build/documentation commits and previous release tags are retained.
+
 ## Detailed records / 逐轮原始记录
 
 The following files retain the original requests, reviews and explicit limitations. Later approved requirements supersede older instructions; a historical “do not release yet” is not a current release prohibition.

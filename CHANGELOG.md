@@ -1,5 +1,16 @@
 # CHANGELOG / 更新记录
 
+## 1.14.0 — 2026-09-15
+
+- 新增逐页正计时秒表、每页累计用时；固定左秒表／右页数，空闲显示 `00` 和 `-/-`。
+- 新增经电脑授权的手机 PPT 文件夹浏览与加入列表，只读导航并限定演示文稿类型。
+- 更新窗口展示完整说明，支持调整大小与滚动；默认启动检测 GitHub/Gitee 新正式版本。
+- 水平、垂直微调默认 0，修正完整屏幕中心、侧边任务栏、自动尺寸变化后的定位。
+- 收紧设置和 PC Remote 纵向间距；手机放映按钮移到文件列表上方。
+- 手机主题、排序和文件下拉控件统一样式、动画、键盘与深浅主题。
+- 更新中英文说明和真实 GUI 渲染图片，保留全部历史提交。详见 [完整说明](docs/RELEASE_NOTES_v1.14.0.md)。
+- Added slide dwell timing/history, opt-in PPT browsing, full release notes/startup checking, monitor centering fixes and unified compact controls.
+
 ## 1.13.1 — 2026-09-13
 
 Public release of the user-accepted V1 Rust + Slint application. 完整保留此前 UX/RC 实际提交；[逐轮时间线与提交链接](docs/DEVELOPMENT_HISTORY.md)。

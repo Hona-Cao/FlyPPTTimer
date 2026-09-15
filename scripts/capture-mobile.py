@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "src/FlyPPTTimer/Web"
-OUT = ROOT / "docs/media/v1.13.1"
+OUT = ROOT / "docs/media/v1.14.0"
 
 def sample_state(language, theme):
     english = language == "en"
@@ -31,7 +31,9 @@ def sample_state(language, theme):
                wpsDetected=False, availablePresentations=[], currentControllable=True,
                canCloseLast=True, canQuitAll=True, listSort="manual", listSortDescending=False)
     return dict(ok=True,message="",timerState=timer,presentationState=ppt,**timer,
-                connectedClients=1,version="1.13.1",revision=1,serverInstance="docs-fixture",uiTheme=theme)
+                fileBrowsingEnabled=True, slideTiming=dict(presentationName=names[1],currentSlide=7,currentSeconds=23,totalSlides=24,
+                    pages=[dict(slide=i,seconds=seconds) for i,seconds in enumerate([31,42,18,65,27,36,23],1)]),
+                connectedClients=1,version="1.14.0",revision=1,serverInstance="docs-fixture",uiTheme=theme)
 
 def main():
     parser=argparse.ArgumentParser()
@@ -46,6 +48,7 @@ def main():
                 context=browser.new_context(viewport=dict(width=390,height=844),device_scale_factor=2,
                     is_mobile=True,has_touch=True,locale=language,color_scheme=theme,timezone_id="Asia/Shanghai")
                 page=context.new_page()
+                page.set_default_timeout(5000)
                 html=(WEB/"index.html").read_text(encoding="utf-8").replace("__FLYPPT_TOKEN__","documentation-example")
                 import re
                 html=re.sub(r'<link[^>]+rel="stylesheet"[^>]*>', '', html)
@@ -53,7 +56,16 @@ def main():
                 page.set_content(html)
                 page.add_style_tag(path=WEB/"app.css")
                 # In-memory response fixture: no network and no server access required.
-                page.evaluate("""state => { window.fetch = async () => {
+                page.evaluate("""state => { window.fetch = async (path, options={}) => {
+                    if(path.startsWith('/browse')){
+                        const request=JSON.parse(options.body||'{}');
+                        const listing={ok:true,path:request.path||'C:\\\\Presentations',parent:'C:\\\\',entries:[
+                            {name:'Archive',path:'C:\\\\Presentations\\\\Archive',isDirectory:true},
+                            {name:'01_Welcome.pptx',path:'C:\\\\Presentations\\\\01_Welcome.pptx',isDirectory:false},
+                            {name:'02_Keynote.pptx',path:'C:\\\\Presentations\\\\02_Keynote.pptx',isDirectory:false},
+                            {name:'03_Workshop.pptx',path:'C:\\\\Presentations\\\\03_Workshop.pptx',isDirectory:false}]};
+                        return new Response(JSON.stringify(listing),{status:200});
+                    }
                     state.presentationState.updatedAt = new Date().toISOString();
                     return new Response(JSON.stringify(state), {status: 200,
                     headers: {'Content-Type':'application/json'}});
@@ -65,9 +77,22 @@ def main():
                 page.locator('[data-page="pptPage"]').click()
                 page.wait_for_timeout(350)
                 page.screenshot(path=OUT/f"mobile-{language}-{theme}-presentation.png",full_page=True)
+                page.locator("#slideHistory").evaluate("(e)=>e.open=true")
+                page.wait_for_timeout(100)
+                page.screenshot(path=OUT/f"mobile-{language}-{theme}-slide-times.png",full_page=True)
+                page.locator("#browseComputer").click()
+                page.locator(".browser-entry").first.wait_for()
+                page.screenshot(path=OUT/f"mobile-{language}-{theme}-browser.png")
+                page.locator("#browseClose").click()
+                page.evaluate("window.scrollTo(0,0)")
+                page.wait_for_timeout(150)
+                page.locator(".theme-row .select-trigger").click()
+                page.locator(".select-popup.visible").wait_for()
+                page.wait_for_timeout(200)
+                page.screenshot(path=OUT/f"mobile-{language}-{theme}-select.png")
                 context.close()
         browser.close()
-    print("Captured eight screenshots from the unchanged Web Remote HTML/CSS/JS.")
+    print("Captured twenty screenshots from the unchanged Web Remote HTML/CSS/JS.")
 
 if __name__=="__main__":
     main()

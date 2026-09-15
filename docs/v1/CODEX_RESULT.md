@@ -639,3 +639,7 @@ Review 分支：`codex/v1-06-manual-test`
 # v1.13.1 direct implementation
 
 User accepted RC3.4. Implemented V1131_DELIVERY.md: list boundary handoff and shared page gestures, wheel and numeric percentage entry, compact aligned Remote columns, ordinary Settings window lifetime, startup visibility reset and version 1.13.1. Exact validation and product source are recorded in CI logs and BUILD.txt.
+
+## v1.14.0 implementation — 2026-09-15
+
+Eight requested improvements are implemented on `release/v1.14.0`. Added focused regressions for startup preference migration, complete update notes/source selection, side-taskbar/mixed-DPI centering, PPT-only token-protected folder browsing, explicit browse permission/deduplication, and per-slide visit/accumulation lifecycle. Browser interaction checks cover Chinese/English selectors, modal navigation, additions, filtering and revoked permission. Publication result and exact CI/source references are maintained in `HANDOFF.md`; GUI renders do not constitute physical phone or Office testing.

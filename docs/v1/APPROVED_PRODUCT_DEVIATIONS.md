@@ -103,3 +103,7 @@ No dependency upgrade, main merge, tag or public GitHub Release. Previous accept
 ## Public v1.13.1 publication authorization (2026-09-13)
 
 The user explicitly accepted v1.13.1, authorized integrating the accepted history into main and publishing a public GitHub Release, requested comprehensive bilingual usage documentation and current PC/mobile GUI screenshots, and requested only portable ZIP and installer ZIP release assets, not separate SHA256 files. This supersedes earlier stage-specific instructions not to release yet. It does not authorize unrelated runtime changes, fabrication of historical activity, or publication to a separate external release service.
+
+## v1.14.0 — explicitly authorized 2026-09-15
+
+The user requested implementation and public GitHub release of v1.14.0. This overrides older freeze/no-new-feature instructions for this task only. Approved changes: full scrollable update notes and default startup checks; zero default offsets and correct per-monitor centering; compact Settings/Remote spacing; mobile commands above files; opt-in local PPT folder browsing/addition; independent per-slide seconds with session totals; fixed lower metadata row and idle placeholders; consistent mobile selectors. Refer to `docs/RELEASE_NOTES_v1.14.0.md` and the v1.14 sections of both user guides. Preserve previous releases and genuine commit ancestry.

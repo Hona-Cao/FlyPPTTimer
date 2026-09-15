@@ -8,7 +8,7 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download)
 [![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**Current version: v1.13.1.** For Windows 10/11 x64; .NET is not required. Standalone timing works without Office. Slide numbers and presentation control require compatible desktop PowerPoint or WPS Presentation. The phone only needs a browser.
+**Current version: v1.14.0.** For Windows 10/11 x64; .NET is not required. Standalone timing works without Office. Slide numbers and presentation control require compatible desktop PowerPoint or WPS Presentation. The phone only needs a browser.
 
 ## Contents
 
@@ -17,12 +17,25 @@
 <a id="download"></a>
 ## Download and install
 
-**For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases).** Gitee is the mainland mirror and carries the official release assets. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
+**For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases).** Gitee is the mainland mirror; synchronization can lag, so check the version shown there. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
 
 | Edition | Mainland China | GitHub | Instructions |
 |---|---|---|---|
-| Portable | [Gitee Releases — choose Portable](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
-| Setup | [Gitee Releases — choose Setup](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
+| Portable | [Gitee Releases — choose Portable](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
+| Setup | [Gitee Releases — choose Setup](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
+
+<a id="v1140"></a>
+## New in 1.14.0: slide stopwatch and phone file browsing
+
+Enable **Settings → Appearance → Show slide stopwatch**, then Apply. A fixed row below the main timer shows elapsed seconds on the left and slide numbers on the right. The idle placeholders are `00` and `-/-`. The stopwatch follows the slide-number font by default; custom size and color are available.
+
+On the phone, navigation and slideshow buttons now come **before** the file list. Expand **Slide times for this show** to review accumulated seconds for each visited slide. Returning to a slide adds to its total; a new show starts a new record. These are session-only slideshow dwell times, independent of the main timer's pause state.
+
+To add a file from the audience, enable **Allow phone to browse computer PPT files** in desktop Remote settings. Open **Presentation → Browse computer PPT files** on the phone, navigate folders, and choose **Add to list**. Only local folders and `.ppt / .pptx / .pptm` files are listed. There is no file download, deletion, upload or network-share browser. Adding a file does not open it.
+
+The **update window** now shows complete, scrollable release notes and can be resized. Startup checks are on by default, use available GitHub/Gitee stable releases, and only prompt for a newer version. ZIP updates open the release download page.
+
+[Detailed instructions and illustrations](docs/USER_GUIDE.en.md#v1140)
 
 <a id="quick-start"></a>
 ## Quick start
@@ -54,7 +67,7 @@ Open Settings by right-clicking the floating timer or its notification-area icon
 <a id="settings-timer"></a>
 ### 1. Timer
 
-![Timer duration, mode, time-up action and presentation rules](docs/media/v1.13.1/settings/en-01-timer-part-1.png)
+![Timer duration, mode, time-up action and presentation rules](docs/media/v1.14.0/settings/en-01-timer-part-1.png)
 
 **Basic Timer** chooses the duration for a session. Enter hours:minutes:seconds: `00:03:00` for three minutes or `00:15:00` for fifteen. Countdown runs toward zero; Count up shows elapsed time. Both can use the preset duration for reminders.
 
@@ -67,7 +80,7 @@ Open Settings by right-clicking the floating timer or its notification-area icon
 <a id="settings-behavior"></a>
 ### 2. Behavior
 
-![Fullscreen behavior and advance reminders](docs/media/v1.13.1/settings/en-02-behavior-part-1.png)
+![Fullscreen behavior and advance reminders](docs/media/v1.14.0/settings/en-02-behavior-part-1.png)
 
 **Global & Startup** controls automatic start for recognized fullscreen applications and stop/reset when leaving fullscreen. Turn automatic start off for fully manual timing. Flash current time when paused makes a paused session easier to recognize.
 
@@ -80,13 +93,13 @@ Each group supports speech, a custom short sound, text/background/border flashin
 <a id="settings-appearance"></a>
 ### 3. Appearance & Display
 
-![Time font and slide-number typography](docs/media/v1.13.1/settings/en-03-appearance-part-2.png)
+![Time font and slide-number typography](docs/media/v1.14.0/settings/en-03-appearance-part-2.png)
 
 | Feature | How to use it |
 |---|---|
 | Theme and colors | Choose System, Light, or Dark for the interface. Timer text, background, and flash colors are separate; use a color picker or a hexadecimal value. |
 | Automatic/custom sizing | Automatic fits the content and fonts. Custom reveals Width and Height; leave room for larger fonts. |
-| Time and slide numbers | Slide-number size/color can match the time or be independent. Choose italics, alignment, and above/below placement. Default slide numbers are size 12, below the time, right-aligned. |
+| Time and slide numbers | Slide-number size/color can match the time or be independent. Slide numbers are fixed below the main time on the right, with optional slide seconds on the left. Default slide-number size is 12. |
 | Shape and opacity | Rectangle or small/medium/large corners. Background opacity is 0–100%; drag, hover-wheel by one percentage point, or type a precise value. |
 | Multiple displays | Put small timers on all displays or one selected display. Use a separate extended screen for a large full-screen moderator timer. |
 | Position | Choose one of nine anchors, then adjust horizontal/vertical percentages. Positive offsets move right/down. Dragging and resetting placement are also available. |
@@ -98,7 +111,7 @@ Enable an extended display in Windows before selecting full-screen timing. It oc
 <a id="settings-remote"></a>
 ### 4. Remote Control
 
-![Remote service actions, connection token and firewall tools](docs/media/v1.13.1/settings/en-04-remote-part-2.png)
+![Remote service actions, connection token and firewall tools](docs/media/v1.14.0/settings/en-04-remote-part-2.png)
 
 Enable remote control and save to see the service state, current port, and connected-device count. After editing Port on next start, use Restart remote service and apply port, then reconnect the phone.
 
@@ -111,7 +124,7 @@ For a connection problem, confirm the network and service first, then inspect th
 <a id="settings-controls"></a>
 ### 5. Controls
 
-![Function keys and the complete window behavior controls](docs/media/v1.13.1/settings/en-05-controls-part-1.png)
+![Function keys and the complete window behavior controls](docs/media/v1.14.0/settings/en-05-controls-part-1.png)
 
 Select F1–F12 for the three main shortcuts: **F3 Start/Pause, F4 Stop/Reset, F5 Show/Hide** by default. F7 triggers flashing; F8 toggles the computer's main audio output mute.
 
@@ -124,9 +137,9 @@ Minimize to tray hides the minimized Settings window in the notification area. C
 <a id="settings-other"></a>
 ### 6. Other
 
-![Language, updates, and configuration management](docs/media/v1.13.1/settings/en-06-other-part-1.png)
+![Language, updates, and configuration management](docs/media/v1.14.0/settings/en-06-other-part-1.png)
 
-**Language** offers System, English, or Simplified Chinese; save and restart when prompted. **Update checks** can run manually or on startup and use the Gitee release page.
+**Language** offers System, English, or Simplified Chinese; save and restart when prompted. **Update checks** are on by default at startup and compare GitHub/Gitee stable releases. Full release notes are scrollable.
 
 **Export configuration** backs up settings and rules. **Import configuration** restores them. **Restore defaults** starts a fresh setup. JSON does not include presentations or custom audio files; copy the PPT files and `alert-sounds` separately when moving computers.
 
@@ -140,8 +153,8 @@ Minimize to tray hides the minimized Settings window in the notification area. C
 Connect both devices to the same Wi-Fi, or connect the computer to the phone's hotspot. Right-click the timer → Remote Control and scan the live QR code on the computer.
 
 <p>
-<img src="docs/media/v1.13.1/mobile-en-light-timer.png" width="310" alt="Phone timer with duration, pause, reset, flashing and audio controls">
-<img src="docs/media/v1.13.1/mobile-en-light-presentation.png" width="310" alt="Phone presentation list, ordering and slide-show navigation">
+<img src="docs/media/v1.14.0/mobile-en-light-timer.png" width="310" alt="Phone timer with duration, pause, reset, flashing and audio controls">
+<img src="docs/media/v1.14.0/mobile-en-light-presentation.png" width="310" alt="Phone presentation list, ordering and slide-show navigation">
 </p>
 
 **Timer:** set duration and mode, start/pause/resume, stop/reset, restart timing, show/hide the timer, flash, or toggle computer mute.

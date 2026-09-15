@@ -8,7 +8,7 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download)
 [![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**当前版本：v1.13.1。** 支持 Windows 10 / 11 x64，无需安装 .NET。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机无需安装 App。
+**当前版本：v1.14.0。** 支持 Windows 10 / 11 x64，无需安装 .NET。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机无需安装 App。
 
 ## 导航
 
@@ -17,12 +17,25 @@
 <a id="download"></a>
 ## 下载与安装
 
-**中国大陆用户建议从 [Gitee 发布页](https://gitee.com/hona-cao/fly-ppttimer/releases) 下载。** Gitee 是本项目的国内镜像，并同步正式 Release 附件；如果当前网络可以正常访问 GitHub，也可以使用右侧的 GitHub 直链。
+**中国大陆用户建议从 [Gitee 发布页](https://gitee.com/hona-cao/fly-ppttimer/releases) 下载。** Gitee 是本项目的国内镜像；镜像同步可能有延迟，请以页面实际版本为准。如果当前网络可以正常访问 GitHub，也可以使用右侧的 GitHub 直链。
 
 | 版本 | 中国大陆下载 | GitHub 下载 | 使用方式 |
 |---|---|---|---|
-| 便携版 | [Gitee 发布页（选择便携版）](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.13.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
-| 安装版 | [Gitee 发布页（选择安装版）](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.13.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.13.1/FlyPPTTimer-v1.13.1-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
+| 便携版 | [Gitee 发布页（选择便携版）](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
+| 安装版 | [Gitee 发布页（选择安装版）](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
+
+<a id="v1140"></a>
+## 1.14.0 新功能：逐页秒表与手机选文件
+
+**逐页秒表**：打开“设置 → 外观与显示 → 显示逐页秒表”，点击应用。主时间下方固定一行：左边是当前页已讲的秒数，右边是 PPT 页数。没有文稿时显示 `00` 和 `-/-`，不会等到开始放映才突然挤出第二行。秒表默认跟随页数字号，也可独立调字号、颜色或随主时间变色。
+
+手机“演示”页现在把翻页和放映按钮放在文件列表前面。下方的 **“本轮逐页用时”** 可查看各页累计秒数；返回同一页会继续累计，新一轮放映重新记录，记录只保留在本次运行中。小秒表计的是放映停留时间，暂停主计时不暂停它。
+
+**手机浏览电脑 PPT**：先在电脑“设置 → 远程控制”开启“允许手机浏览电脑 PPT 文件”并应用，再在手机“演示 → 浏览电脑 PPT 文件”中进入文件夹，点文件右侧“加入列表”。只显示本地文件夹和 `.ppt / .pptx / .pptm`，不提供下载、删除、上传或网络共享浏览；加入后再自行选择打开或放映。
+
+**更新窗口**支持拉大、换行和滚动，不再截断更新说明。启动检测默认开启，只在有新版本时弹出；没有更新或暂时联网失败不会打断工作。检测 GitHub 与 Gitee 可用正式版本，ZIP 更新进入发布页下载。
+
+[完整新功能图解与操作说明](docs/USER_GUIDE.zh-CN.md#v1140)
 
 <a id="quick-start"></a>
 ## 快速开始
@@ -54,7 +67,7 @@
 <a id="settings-timer"></a>
 ### 1. 时长设置
 
-![时长设置与文稿规则](docs/media/v1.13.1/settings/zh-CN-01-timer-part-1.png)
+![时长设置与文稿规则](docs/media/v1.14.0/settings/zh-CN-01-timer-part-1.png)
 
 **基础计时**决定一轮讲多久。输入格式为“小时:分钟:秒”：三分钟是 `00:03:00`，十五分钟是 `00:15:00`。倒计时从预设时长减到零；正计时从零累计，两种模式都可以按预设时长提醒。
 
@@ -67,7 +80,7 @@
 <a id="settings-behavior"></a>
 ### 2. 行为设置
 
-![自动计时与提前提醒](docs/media/v1.13.1/settings/zh-CN-02-behavior-part-1.png)
+![自动计时与提前提醒](docs/media/v1.14.0/settings/zh-CN-02-behavior-part-1.png)
 
 **全局与启动**控制进入符合条件的全屏演示时是否自动开始，以及退出时是否停止、重置。只想手动计时，可以关闭自动开始；开启“暂停时闪烁当前时间”，能清楚区分暂停状态。
 
@@ -80,16 +93,16 @@
 <a id="settings-appearance"></a>
 ### 3. 外观与显示
 
-![时间字号与页数排版](docs/media/v1.13.1/settings/zh-CN-03-appearance-part-2.png)
+![时间字号与页数排版](docs/media/v1.14.0/settings/zh-CN-03-appearance-part-2.png)
 
 | 功能 | 使用方法 |
 |---|---|
 | 界面主题、配色 | 界面可跟随系统或选浅色／深色；浮窗文字、背景、闪烁颜色单独设置，支持选色和颜色值输入。 |
 | 自动／自定义尺寸 | 自动按内容和字号调整；选自定义后填写宽高。调大字号时留足空间。 |
-| 时间与页数 | 页数字号和颜色可跟随时间，也可独立设置；支持斜体、左右居中对齐和时间上下位置。默认页数为字号 12、下方、右对齐。 |
+| 时间与页数 | 页数字号和颜色可跟随时间，也可独立设置；支持斜体。页数固定在主时间下方右对齐；逐页秒表固定在同一行左侧。默认页数字号 12。 |
 | 形状、不透明度 | 直角或小／中／大圆角。背景不透明度 0–100%，支持拖动、悬停滚轮每格 1 个百分点、右侧精确输入。 |
 | 多屏、大屏 | 普通浮窗显示在全部屏幕或指定一屏；扩展屏可以单独全屏显示大字计时。 |
-| 位置微调 | 先选九宫格基准点，再调水平和垂直偏移。正数向右／向下，也可拖动或重置位置。 |
+| 位置微调 | 水平、垂直偏移默认均为 0；居中点按完整屏幕宽度计算。先选九宫格基准点，再调水平和垂直偏移。正数向右／向下，也可拖动或重置位置。 |
 
 大屏计时需要在 Windows 中启用扩展显示，会占满所选屏幕。为主持人设置专用屏时，注意不要误选观众的 PPT 显示屏。
 
@@ -98,7 +111,7 @@
 <a id="settings-remote"></a>
 ### 4. 远程控制
 
-![服务操作、地址和防火墙工具](docs/media/v1.13.1/settings/zh-CN-04-remote-part-2.png)
+![服务操作、地址和防火墙工具](docs/media/v1.14.0/settings/zh-CN-04-remote-part-2.png)
 
 启用遥控并保存后，可查看服务状态、当前端口和连接数量。修改“下次服务端口”后，点击“重启远程服务并应用端口”，再让手机重新连接。
 
@@ -111,7 +124,7 @@
 <a id="settings-controls"></a>
 ### 5. 控制设置
 
-![主要快捷键与窗口行为](docs/media/v1.13.1/settings/zh-CN-05-controls-part-1.png)
+![主要快捷键与窗口行为](docs/media/v1.14.0/settings/zh-CN-05-controls-part-1.png)
 
 三个主要快捷键可选择 F1–F12：默认 **F3 开始／暂停、F4 停止重置、F5 显示／隐藏**。F7 触发闪烁，F8 切换电脑主输出静音。
 
@@ -124,9 +137,9 @@
 <a id="settings-other"></a>
 ### 6. 其他设置
 
-![语言、版本检查和配置管理](docs/media/v1.13.1/settings/zh-CN-06-other-part-1.png)
+![语言、版本检查和配置管理](docs/media/v1.14.0/settings/zh-CN-06-other-part-1.png)
 
-**语言**可选跟随系统、English、简体中文，保存后按提示重启。**软件更新**可手动检查或启动时检查，使用 Gitee 发布页。
+**语言**可选跟随系统、English、简体中文，保存后按提示重启。**软件更新**默认启动检测，也可手动检查；兼查 GitHub 与 Gitee，完整更新说明可滚动阅读。
 
 **配置导出**备份设置与文件规则，**配置导入**恢复配置，**恢复默认**重新开始设置。导出的 JSON 不包含文稿和自选音频；搬电脑时还要复制 PPT 和 `alert-sounds`。
 
@@ -140,8 +153,8 @@
 手机和电脑接入同一 Wi-Fi，或让电脑连接手机热点。右键计时器 → **远程控制**，扫描自己电脑上的实时二维码。
 
 <p>
-<img src="docs/media/v1.13.1/mobile-zh-CN-light-timer.png" width="310" alt="手机计时页：时长、暂停、重置和声音控制">
-<img src="docs/media/v1.13.1/mobile-zh-CN-light-presentation.png" width="310" alt="手机演示页：文件列表、排序、放映和翻页">
+<img src="docs/media/v1.14.0/mobile-zh-CN-light-timer.png" width="310" alt="手机计时页：时长、暂停、重置和声音控制">
+<img src="docs/media/v1.14.0/mobile-zh-CN-light-presentation.png" width="310" alt="手机演示页：文件列表、排序、放映和翻页">
 </p>
 
 **计时页**可设置时长和模式，开始、暂停、继续、停止重置、重新计时，显示／隐藏浮窗，触发闪烁和控制电脑静音。

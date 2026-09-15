@@ -197,3 +197,20 @@ f6f5717fe6c2f958c8e833749bcd45ba10f7bc34	2026-09-03T11:08:28+08:00	Hona-Cao	docs
 b48e59dc5490485a9658a4d6c5459e605b7f7690	2026-09-03T11:08:19+08:00	Hona-Cao	docs: add next Codex manual-test candidate task
 6eb5689d481e193fdbac2b1dc0c4cd70aced2f72	2026-09-03T11:07:46+08:00	Hona-Cao	docs: route Codex through GitHub task and result files
 57144e3c494618d94128d91d2f46caff851d006e	2026-09-03T10:44:34+08:00	Hona-Cao	feat: add V1 Rust Slint implementation for window audit
+5af8d801135a6f9702b958b75d706b9df578c49c	2026-09-15T16:52:04+08:00	Hona-Cao	build: prepare v1.14.0 from current published main
+7bf127f5afb2ef0a33233aa4b0186edd2cf18722	2026-09-15T17:10:31+08:00	Hona-Cao	build: stage v1.14.0 changes 1/6 [skip ci]
+76fc21f88cc768be800627e641a9b33ea35a6782	2026-09-15T17:11:51+08:00	Hona-Cao	build: stage v1.14.0 changes 2/6 [skip ci]
+8bed50a7f893012a0ca54d8c26e8b7c426f3011c	2026-09-15T17:12:51+08:00	Hona-Cao	build: stage v1.14.0 changes 3/6 [skip ci]
+4087e80bab29afd0db724577d3fd369b63cba7af	2026-09-15T17:16:19+08:00	Hona-Cao	build: stage v1.14.0 changes 4/6 [skip ci]
+edccd199510ed45a269da34569db77660323cf98	2026-09-15T17:17:28+08:00	Hona-Cao	build: stage v1.14.0 changes 5/6 [skip ci]
+afa804afe3efa4dec31564af7dfe66e95d519299	2026-09-15T17:18:02+08:00	Hona-Cao	build: stage v1.14.0 changes 6/6 [skip ci]
+42e0c220b962c3f6b0ebcf76b4b727aa51f42b41	2026-09-15T17:18:12+08:00	Hona-Cao	build: apply v1.14.0 implementation [skip ci]
+520910d1d3bc80366ff862036b49538ff57293a8	2026-09-15T17:18:47+08:00	Hona-Cao	build: validate v1.14.0 slide timing, remote browsing and update window
+2fff428fc65740862d8c34a4f0eb55cfba43c494	2026-09-15T17:24:07+08:00	Hona-Cao	fix: remove retired update prompt and clear revoked file-browser views
+165591cdfe5e682f928c739d4a9ecc088aaa09f2	2026-09-15T09:37:20Z	github-actions[bot]	feat: release v1.14.0 slide timing, PPT browsing and unified controls
+bd41c691093d8fb7812dc1ebe12855aa4c0059b9	2026-09-15T17:38:16+08:00	Hona-Cao	docs: capture v1.14.0 timer, update window and compact desktop UI
+c913a5964e24956663b4b2e0c4a2052ae72bf877	2026-09-15T17:40:02+08:00	Hona-Cao	docs: stage v1.14.0 bilingual guides 1/4 [skip ci]
+d36fb7eb80acebf453103e924b6f0d2675d38642	2026-09-15T17:41:43+08:00	Hona-Cao	docs: stage v1.14.0 bilingual guides 2/4 [skip ci]
+6d1ec31d7e88a5bbc61fec9865138fec26f5d1d9	2026-09-15T17:43:21+08:00	Hona-Cao	docs: stage v1.14.0 bilingual guides 3/4 [skip ci]
+809c7ec0b027cd7f038242e187f9faf5230a053c	2026-09-15T17:44:04+08:00	Hona-Cao	docs: stage v1.14.0 bilingual guides 4/4 [skip ci]
+a03e819c3eb3a102f32364ed5eca35075adcc71f	2026-09-15T17:48:05+08:00	Hona-Cao	release: publish v1.14.0 with current guides and portable/setup ZIPs
