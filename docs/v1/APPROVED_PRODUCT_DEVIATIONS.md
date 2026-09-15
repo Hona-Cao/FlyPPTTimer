@@ -107,3 +107,7 @@ The user explicitly accepted v1.13.1, authorized integrating the accepted histor
 ## v1.14.0 — explicitly authorized 2026-09-15
 
 The user requested implementation and public GitHub release of v1.14.0. This overrides older freeze/no-new-feature instructions for this task only. Approved changes: full scrollable update notes and default startup checks; zero default offsets and correct per-monitor centering; compact Settings/Remote spacing; mobile commands above files; opt-in local PPT folder browsing/addition; independent per-slide seconds with session totals; fixed lower metadata row and idle placeholders; consistent mobile selectors. Refer to `docs/RELEASE_NOTES_v1.14.0.md` and the v1.14 sections of both user guides. Preserve previous releases and genuine commit ancestry.
+
+## v1.14.1 user feedback (2026-09-15)
+
+A successful phone connection should lead directly to the desktop file-access authorization page. Do not silently grant permission or repeatedly steal focus on state polling. Tighten the main-time/page/stopwatch spacing without reducing font sizes. Zero-offset top/bottom anchors must align the actual window edge with the full screen edge, using actual window dimensions rather than a fixed baseline. Existing public releases remain unchanged during this follow-up.

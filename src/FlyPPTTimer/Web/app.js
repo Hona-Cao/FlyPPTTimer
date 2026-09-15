@@ -1,8 +1,9 @@
 const effectiveLanguage=navigator.language.toLowerCase().startsWith('zh')?'zh-CN':'en';
 document.documentElement.lang=effectiveLanguage;
 const webEnglish={
+"请在电脑弹出的远程控制设置中勾选文件浏览权限，再点应用。":"On the computer, enable the highlighted PPT browsing option and click Apply (Settings > Remote control).",
 "浏览电脑 PPT 文件":"Browse computer PPT files",
-"需在电脑设置中允许手机浏览":"Enable phone file browsing in computer Settings first",
+"需在电脑设置中允许手机浏览":"On the computer, enable the highlighted PPT browsing option and click Apply (Settings > Remote control).",
 "电脑 PPT 文件":"Computer PPT files",
 "此电脑":"This computer",
 "上一级":"Up one level",
@@ -681,7 +682,7 @@ $('browseComputer').addEventListener('click',()=>{
   closeSelect(false);browseFocus=document.activeElement;const modal=$('fileBrowser');modal.hidden=false;
   for(const child of modal.parentElement.children)child.inert=child!==modal;
   document.body.classList.add('modal-open');$('browseClose').focus();
-  if(!lastState?.fileBrowsingEnabled){$('browseEntries').replaceChildren();$('browseStatus').textContent=wt('需在电脑设置中允许手机浏览');return}
+  if(!lastState?.fileBrowsingEnabled){$('browseEntries').replaceChildren();$('browseStatus').textContent=wt('请在电脑弹出的远程控制设置中勾选文件浏览权限，再点应用。');return}
   loadComputerFolder(browseListing?.path||'');
 });
 $('browseRoots').addEventListener('click',()=>loadComputerFolder(''));

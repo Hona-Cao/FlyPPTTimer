@@ -501,3 +501,9 @@ End slide show stops the presentation playback. Close active presentation closes
 Before an event, check presentation order, timing allowances, displays, sound, and the phone connection. Share remote-control credentials only with trusted people; do not publish QR codes or forward the control port to the public internet.
 
 For further help, open a [GitHub issue](https://github.com/Hona-Cao/FlyPPTTimer/issues) with the application version, Windows and presentation-software versions, steps, and screenshots. Remove tokens, private paths, and sensitive presentation content first.
+
+## 1.14.1 connection guidance and edge placement
+
+A newly connected phone opens desktop Remote settings at the highlighted file-browsing checkbox. Check it and Apply; connection alone never grants access. Polling from the same device does not reopen Settings.
+
+The timer uses tighter rows/padding. Zero-offset top/bottom anchors now meet the full screen edge with no baseline inset, using actual window dimensions. Saved custom offsets remain unchanged. [Full notes](RELEASE_NOTES_v1.14.1.md).

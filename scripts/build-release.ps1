@@ -28,7 +28,7 @@ $setupOut = Join-Path $out "installer-output"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage,$setupOut | Out-Null
 Copy-Item $exe $stage
-Copy-Item (Join-Path $root "docs\v1140-default-config.json") (Join-Path $stage "FlyPPTTimer.config.json")
+Copy-Item (Join-Path $root "docs\v1141-default-config.json") (Join-Path $stage "FlyPPTTimer.config.json")
 Copy-Item (Join-Path $root "src\FlyPPTTimer\Assets\app.ico") $stage
 foreach ($file in @("README.md","README.zh-CN.md","LICENSE","CHANGELOG.md","CONTRIBUTING.md")) {
     Copy-Item (Join-Path $root $file) $stage
@@ -46,7 +46,7 @@ foreach ($file in @("USER_GUIDE.en.md","USER_GUIDE.zh-CN.md","BUILDING.md","DEVE
 New-Item -ItemType Directory -Force (Join-Path $docs "v1") | Out-Null
 Copy-Item (Join-Path $root "docs\v1\*.md") (Join-Path $docs "v1")
 New-Item -ItemType Directory -Force (Join-Path $docs "media") | Out-Null
-foreach ($media in @("v1.13.1", "v$version")) {
+foreach ($media in @("v1.13.1", "v1.14.0", "v$version")) {
     $source = Join-Path $root "docs\media\$media"
     if (Test-Path $source) { Copy-Item $source (Join-Path $docs "media") -Recurse -Force }
 }
@@ -61,7 +61,7 @@ $sourceSha = if ($env:PRODUCT_SOURCE_SHA) { $env:PRODUCT_SOURCE_SHA } else { (gi
 @(
     "FlyPPTTimer v$version"
     "Executable source: $sourceSha"
-    "Release documentation: https://github.com/Hona-Cao/FlyPPTTimer/releases/tag/v$version"
+    "Change notes: docs/RELEASE_NOTES_v$version.md"
     "Both editions contain the same application executable."
     "Settings and imported alert sounds are local. Back up personal configuration before upgrading."
     "Read README.md or README.zh-CN.md and docs/USER_GUIDE.*.md."

@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
     sync::{
@@ -200,6 +200,7 @@ pub struct RemoteServer {
     info: Arc<Mutex<RemoteInfo>>,
     token: Arc<Mutex<String>>,
     clients: Arc<Mutex<HashMap<IpAddr, Instant>>>,
+    announced_clients: RefCell<HashSet<IpAddr>>,
     revision: Arc<AtomicI64>,
     server_instance: String,
     sender: mpsc::Sender<RemoteRequest>,
@@ -214,6 +215,7 @@ impl RemoteServer {
             info: Arc::new(Mutex::new(RemoteInfo::default())),
             token: Arc::new(Mutex::new(String::new())),
             clients: Arc::new(Mutex::new(HashMap::new())),
+            announced_clients: RefCell::new(HashSet::new()),
             revision: Arc::new(AtomicI64::new(0)),
             server_instance: generate_token(),
             sender,
@@ -340,6 +342,7 @@ impl RemoteServer {
             let _ = instance.thread.join();
         }
         self.clients.lock().unwrap().clear();
+        self.announced_clients.borrow_mut().clear();
         let mut info = self.info.lock().unwrap();
         info.running = false;
         info.status = "未启动".to_owned();
@@ -384,6 +387,22 @@ impl RemoteServer {
         state
     }
 
+    /// A device is connected only after a token-authenticated state request.
+    /// Polling, page refreshes and temporary disconnects must not steal focus again.
+    pub fn take_new_client(&self) -> Option<IpAddr> {
+        let clients = self.clients.lock().unwrap();
+        let mut announced = self.announced_clients.borrow_mut();
+        let next = clients
+            .keys()
+            .copied()
+            .filter(|ip| !ip.is_loopback() && !announced.contains(ip))
+            .min();
+        if let Some(ip) = next {
+            announced.insert(ip);
+        }
+        next
+    }
+
     pub fn info(&self) -> RemoteInfo {
         self.info.lock().unwrap().clone()
     }
@@ -392,6 +411,7 @@ impl RemoteServer {
         let token = generate_token();
         *self.token.lock().unwrap() = token.clone();
         self.clients.lock().unwrap().clear();
+        self.announced_clients.borrow_mut().clear();
         self.revision.fetch_add(1, Ordering::Relaxed);
         token
     }
@@ -532,11 +552,13 @@ fn route(
             &serde_json::json!({"ok":false,"error":"令牌无效或远程控制已关闭"}),
         ));
     }
-    context
-        .clients
-        .lock()
-        .unwrap()
-        .insert(address.ip(), Instant::now());
+    if request.method == "GET" && path == "/state" {
+        context
+            .clients
+            .lock()
+            .unwrap()
+            .insert(address.ip(), Instant::now());
+    }
     prune_clients(&context.clients);
     match (request.method.as_str(), path.as_str()) {
         ("GET", "/") | ("GET", "/index.html") => {
@@ -1108,6 +1130,69 @@ pub fn id_for_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn successful_phone_connection_announces_once_but_never_grants_file_access() {
+        let (sender, _receiver) = mpsc::channel();
+        let server = RemoteServer::new(sender);
+        *server.token.lock().unwrap() = "test".into();
+        let context = ConnectionContext {
+            state: server.shared_state.clone(),
+            token: server.token.clone(),
+            clients: server.clients.clone(),
+            sender: server.sender.clone(),
+        };
+        let ip = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10));
+        let request = |token: &str, path: &str| HttpRequest {
+            method: "GET".into(),
+            raw_url: format!("{path}?token={token}"),
+            body: vec![],
+        };
+        route(
+            request("bad", "/state"),
+            SocketAddr::new(ip, 4000),
+            &context,
+        )
+        .unwrap();
+        route(request("test", "/"), SocketAddr::new(ip, 4000), &context).unwrap();
+        assert!(server.take_new_client().is_none());
+        route(
+            request("test", "/state"),
+            SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 4000),
+            &context,
+        )
+        .unwrap();
+        assert!(server.take_new_client().is_none());
+        for port in [4000, 4001, 4002] {
+            route(
+                request("test", "/state"),
+                SocketAddr::new(ip, port),
+                &context,
+            )
+            .unwrap();
+            assert_eq!(
+                server.take_new_client(),
+                if port == 4000 { Some(ip) } else { None }
+            );
+        }
+        assert!(!server.shared_state.lock().unwrap().file_browsing_enabled);
+        server.clients.lock().unwrap().clear();
+        route(
+            request("test", "/state"),
+            SocketAddr::new(ip, 5000),
+            &context,
+        )
+        .unwrap();
+        assert!(server.take_new_client().is_none());
+        let token = server.regenerate_token();
+        route(
+            request(&token, "/state"),
+            SocketAddr::new(ip, 5000),
+            &context,
+        )
+        .unwrap();
+        assert_eq!(server.take_new_client(), Some(ip));
+    }
 
     #[test]
     fn file_browser_requires_token_and_desktop_opt_in_and_exposes_no_download() {

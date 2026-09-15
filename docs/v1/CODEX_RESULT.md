@@ -643,3 +643,7 @@ User accepted RC3.4. Implemented V1131_DELIVERY.md: list boundary handoff and sh
 ## v1.14.0 implementation — 2026-09-15
 
 Eight requested improvements are implemented on `release/v1.14.0`. Added focused regressions for startup preference migration, complete update notes/source selection, side-taskbar/mixed-DPI centering, PPT-only token-protected folder browsing, explicit browse permission/deduplication, and per-slide visit/accumulation lifecycle. Browser interaction checks cover Chinese/English selectors, modal navigation, additions, filtering and revoked permission. Publication result and exact CI/source references are maintained in `HANDOFF.md`; GUI renders do not constitute physical phone or Office testing.
+
+## v1.14.1 focused follow-up
+
+Implemented authenticated first-connection navigation to Remote settings and a highlighted authorization instruction, preserving draft edits and explicit Apply. Client polling is deduplicated per IP for the service session. Removed fixed 140x50 anchor geometry and used actual window size/full monitor bounds; drag capture uses the same inverse mapping. Reduced timer row gap and padding without changing fonts. Added targeted connection/permission and multi-DPI edge tests, and a production authorization-page capture. CI results and BUILD.txt identify the delivered build; do not infer physical phone/DPI acceptance from software tests.

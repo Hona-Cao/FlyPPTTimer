@@ -196,6 +196,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     &config_path_for_updates,
                 );
             }
+            if let Some(address) = remote_for_updates.take_new_client()
+                && !config_for_updates.borrow().remote_control.allow_file_browsing {
+                handle_desktop_event(
+                    DesktopEvent::OpenSettings, &weak_window, &timer_for_updates, &config_for_updates,
+                    &alerts_for_updates, &flash_for_updates, &desktop_for_updates, &settings_for_updates,
+                    &presentation_window_for_updates, &presentation_for_updates, &remote_for_updates,
+                    &update_for_updates, &display_rebuild_for_updates, &config_path_for_updates,
+                );
+                if let Some(settings) = settings_for_updates.borrow().as_ref() {
+                    settings::show_file_access_request(settings, &config_for_updates.borrow(), address);
+                }
+            }
             while let Ok(request) = remote_receiver_for_updates.borrow().try_recv() {
                 handle_remote_request(
                     request,
@@ -2920,7 +2932,7 @@ mod remote_parity_tests {
         overlay.set_page_text("1/23".into());
         overlay.set_page_reserve(page_reserve(23).into());
         sync_timer_window_scale(&overlay, &baseline);
-        assert!(overlay.get_content_height() > 35.0);
+        assert!(overlay.get_content_height() > 18.0);
         overlay.set_page_text("".into());
         sync_timer_window_scale(&overlay, &baseline);
         assert_eq!(
@@ -2992,6 +3004,26 @@ mod remote_parity_tests {
         assert_eq!(settings.get_timer_preview_width(), 150);
         assert_eq!(config.borrow().appearance.width, 100);
         assert!(settings.get_dirty());
+        settings::show_file_access_request(
+            &settings,
+            &config.borrow(),
+            "192.0.2.10".parse().unwrap(),
+        );
+        assert_eq!(settings.get_current_page(), 3);
+        assert!(settings.get_file_access_notice().contains("192.0.2.10"));
+        assert_eq!(settings.get_preview_scroll_y(), 0.0);
+        assert!(!config.borrow().remote_control.allow_file_browsing);
+        assert!(settings.get_dirty()); // Navigation must not discard unrelated draft edits.
+        let browse_row = settings
+            .get_items()
+            .iter()
+            .position(|item| item.key == "remote.browse")
+            .unwrap() as i32;
+        settings.invoke_field_edited(browse_row, "".into(), true, 0);
+        assert!(!config.borrow().remote_control.allow_file_browsing); // Explicit Apply is still required.
+        settings.invoke_field_edited(browse_row, "".into(), false, 0);
+        settings.invoke_navigate(2);
+        assert_eq!(settings.get_timer_preview_width(), 150);
 
         control.invoke_presentation_selected(0, false, false);
         control.invoke_presentation_selected(1, true, false);
