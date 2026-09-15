@@ -21,16 +21,19 @@ The user-facing release contains exactly the portable ZIP and setup ZIP, without
 
 Automated Rust, HTTP, browser interaction and installer checks do not constitute physical Office/WPS or phone acceptance. No Gitee publication is implied by a GitHub release.
 
-## Validated candidate
 
+## Published on 2026-09-15
+
+GitHub Release v1.14.0 is public, not a prerelease or draft.
+Release/tag source: af7ac108939d0c375800a49f64aa10926763a661.
 Executable source: 165591cdfe5e682f928c739d4a9ecc088aaa09f2.
-Windows CI: 34952365172, successful (100 passed, 0 failed, 3 ignored).
-Desktop GUI capture: 34953602785. Publication workflow: 34954515205.
-The public release and main references must be verified after the publication job completes.
+Product CI: 34952365172 (100 passed, 0 failed, 3 explicitly ignored).
+Publication workflow: 34985358779, both documentation and package-and-publish jobs succeeded.
+The interrupted publication was fixed by using Appearance.Width, the actual saved field, in the installer check; the application was not changed to bypass validation.
 
-## Validated candidate
+Exactly two uploaded assets: FlyPPTTimer-v1.14.0-portable-win-x64.zip and FlyPPTTimer-v1.14.0-setup-win-x64.zip. No checksum assets were uploaded.
+Installation, runtime DLLs, preservation of existing configuration, pre-1.14 update-check migration, startup visibility and live Remote state passed on hosted Windows.
+Eight focused English/Chinese browser checks passed. These are automated checks, not physical-phone or Office/WPS acceptance.
 
-Executable source: 165591cdfe5e682f928c739d4a9ecc088aaa09f2.
-Windows CI: 34952365172, successful (100 passed, 0 failed, 3 ignored).
-Desktop GUI capture: 34953602785. Publication workflow: 34985358779.
-The public release and main references must be verified after the publication job completes.
+This documentation-only follow-up captures completed finite CSS animations so the file-browser images are not captured halfway through opening. Shipping HTML/CSS/JS and the executable remain unchanged. The release tag/assets remain fixed; corrected documentation screenshots are on the continuing branch/main, while the release ZIPs retain their publication-time documentation.
+Fast-forward main to the finalized documentation commit without rewriting earlier history; read the remote ref before updating. Preserve v1.14.0 and earlier tags. No Gitee release was made in this task.
