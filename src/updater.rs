@@ -1,5 +1,5 @@
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     ffi::c_void,
     fs,
     os::windows::process::CommandExt,
@@ -10,6 +10,7 @@ use std::{
 };
 
 use serde_json::Value;
+use slint::ComponentHandle;
 use windows_sys::Win32::Networking::WinHttp::{
     WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE, WINHTTP_QUERY_FLAG_NUMBER,
     WINHTTP_QUERY_STATUS_CODE, WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest,
@@ -20,6 +21,8 @@ use windows_sys::Win32::Networking::WinHttp::{
 pub const RELEASES_URL: &str = "https://gitee.com/hona-cao/fly-ppttimer/releases";
 const LATEST_RELEASE_API: &str =
     "https://gitee.com/api/v5/repos/hona-cao/fly-ppttimer/releases/latest";
+const GITHUB_API: &str = "https://api.github.com/repos/Hona-Cao/FlyPPTTimer/releases/latest";
+const GITHUB_RELEASES: &str = "https://github.com/Hona-Cao/FlyPPTTimer/releases";
 const RELEASE_API: &str = "https://gitee.com/api/v5/repos/hona-cao/fly-ppttimer/releases";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -54,6 +57,8 @@ pub enum CheckStatus {
 
 #[derive(Debug)]
 pub enum Response {
+    Dismissed,
+    Accepted(ReleaseInfo),
     Checked {
         user_initiated: bool,
         result: Result<CheckStatus, Box<dyn std::error::Error + Send + Sync>>,
@@ -67,6 +72,7 @@ pub struct UpdateService {
     sender: mpsc::Sender<Response>,
     receiver: Mutex<mpsc::Receiver<Response>>,
     busy: Cell<bool>,
+    window: RefCell<Option<crate::app::UpdateWindow>>,
 }
 
 impl UpdateService {
@@ -76,6 +82,7 @@ impl UpdateService {
             sender,
             receiver: Mutex::new(receiver),
             busy: Cell::new(false),
+            window: RefCell::new(None),
         }
     }
 
@@ -113,6 +120,12 @@ impl UpdateService {
         true
     }
 
+    pub fn refresh_theme(&self, dark: bool) {
+        if let Some(window) = self.window.borrow().as_ref() {
+            crate::theme::update(window, dark);
+        }
+    }
+
     pub fn try_recv(&self) -> Option<Response> {
         self.receiver.lock().ok()?.try_recv().ok()
     }
@@ -124,26 +137,18 @@ pub fn start_check_ui(
     desktop: &crate::desktop::DesktopIntegration,
     user: bool,
 ) {
-    let started = service.check(user);
-    if started && user {
+    if service.check(user) && user {
         desktop.notify(
             text(
                 config,
-                "正在从 Gitee 检测新版本…",
-                "Checking Gitee for updates…",
+                "正在检查 Gitee / GitHub 新版本…",
+                "Checking Gitee / GitHub for updates...",
             ),
             2000,
         );
-    } else if !started && user {
-        crate::settings::native::message(
-            text(
-                config,
-                "\u{6b63}\u{5728}\u{68c0}\u{6d4b}\u{65b0}\u{7248}\u{672c}\u{ff0c}\u{8bf7}\u{7a0d}\u{5019}\u{3002}",
-                "Checking for updates. Please wait.",
-            ),
-            text(config, "FlyPPTTimer \u{66f4}\u{65b0}", "FlyPPTTimer Update"),
-            false,
-        );
+    } else if user && let Some(window) = service.window.borrow().as_ref() {
+        let _ = window.show();
+        crate::window::foreground(window.window());
     }
 }
 
@@ -154,10 +159,27 @@ pub fn handle_response_ui(
     desktop: &crate::desktop::DesktopIntegration,
 ) {
     match response {
+        Response::Dismissed => {
+            service.window.borrow_mut().take();
+            service.busy.set(false);
+        }
+        Response::Accepted(release) => {
+            service.window.borrow_mut().take();
+            if is_installed_edition() && release.installer().is_some() {
+                desktop.notify(
+                    text(config, "正在下载更新...", "Downloading update..."),
+                    3000,
+                );
+                service.download(release);
+            } else {
+                crate::settings::native::open_url(&release.release_url);
+                service.busy.set(false);
+            }
+        }
         Response::Checked {
             user_initiated,
             result,
-        } => handle_checked(result, user_initiated, service, config, desktop),
+        } => handle_checked(result, user_initiated, service, config),
         Response::Downloaded { result } => {
             match result {
                 Ok(path) => match launch_installer_after_exit(&path) {
@@ -178,14 +200,13 @@ fn handle_checked(
     user: bool,
     service: &UpdateService,
     config: &crate::config::AppConfig,
-    desktop: &crate::desktop::DesktopIntegration,
 ) {
     match result {
         Ok(CheckStatus::NoRelease) if user => crate::settings::native::message(
             text(
                 config,
-                "Gitee \u{9879}\u{76ee}\u{76ee}\u{524d}\u{8fd8}\u{6ca1}\u{6709}\u{53d1}\u{5e03} Release\u{3002}",
-                "The Gitee project has no releases yet.",
+                "Gitee / GitHub \u{9879}\u{76ee}\u{76ee}\u{524d}\u{8fd8}\u{6ca1}\u{6709}\u{53d1}\u{5e03} Release\u{3002}",
+                "No accessible release source has published a release yet.",
             ),
             text(config, "FlyPPTTimer \u{66f4}\u{65b0}", "FlyPPTTimer Update"),
             false,
@@ -204,13 +225,11 @@ fn handle_checked(
             false,
         ),
         Ok(CheckStatus::UpdateAvailable(release)) => {
-            if prompt_update(service, config, desktop, release) {
+            if prompt_update(service, config, release) {
                 return;
             }
         }
-        Err(error) if user || !error.is::<std::io::Error>() => {
-            show_error(config, &error.to_string())
-        }
+        Err(error) if user => show_error(config, &error.to_string()),
         _ => {}
     }
     service.busy.set(false);
@@ -219,100 +238,75 @@ fn handle_checked(
 fn prompt_update(
     service: &UpdateService,
     config: &crate::config::AppConfig,
-    desktop: &crate::desktop::DesktopIntegration,
     release: ReleaseInfo,
 ) -> bool {
-    let installed = is_installed_edition();
-    let action = if installed && release.installer().is_some() {
-        text(
-            config,
-            "\u{662f}\u{5426}\u{7acb}\u{5373}\u{4e0b}\u{8f7d}\u{5b89}\u{88c5}\u{ff1f}\u{5b89}\u{88c5}\u{65f6}\u{4f1a}\u{4fdd}\u{7559}\u{5f53}\u{524d}\u{914d}\u{7f6e}\u{ff0c}\u{65b0}\u{529f}\u{80fd}\u{4ecd}\u{4f7f}\u{7528}\u{9ed8}\u{8ba4}\u{8bbe}\u{7f6e}\u{ff0c}\u{4e4b}\u{540e}\u{53ef}\u{81ea}\u{884c}\u{9009}\u{62e9}\u{3002}",
-            "Download and install now? Your current configuration will be preserved.",
-        )
-    } else if installed {
-        text(
-            config,
-            "\u{6b64} Release \u{6682}\u{672a}\u{627e}\u{5230} Windows x64 \u{5b89}\u{88c5}\u{5305}\u{3002}\u{662f}\u{5426}\u{6253}\u{5f00} Gitee Release \u{9875}\u{9762}\u{ff1f}",
-            "No Windows x64 installer was found in this release. Open the Gitee release page?",
-        )
-    } else {
-        text(
-            config,
-            "\u{5f53}\u{524d}\u{4f7f}\u{7528}\u{7684}\u{662f}\u{7eff}\u{8272}\u{4fbf}\u{643a}\u{7248}\u{ff0c}\u{7a0b}\u{5e8f}\u{4e0d}\u{4f1a}\u{81ea}\u{52a8}\u{8986}\u{76d6}\u{6587}\u{4ef6}\u{3002}\u{662f}\u{5426}\u{6253}\u{5f00} Gitee Release \u{9875}\u{9762}\u{81ea}\u{884c}\u{9009}\u{62e9}\u{4e0b}\u{8f7d}\u{ff1f}",
-            "You are using the portable edition, so the app will not overwrite its own files. Open the Gitee release page to download the update?",
-        )
-    };
-    let prompt = update_prompt(config, &release, action);
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        MB_ICONINFORMATION, MB_ICONQUESTION, MB_ICONWARNING,
-    };
-    let icon = if !installed {
-        MB_ICONINFORMATION
-    } else if release.installer().is_some() {
-        MB_ICONQUESTION
-    } else {
-        MB_ICONWARNING
-    };
-    if crate::settings::native::yes_no_with_icon(
-        &prompt,
-        text(
-            config,
-            "\u{53d1}\u{73b0}\u{65b0}\u{7248}\u{672c}",
-            "Update available",
-        ),
-        icon,
-    ) {
-        if installed && release.installer().is_some() {
-            desktop.notify(
-                text(
-                    config,
-                    "正在下载更新，完成前请勿退出程序…",
-                    "Downloading the update. Do not exit until it finishes…",
-                ),
-                3000,
-            );
-            return service.download(release);
-        } else {
-            crate::settings::native::open_url(&release.release_url);
+    let window = match crate::app::UpdateWindow::new() {
+        Ok(window) => window,
+        Err(error) => {
+            show_error(config, &error.to_string());
+            return false;
         }
+    };
+    configure_update_window(&window, config, &release);
+    let weak = window.as_weak();
+    let sender = service.sender.clone();
+    window.on_download(move || {
+        if let Some(window) = weak.upgrade() {
+            let _ = window.hide();
+        }
+        let _ = sender.send(Response::Accepted(release.clone()));
+    });
+    let weak = window.as_weak();
+    let sender = service.sender.clone();
+    window.on_later(move || {
+        if let Some(window) = weak.upgrade() {
+            let _ = window.hide();
+        }
+        let _ = sender.send(Response::Dismissed);
+    });
+    let sender = service.sender.clone();
+    window.window().on_close_requested(move || {
+        let _ = sender.send(Response::Dismissed);
+        slint::CloseRequestResponse::HideWindow
+    });
+    if let Err(error) = window.show() {
+        show_error(config, &error.to_string());
+        return false;
     }
-    false
+    crate::window::center_window_on_cursor(window.window(), window.window().size());
+    crate::window::brand_native_window(window.window());
+    crate::theme::update(&window, crate::theme::is_dark(&config.ui_theme));
+    crate::window::foreground(window.window());
+    *service.window.borrow_mut() = Some(window);
+    true
 }
 
-fn update_prompt(config: &crate::config::AppConfig, release: &ReleaseInfo, action: &str) -> String {
-    let notes = release.body.trim().chars().take(600).collect::<String>();
-    let notes = if notes.is_empty() {
-        String::new()
-    } else {
+pub(crate) fn configure_update_window(
+    window: &crate::app::UpdateWindow,
+    config: &crate::config::AppConfig,
+    release: &ReleaseInfo,
+) {
+    window.set_dark_theme(crate::theme::is_dark(&config.ui_theme));
+    window.set_heading(format!("FlyPPTTimer v{}", release.version).into());
+    window.set_subtitle(
         format!(
-            "\r\n\r\n{}\r\n{notes}",
-            text(
-                config,
-                "\u{66f4}\u{65b0}\u{8bf4}\u{660e}\u{ff1a}",
-                "Release notes:"
-            )
-        )
-    };
-    if crate::config::ui_is_english(&config.language) {
-        return format!(
-            "FlyPPTTimer v{} is available (current: v{}).{notes}\r\n\r\n{action}",
-            release.version,
+            "{} v{}",
+            text(config, "当前版本：", "Current version:"),
             env!("CARGO_PKG_VERSION")
-        );
+        )
+        .into(),
+    );
+    window.set_notes(release_notes(release).into());
+    window.set_later_text(text(config, "稍后", "Later").into());
+    window.set_download_text(text(config, "下载新版本", "Download update").into());
+    window.set_hint(text(config, "滚动可阅读全部更新内容。ZIP 版本将打开发布页下载，请保留自己的配置。", "Scroll to read all release notes. ZIP editions open the release page for download; settings are kept.").into());
+}
+fn release_notes(release: &ReleaseInfo) -> String {
+    // Do not truncate: even long multilingual release notes must remain readable to the end.
+    if release.body.trim().is_empty() {
+        return "No release notes were provided. / 此版本未提供更新说明。".into();
     }
-    format!(
-        "{} v{}\u{ff08}{} v{}\u{ff09}\u{3002}{}\r\n\r\n{}",
-        text(
-            config,
-            "\u{53d1}\u{73b0}\u{65b0}\u{7248}\u{672c}",
-            "Update available"
-        ),
-        release.version,
-        text(config, "\u{5f53}\u{524d}", "current"),
-        env!("CARGO_PKG_VERSION"),
-        notes,
-        action
-    )
+    release.body.trim().to_owned()
 }
 
 fn show_error(config: &crate::config::AppConfig, error: &str) {
@@ -376,46 +370,89 @@ pub fn launch_installer_after_exit(path: &Path) -> Result<(), String> {
 }
 
 fn check_latest() -> Result<CheckStatus, Box<dyn std::error::Error + Send + Sync>> {
-    let response = http_get(LATEST_RELEASE_API)?;
+    let (mirror, github) = thread::scope(|scope| {
+        let mirror = scope.spawn(|| fetch_release(LATEST_RELEASE_API, RELEASES_URL, true));
+        let github = fetch_release(GITHUB_API, GITHUB_RELEASES, false);
+        (
+            mirror
+                .join()
+                .unwrap_or_else(|_| Err("Gitee check worker failed".into())),
+            github,
+        )
+    });
+    choose_release([mirror, github])
+}
+
+type ReleaseResult = Result<Option<ReleaseInfo>, Box<dyn std::error::Error + Send + Sync>>;
+fn choose_release(
+    results: [ReleaseResult; 2],
+) -> Result<CheckStatus, Box<dyn std::error::Error + Send + Sync>> {
+    let mut reachable = false;
+    let mut best: Option<ReleaseInfo> = None;
+    let mut errors = Vec::new();
+    for result in results {
+        match result {
+            Ok(release) => {
+                reachable = true;
+                if let Some(release) = release
+                    && best.as_ref().is_none_or(|current| {
+                        parse_version(&release.version) > parse_version(&current.version)
+                    })
+                {
+                    best = Some(release);
+                }
+            }
+            Err(error) => errors.push(error.to_string()),
+        }
+    }
+    if !reachable {
+        return Err(errors.join("; ").into());
+    }
+    match best {
+        Some(release)
+            if parse_version(&release.version) > parse_version(env!("CARGO_PKG_VERSION")) =>
+        {
+            Ok(CheckStatus::UpdateAvailable(release))
+        }
+        Some(_) => Ok(CheckStatus::UpToDate),
+        None => Ok(CheckStatus::NoRelease),
+    }
+}
+fn fetch_release(api: &str, releases_url: &str, gitee: bool) -> ReleaseResult {
+    let response = http_get(api)?;
     if response.status == 404 {
-        return Ok(CheckStatus::NoRelease);
+        return Ok(None);
     }
     if !(200..300).contains(&response.status) {
-        return Err(std::io::Error::other(format!("Gitee HTTP {}", response.status)).into());
+        return Err(std::io::Error::other(format!("{api}: HTTP {}", response.status)).into());
     }
     let root: Value = serde_json::from_slice(&response.body)?;
-    let tag = json_string(&root, "tag_name");
-    let remote = parse_version(&tag).ok_or("Gitee Release \u{7684}\u{7248}\u{672c}\u{6807}\u{7b7e}\u{65e0}\u{6cd5}\u{8bc6}\u{522b}\u{3002}")?;
-    let current = parse_version(env!("CARGO_PKG_VERSION")).ok_or(
-        "\u{5f53}\u{524d}\u{7a0b}\u{5e8f}\u{7248}\u{672c}\u{65e0}\u{6cd5}\u{8bc6}\u{522b}\u{3002}",
-    )?;
-    if remote <= current {
-        return Ok(CheckStatus::UpToDate);
-    }
-
-    let mut assets = parse_assets(&root);
-    if assets.is_empty()
-        && let Some(id) = root.get("id").and_then(Value::as_i64)
+    if root.get("draft").and_then(Value::as_bool) == Some(true)
+        || root.get("prerelease").and_then(Value::as_bool) == Some(true)
     {
-        let response = http_get(&format!("{RELEASE_API}/{id}/attach_files"))?;
-        if (200..300).contains(&response.status)
-            && let Ok(value) = serde_json::from_slice::<Value>(&response.body)
-        {
-            assets = parse_assets(&value);
-        }
+        return Ok(None);
     }
-    let release_url = {
-        let value = json_string(&root, "html_url");
-        if value.is_empty() {
-            format!("{RELEASES_URL}/tag/{tag}")
-        } else {
-            value
-        }
-    };
-    Ok(CheckStatus::UpdateAvailable(ReleaseInfo {
-        version: format_version(remote),
+    let tag = json_string(&root, "tag_name");
+    let version = parse_version(&tag).ok_or("Release version could not be read")?;
+    let mut assets = parse_assets(&root);
+    if gitee
+        && assets.is_empty()
+        && let Some(id) = root.get("id").and_then(Value::as_i64)
+        && let Ok(response) = http_get(&format!("{RELEASE_API}/{id}/attach_files"))
+        && (200..300).contains(&response.status)
+        && let Ok(value) = serde_json::from_slice::<Value>(&response.body)
+    {
+        assets = parse_assets(&value);
+    }
+    let url = json_string(&root, "html_url");
+    Ok(Some(ReleaseInfo {
+        version: format_version(version),
         body: json_string(&root, "body"),
-        release_url,
+        release_url: if url.is_empty() {
+            format!("{releases_url}/tag/{tag}")
+        } else {
+            url
+        },
         assets,
     }))
 }
@@ -566,7 +603,7 @@ fn http_get(url: &str) -> Result<HttpResponse, Box<dyn std::error::Error + Send 
         "WinHttpOpen",
     )?;
     unsafe {
-        WinHttpSetTimeouts(session.0, 20_000, 20_000, 20_000, 20_000);
+        WinHttpSetTimeouts(session.0, 5_000, 5_000, 8_000, 8_000);
     }
     let host = wide(&parsed.host);
     let connection = InternetHandle::new(
@@ -698,6 +735,38 @@ fn wide(value: &str) -> Vec<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn release(version: &str, body: &str) -> ReleaseInfo {
+        ReleaseInfo {
+            version: version.into(),
+            body: body.into(),
+            release_url: GITHUB_RELEASES.into(),
+            assets: Vec::new(),
+        }
+    }
+    #[test]
+    fn full_release_notes_and_newest_accessible_source_are_preserved() {
+        let long = "A release note line.\n".repeat(500) + "FINAL NOTE";
+        let newer = release("9.0.0", &long);
+        assert_eq!(release_notes(&newer), long);
+        assert_eq!(
+            choose_release([Ok(Some(release("1.13.1", "old"))), Ok(Some(newer.clone()))]).unwrap(),
+            CheckStatus::UpdateAvailable(newer.clone())
+        );
+        assert_eq!(
+            choose_release([Err("mirror unavailable".into()), Ok(Some(newer))]).unwrap(),
+            CheckStatus::UpdateAvailable(release("9.0.0", &long))
+        );
+        assert_eq!(
+            choose_release([
+                Ok(None),
+                Ok(Some(release(env!("CARGO_PKG_VERSION"), "current")))
+            ])
+            .unwrap(),
+            CheckStatus::UpToDate
+        );
+        assert!(choose_release([Err("offline".into()), Err("offline".into())]).is_err());
+    }
 
     #[test]
     fn version_parser_matches_release_tags() {

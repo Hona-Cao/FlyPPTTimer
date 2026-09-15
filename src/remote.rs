@@ -120,6 +120,8 @@ pub struct RemoteState {
     pub revision: i64,
     pub server_instance: String,
     pub ui_theme: String,
+    pub file_browsing_enabled: bool,
+    pub slide_timing: crate::slide_timer::SlideTiming,
 }
 
 impl Default for RemoteState {
@@ -146,6 +148,8 @@ impl Default for RemoteState {
             revision: 0,
             server_instance: String::new(),
             ui_theme: "system".into(),
+            file_browsing_enabled: false,
+            slide_timing: Default::default(),
         }
     }
 }
@@ -192,6 +196,7 @@ struct ServerInstance {
 pub struct RemoteServer {
     instance: RefCell<Option<ServerInstance>>,
     shared_state: Arc<Mutex<RemoteState>>,
+    slide_timing: RefCell<crate::slide_timer::SlideTiming>,
     info: Arc<Mutex<RemoteInfo>>,
     token: Arc<Mutex<String>>,
     clients: Arc<Mutex<HashMap<IpAddr, Instant>>>,
@@ -205,6 +210,7 @@ impl RemoteServer {
         Self {
             instance: RefCell::new(None),
             shared_state: Arc::new(Mutex::new(RemoteState::default())),
+            slide_timing: RefCell::new(Default::default()),
             info: Arc::new(Mutex::new(RemoteInfo::default())),
             token: Arc::new(Mutex::new(String::new())),
             clients: Arc::new(Mutex::new(HashMap::new())),
@@ -354,6 +360,10 @@ impl RemoteServer {
         Ok(())
     }
 
+    pub fn update_slide_timing(&self, timing: crate::slide_timer::SlideTiming) {
+        *self.slide_timing.borrow_mut() = timing;
+    }
+
     pub fn update_state(&self, state: RemoteState) {
         self.publish_state(state);
     }
@@ -366,6 +376,7 @@ impl RemoteServer {
         state.connected_clients = count;
         state.server_instance = self.server_instance.clone();
         let mut current = self.shared_state.lock().unwrap();
+        state.slide_timing = self.slide_timing.borrow().clone();
         state.revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
         *current = state.clone();
         drop(current);
@@ -556,6 +567,23 @@ fn route(
             let mut state = context.state.lock().unwrap().clone();
             state.connected_clients = context.clients.lock().unwrap().len();
             Ok(HttpResponse::json(200, &state))
+        }
+        ("POST", "/browse") => {
+            if !context.state.lock().unwrap().file_browsing_enabled {
+                return Ok(HttpResponse::json(
+                    403,
+                    &serde_json::json!({"ok":false,"message":"Computer file browsing is disabled in desktop Remote settings."}),
+                ));
+            }
+            let input: crate::file_browser::BrowseRequest =
+                serde_json::from_slice(&request.body).map_err(|e| e.to_string())?;
+            match crate::file_browser::browse(&input.path) {
+                Ok(listing) => Ok(HttpResponse::json(200, &listing)),
+                Err(error) => Ok(HttpResponse::json(
+                    400,
+                    &serde_json::json!({"ok":false,"message":error}),
+                )),
+            }
         }
         ("POST", "/command") => {
             let command: RemoteCommand =
@@ -923,6 +951,8 @@ pub fn remote_state(
         revision: 0,
         server_instance: String::new(),
         ui_theme: config.ui_theme.clone(),
+        file_browsing_enabled: config.remote_control.allow_file_browsing,
+        slide_timing: Default::default(),
     }
 }
 
@@ -1078,6 +1108,49 @@ pub fn id_for_path(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_browser_requires_token_and_desktop_opt_in_and_exposes_no_download() {
+        let (sender, _receiver) = mpsc::channel();
+        let state = Arc::new(Mutex::new(RemoteState::default()));
+        let context = ConnectionContext {
+            state: state.clone(),
+            token: Arc::new(Mutex::new("test".into())),
+            clients: Arc::new(Mutex::new(HashMap::new())),
+            sender,
+        };
+        let address = SocketAddr::from((Ipv4Addr::LOCALHOST, 1000));
+        let request = |token: &str, method: &str, path: &str| HttpRequest {
+            method: method.into(),
+            raw_url: format!("{path}?token={token}"),
+            body: b"{}".to_vec(),
+        };
+        assert_eq!(
+            route(request("wrong", "POST", "/browse"), address, &context)
+                .unwrap()
+                .status,
+            403
+        );
+        assert_eq!(
+            route(request("test", "POST", "/browse"), address, &context)
+                .unwrap()
+                .status,
+            403
+        );
+        state.lock().unwrap().file_browsing_enabled = true;
+        assert_eq!(
+            route(request("test", "POST", "/browse"), address, &context)
+                .unwrap()
+                .status,
+            200
+        );
+        assert_eq!(
+            route(request("test", "GET", "/download"), address, &context)
+                .unwrap()
+                .status,
+            404
+        );
+    }
 
     #[test]
     fn client_stream_is_restored_to_blocking_before_http_read() {

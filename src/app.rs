@@ -151,6 +151,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let last_display_check = Rc::new(Cell::new(Instant::now()));
     let escape_was_down = Cell::new(false);
 
+    let slide_clock = Instant::now();
+    let slide_timer = RefCell::new(crate::slide_timer::SlideTimer::default());
     let refresh_timer = slint::Timer::default();
     refresh_timer.start(
         slint::TimerMode::Repeated,
@@ -220,6 +222,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = settings.hide();
             }
             let presentation_state = presentation_for_updates.state();
+            slide_timer.borrow_mut().observe(slide_clock.elapsed(), &presentation_state);
+            let slide_timing = slide_timer.borrow().snapshot();
+            remote_for_updates.update_slide_timing(slide_timing.clone());
             if last_remote_update.get().elapsed() >= Duration::from_secs(1)
                 && let Some(settings) = settings_for_updates.borrow().as_ref()
             {
@@ -348,21 +353,24 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let preview = settings::preview_config(&config, settings_for_updates.borrow().as_ref());
             let dark = crate::theme::is_dark(&preview.ui_theme);
+            update_for_updates.refresh_theme(dark);
             if let Some(settings) = settings_for_updates.borrow().as_ref() {
                 crate::theme::settings(settings, dark);
             }
             if let Some(control) = presentation_window_for_updates.borrow().as_ref() {
                 crate::theme::remote(control, dark);
             }
+            let slide_text = crate::slide_timer::seconds_label(preview.timer.enable_per_slide_timer, slide_timing.current_seconds);
             let label = page_label(preview.appearance.show_slide_numbers, presentation_state.current_slide, presentation_state.total_slides);
-            if let Some(root) = weak_window.upgrade() { root.set_page_text(label.clone().into());
+            if let Some(root) = weak_window.upgrade() { root.set_page_text(label.clone().into()); root.set_slide_text(slide_text.clone().into());
                 root.set_page_reserve(page_reserve(presentation_state.total_slides).into()); }
             {
                 let displays = display_windows_for_updates.borrow();
-                for overlay in &displays.overlays { overlay.set_page_text(label.clone().into());
+                for overlay in &displays.overlays { overlay.set_page_text(label.clone().into()); overlay.set_slide_text(slide_text.clone().into());
                     overlay.set_page_reserve(page_reserve(presentation_state.total_slides).into()); }
                 if let Some(big) = &displays.big_screen {
                     big.set_page_text(label.into());
+                    big.set_slide_text(slide_text.into());
                     big.set_page_reserve(page_reserve(presentation_state.total_slides).into());
                 }
             }
@@ -2121,11 +2129,14 @@ fn configure_timer_window(
     window.set_assigned_display(monitor.device_name.clone().into());
     window.set_applied_offset_x(config.placement.offset_x_percent as f32);
     window.set_applied_offset_y(config.placement.offset_y_percent as f32);
-    let size = display::logical_size_physical(
-        config.appearance.width,
-        config.appearance.height,
-        monitor.dpi,
+    let (content_width, content_height) = timer_content_size(
+        config,
+        window.get_required_text_width(),
+        window.get_required_text_height(),
     );
+    window.set_content_width(content_width as f32);
+    window.set_content_height(content_height as f32);
+    let size = display::logical_size_physical(content_width, content_height, monitor.dpi);
     window
         .window()
         .set_position(display::timer_position(monitor, &config.placement, size));
@@ -2157,10 +2168,7 @@ fn configure_timer_window(
     let always_on_top = config.appearance.always_on_top;
     let opacity = config.appearance.background_opacity;
     let visible = config.placement.visible;
-    let logical_size = LogicalSize::new(
-        config.appearance.width as f32,
-        config.appearance.height as f32,
-    );
+    let logical_size = LogicalSize::new(content_width as f32, content_height as f32);
     slint::Timer::single_shot(Duration::from_millis(80), move || {
         if let Some(window) = weak.upgrade() {
             // Once the window has crossed a per-monitor-DPI boundary, Slint has
@@ -2237,9 +2245,21 @@ fn sync_timer_window_scale(window: &AppWindow, config: &AppConfig) {
         window.get_required_text_width(),
         window.get_required_text_height(),
     );
+    let before = window.window().size();
     window.set_content_width(width as f32);
     window.set_content_height(height as f32);
     window::resize_for_dpi(window.window(), width, height);
+    let after = window.window().size();
+    if before != after
+        && !window.get_dragging()
+        && let Some(monitor) = display::monitors()
+            .iter()
+            .find(|m| m.device_name == window.get_assigned_display().as_str())
+    {
+        window
+            .window()
+            .set_position(display::timer_position(monitor, &config.placement, after));
+    }
     // Region dimensions are physical and can change after WM_DPICHANGED.
     // Refreshing it with the current client rect keeps the configured corners
     // aligned while a timer is dragged between monitors.
@@ -2294,8 +2314,19 @@ fn update_big_screen(window: &BigScreenWindow, snapshot: &TimerSnapshot, config:
             .unwrap_or(window.get_foreground_color()),
     );
     window.set_page_italic(config.appearance.page_italic);
-    window.set_page_alignment(config.appearance.page_alignment as i32);
-    window.set_page_above(config.appearance.page_position == crate::config::PagePosition::Above);
+    window.set_page_alignment(2);
+    window.set_page_above(false);
+    window.set_slide_font_ratio(
+        slide_font_size(config) / config.appearance.font_size.clamp(8.0, 180.0),
+    );
+    window.set_slide_color(
+        config
+            .appearance
+            .slide_timer_text_color
+            .as_deref()
+            .map(|v| parse_color(v, window.get_foreground_color()))
+            .unwrap_or(window.get_foreground_color()),
+    );
     window.set_keep_on_top(config.appearance.always_on_top);
 }
 
@@ -2326,15 +2357,36 @@ fn page_reserve(total: i32) -> String {
 }
 
 fn page_label(enabled: bool, current: i32, total: i32) -> String {
-    if enabled && current > 0 && total > 0 {
+    if !enabled {
+        String::new()
+    } else if current > 0 && total > 0 {
         format!("{current}/{total}")
     } else {
-        String::new()
+        "-/-".into()
     }
+}
+fn slide_font_size(config: &AppConfig) -> f32 {
+    config
+        .appearance
+        .slide_timer_font_size
+        .unwrap_or(
+            config
+                .appearance
+                .page_font_size
+                .unwrap_or(config.appearance.font_size),
+        )
+        .clamp(8.0, 180.0)
 }
 
 pub(crate) fn apply_config(window: &AppWindow, config: &AppConfig) {
     let appearance = &config.appearance;
+    window.set_page_text(page_label(appearance.show_slide_numbers, 0, 0).into());
+    window.set_page_reserve(page_reserve(0).into());
+    window.set_page_font_size(appearance.page_font_size.unwrap_or(appearance.font_size));
+    window.set_slide_font_size(slide_font_size(config));
+    window.set_slide_text(
+        crate::slide_timer::seconds_label(config.timer.enable_per_slide_timer, 0).into(),
+    );
     window.set_content_width(appearance.width.max(1) as f32);
     window.set_content_height(appearance.height.max(1) as f32);
     window.window().set_size(LogicalSize::new(
@@ -2407,9 +2459,10 @@ fn update_window(
             .unwrap_or(config.appearance.font_size)
             .clamp(8.0, 180.0),
     );
+    window.set_slide_font_size(slide_font_size(config));
     window.set_page_italic(config.appearance.page_italic);
-    window.set_page_alignment(config.appearance.page_alignment as i32);
-    window.set_page_above(config.appearance.page_position == crate::config::PagePosition::Above);
+    window.set_page_alignment(2);
+    window.set_page_above(false);
     let color = if overtime {
         parse_color(
             &config.appearance.timeout_text_color,
@@ -2433,6 +2486,14 @@ fn update_window(
         )
     };
     window.set_foreground_color(color);
+    window.set_slide_color(
+        config
+            .appearance
+            .slide_timer_text_color
+            .as_deref()
+            .map(|v| parse_color(v, color))
+            .unwrap_or(color),
+    );
     window.set_page_color(
         config
             .appearance
@@ -2457,6 +2518,7 @@ fn connect_drag(window: &AppWindow, config: Rc<RefCell<AppConfig>>, path: PathBu
     window.on_begin_drag(move || {
         if let (Some(window), Some(cursor)) = (weak_for_start.upgrade(), window::cursor_position())
         {
+            window.set_dragging(true);
             *drag_start_for_start.borrow_mut() = Some((window.window().position(), cursor));
         }
     });
@@ -2485,6 +2547,7 @@ fn connect_drag(window: &AppWindow, config: Rc<RefCell<AppConfig>>, path: PathBu
             return;
         }
         if let Some(window) = weak_for_end.upgrade() {
+            window.set_dragging(false);
             let monitors = display::monitors();
             if !monitors.is_empty() {
                 display::capture_timer_position(
@@ -2815,9 +2878,9 @@ mod remote_parity_tests {
     #[test]
     fn page_visibility_and_content_size_preserve_baseline() {
         assert_eq!(page_label(true, 1, 23), "1/23");
-        for (enabled, current, total) in [(false, 1, 23), (true, 0, 23), (true, 1, 0)] {
-            assert!(page_label(enabled, current, total).is_empty());
-        }
+        assert!(page_label(false, 1, 23).is_empty());
+        assert_eq!(page_label(true, 0, 23), "-/-");
+        assert_eq!(page_label(true, 1, 0), "-/-");
         let config = AppConfig::default();
         let before = serde_json::to_value(&config).unwrap();
         assert_eq!(timer_content_size(&config, 85.0, 30.0), (85, 30));

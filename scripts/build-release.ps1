@@ -28,7 +28,7 @@ $setupOut = Join-Path $out "installer-output"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage,$setupOut | Out-Null
 Copy-Item $exe $stage
-Copy-Item (Join-Path $root "docs\v1131-default-config.json") (Join-Path $stage "FlyPPTTimer.config.json")
+Copy-Item (Join-Path $root "docs\v1140-default-config.json") (Join-Path $stage "FlyPPTTimer.config.json")
 Copy-Item (Join-Path $root "src\FlyPPTTimer\Assets\app.ico") $stage
 foreach ($file in @("README.md","README.zh-CN.md","LICENSE","CHANGELOG.md","CONTRIBUTING.md")) {
     Copy-Item (Join-Path $root $file) $stage
@@ -40,13 +40,16 @@ foreach ($dll in @("vcruntime140.dll","vcruntime140_1.dll","msvcp140.dll")) {
 }
 $docs = Join-Path $stage "docs"
 New-Item -ItemType Directory -Force $docs | Out-Null
-foreach ($file in @("USER_GUIDE.en.md","USER_GUIDE.zh-CN.md","BUILDING.md","DEVELOPMENT_HISTORY.md","RELEASE_NOTES_v1.13.1.md","development-commits.tsv")) {
+foreach ($file in @("USER_GUIDE.en.md","USER_GUIDE.zh-CN.md","BUILDING.md","DEVELOPMENT_HISTORY.md","RELEASE_NOTES_v$version.md","development-commits.tsv")) {
     Copy-Item (Join-Path $root "docs\$file") $docs
 }
 New-Item -ItemType Directory -Force (Join-Path $docs "v1") | Out-Null
 Copy-Item (Join-Path $root "docs\v1\*.md") (Join-Path $docs "v1")
 New-Item -ItemType Directory -Force (Join-Path $docs "media") | Out-Null
-Copy-Item (Join-Path $root "docs\media\v1.13.1") (Join-Path $docs "media") -Recurse
+foreach ($media in @("v1.13.1", "v$version")) {
+    $source = Join-Path $root "docs\media\$media"
+    if (Test-Path $source) { Copy-Item $source (Join-Path $docs "media") -Recurse -Force }
+}
 foreach ($file in @("donate-alipay.jpg","donate-wechat.png")) {
     Copy-Item (Join-Path $root "docs\media\$file") (Join-Path $docs "media")
 }

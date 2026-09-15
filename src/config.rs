@@ -94,7 +94,23 @@ impl Default for AppConfig {
 
 impl AppConfig {
     pub fn from_json(json: &str) -> Result<Self, ConfigError> {
-        Ok(serde_json::from_str(json)?)
+        let mut config: Self = serde_json::from_str(json)?;
+        let mut version = config.version.trim_start_matches('v').split('.');
+        let major = version
+            .next()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(0);
+        let minor = version
+            .next()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(0);
+        if (major, minor) < (1, 14) {
+            config.update.check_on_startup = true;
+        }
+        // The metadata row has a fixed layout from 1.14 onward. Keep legacy fields readable.
+        config.appearance.page_alignment = PageAlignment::Right;
+        config.appearance.page_position = PagePosition::Below;
+        Ok(config)
     }
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self, ConfigError> {
@@ -162,10 +178,17 @@ fn replace_file(temporary_path: &Path, destination: &Path) -> io::Result<()> {
     fs::rename(temporary_path, destination)
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
 pub struct UpdateSettings {
     pub check_on_startup: bool,
+}
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self {
+            check_on_startup: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -320,6 +343,8 @@ impl Default for PromptSettings {
 pub struct AppearanceSettings {
     pub auto_size: bool,
     pub page_font_size: Option<f32>,
+    pub slide_timer_font_size: Option<f32>,
+    pub slide_timer_text_color: Option<String>,
     pub page_text_color: Option<String>,
     pub page_italic: bool,
     pub page_alignment: PageAlignment,
@@ -352,6 +377,8 @@ impl Default for AppearanceSettings {
         Self {
             auto_size: true,
             page_font_size: Some(12.0),
+            slide_timer_font_size: None,
+            slide_timer_text_color: None,
             page_text_color: None,
             page_italic: false,
             page_alignment: PageAlignment::Right,
@@ -476,6 +503,7 @@ pub enum CloseButtonBehavior {
 #[serde(default, rename_all = "PascalCase")]
 pub struct RemoteControlSettings {
     pub list_sort: String,
+    pub allow_file_browsing: bool,
     pub list_sort_descending: bool,
     pub enabled: bool,
     pub use_random_port: bool,
@@ -488,6 +516,7 @@ impl Default for RemoteControlSettings {
     fn default() -> Self {
         Self {
             list_sort: "manual".into(),
+            allow_file_browsing: false,
             list_sort_descending: false,
             enabled: true,
             use_random_port: false,
@@ -551,7 +580,7 @@ impl Default for WindowPlacement {
             target_screen_device_name: String::new(),
             anchor: OverlayAnchor::TopCenter,
             offset_x_percent: 0.0,
-            offset_y_percent: 0.5,
+            offset_y_percent: 0.0,
             x: 80,
             y: 80,
             screen_device_name: String::new(),
@@ -643,6 +672,28 @@ mod tests {
     const V0302_DEFAULT_CONFIG: &str = include_str!("../docs/default-config.json");
 
     #[test]
+    fn update_default_migrates_once_and_new_opt_out_is_preserved() {
+        let c = AppConfig::default();
+        assert!(c.update.check_on_startup);
+        assert_eq!(
+            (c.placement.offset_x_percent, c.placement.offset_y_percent),
+            (0.0, 0.0)
+        );
+        assert!(
+            AppConfig::from_json(r#"{"Version":"1.13.1","Update":{"CheckOnStartup":false}}"#)
+                .unwrap()
+                .update
+                .check_on_startup
+        );
+        assert!(
+            !AppConfig::from_json(r#"{"Version":"1.14.0","Update":{"CheckOnStartup":false}}"#)
+                .unwrap()
+                .update
+                .check_on_startup
+        );
+    }
+
+    #[test]
     fn rc34_portable_defaults_match_new_install_preferences() {
         let c = AppConfig::from_json(include_str!("../docs/rc34-default-config.json")).unwrap();
         assert_eq!(c.appearance.page_font_size, Some(12.0));
@@ -691,12 +742,16 @@ mod tests {
             "PageItalic",
             "PageAlignment",
             "PagePosition",
+            "SlideTimerFontSize",
+            "SlideTimerTextColor",
         ] {
             actual["Appearance"].as_object_mut().unwrap().remove(key);
         }
-        for key in ["ListSort", "ListSortDescending"] {
+        for key in ["ListSort", "ListSortDescending", "AllowFileBrowsing"] {
             actual["RemoteControl"].as_object_mut().unwrap().remove(key);
         }
+        expected["Placement"]["OffsetYPercent"] = serde_json::json!(0.0);
+        expected["Update"]["CheckOnStartup"] = serde_json::json!(true);
         normalize_integral_numbers(&mut expected);
         normalize_integral_numbers(&mut actual);
 
@@ -714,8 +769,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(old.appearance.page_font_size, None);
-        assert_eq!(old.appearance.page_alignment, PageAlignment::Left);
-        assert_eq!(old.appearance.page_position, PagePosition::Above);
+        assert_eq!(old.appearance.page_alignment, PageAlignment::Right);
+        assert_eq!(old.appearance.page_position, PagePosition::Below);
         assert_eq!(shape_radius("RoundedSmall"), 3.0);
         assert_eq!(shape_radius("圆角矩形（小）"), 7.0);
     }

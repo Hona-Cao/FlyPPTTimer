@@ -225,7 +225,7 @@ fn anchor_origin(monitor: &DisplayMonitor, anchor: OverlayAnchor) -> (f64, f64) 
     let baseline_height = 50.0 * scale;
     let x = match anchor {
         OverlayAnchor::TopCenter | OverlayAnchor::Center | OverlayAnchor::BottomCenter => {
-            area.x as f64 + area.width as f64 / 2.0
+            monitor.bounds.x as f64 + monitor.bounds.width as f64 / 2.0
         }
         OverlayAnchor::TopRight | OverlayAnchor::MiddleRight | OverlayAnchor::BottomRight => {
             (area.x + area.width) as f64 - baseline_width / 2.0
@@ -272,7 +272,7 @@ mod tests {
     fn top_center_matches_v0302_baseline() {
         let placement = WindowPlacement::default();
         let position = timer_position(&monitor(96), &placement, PhysicalSize::new(100, 35));
-        assert_eq!(position, PhysicalPosition::new(910, 13));
+        assert_eq!(position, PhysicalPosition::new(910, 8));
     }
 
     #[test]
@@ -285,6 +285,23 @@ mod tests {
         };
         let position = timer_position(&monitor(144), &placement, PhysicalSize::new(150, 53));
         assert_eq!(position, PhysicalPosition::new(1548, 872));
+    }
+
+    #[test]
+    fn centers_each_display_with_negative_origin_dpi_and_a_side_taskbar() {
+        for dpi in [96, 144, 192] {
+            let mut screen = monitor(dpi);
+            screen.bounds.x = -2560;
+            screen.bounds.width = 2560;
+            screen.work_area.x = -2480;
+            screen.work_area.width = 2480;
+            for width in [80, 137, 320] {
+                let size = logical_size_physical(width, 50, dpi);
+                let p = timer_position(&screen, &WindowPlacement::default(), size);
+                let center = p.x as f64 + size.width as f64 / 2.0;
+                assert!((center - (-1280.0)).abs() <= 0.5);
+            }
+        }
     }
 
     #[test]

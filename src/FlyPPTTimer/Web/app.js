@@ -1,6 +1,28 @@
 const effectiveLanguage=navigator.language.toLowerCase().startsWith('zh')?'zh-CN':'en';
 document.documentElement.lang=effectiveLanguage;
 const webEnglish={
+"浏览电脑 PPT 文件":"Browse computer PPT files",
+"需在电脑设置中允许手机浏览":"Enable phone file browsing in computer Settings first",
+"电脑 PPT 文件":"Computer PPT files",
+"此电脑":"This computer",
+"上一级":"Up one level",
+"关闭":"Close",
+"筛选当前文件夹":"Filter this folder",
+"只显示文件夹和 PPT，加入列表不会自动打开文件":"Only folders and PPT files. Adding does not open the file.",
+"本页用时":"Time on this slide",
+"本轮逐页用时":"Slide times for this show",
+"返回同一页会累计；新一轮放映重新记录":"Revisited slides accumulate time; a new show starts a new record",
+"累计秒数":"Total seconds",
+"开始放映后记录逐页用时":"Slide times are recorded during a slide show",
+"正在读取文件夹...":"Loading folder...",
+"没有匹配的文件夹或 PPT":"No matching folders or PPT files",
+"已加入":"Added",
+"已加入受控列表":"Added to the controlled list",
+"加入中...":"Adding...",
+"未能加入，请检查连接或电脑权限":"Could not add the file. Check the connection or computer permissions",
+"用户主文件夹":"Home",
+"手机浏览权限已关闭":"Phone file browsing has been disabled",
+
   "界面主题":"Interface theme", "跟随电脑":"Follow computer", "浅色":"Light", "深色":"Dark",
   "已保存":"Saved", "有未保存的时长修改":"Unsaved duration changes",
   "排序方式":"Sort by",
@@ -109,6 +131,8 @@ new MutationObserver(records=>records.forEach(record=>{
   if(record.type==='characterData'){const next=wt(record.target.nodeValue);if(next!==record.target.nodeValue)record.target.nodeValue=next}
   record.addedNodes.forEach(node=>{if(node.nodeType===Node.ELEMENT_NODE)translateWeb(node);else if(node.nodeType===Node.TEXT_NODE){const next=wt(node.nodeValue);if(next!==node.nodeValue)node.nodeValue=next}});
 })).observe(document.body,{subtree:true,childList:true,characterData:true});
+const selectWidgets=[];
+let openSelect=null;
 const token=window.FLYPPT_TOKEN||'';
 const $=id=>document.getElementById(id);
 const commandButtons=[...document.querySelectorAll('[data-command]')];
@@ -183,7 +207,7 @@ function paint(s){
   $('pptShowState').textContent=p.isSlideShowRunning?'正在放映':'未放映';$('pptSlide').textContent=`${p.currentSlide||0} / ${p.totalSlides||0}`;$('pptScreen').textContent=p.screenMode||'正常';
   $('blackScreenButton').classList.toggle('selected',p.screenMode==='黑屏');$('whiteScreenButton').classList.toggle('selected',p.screenMode==='白屏');
   document.querySelector('.presentation-card').classList.toggle('is-showing',!!p.isSlideShowRunning);
-  renderListTools(p);renderPresentations(p.presentations||[]);setAvailability(t,p);updatePresentationHint(p);requestAnimationFrame(syncViewportHeight);if(s.message)notify(s.message);
+  renderListTools(p);renderPresentations(p.presentations||[]);renderSlideTiming(s.slideTiming);setAvailability(t,p);updatePresentationHint(p);requestAnimationFrame(syncViewportHeight);if(s.message)notify(s.message);
 }
 let showHiddenPresentations=false,listGesture=null,listCommit=false,lastMovedId=null,suppressListClickUntil=0;
 const listHost=$('presentationList');
@@ -377,7 +401,7 @@ document.addEventListener('click',event=>{if(performance.now()<suppressListClick
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&listGesture)finishListGesture(true)});
 window.addEventListener('blur',()=>finishListGesture(true));
 document.addEventListener('visibilitychange',()=>{if(document.hidden)finishListGesture(true)});
-for(const name of ['copy','cut','selectstart','contextmenu'])document.addEventListener(name,event=>event.preventDefault());
+for(const name of ['copy','cut','selectstart','contextmenu'])document.addEventListener(name,event=>{if(!event.target.closest('input,textarea'))event.preventDefault()});
 
 function setAvailability(t,p){
   const controlled=!!p.currentControllable,show=!!p.isSlideShowRunning&&controlled,has=controlled||!!selectedPresentationId,state=t.state||'',running=!!t.running,paused=state.includes('暂停'),stopped=!running&&!paused,operationBusy=!!p.isOperationBusy;
@@ -400,10 +424,17 @@ function setAvailability(t,p){
   $('applyDuration').disabled=busy||!connected;
   timerModeButtons.forEach(button=>button.disabled=busy||!connected);
   refreshPresentationButtons();
+  $('browseComputer').disabled=!connected||busy;
+  $('browsePermissionHint').hidden=!!lastState?.fileBrowsingEnabled;
+  if(!$('fileBrowser').hidden&&!lastState?.fileBrowsingEnabled){
+    $('browseEntries').replaceChildren();
+    $('browseStatus').textContent=wt('手机浏览权限已关闭');
+  }
+  syncSelects();
 }
 function updatePresentationHint(p){
   const updated=p.updatedAt?new Date(p.updatedAt).getTime():0,stale=updated>0&&Date.now()-updated>3000;
-  $('presentationHint').textContent=p.error||(p.hasPresentation&&!p.currentControllable?"当前文稿未受控，请先加入列表。":!p.powerPointInstalled?'本机未安装 Microsoft PowerPoint':!p.hasPresentation?'请先打开或从上方列表选择演示文稿':stale?'PowerPoint 状态可能已过期，计时控制仍可使用':'');
+  $('presentationHint').textContent=p.error||(p.hasPresentation&&!p.currentControllable?"当前文稿未受控，请先加入列表。":!p.powerPointInstalled?'本机未安装 Microsoft PowerPoint':!p.hasPresentation?wt('请先打开或从上方列表选择演示文稿').replace('上方','下方').replace('above','below'):stale?'PowerPoint 状态可能已过期，计时控制仍可使用':'');
 }
 function schedulePoll(delay=1000){clearTimeout(pollTimer);pollTimer=setTimeout(poll,delay)}
 async function poll(){
@@ -467,7 +498,7 @@ function renderPage(index,animate=true){
 }
 function activatePage(pageId){renderPage(Math.max(0,pages.indexOf(pageId)),true)}
 document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>activatePage(tab.dataset.page)));
-pagesViewport.addEventListener('touchstart',event=>{if(event.touches.length!==1||event.target.closest('.confirm-panel,input,select,textarea'))return;const touch=event.touches[0];swipeStart={x:touch.clientX,y:touch.clientY,time:performance.now(),baseX:readTrackX(),dragging:false,lastX:touch.clientX,lastTime:performance.now()}},{passive:true});
+pagesViewport.addEventListener('touchstart',event=>{if(event.touches.length!==1||event.target.closest('.confirm-panel,.select-widget,input,select,textarea'))return;const touch=event.touches[0];swipeStart={x:touch.clientX,y:touch.clientY,time:performance.now(),baseX:readTrackX(),dragging:false,lastX:touch.clientX,lastTime:performance.now()}},{passive:true});
 pagesViewport.addEventListener('touchmove',event=>{if(!swipeStart||!event.touches.length)return;const touch=event.touches[0],dx=touch.clientX-swipeStart.x,dy=touch.clientY-swipeStart.y;if(!swipeStart.dragging){const distance=Math.hypot(dx,dy);if(distance<SWIPE_DIRECTION_DISTANCE)return;const angle=Math.atan2(Math.abs(dy),Math.abs(dx))*180/Math.PI;if(angle>SWIPE_MAX_ANGLE_DEGREES){swipeStart=null;return}swipeStart.baseX=freezeTrack();swipeStart.dragging=true;suppressSwipeClick=true;clearTimeout(suppressSwipeClickTimer)}event.preventDefault();const width=Math.max(1,pagesViewport.clientWidth),minX=-(pages.length-1)*width;let nextX=swipeStart.baseX+dx;if(nextX>0)nextX*=.24;else if(nextX<minX)nextX=minX+(nextX-minX)*.24;pagesTrack.style.transition='none';pagesTrack.style.transform=`translate3d(${nextX}px,0,0)`;swipeStart.lastX=touch.clientX;swipeStart.lastTime=performance.now()},{passive:false});
 pagesViewport.addEventListener('touchend',event=>{if(!swipeStart)return;const touch=event.changedTouches[0],now=performance.now(),x=touch?touch.clientX:swipeStart.lastX,dx=x-swipeStart.x,elapsed=Math.max(1,now-swipeStart.time),dragging=swipeStart.dragging,currentX=readTrackX(),width=Math.max(1,pagesViewport.clientWidth);swipeStart=null;if(!dragging){renderPage(pageIndex,true);return}const velocity=dx/elapsed,commit=Math.abs(dx)>=18||Math.abs(velocity)>=.12,position=-currentX/width;let target=Math.round(position);if(commit)target=dx<0?Math.floor(position)+1:Math.ceil(position)-1;renderPage(target,true);suppressSwipeClickTimer=setTimeout(()=>suppressSwipeClick=false,420)},{passive:true});
 pagesViewport.addEventListener('touchcancel',()=>{swipeStart=null;renderPage(pageIndex,true)},{passive:true});
@@ -498,6 +529,7 @@ $('gotoSlide').addEventListener('click',()=>{const input=$('slideNumber'),value=
 window.addEventListener('online',()=>{if(!busy)schedulePoll(0)});
 window.addEventListener('focus',()=>{if(!busy)schedulePoll(0)});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!busy)schedulePoll(0)});
+initializeSelects();
 poll();
 
 $('confirmPanel').addEventListener('keydown',event=>{
@@ -505,5 +537,164 @@ $('confirmPanel').addEventListener('keydown',event=>{
   if(event.key==='Tab'){
     event.preventDefault();
     (document.activeElement===$('confirmAccept')?$('confirmCancel'):$('confirmAccept')).focus();
+  }
+});
+
+
+// One themed dropdown for theme, ordering and available files. Native <select>
+// remains the source of values/change events; the popup escapes clipped cards.
+function initializeSelects(){
+  document.querySelectorAll('select').forEach(select=>{
+    const wrapper=document.createElement('div');wrapper.className='select-widget';
+    select.before(wrapper);wrapper.append(select);select.classList.add('select-source');select.tabIndex=-1;select.setAttribute('aria-hidden','true');
+    const trigger=document.createElement('button');trigger.type='button';trigger.className='select-trigger';
+    trigger.setAttribute('role','combobox');trigger.setAttribute('aria-haspopup','listbox');trigger.setAttribute('aria-expanded','false');
+    trigger.setAttribute('aria-controls',select.id+'-options');
+    wrapper.append(trigger);const widget={select,trigger,wrapper};selectWidgets.push(widget);
+    trigger.addEventListener('click',()=>openSelect?.widget===widget?closeSelect(true):showSelect(widget));
+    trigger.addEventListener('keydown',event=>{if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){event.preventDefault();showSelect(widget,event.key)}});
+    select.addEventListener('change',syncSelects);
+  });
+  syncSelects();
+}
+function syncSelects(){
+  selectWidgets.forEach(widget=>{
+    const {select,trigger}=widget;trigger.disabled=select.disabled;
+    const label=wt(select.selectedOptions[0]?.textContent||'');
+    if(trigger.textContent!==label)trigger.textContent=label;
+    const name=select.getAttribute('aria-label')||document.querySelector(`label[for="${select.id}"]`)?.textContent||'';
+    trigger.setAttribute('aria-label',wt(name)+(name?': ':'')+label);
+    const signature=[...select.options].map(x=>x.value+'|'+x.disabled+'|'+x.textContent).join('\n');
+    if(openSelect?.widget===widget&&(select.disabled||openSelect.signature!==signature))closeSelect(false);
+  });
+}
+function closeSelect(restoreFocus=false){
+  if(!openSelect)return;
+  const {widget,popup}=openSelect;openSelect=null;popup.remove();widget.trigger.setAttribute('aria-expanded','false');
+  if(restoreFocus&&!widget.trigger.disabled)widget.trigger.focus();
+}
+function showSelect(widget,key){
+  closeSelect(false);const {select,trigger}=widget;if(select.disabled)return;
+  const popup=document.createElement('div');popup.className='select-popup';popup.id=select.id+'-options';popup.setAttribute('role','listbox');
+  popup.setAttribute('aria-label',trigger.getAttribute('aria-label'));
+  const buttons=[];
+  for(const option of select.options){
+    const button=document.createElement('button');button.type='button';button.className='select-option';button.setAttribute('role','option');
+    button.setAttribute('aria-selected',String(option.selected));button.disabled=option.disabled;button.textContent=wt(option.textContent);
+    button.addEventListener('click',()=>{select.value=option.value;closeSelect(true);select.dispatchEvent(new Event('change',{bubbles:true}));syncSelects()});
+    popup.append(button);if(!button.disabled)buttons.push(button);
+  }
+  document.body.append(popup);
+  openSelect={widget,popup,signature:[...select.options].map(x=>x.value+'|'+x.disabled+'|'+x.textContent).join('\n')};
+  trigger.setAttribute('aria-expanded','true');
+  const rect=trigger.getBoundingClientRect(),vw=document.documentElement.clientWidth,vh=window.innerHeight;
+  popup.style.width=Math.min(vw-24,Math.max(rect.width,200))+'px';
+  popup.style.left=Math.max(12,Math.min(rect.left,vw-popup.offsetWidth-12))+'px';
+  const below=vh-rect.bottom-12,above=rect.top-12,down=below>=Math.min(popup.scrollHeight,220)||below>=above;
+  popup.style.maxHeight=Math.max(100,Math.min(320,down?below:above))+'px';
+  if(down)popup.style.top=rect.bottom+6+'px';else popup.style.bottom=vh-rect.top+6+'px';
+  const active=buttons.find(x=>x.getAttribute('aria-selected')==='true')||buttons[0];
+  (key==='End'?buttons.at(-1):key==='Home'?buttons[0]:active)?.focus({preventScroll:true});
+  document.activeElement?.scrollIntoView({block:'nearest'});
+  requestAnimationFrame(()=>popup.classList.add('visible'));
+  popup.addEventListener('keydown',event=>{
+    if(event.key==='Escape'){event.preventDefault();closeSelect(true);return}
+    if(event.key==='Tab'){closeSelect(true);return}
+    let index=buttons.indexOf(document.activeElement);
+    if(event.key==='ArrowDown')index=Math.min(buttons.length-1,index+1);
+    else if(event.key==='ArrowUp')index=Math.max(0,index-1);
+    else if(event.key==='Home')index=0;
+    else if(event.key==='End')index=buttons.length-1;
+    else return;
+    event.preventDefault();buttons[index]?.focus({preventScroll:true});buttons[index]?.scrollIntoView({block:'nearest'});
+  });
+}
+document.addEventListener('pointerdown',event=>{if(openSelect&&!openSelect.popup.contains(event.target)&&!openSelect.widget.wrapper.contains(event.target))closeSelect(false)});
+window.addEventListener('resize',()=>closeSelect(false));
+document.addEventListener('scroll',event=>{if(openSelect&&!openSelect.popup.contains(event.target))closeSelect(false)},true);
+
+function renderSlideTiming(timing){
+  const t=timing||{};text($('slideElapsed'),String(t.currentSeconds||0).padStart(2,'0'));
+  text($('slideHistoryName'),t.presentationName||'');
+  const rows=t.pages||[],host=$('slideHistoryRows'),signature=JSON.stringify(rows);
+  $('slideHistoryEmpty').hidden=rows.length>0;
+  if(host.dataset.signature===signature)return;
+  host.dataset.signature=signature;host.replaceChildren();
+  for(const page of rows){
+    const row=document.createElement('tr');
+    for(const value of [page.slide,page.seconds]){const cell=document.createElement('td');cell.textContent=String(value);row.append(cell)}
+    host.append(row);
+  }
+}
+$('slideHistory').addEventListener('toggle',()=>requestAnimationFrame(syncViewportHeight));
+
+let browseGeneration=0,browseListing=null,browseFocus=null,browseAdding=false;
+function browseError(error){
+  if(effectiveLanguage==='en')return error.message;
+  return error.message.replace('Only local computer drives are available.','仅允许浏览电脑本地磁盘。')
+    .replace('Cannot access folder or file:','无法访问文件夹或文件：').replace('Cannot read this folder:','无法读取此文件夹：')
+    .replace('Computer file browsing is disabled in desktop Remote settings.','手机浏览权限已关闭');
+}
+async function loadComputerFolder(path=''){
+  if(!$('fileBrowser').hidden&&lastState?.fileBrowsingEnabled){
+    const generation=++browseGeneration;$('browseStatus').textContent=wt('正在读取文件夹...');
+    $('browseEntries').replaceChildren();$('browseFilter').value='';
+    try{
+      const listing=await api('/browse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+      if(generation!==browseGeneration||$('fileBrowser').hidden||!lastState?.fileBrowsingEnabled)return;
+      browseListing=listing;$('browsePath').textContent=listing.path||wt('此电脑');$('browseUp').disabled=!listing.path;
+      $('browseStatus').textContent='';renderComputerFiles();
+    }catch(error){if(generation===browseGeneration)$('browseStatus').textContent=browseError(error)}
+  }
+}
+function fileIdentity(value){return String(value||'').replaceAll('\\','/').toLowerCase()}
+function renderComputerFiles(){
+  const host=$('browseEntries');host.replaceChildren();if(!lastState?.fileBrowsingEnabled)return;
+  const query=$('browseFilter').value.trim().toLocaleLowerCase(),entries=(browseListing?.entries||[]).filter(x=>x.name.toLocaleLowerCase().includes(query));
+  const controlled=new Set((lastState?.presentationState?.presentations||[]).map(x=>fileIdentity(x.id)));
+  for(const entry of entries){
+    const row=document.createElement('div');row.className='browser-entry';
+    const name=entry.name==='Home'?wt('用户主文件夹'):entry.name;
+    if(entry.isDirectory){
+      const button=document.createElement('button');button.type='button';button.className='folder-button';button.textContent=name;button.title=entry.path;
+      button.addEventListener('click',()=>loadComputerFolder(entry.path));row.append(button);
+    }else{
+      const label=document.createElement('span');label.textContent=name;label.title=entry.path;
+      const add=document.createElement('button');add.type='button';const added=controlled.has(fileIdentity(entry.path));
+      add.textContent=wt(added?'已加入':'加入列表');add.disabled=added||browseAdding;
+      add.addEventListener('click',async()=>{
+        if(browseAdding)return;browseAdding=true;add.disabled=true;add.textContent=wt('加入中...');
+        const ok=await command('rules.addFile',{presentationId:entry.path});browseAdding=false;
+        $('browseStatus').textContent=wt(ok?'已加入受控列表':'未能加入，请检查连接或电脑权限');renderComputerFiles();
+      });row.append(label,add);
+    }
+    host.append(row);
+  }
+  if(!entries.length){const empty=document.createElement('p');empty.className='hint';empty.textContent=wt('没有匹配的文件夹或 PPT');host.append(empty)}
+}
+function closeComputerBrowser(){
+  ++browseGeneration;$('fileBrowser').hidden=true;document.body.classList.remove('modal-open');
+  for(const child of $('fileBrowser').parentElement.children)child.inert=false;
+  if(browseFocus?.isConnected)browseFocus.focus();
+}
+$('browseComputer').addEventListener('click',()=>{
+  closeSelect(false);browseFocus=document.activeElement;const modal=$('fileBrowser');modal.hidden=false;
+  for(const child of modal.parentElement.children)child.inert=child!==modal;
+  document.body.classList.add('modal-open');$('browseClose').focus();
+  if(!lastState?.fileBrowsingEnabled){$('browseEntries').replaceChildren();$('browseStatus').textContent=wt('需在电脑设置中允许手机浏览');return}
+  loadComputerFolder(browseListing?.path||'');
+});
+$('browseRoots').addEventListener('click',()=>loadComputerFolder(''));
+$('browseUp').addEventListener('click',()=>loadComputerFolder(browseListing?.parent||''));
+$('browseClose').addEventListener('click',closeComputerBrowser);
+$('browseFilter').addEventListener('input',renderComputerFiles);
+$('fileBrowser').addEventListener('click',event=>{if(event.target===$('fileBrowser'))closeComputerBrowser()});
+$('fileBrowser').addEventListener('keydown',event=>{
+  if(event.key==='Escape'){event.preventDefault();closeComputerBrowser()}
+  if(event.key==='Tab'){
+    const focusable=[...$('fileBrowser').querySelectorAll('button:not(:disabled),input:not(:disabled)')].filter(x=>x.offsetParent!==null);
+    const first=focusable[0],last=focusable.at(-1);
+    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
   }
 });

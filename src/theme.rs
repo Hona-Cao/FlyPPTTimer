@@ -57,3 +57,10 @@ pub fn remote(window: &crate::app::PresentationWindow, dark: bool) {
         window.set_theme_initialized(titlebar(window.window(), dark));
     }
 }
+
+pub fn update(window: &crate::app::UpdateWindow, dark: bool) {
+    if window.get_dark_theme() != dark || !window.get_theme_initialized() {
+        window.set_dark_theme(dark);
+        window.set_theme_initialized(titlebar(window.window(), dark));
+    }
+}

@@ -145,6 +145,30 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
             &timer_window.window().take_snapshot()?,
         )?;
     }
+    for (name, page, seconds) in [
+        ("timer-v1140-idle", "-/-", "00"),
+        ("timer-v1140-slide", "7/24", "123"),
+    ] {
+        timer_window.set_page_text(page.into());
+        timer_window.set_page_reserve("24/24".into());
+        timer_window.set_slide_text(seconds.into());
+        timer_window.set_page_font_size(12.0);
+        timer_window.set_slide_font_size(12.0);
+        timer_window.set_page_italic(false);
+        timer_window.set_page_color(timer_window.get_foreground_color());
+        timer_window.set_slide_color(timer_window.get_foreground_color());
+        let width = timer_window.get_required_text_width().ceil();
+        let height = timer_window.get_required_text_height().ceil();
+        timer_window.set_content_width(width);
+        timer_window.set_content_height(height);
+        HEADLESS_WINDOW
+            .with(|window| window.set_size(PhysicalSize::new(width as u32, height as u32)));
+        slint::platform::update_timers_and_animations();
+        write_png(
+            output.join(format!("{name}.png")),
+            &timer_window.window().take_snapshot()?,
+        )?;
+    }
     timer_window.hide()?;
     drop(timer_window);
 
@@ -191,6 +215,31 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
     write_png(output.join("remote-presentation.png"), &pixels)?;
     control.hide()?;
     drop(control);
+    HEADLESS_WINDOW.with(|window| window.set_size(PhysicalSize::new(720, 580)));
+    let update = crate::app::UpdateWindow::new()?;
+    let config = AppConfig {
+        language: "en".into(),
+        ui_theme: std::env::var("FLYPPT_CAPTURE_THEME").unwrap_or_else(|_| "light".into()),
+        ..Default::default()
+    };
+    let release = crate::updater::ReleaseInfo {
+        version: "1.14.0".into(),
+        body: include_str!("../docs/RELEASE_NOTES_v1.14.0.md").into(),
+        release_url: String::new(),
+        assets: Vec::new(),
+    };
+    crate::updater::configure_update_window(&update, &config, &release);
+    assert!(update.get_notes().len() > 600);
+    update.show()?;
+    for (name, offset) in [("update-notes-top", 0.0), ("update-notes-end", -10000.0)] {
+        update.set_notes_scroll_y(offset);
+        slint::platform::update_timers_and_animations();
+        write_png(
+            output.join(format!("{name}.png")),
+            &update.window().take_snapshot()?,
+        )?;
+    }
+    update.hide()?;
     Ok(())
 }
 

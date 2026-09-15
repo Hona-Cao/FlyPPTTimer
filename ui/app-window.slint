@@ -37,99 +37,67 @@ export struct PresentationItem {
     selected: bool,
 }
 
-// Both rows form one measured block; outer top/bottom space is identical.
+// One fixed metadata row: slide stopwatch on the left, page numbers on the right.
 component TimerReadout inherits Rectangle {
-    // Content measurements are outputs, not constraints fed into the host window.
-    // Keep every inferred layout constraint independent of fullscreen font fit.
-    min-width: 0px;
-    min-height: 0px;
-    max-width: 65535px;
-    max-height: 65535px;
-    horizontal-stretch: 1;
-    vertical-stretch: 1;
-    preferred-width: 1px;
-    preferred-height: 1px;
+    min-width: 0px; min-height: 0px; max-width: 65535px; max-height: 65535px;
+    horizontal-stretch: 1; vertical-stretch: 1; preferred-width: 1px; preferred-height: 1px;
     in property <string> display-text;
     in property <string> page-text;
     in property <string> page-reserve;
+    in property <string> slide-text;
     in property <length> timer-font-size: 18px;
     in property <length> page-font-size: root.timer-font-size;
+    in property <length> slide-font-size: root.page-font-size;
     in property <string> font-family: "Microsoft YaHei UI";
     in property <int> font-weight: 700;
     in property <bool> font-italic: false;
     in property <bool> page-italic: false;
     in property <color> foreground-color;
     in property <color> page-color: root.foreground-color;
-    in property <int> page-alignment: 1;
+    in property <color> slide-color: root.foreground-color;
+    // Legacy properties remain readable by earlier capture clients, but no longer change layout.
+    in property <int> page-alignment: 2;
     in property <bool> page-above: false;
     in property <bool> text-visible: true;
-    private property <length> row-gap: root.page-text == "" ? 0px : 2px;
-    private property <length> page-height: root.page-text == "" ? 0px : page-measure.preferred-height;
-    private property <length> block-height: time-measure.preferred-height + root.page-height + root.row-gap;
-    private property <length> block-width: max(time-measure.preferred-width, max(page-measure.preferred-width, page-actual.preferred-width));
-    private property <length> available-width: max(1px, root.width - 16px);
-    private property <length> draw-width: min(root.block-width, root.available-width);
+    private property <bool> has-meta: root.page-text != "" || root.slide-text != "";
+    private property <length> row-gap: root.has-meta ? 2px : 0px;
+    private property <length> page-width: root.page-text == "" ? 0px : max(page-measure.preferred-width, page-actual.preferred-width);
+    private property <length> slide-width: root.slide-text == "" ? 0px : slide-measure.preferred-width;
+    private property <length> meta-gap: root.page-text != "" && root.slide-text != "" ? 8px : 0px;
+    private property <length> meta-height: max(root.page-text == "" ? 0px : page-actual.preferred-height, root.slide-text == "" ? 0px : slide-measure.preferred-height);
+    private property <length> block-height: time-measure.preferred-height + root.meta-height + root.row-gap;
+    private property <length> block-width: max(time-measure.preferred-width, root.page-width + root.slide-width + root.meta-gap);
+    private property <length> draw-width: min(root.block-width, max(1px, root.width - 16px));
+    private property <length> block-left: (root.width - root.draw-width) / 2;
     private property <length> block-top: (root.height - root.block-height) / 2;
     out property <length> required-width: root.block-width + 16px;
     out property <length> required-height: root.block-height + 12px;
     out property <length> top-space: root.block-top;
     out property <length> bottom-space: root.height - root.block-top - root.block-height;
     clip: true;
-    time-measure := Text {
-        text: root.display-text;
-        font-family: root.font-family;
-        font-size: root.timer-font-size;
-        font-weight: root.font-weight;
-        font-italic: root.font-italic;
-        visible: false;
-    }
-    page-measure := Text {
-        text: root.page-text == "" ? "" : root.page-reserve;
-        font-family: root.font-family;
-        font-size: root.page-font-size;
-        font-weight: root.font-weight;
-        font-italic: root.page-italic;
-        visible: false;
-    }
-    page-actual := Text {
-        text: root.page-text;
-        font-family: root.font-family;
-        font-size: root.page-font-size;
-        font-weight: root.font-weight;
-        font-italic: root.page-italic;
-        visible: false;
+    time-measure := Text { text: root.display-text; font-family: root.font-family; font-size: root.timer-font-size; font-weight: root.font-weight; font-italic: root.font-italic; visible: false; }
+    page-measure := Text { text: root.page-text == "" ? "" : root.page-reserve; font-family: root.font-family; font-size: root.page-font-size; font-weight: root.font-weight; font-italic: root.page-italic; visible: false; }
+    page-actual := Text { text: root.page-text; font-family: root.font-family; font-size: root.page-font-size; font-weight: root.font-weight; font-italic: root.page-italic; visible: false; }
+    slide-measure := Text { text: root.slide-text; font-family: root.font-family; font-size: root.slide-font-size; font-weight: root.font-weight; visible: false; }
+    Text {
+        x: root.block-left; y: root.block-top; width: root.draw-width; height: time-measure.preferred-height;
+        text: root.display-text; font-family: root.font-family; font-size: root.timer-font-size;
+        font-weight: root.font-weight; font-italic: root.font-italic; color: root.foreground-color;
+        horizontal-alignment: center; vertical-alignment: center; visible: root.text-visible;
     }
     Text {
-        x: (root.width - root.draw-width) / 2;
-        y: root.block-top + (root.page-above ? root.page-height + root.row-gap : 0px);
-        width: root.draw-width;
-        height: time-measure.preferred-height;
-        text: root.display-text;
-        font-family: root.font-family;
-        font-size: root.timer-font-size;
-        font-weight: root.font-weight;
-        font-italic: root.font-italic;
-        color: root.foreground-color;
-        horizontal-alignment: root.page-alignment == 0 ? left : root.page-alignment == 2 ? right : center;
-        vertical-alignment: center;
-        overflow: clip;
-        visible: root.text-visible;
+        x: root.block-left; y: root.block-top + time-measure.preferred-height + root.row-gap;
+        width: root.slide-width; height: root.meta-height;
+        text: root.slide-text; font-family: root.font-family; font-size: root.slide-font-size;
+        font-weight: root.font-weight; color: root.slide-color; horizontal-alignment: left; vertical-alignment: center;
+        visible: root.slide-text != "" && root.text-visible;
     }
     Text {
-        x: (root.width - root.draw-width) / 2;
-        y: root.block-top + (root.page-above ? 0px : time-measure.preferred-height + root.row-gap);
-        width: root.draw-width;
-        height: root.page-height;
-        text: root.page-text;
-        font-family: root.font-family;
-        font-size: root.page-font-size;
-        font-weight: root.font-weight;
-        font-italic: root.page-italic;
-        color: root.page-color;
-        horizontal-alignment: root.page-alignment == 0 ? left : root.page-alignment == 2 ? right : center;
-        vertical-alignment: center;
-        overflow: clip;
-        visible: root.page-text != "" && root.text-visible;
+        x: root.block-left + root.draw-width - root.page-width; y: root.block-top + time-measure.preferred-height + root.row-gap;
+        width: root.page-width; height: root.meta-height;
+        text: root.page-text; font-family: root.font-family; font-size: root.page-font-size;
+        font-weight: root.font-weight; font-italic: root.page-italic; color: root.page-color;
+        horizontal-alignment: right; vertical-alignment: center; visible: root.page-text != "" && root.text-visible;
     }
 }
 
@@ -143,11 +111,15 @@ export component AppWindow inherits Window {
     in property <length> content-height: 35px;
     in property <string> page-text;
     in property <string> page-reserve;
+    in property <string> slide-text;
+    in property <color> slide-color: root.foreground-color;
     in property <string> display-text: "08:00";
     in property <brush> surface-color: #f3f8fc;
     in property <color> foreground-color: #0b3a66;
     in property <length> timer-font-size: 18px;
     in property <length> page-font-size: root.timer-font-size;
+    in property <length> slide-font-size: root.page-font-size;
+    in-out property <bool> dragging: false;
     in property <color> page-color: root.foreground-color;
     in property <bool> page-italic: false;
     in property <int> page-alignment: 1;
@@ -190,6 +162,9 @@ export component AppWindow inherits Window {
             display-text: root.display-text;
             page-text: root.page-text;
             page-reserve: root.page-reserve;
+            slide-text: root.slide-text;
+            slide-color: root.slide-color;
+            slide-font-size: root.slide-font-size;
             timer-font-size: root.timer-font-size;
             page-font-size: root.page-font-size;
             font-family: root.timer-font-family;
@@ -218,11 +193,14 @@ export component BigScreenWindow inherits Window {
     max-height: 65535px;
     in property <string> page-text;
     in property <string> page-reserve;
+    in property <string> slide-text;
+    in property <color> slide-color: root.foreground-color;
     in property <string> display-text: "08:00";
     in property <brush> surface-color: #f3f8fc;
     in property <color> foreground-color: #0b3a66;
     in property <color> page-color: root.foreground-color;
     in property <float> page-font-ratio: 1;
+    in property <float> slide-font-ratio: 1;
     in property <bool> page-italic: false;
     in property <int> page-alignment: 1;
     in property <bool> page-above: false;
@@ -242,8 +220,11 @@ export component BigScreenWindow inherits Window {
         display-text: root.display-text;
         page-text: root.page-text;
         page-reserve: root.page-reserve;
+        slide-text: root.slide-text;
+        slide-color: root.slide-color;
         timer-font-size: root.timer-font-size;
         page-font-size: root.timer-font-size * root.page-font-ratio;
+        slide-font-size: root.timer-font-size * root.slide-font-ratio;
         font-family: root.timer-font-family;
         page-italic: root.page-italic;
         visible: false;
@@ -254,8 +235,11 @@ export component BigScreenWindow inherits Window {
         display-text: root.display-text;
         page-text: root.page-text;
         page-reserve: root.page-reserve;
+        slide-text: root.slide-text;
+        slide-color: root.slide-color;
         timer-font-size: root.timer-font-size * root.fit;
         page-font-size: root.timer-font-size * root.page-font-ratio * root.fit;
+        slide-font-size: root.timer-font-size * root.slide-font-ratio * root.fit;
         font-family: root.timer-font-family;
         page-italic: root.page-italic;
         foreground-color: root.foreground-color;
@@ -537,7 +521,7 @@ export component PresentationWindow inherits Window {
                     padding-left: 18px;
                     padding-right: 36px;
                     alignment: start;
-                    spacing: 12px;
+                    spacing: 8px;
                     Rectangle {
                         height: max(148px, recommended.y + recommended.preferred-height + 8px);
                         Text { x: 0; y: 0; width: parent.width - 164px; height: 28px; text: root.service-status-text; color: DesktopTheme.text; font-size: 18px; font-weight: 700; vertical-alignment: center; overflow: elide; }
@@ -548,23 +532,23 @@ export component PresentationWindow inherits Window {
                     }
                     Rectangle { height: 1px; background: DesktopTheme.border; }
                     HorizontalLayout {
-                        height: 36px; spacing: 12px;
+                        height: 36px; spacing: 8px;
                         Text { width: 120px; text: root.next-port-label; color: DesktopTheme.secondary; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
                         CommitLineEdit { enabled: !root.confirm-exit; width: 96px; text <=> root.next-port; }
                     }
                     RemoteButton { enabled: !root.confirm-exit; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, false); } }
                     HorizontalLayout {
-                        height: 36px; spacing: 12px;
+                        height: 36px; spacing: 8px;
                         RemoteButton { enabled: !root.confirm-exit; text: root.service-toggle-text; clicked => { root.remote-action(7, "", false); } }
                         RemoteButton { enabled: !root.confirm-exit; text: root.restart-service-text; clicked => { root.remote-action(0, "", false); } }
                     }
                     HorizontalLayout {
-                        height: 36px; spacing: 12px;
+                        height: 36px; spacing: 8px;
                         RemoteButton { enabled: !root.confirm-exit; text: root.regenerate-token-text; clicked => { root.remote-action(2, "", false); } }
                         RemoteButton { enabled: !root.confirm-exit; text: root.disconnect-text; clicked => { root.remote-action(3, "", false); } }
                     }
                     HorizontalLayout {
-                        height: 40px; spacing: 12px;
+                        height: 40px; spacing: 8px;
                         RemoteButton { enabled: !root.confirm-exit; text: root.copy-address-text; clicked => { root.remote-action(4, "", false); } }
                         RemoteButton { enabled: !root.confirm-exit; text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
                         RemoteButton { enabled: !root.confirm-exit; text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
@@ -600,7 +584,7 @@ export component PresentationWindow inherits Window {
                     alignment: start;
                     spacing: 4px;
                     for item[index] in root.presentations: Rectangle {
-                        height: 52px; border-radius: 8px;
+                        height: 48px; border-radius: 8px;
                         background: item.selected ? DesktopTheme.selected : transparent;
                         border-width: item.selected ? 1px : 0px;
                         border-color: DesktopTheme.accent;
@@ -690,10 +674,10 @@ component FieldRow inherits Rectangle {
 
     property <length> control-x: min(260px, self.width * 0.44);
     property <length> control-width: self.width - self.control-x - 16px;
-    height: item.kind == 0 ? (row-index == 0 ? 40px : 56px)
+    height: item.kind == 0 ? (row-index == 0 ? 34px : 42px)
         : item.kind == 5 ? 44px
         : item.kind == 6 ? 44px
-        : max(item.row-height > 0 ? item.row-height * 1px : 48px, field-label.preferred-height + 20px);
+        : max(item.row-height > 0 ? item.row-height * 1px : 40px, field-label.preferred-height + 12px);
     background: item.kind == 0 ? DesktopTheme.canvas : DesktopTheme.surface;
     border-radius: 8px;
     border-width: item.kind == 0 ? 0px : 1px;
@@ -709,9 +693,9 @@ component FieldRow inherits Rectangle {
 
     if item.kind == 0: Text {
         x: 16px;
-        y: root.row-index == 0 ? 0px : 16px;
+        y: root.row-index == 0 ? 0px : 8px;
         width: parent.width - 32px;
-        height: 40px;
+        height: 32px;
         text: item.label;
         color: DesktopTheme.text;
         font-size: 14px;
@@ -865,6 +849,9 @@ export component SettingsWindow inherits Window {
     in-out property <int> timer-preview-height: 35;
     in-out property <float> timer-preview-font: 18;
     in-out property <bool> timer-preview-pages: true;
+    in-out property <bool> timer-preview-slide-enabled: false;
+    in-out property <float> timer-preview-slide-font: 0;
+    in-out property <string> timer-preview-slide-color;
     in-out property <bool> timer-preview-auto: true;
     in-out property <float> timer-preview-page-font: 0;
     in-out property <string> timer-preview-page-color;
@@ -1196,4 +1183,48 @@ export component SettingsWindow inherits Window {
         }
     }
 
+}
+
+export component UpdateWindow inherits Window {
+    icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
+    title: root.heading;
+    preferred-width: 720px; preferred-height: 580px;
+    min-width: 420px; min-height: 340px;
+    in property <string> heading;
+    in property <string> subtitle;
+    in property <string> notes;
+    in property <string> hint;
+    in property <string> later-text;
+    in property <string> download-text;
+    in property <bool> dark-theme: false;
+    in-out property <bool> theme-initialized: false;
+    in-out property <length> notes-scroll-y: 0px;
+    out property <length> notes-content-height: body.preferred-height;
+    callback download();
+    callback later();
+    init => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    changed dark-theme => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    background: DesktopTheme.canvas;
+    FocusScope {
+        width: 100%; height: 100%;
+        key-pressed(event) => { if event.text == Key.Escape { root.later(); return accept; } return reject; }
+        Text { x: 20px; y: 14px; width: parent.width - 40px; height: 30px; text: root.heading; color: DesktopTheme.text; font-size: 22px; font-weight: 700; }
+        Text { x: 20px; y: 48px; width: parent.width - 40px; height: 22px; text: root.subtitle; color: DesktopTheme.muted; font-size: 13px; }
+        Rectangle {
+            x: 20px; y: 82px; width: parent.width - 40px; height: parent.height - 184px;
+            background: DesktopTheme.surface; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
+            ScrollView {
+                x: 4px; y: 4px; width: parent.width - 8px; height: parent.height - 8px;
+                viewport-width: self.visible-width; viewport-height: body.preferred-height + 24px;
+                viewport-x: 0px; viewport-y <=> root.notes-scroll-y;
+                body := Text {
+                    x: 12px; y: 12px; width: root.width - 88px; height: self.preferred-height;
+                    text: root.notes; wrap: word-wrap; color: DesktopTheme.text; font-size: 14px;
+                }
+            }
+        }
+        Text { x: 20px; y: parent.height - 92px; width: parent.width - 40px; height: 36px; text: root.hint; wrap: word-wrap; color: DesktopTheme.muted; font-size: 12px; }
+        Button { x: parent.width - 262px; y: parent.height - 46px; width: 90px; height: 32px; text: root.later-text; clicked => { root.later(); } }
+        Button { x: parent.width - 164px; y: parent.height - 46px; width: 144px; height: 32px; text: root.download-text; clicked => { root.download(); } }
+    }
 }

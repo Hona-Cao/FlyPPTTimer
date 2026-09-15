@@ -27,7 +27,7 @@ pub fn file_metadata(path: &str) -> (Option<u64>, Option<u64>) {
 unsafe extern "system" {
     fn StrCmpLogicalW(left: *const u16, right: *const u16) -> i32;
 }
-fn logical_compare(left: &str, right: &str) -> Ordering {
+pub(crate) fn logical_compare(left: &str, right: &str) -> Ordering {
     let left: Vec<u16> = left.encode_utf16().chain(Some(0)).collect();
     let right: Vec<u16> = right.encode_utf16().chain(Some(0)).collect();
     unsafe { StrCmpLogicalW(left.as_ptr(), right.as_ptr()) }.cmp(&0)
@@ -172,6 +172,32 @@ pub fn execute(
     state: &PresentationState,
     command: &RemoteCommand,
 ) -> Result<(), String> {
+    if command.command == "rules.addFile" {
+        if !config.remote_control.allow_file_browsing {
+            return Err("Computer file browsing is disabled in desktop Remote settings.".into());
+        }
+        let path = crate::file_browser::presentation_file(
+            command.presentation_id.as_deref().ok_or("Choose a file.")?,
+        )?;
+        let value = path.to_string_lossy().into_owned();
+        if !is_controlled(config, &value) {
+            let order = ordered_indices(config);
+            write_order(config, &order);
+            config.rules.push(FileRule {
+                file_name: path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+                file_path: value,
+                duration: config.timer.default_duration.clone(),
+                mode: config.timer.mode,
+                mobile_order: config.rules.len() as i32,
+                ..FileRule::default()
+            });
+        }
+        return Ok(());
+    }
     if command.command == "rules.sort" {
         let sort = command.sort_by.as_deref().ok_or("请选择排序方式。")?;
         if !matches!(sort, "manual" | "name" | "size" | "modified") {
@@ -307,6 +333,29 @@ mod tests {
             .map(|&i| c.rules[i].file_path.clone())
             .collect()
     }
+    #[test]
+    fn phone_added_ppt_is_deduplicated_and_keeps_the_actual_file() {
+        let dir = std::env::temp_dir().join(format!("flyppt-add-ppt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("talk.pptx");
+        std::fs::write(&file, b"unchanged").unwrap();
+        let command = RemoteCommand {
+            command: "rules.addFile".into(),
+            presentation_id: Some(file.to_string_lossy().into_owned()),
+            ..Default::default()
+        };
+        let mut config = AppConfig::default();
+        let state = PresentationState::default();
+        assert!(execute(&mut config, &state, &command).is_err());
+        config.remote_control.allow_file_browsing = true;
+        execute(&mut config, &state, &command).unwrap();
+        execute(&mut config, &state, &command).unwrap();
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].duration, config.timer.default_duration);
+        assert_eq!(std::fs::read(file).unwrap(), b"unchanged");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn mobile_add_open_rejects_non_powerpoint_files() {
         let mut config = AppConfig::default();

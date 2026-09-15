@@ -36,6 +36,13 @@ fn localize(lang: Language, value: &str) -> &str {
         return value;
     }
     match value {
+        "显示逐页秒表" => "Show per-slide stopwatch",
+        "逐页字号跟随页数" => "Match slide-number font size",
+        "逐页秒表字号" => "Per-slide stopwatch font size",
+        "逐页颜色跟随时间" => "Match time color for stopwatch",
+        "逐页秒表颜色" => "Per-slide stopwatch color",
+        "允许手机浏览电脑 PPT 文件" => "Allow phone to browse computer PPT files",
+
         "界面主题" => "Interface theme",
         "浅色" => "Light",
         "深色" => "Dark",
@@ -454,19 +461,6 @@ pub mod native {
         }
     }
 
-    pub fn yes_no_with_icon(text: &str, title: &str, icon: u32) -> bool {
-        let text = wide(text);
-        let title = wide(title);
-        unsafe {
-            crate::window::branded_message_box(
-                crate::window::app_dialog_owner(),
-                text.as_ptr(),
-                title.as_ptr(),
-                MB_YESNO | icon,
-            ) == IDYES
-        }
-    }
-
     pub fn yes_no_for_window(window: &slint::Window, text: &str, title: &str) -> bool {
         ask_yes_no(
             crate::window::hwnd(window).unwrap_or(std::ptr::null_mut()),
@@ -624,6 +618,9 @@ pub fn create(
                             | "appearance.pages"
                             | "appearance.page_font_follow"
                             | "appearance.page_color_follow"
+                            | "timer.per_slide"
+                            | "appearance.slide_font_follow"
+                            | "appearance.slide_color_follow"
                     ) {
                         refresh(
                             &w,
@@ -1730,17 +1727,40 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             "页数斜体",
             c.appearance.page_italic,
         ),
-        Row::combo(
-            "appearance.page_alignment",
-            "页数对齐",
-            vec!["与时间左对齐", "居中对齐", "与时间右对齐"],
-            c.appearance.page_alignment as i32,
+        Row::check(
+            "timer.per_slide",
+            "显示逐页秒表",
+            c.timer.enable_per_slide_timer,
         ),
-        Row::combo(
-            "appearance.page_position",
-            "页数位置",
-            vec!["时间上方", "时间下方"],
-            c.appearance.page_position as i32,
+        Row::check(
+            "appearance.slide_font_follow",
+            "逐页字号跟随页数",
+            c.appearance.slide_timer_font_size.is_none(),
+        ),
+        Row::text(
+            "appearance.slide_font",
+            "逐页秒表字号",
+            c.appearance
+                .slide_timer_font_size
+                .unwrap_or(
+                    c.appearance
+                        .page_font_size
+                        .unwrap_or(c.appearance.font_size),
+                )
+                .to_string(),
+        ),
+        Row::check(
+            "appearance.slide_color_follow",
+            "逐页颜色跟随时间",
+            c.appearance.slide_timer_text_color.is_none(),
+        ),
+        Row::color(
+            "appearance.slide_color",
+            "逐页秒表颜色",
+            c.appearance
+                .slide_timer_text_color
+                .as_deref()
+                .unwrap_or(&c.appearance.text_color),
         ),
         Row::combo(
             "appearance.shape",
@@ -1821,6 +1841,16 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
     ]
     .into_iter()
     .filter(|row| appearance_row_visible(&c.appearance, &row.key))
+    .filter(|row| match row.key.as_str() {
+        "appearance.slide_font" => {
+            c.timer.enable_per_slide_timer && c.appearance.slide_timer_font_size.is_some()
+        }
+        "appearance.slide_color" => {
+            c.timer.enable_per_slide_timer && c.appearance.slide_timer_text_color.is_some()
+        }
+        key if key.starts_with("appearance.slide_") => c.timer.enable_per_slide_timer,
+        _ => true,
+    })
     .collect()
 }
 
@@ -1920,6 +1950,7 @@ fn remote_rows(
     vec![
         Row::section("本地网页遥控"),
         Row::check("remote.enabled", "启用远程控制", c.remote_control.enabled),
+        Row::check("remote.browse", "允许手机浏览电脑 PPT 文件", c.remote_control.allow_file_browsing),
         Row::text("", "当前服务状态", status).disabled(),
         Row::text("", "本次启动端口", current_port).disabled(),
         Row::text("remote.port", "下次服务端口", c.remote_control.port.to_string()),
@@ -2062,6 +2093,10 @@ fn normalize_before_save(c: &mut AppConfig) {
     c.appearance.height = c.appearance.height.clamp(1, 1000);
     c.appearance.font_size = c.appearance.font_size.clamp(8.0, 180.0);
     c.appearance.page_font_size = c.appearance.page_font_size.map(|v| v.clamp(8.0, 180.0));
+    c.appearance.slide_timer_font_size = c
+        .appearance
+        .slide_timer_font_size
+        .map(|v| v.clamp(8.0, 180.0));
     c.appearance.background_opacity = c.appearance.background_opacity.clamp(0, 100);
     c.placement.offset_x_percent = c.placement.offset_x_percent.clamp(-50.0, 50.0);
     c.placement.offset_y_percent = c.placement.offset_y_percent.clamp(-50.0, 50.0);
@@ -2157,20 +2192,6 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
         }
         "appearance.page_color" => c.appearance.page_text_color = Some(value.into()),
         "appearance.page_italic" => c.appearance.page_italic = checked,
-        "appearance.page_alignment" => {
-            c.appearance.page_alignment = match selected {
-                0 => crate::config::PageAlignment::Left,
-                2 => crate::config::PageAlignment::Right,
-                _ => crate::config::PageAlignment::Center,
-            }
-        }
-        "appearance.page_position" => {
-            c.appearance.page_position = if selected == 0 {
-                crate::config::PagePosition::Above
-            } else {
-                crate::config::PagePosition::Below
-            }
-        }
         "appearance.pages" => c.appearance.show_slide_numbers = checked,
         "appearance.width" => c.appearance.width = int(),
         "appearance.height" => c.appearance.height = int(),
@@ -2237,6 +2258,21 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
             }
         }
         "remote.enabled" => c.remote_control.enabled = checked,
+        "remote.browse" => c.remote_control.allow_file_browsing = checked,
+        "timer.per_slide" => c.timer.enable_per_slide_timer = checked,
+        "appearance.slide_font_follow" => {
+            c.appearance.slide_timer_font_size = (!checked).then_some(
+                c.appearance
+                    .page_font_size
+                    .unwrap_or(c.appearance.font_size),
+            )
+        }
+        "appearance.slide_font" => c.appearance.slide_timer_font_size = Some(float() as f32),
+        "appearance.slide_color_follow" => {
+            c.appearance.slide_timer_text_color =
+                (!checked).then(|| c.appearance.text_color.clone())
+        }
+        "appearance.slide_color" => c.appearance.slide_timer_text_color = Some(value.into()),
         "remote.port" => {
             if let Ok(port) = value.parse::<u16>() {
                 c.remote_control.port = port;
@@ -2344,6 +2380,13 @@ fn validate(c: &AppConfig, lang: Language) -> Result<(), String> {
             "Page",
             c.appearance
                 .page_text_color
+                .as_deref()
+                .unwrap_or(&c.appearance.text_color),
+        ),
+        (
+            "Per-slide stopwatch",
+            c.appearance
+                .slide_timer_text_color
                 .as_deref()
                 .unwrap_or(&c.appearance.text_color),
         ),
@@ -2806,6 +2849,16 @@ fn set_timer_preview(window: &SettingsWindow, config: &AppConfig) {
     window.set_timer_preview_height(config.appearance.height.clamp(1, 1000));
     window.set_timer_preview_font(config.appearance.font_size.clamp(8.0, 180.0));
     window.set_timer_preview_pages(config.appearance.show_slide_numbers);
+    window.set_timer_preview_slide_enabled(config.timer.enable_per_slide_timer);
+    window.set_timer_preview_slide_font(config.appearance.slide_timer_font_size.unwrap_or(0.0));
+    window.set_timer_preview_slide_color(
+        config
+            .appearance
+            .slide_timer_text_color
+            .clone()
+            .unwrap_or_default()
+            .into(),
+    );
     window.set_timer_preview_auto(config.appearance.auto_size);
     window.set_timer_preview_page_font(
         config
@@ -2843,6 +2896,12 @@ pub(crate) fn preview_config(applied: &AppConfig, settings: Option<&SettingsWind
         preview.appearance.height = settings.get_timer_preview_height();
         preview.appearance.font_size = settings.get_timer_preview_font();
         preview.appearance.show_slide_numbers = settings.get_timer_preview_pages();
+        preview.timer.enable_per_slide_timer = settings.get_timer_preview_slide_enabled();
+        let slide_font = settings.get_timer_preview_slide_font();
+        preview.appearance.slide_timer_font_size = (slide_font > 0.0).then_some(slide_font);
+        let slide_color = settings.get_timer_preview_slide_color().to_string();
+        preview.appearance.slide_timer_text_color =
+            (!slide_color.is_empty()).then_some(slide_color);
         preview.appearance.auto_size = settings.get_timer_preview_auto();
         let font = settings.get_timer_preview_page_font();
         preview.appearance.page_font_size = (font > 0.0).then_some(font);
@@ -2866,6 +2925,30 @@ pub(crate) fn preview_config(applied: &AppConfig, settings: Option<&SettingsWind
 #[cfg(test)]
 mod parity_tests {
     use super::*;
+
+    #[test]
+    fn slide_stopwatch_preferences_and_browsing_are_explicit() {
+        let mut c = AppConfig::default();
+        assert!(!c.remote_control.allow_file_browsing);
+        update_field(&mut c, "remote.browse", "", true, 0);
+        update_field(&mut c, "timer.per_slide", "", true, 0);
+        update_field(&mut c, "appearance.slide_font_follow", "", false, 0);
+        assert_eq!(c.appearance.slide_timer_font_size, Some(12.0));
+        update_field(&mut c, "appearance.slide_font", "14", false, 0);
+        update_field(&mut c, "appearance.slide_color_follow", "", false, 0);
+        update_field(&mut c, "appearance.slide_color", "#123456", false, 0);
+        let loaded = AppConfig::from_json(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert!(loaded.remote_control.allow_file_browsing && loaded.timer.enable_per_slide_timer);
+        assert_eq!(loaded.appearance.slide_timer_font_size, Some(14.0));
+        assert_eq!(
+            loaded.appearance.slide_timer_text_color.as_deref(),
+            Some("#123456")
+        );
+        assert!(!appearance_rows(&loaded).iter().any(|row| matches!(
+            row.key.as_str(),
+            "appearance.page_alignment" | "appearance.page_position"
+        )));
+    }
 
     #[test]
     fn percentage_rows_are_sliders_with_their_existing_ranges() {
@@ -3227,15 +3310,15 @@ mod rc32_tests {
         update_field(&mut c, "appearance.page_color_follow", "", false, 0);
         update_field(&mut c, "appearance.page_color", "#cc5500", false, 0);
         update_field(&mut c, "appearance.page_italic", "", true, 0);
-        update_field(&mut c, "appearance.page_alignment", "", false, 2);
-        update_field(&mut c, "appearance.page_position", "", false, 0);
+        assert!(!has(&c, "appearance.page_alignment"));
+        assert!(!has(&c, "appearance.page_position"));
         assert!(has(&c, "appearance.page_font"));
         assert!(has(&c, "appearance.page_color"));
         assert_eq!(c.appearance.page_font_size, Some(32.0));
         assert_eq!(c.appearance.page_text_color.as_deref(), Some("#cc5500"));
         assert!(c.appearance.page_italic);
         assert_eq!(c.appearance.page_alignment, PageAlignment::Right);
-        assert_eq!(c.appearance.page_position, PagePosition::Above);
+        assert_eq!(c.appearance.page_position, PagePosition::Below);
         update_field(&mut c, "appearance.pages", "", false, 0);
         assert!(!has(&c, "appearance.page_font_follow"));
         assert!(!has(&c, "appearance.page_color"));
