@@ -6,6 +6,8 @@
 
 ## 逐阶段索引
 
+- [v1.14.1：连接授权引导、紧凑计时器、真实屏幕贴边](stages/stage-30.md) — 2026-09-15；已交付构建，未公开 Release
+
 - [V1 初始重构 / Rust + Slint foundation](stages/stage-01.md) — 2026-09-03
 - [v1.06 窗口候选 / window candidate](stages/stage-02.md) — 2026-09-03
 - [v1.07 / frameless window](stages/stage-03.md) — 2026-09-03

@@ -643,3 +643,7 @@ User accepted RC3.4. Implemented V1131_DELIVERY.md: list boundary handoff and sh
 ## v1.14.0 implementation — 2026-09-15
 
 Eight requested improvements are implemented on `release/v1.14.0`. Added focused regressions for startup preference migration, complete update notes/source selection, side-taskbar/mixed-DPI centering, PPT-only token-protected folder browsing, explicit browse permission/deduplication, and per-slide visit/accumulation lifecycle. Browser interaction checks cover Chinese/English selectors, modal navigation, additions, filtering and revoked permission. Publication result and exact CI/source references are maintained in `HANDOFF.md`; GUI renders do not constitute physical phone or Office testing.
+
+## v1.14.1 illustrated-guide update
+
+Documentation only: English/Chinese README and complete tutorials describe connection-triggered permission guidance, explicit Apply, token-wide browsing scope, tighter automatic timer sizing and actual full-screen edge anchoring. Public downloads remain v1.14.0 and are labeled separately from delivered v1.14.1. Ten GUI images are selected from successful capture run 34994278753; intermediate images that did not accurately show the selected checkbox are not used. Original runtime verification and package provenance remain linked rather than rerun or relabeled as new tests. Main runtime files and existing release assets/tags are unchanged.

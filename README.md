@@ -8,14 +8,16 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download)
 [![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**Current version: v1.14.0.** For Windows 10/11 x64; .NET is not required. Standalone timing works without Office. Slide numbers and presentation control require compatible desktop PowerPoint or WPS Presentation. The phone only needs a browser.
+**Guide updated for v1.14.1; latest public Release remains v1.14.0.** For Windows 10/11 x64; .NET is not required. Standalone timing works without Office. Slide numbers and presentation control require compatible desktop PowerPoint or WPS Presentation. The phone only needs a browser.
 
 ## Contents
 
-[Download](#download) · [Quick start](#quick-start) · [Settings](#settings) · [Phone remote](#phone) · [FAQ](#faq) · [Complete guide](docs/USER_GUIDE.en.md)
+[Download](#download) · [v1.14.1 workflow](#v1141) · [Quick start](#quick-start) · [Settings](#settings) · [Phone remote](#phone) · [FAQ](#faq) · [Complete guide](docs/USER_GUIDE.en.md)
 
 <a id="download"></a>
 ## Download and install
+
+The public links below still download **v1.14.0**, not v1.14.1. The delivered v1.14.1 build is recorded with its packages in [Actions](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/34992459836); downloads may require sign-in and artifact retention is limited. Its [source commit](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a) is permanent. This documentation update does not publish a new Release.
 
 **For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases).** Gitee is the mainland mirror; synchronization can lag, so check the version shown there. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
 
@@ -23,6 +25,23 @@
 |---|---|---|---|
 | Portable | [Gitee Releases — choose Portable](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
 | Setup | [Gitee Releases — choose Setup](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
+
+<a id="v1141"></a>
+## v1.14.1: connection guidance, a compact timer, and exact screen edges
+
+**These changes apply to the delivered v1.14.1 build.** With public v1.14.0, open the permission setting manually; it does not navigate there automatically.
+
+**Connect the phone → desktop Settings opens at Remote Control → check the highlighted “Allow phone to browse computer PPT files” option → click Apply → use Presentation → Browse computer PPT files on the phone.** Checking the box without applying is not authorization. Timing and slide navigation do not require file-browsing permission.
+
+![v1.14.1 desktop Settings navigates to the highlighted PPT browsing permission after a phone connects](docs/media/v1.14.1/permission-en-light-connected.png)
+
+| Change | How to use it |
+|---|---|
+| Direct permission guidance | A new phone connection opens the permission setting when browsing is disabled. Existing permission, polling and reconnecting from an already announced address do not repeatedly reopen it. Connection alone grants nothing; this is not a per-device permission switch. |
+| Compact timer | Less space between rows and around the text, without shrinking fonts or changing the left-stopwatch/right-page arrangement. Choose automatic sizing; saved custom dimensions remain unchanged. |
+| Exact zero-offset edges | Top-center with both offsets at 0% aligns the actual window top to the screen top. Bottom-center aligns its bottom to the screen bottom—not to the taskbar's upper edge. Change saved nonzero offsets to 0 and Apply for this behavior. |
+
+[Illustrated authorization steps](docs/USER_GUIDE.en.md#file-access) · [Compact timer and edge placement](docs/USER_GUIDE.en.md#edge-placement)
 
 <a id="v1140"></a>
 ## New in 1.14.0: slide stopwatch and phone file browsing
@@ -102,7 +121,7 @@ Each group supports speech, a custom short sound, text/background/border flashin
 | Time and slide numbers | Slide-number size/color can match the time or be independent. Slide numbers are fixed below the main time on the right, with optional slide seconds on the left. Default slide-number size is 12. |
 | Shape and opacity | Rectangle or small/medium/large corners. Background opacity is 0–100%; drag, hover-wheel by one percentage point, or type a precise value. |
 | Multiple displays | Put small timers on all displays or one selected display. Use a separate extended screen for a large full-screen moderator timer. |
-| Position | Choose one of nine anchors, then adjust horizontal/vertical percentages. Positive offsets move right/down. Dragging and resetting placement are also available. |
+| Position | Choose one of nine anchors. In v1.14.1 zero-offset Top/Bottom-center aligns the actual top/bottom window edge to the full screen. Positive offsets move right/down; drag/reset remains available. |
 
 Enable an extended display in Windows before selecting full-screen timing. It occupies the target screen, so avoid choosing the audience's slide-show display unintentionally.
 
@@ -110,6 +129,8 @@ Enable an extended display in Windows before selecting full-screen timing. It oc
 
 <a id="settings-remote"></a>
 ### 4. Remote Control
+
+For computer-file access, follow the [illustrated connection and authorization steps](docs/USER_GUIDE.en.md#file-access). Check the permission **on the computer** and Apply; phone connection alone does not approve it.
 
 ![Remote service actions, connection token and firewall tools](docs/media/v1.14.0/settings/en-04-remote-part-2.png)
 
@@ -167,6 +188,10 @@ Desktop Remote's Presentations page edits rules; the phone/browser Presentation 
 
 <a id="faq"></a>
 ## FAQ
+
+**Connected but unable to browse computer files?** Connection and browsing permission are separate. In v1.14.1 the computer opens the highlighted option; check it and click Apply. [Step-by-step guide](docs/USER_GUIDE.en.md#file-access)
+
+**Still too large or not flush at 0%?** Confirm v1.14.1 is running, use the intended anchor, set both offsets to zero and Apply. Choose Automatic sizing for the tighter content-sized window. [Sizing and placement](docs/USER_GUIDE.en.md#edge-placement)
 
 **Phone cannot connect?** Check that the service is running and both devices are on the same network, then scan again. Guest networks may block device-to-device access; check VPNs and the current port's Windows Firewall rule. [Troubleshooting](docs/USER_GUIDE.en.md#faq)
 

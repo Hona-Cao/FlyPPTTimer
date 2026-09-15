@@ -1,5 +1,5 @@
-# v1.13.1 publication — no new application implementation assigned
+# Current task: v1.14.1 illustrated user documentation
 
-The user authorized public GitHub publication of the accepted v1.13.1. Scope is current docs, screenshots, release packaging, main integration with history preserved, and discoverability. Accepted runtime source e625c809f8cf7515f0143fab476bb4467d2fe1d7 must not be replaced by a documentation renderer.
+Update explanations and tutorials for the delivered v1.14.1 without changing product code, packages or public release/tag state. Preserve the public v1.14.0 download links and explicitly distinguish them from the delivered build. The documentation branch is docs/v1.14.1-guide, based on main. Do not merge or re-run historical RC/review implementation tasks. See HANDOFF.md and docs/development/stages/stage-30.md.
 
-Do not execute historical RC/UX tasks or old patch/refinement scripts. Preserve existing commit authors and timestamps. After publication, await new user feedback rather than resume speculative feature changes. See HANDOFF.md and docs/DEVELOPMENT_HISTORY.md.
+After the documentation-only main update, stop and await further feedback.

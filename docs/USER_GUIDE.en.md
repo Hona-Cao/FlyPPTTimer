@@ -2,16 +2,101 @@
 
 [Home](../README.md) · [简体中文](USER_GUIDE.zh-CN.md)
 
-For **v1.14.0 · Windows 10 / 11 x64**.
+For the **delivered v1.14.1 build · Windows 10 / 11 x64**. Latest public Release remains v1.14.0. [Version and download distinction](../README.md#download).
 
 Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to show slide numbers, use a different duration for each presentation, and control your talk from a phone browser. This guide follows the six Settings pages, then covers phone controls and everyday maintenance.
 
 ## Contents
 
+[v1.14.1 illustrated workflow](#v1141) · [Connection and authorization](#file-access) · [Compact timer](#compact-timer) · [Zero-offset edges](#edge-placement)
+
 [Getting started](#start) · [Saving settings](#save) · [1. Timer](#timer) · [2. Behavior](#behavior) · [3. Appearance & Display](#appearance) · [4. Remote Control](#remote) · [5. Controls](#controls) · [6. Other](#other) · [Phone controls](#phone) · [Troubleshooting](#faq)
 
+<a id="v1141"></a>
+## v1.14.1 illustrated instructions
+
+This section describes the delivered **v1.14.1** build. Check the running version in **Settings → Other**; a folder name is not proof of the executable version. The latest public Release is still v1.14.0, whose download does not include this new navigation or edge fix. The six settings chapters below continue to describe shared features.
+
+<a id="file-access"></a>
+### Allow computer PPT browsing after the phone connects
+
+**Connecting to Remote and allowing file browsing are separate.** The additional browsing switch exposes folder/PPT names and is off by default. Leave it off when you only need timing or slide navigation.
+
+**Step 1 — Connect, then look at the computer.** Scan the live desktop Remote QR code on the same network and wait for Connected. When browsing is not yet allowed, Settings opens at Remote Control with the browsing option highlighted. The notice shows the connection address; it is not a password or an approval button.
+
+![Step 1: a successful phone connection opens Settings at the highlighted PPT browsing switch](media/v1.14.1/permission-en-light-connected.png)
+
+**Step 2 — Check the switch and click Apply.** Select **Allow phone to browse computer PPT files**. The footer now indicates unsaved changes; the phone still lacks permission. Click **Apply** to save. **OK** saves and closes Settings. Enter, hiding the window, or simply dismissing the notice is not Apply.
+
+
+**Step 3 — Confirm it is saved and return to the phone.** After Apply, the box stays selected, the footer shows Saved and the connection notice clears. Normal phone polling obtains the new permission. Open **Presentation → Browse computer PPT files**. If an already-open browser panel still shows its permission message, close and reopen that panel.
+
+![Step 3: saved authorization with the switch still on](media/v1.14.1/permission-en-light-saved.png)
+
+**Step 4 — Find and add a PPT.** Open Home or a local drive, navigate folders and filter the current folder's names. Use **Add to list** beside the file, then close the browser and open/start it from the controlled list. Existing entries are not duplicated.
+
+<img src="media/v1.14.0/mobile-en-light-browser.png" width="360" alt="Phone file browser showing computer folders and PPT files that can be added to the controlled list">
+
+The phone file browser is unchanged from v1.14.0, so that production-web rendering is retained above. The desktop authorization illustrations in this section are newly captured from v1.14.1.
+
+**Decline or revoke:** do not check the box to decline. To revoke later, uncheck it in desktop Settings → Remote Control and Apply. This stops future folder browsing; it does not delete existing rules or close an open presentation.
+
+**The checkbox does not grant access only to the phone named in the notice.** It remains a shared permission for devices holding the current valid Remote URL/token. It allows local folder navigation and adding PPT files—not arbitrary downloads, deletion, editing or network-share access. Keep live QR codes and full control URLs private.
+
+#### When the authorization page does not open automatically
+
+| Situation | What to do |
+|---|---|
+| The computer is still running v1.14.0 | Open Settings → Remote Control manually and Apply the permission. Automatic guidance starts with v1.14.1. |
+| Browsing is already allowed | No repeated prompt is needed. Browse directly from the phone. |
+| This phone was already announced | A connection IP is announced once per service session; refreshing or briefly reconnecting does not keep interrupting a presentation. Open Settings manually when needed. |
+| The web page opened but is not connected | First establish an authenticated connection; check the current QR, network and service. |
+| You opened the local control page on the PC | Loopback access is not treated as a new phone connection. Authorize manually if needed. |
+| The phone still asks for permission | Confirm that you clicked Apply, connected to the intended computer, and reopened the browser panel after saving. |
+
+Restarting the service or regenerating the token resets the connection-notice record. A changed network address can also produce another prompt; this is not permanent device identity. Existing unsaved Settings edits are preserved when the page changes. Apply also saves other pending edits in that Settings window, so check them first.
+
+<details>
+<summary>The same steps in dark mode</summary>
+
+![Dark mode: connection guidance](media/v1.14.1/permission-en-dark-connected.png)
+
+
+![Dark mode: applied and saved](media/v1.14.1/permission-en-dark-saved.png)
+
+</details>
+
+<a id="compact-timer"></a>
+### Make the timer compact without shrinking its text
+
+In **Settings → Appearance & Display**, choose **Automatic** sizing and Apply. v1.14.1 reduces the gap between the main time and its lower row, and the outer padding. Your font sizes and left-stopwatch/right-page arrangement remain unchanged.
+
+| Idle, with stopwatch and slide numbers enabled | Slideshow example |
+|---|---|
+| ![Compact v1.14.1 timer with 00 and -/-](media/v1.14.1/timer-idle.png) | ![Compact v1.14.1 timer with visit seconds and slide numbers](media/v1.14.1/timer-slide.png) |
+
+These are production GUI renders using example state, not a promise of the same physical pixel dimensions at every display scale. Saved custom width/height is not overwritten. If the new version still looks large, check whether Custom sizing is selected before assuming the compact layout did not apply.
+
+<a id="edge-placement"></a>
+### Make top-center and bottom-center flush at 0%
+
+Under the appearance position settings, choose the target display/display mode and anchor, set **both horizontal and vertical offsets to 0%**, and Apply:
+
+| Anchor | Zero-offset result in v1.14.1 |
+|---|---|
+| Top-center | Horizontally centered; the actual window top touches the screen top. |
+| Bottom-center | Horizontally centered; the actual window bottom touches the screen bottom. |
+| Top-left/top-right and bottom-left/bottom-right | Both corresponding window edges align with the screen edges. |
+| Center | The whole window is centered horizontally and vertically. |
+
+The calculation uses actual window dimensions, not an assumed 140×50 rectangle. Font changes, automatic resizing and DPI changes therefore use the real edges. Secondary monitors with negative coordinates use their own bounds.
+
+**Screen means the full display, not the work area above the taskbar.** Bottom-center at 0% can overlap the taskbar region. To add an inward margin, use a small positive vertical offset at the top or a small negative offset at the bottom. Positive moves right/down; negative moves left/up.
+
+Nonzero offsets still use the display work area's dimensions as the percentage scale. Upgrading does not zero your saved offsets, and dragging records an offset too. To restore flush positioning, choose the anchor, set both offsets to zero and Apply; use Reset timer position when necessary.
+
 <a id="v1140"></a>
-## 1.14.0: slide timing, computer file browsing, and full update notes
+## Shared 1.14 features: slide timing, computer file browsing, and full update notes
 
 ### Enable the slide stopwatch
 
@@ -19,8 +104,8 @@ Choose **Settings → Appearance → Show slide stopwatch**, then Apply. It is o
 
 A fixed row below the main timer places **slide seconds on the left and slide numbers on the right**. The old slide-number alignment and above/below choices are removed. The stopwatch follows the slide-number size by default. Turn off the font-follow switch for a custom size. Its color follows the main timer unless you disable that switch and pick a custom color.
 
-![Idle timer with 00 and -/- placeholders](media/v1.14.0/timer-idle.png)
-![Slide stopwatch and page numbers](media/v1.14.0/timer-slide.png)
+![Idle timer with 00 and -/- placeholders](media/v1.14.1/timer-idle.png)
+![Slide stopwatch and page numbers](media/v1.14.1/timer-slide.png)
 
 Before a presentation can be read, enabled fields show `00` and `-/-`. Automatic sizing reserves the row from startup, rather than revealing a clipped extra row only after slideshow detection. Use automatic sizing when increasing fonts; a deliberately tiny fixed window can still be too small.
 
@@ -35,7 +120,7 @@ Ending the show retains the last table and resets the small display to `00`. A n
 ### Add a computer PPT from the phone
 
 1. Connect through the computer Remote QR code on the same trusted local network.
-2. In desktop **Settings → Remote control**, enable **Allow phone to browse computer PPT files**, then Apply. This additional permission is off by default.
+2. Check **Allow phone to browse computer PPT files** on the computer, then Apply. In v1.14.1 an unapproved phone connection opens this highlighted setting automatically. In v1.14.0, or when no new notice appears, open **Settings → Remote Control** manually. The permission remains off by default.
 3. On the phone, open **Presentation → Browse computer PPT files** below the controlled list.
 4. Choose Home or a local disk and open folders. **Up one level** returns to the parent; **This computer** returns to drive roots.
 5. Filter searches names in the current folder only, not the whole disk. Only directories and `.ppt / .pptx / .pptm` files appear.
@@ -65,7 +150,7 @@ The update window can be resized. Its complete release body wraps and scrolls, w
 
 ### Positioning and spacing
 
-New horizontal/vertical offsets default to **0%**. Center anchors use the full width of each monitor, including when a side taskbar reduces its work area. Auto-size changes re-center the timer, and DPI/negative monitor coordinates are accounted for. Zero means no extra offset, not removal of the standard edge padding.
+New horizontal/vertical offsets default to **0%**. Center anchors use the full width of each monitor, including when a side taskbar reduces its work area. Auto-size changes re-center the timer, and DPI/negative monitor coordinates are accounted for. **In v1.14.1, zero aligns the actual window edge to the full screen edge**; the old fixed edge padding no longer applies. See [edge placement](#edge-placement).
 
 Existing custom offsets remain. To use the new position, choose a centered anchor, set both offsets to zero and Apply; reset the timer position if needed. Settings and desktop Remote reduce vertical whitespace while keeping usable input/button targets.
 
@@ -74,6 +159,8 @@ Existing custom offsets remain. To use the new position, choose a centered ancho
 ## Getting started
 
 ### Download and install
+
+Check the [version note](../README.md#download) first: the public packages still contain v1.14.0, not the delivered v1.14.1 changes described above.
 
 Choose an edition from [GitHub Releases](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest) or [Gitee Releases](https://gitee.com/hona-cao/fly-ppttimer/releases).
 
@@ -297,6 +384,8 @@ When the full-screen option is disabled or says Extended display required, check
 
 ### Default position and offsets
 
+With v1.14.1, Top-center at 0% touches the actual screen top and Bottom-center the actual bottom, including the taskbar region. [Detailed steps](#edge-placement).
+
 ![Full-screen timer, anchor positions and horizontal/vertical offsets](media/v1.14.0/settings/en-03-appearance-part-4.png)
 
 | Setting | Purpose |
@@ -485,6 +574,8 @@ End slide show stops the presentation playback. Close active presentation closes
 
 | Problem | What to do |
 |---|---|
+| Phone connected but file browsing denied | Check the permission on the computer and Apply. If no new notice appears, open Remote Control settings manually. [Illustrated steps](#file-access) |
+| Top/bottom anchor not flush | Confirm v1.14.1, the correct display and anchor, set both offsets to 0 and Apply; saved nonzero offsets remain preferences. |
 | Cannot find the timer | Press F5 or open Settings from the notification area. Check visibility, target display, text color/font size, and reset its position. |
 | Cannot click or drag the timer | Check Click-through and Lock window under Controls. |
 | Edits are not retained | Check the unsaved indicator. Use Apply or OK after previewing changes. |

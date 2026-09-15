@@ -48,6 +48,14 @@ Dates below are the original author dates normalized to **UTC**. A linked commit
 
 Continued work after 1.13.1: slide timing/history, opt-in phone PPT browsing, complete update notes, startup checking, monitor centering and cohesive controls. Original implementation/fix/build/documentation commits and previous release tags are retained.
 
+## v1.14.1 — 2026-09-15（已交付 / delivered build）
+
+[`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a) 增加手机连接后自动定位授权开关，进一步压缩浮窗留白，并以实际窗口尺寸修复0%屏幕贴边。
+
+[阶段记录与验证口径](development/stages/stage-30.md) · [中文图解](USER_GUIDE.zh-CN.md#v1141) · [English instructions](USER_GUIDE.en.md#v1141)
+
+This is a delivered branch build, not a new public Release. The documentation refresh preserves the public v1.14.0 tag/packages and main's application source. Source dates and original validation results are retained.
+
 ## Detailed records / 逐轮原始记录
 
 The following files retain the original requests, reviews and explicit limitations. Later approved requirements supersede older instructions; a historical “do not release yet” is not a current release prohibition.

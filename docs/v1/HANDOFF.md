@@ -37,3 +37,11 @@ Eight focused English/Chinese browser checks passed. These are automated checks,
 
 This documentation-only follow-up captures completed finite CSS animations so the file-browser images are not captured halfway through opening. Shipping HTML/CSS/JS and the executable remain unchanged. The release tag/assets remain fixed; corrected documentation screenshots are on the continuing branch/main, while the release ZIPs retain their publication-time documentation.
 Fast-forward main to the finalized documentation commit without rewriting earlier history; read the remote ref before updating. Preserve v1.14.0 and earlier tags. No Gitee release was made in this task.
+
+## v1.14.1 illustrated documentation synchronization
+
+The user requested current GitHub explanations/tutorials with illustrations. The guides now describe delivered v1.14.1, whose runtime source is 6e8bd3aeaec7ae8c247e09b535157db7f490047a on review/v1.14.1. The latest public Release remains v1.14.0. This documentation task does not publish a release, move tags, replace packages or merge the review runtime into main.
+
+Updated bilingual READMEs, full tutorials, changelog and development stage record. Ten new GUI images show connected/saved permission states in both languages and themes plus the compact timer. Captures use the production layouts in a disposable CJK-enabled documentation renderer (run 34994278753); fonts and the temporary executable are not shipped. Unchanged phone images retain their documented v1.14.0 provenance.
+
+The documentation workflow validates local links, explicit anchors, image references and a documentation-only diff before fast-forwarding main. Read the final workflow result and remote main ref to confirm completion. No new runtime testing or physical-device acceptance is claimed.
