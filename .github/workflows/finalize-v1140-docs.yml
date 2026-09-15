@@ -1,0 +1,79 @@
+name: Finalize v1.14.0 documentation
+on:
+  push:
+    branches: [release/v1.14.0]
+    paths: [.github/workflows/finalize-v1140-docs.yml]
+permissions:
+  contents: write
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Capture settled animations and record publication
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('scripts/capture-mobile.py')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('page.screenshot(path=', 'page.screenshot(animations="disabled", path=')
+          p.write_text(s, encoding='utf-8')
+          p = Path('docs/v1/HANDOFF.md')
+          s = p.read_text(encoding='utf-8').split('\n## Validated candidate')[0]
+          s += '''
+
+          ## Published on 2026-09-15
+
+          GitHub Release v1.14.0 is public, not a prerelease or draft.
+          Release/tag source: af7ac108939d0c375800a49f64aa10926763a661.
+          Executable source: 165591cdfe5e682f928c739d4a9ecc088aaa09f2.
+          Product CI: 34952365172 (100 passed, 0 failed, 3 explicitly ignored).
+          Publication workflow: 34985358779, both documentation and package-and-publish jobs succeeded.
+          The interrupted publication was fixed by using Appearance.Width, the actual saved field, in the installer check; the application was not changed to bypass validation.
+
+          Exactly two uploaded assets: FlyPPTTimer-v1.14.0-portable-win-x64.zip and FlyPPTTimer-v1.14.0-setup-win-x64.zip. No checksum assets were uploaded.
+          Installation, runtime DLLs, preservation of existing configuration, pre-1.14 update-check migration, startup visibility and live Remote state passed on hosted Windows.
+          Eight focused English/Chinese browser checks passed. These are automated checks, not physical-phone or Office/WPS acceptance.
+
+          This documentation-only follow-up captures completed finite CSS animations so the file-browser images are not captured halfway through opening. Shipping HTML/CSS/JS and the executable remain unchanged. The release tag/assets remain fixed; corrected documentation screenshots are on the continuing branch/main, while the release ZIPs retain their publication-time documentation.
+          Fast-forward main to the finalized documentation commit without rewriting earlier history; read the remote ref before updating. Preserve v1.14.0 and earlier tags. No Gitee release was made in this task.
+          '''
+          import textwrap
+          head, tail = s.split('\n\n          ## Published on 2026-09-15', 1)
+          p.write_text(head.rstrip() + '\n\n## Published on 2026-09-15' + textwrap.dedent(tail).rstrip() + '\n', encoding='utf-8')
+      - name: Browser renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-noto-cjk
+          python -m pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Render current mobile GUI
+        run: |
+          python scripts/capture-mobile.py
+          python scripts/check-user-guide.py
+      - name: Commit documentation only
+        run: |
+          git diff --exit-code 165591cdfe5e682f928c739d4a9ecc088aaa09f2 -- Cargo.toml Cargo.lock src ui resources build.rs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/capture-mobile.py docs/media/v1.14.0 docs/v1/HANDOFF.md
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'docs: settle mobile GUI screenshots and record successful v1.14.0 publication'
+            git push origin HEAD:refs/heads/release/v1.14.0
+          fi
+          git rev-parse HEAD > finalized-source.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1140-finalized-documentation
+          path: |
+            finalized-source.txt
+            docs/v1/HANDOFF.md
+            docs/media/v1.14.0/*browser.png
+          retention-days: 14
