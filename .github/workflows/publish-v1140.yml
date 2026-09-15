@@ -128,7 +128,7 @@ jobs:
           }
           $configPath = Join-Path $install 'FlyPPTTimer.config.json'
           $cfg = Get-Content $configPath -Raw | ConvertFrom-Json
-          $cfg.Appearance.ManualWidth = 210
+          $cfg.Appearance.Width = 210
           $cfg.Version = '1.13.1'
           $cfg.Placement.Visible = $false
           $cfg.Update.CheckOnStartup = $false
@@ -149,7 +149,7 @@ jobs:
               }
               if ((Get-Date) -gt $deadline) { throw 'Installed app did not publish initial state' }
             } until ($state.timerState.displayText -and $state.timerState.windowVisible)
-            if ($state.version -ne '1.14.0' -or -not $cfg.Update.CheckOnStartup -or $cfg.Appearance.ManualWidth -ne 210) { throw 'Startup migration mismatch' }
+            if ($state.version -ne '1.14.0' -or -not $cfg.Update.CheckOnStartup -or $cfg.Appearance.Width -ne 210) { throw 'Startup migration mismatch' }
             New-Item -ItemType Directory -Force artifacts/release/v1.14.0/evidence | Out-Null
             $state | ConvertTo-Json -Depth 20 | Set-Content artifacts/release/v1.14.0/evidence/installed-state.json -Encoding utf8
           } finally {
