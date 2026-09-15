@@ -27,3 +27,10 @@ Executable source: 165591cdfe5e682f928c739d4a9ecc088aaa09f2.
 Windows CI: 34952365172, successful (100 passed, 0 failed, 3 ignored).
 Desktop GUI capture: 34953602785. Publication workflow: 34954515205.
 The public release and main references must be verified after the publication job completes.
+
+## Validated candidate
+
+Executable source: 165591cdfe5e682f928c739d4a9ecc088aaa09f2.
+Windows CI: 34952365172, successful (100 passed, 0 failed, 3 ignored).
+Desktop GUI capture: 34953602785. Publication workflow: 34985358779.
+The public release and main references must be verified after the publication job completes.

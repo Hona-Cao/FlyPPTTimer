@@ -214,3 +214,5 @@ d36fb7eb80acebf453103e924b6f0d2675d38642	2026-09-15T17:41:43+08:00	Hona-Cao	docs
 6d1ec31d7e88a5bbc61fec9865138fec26f5d1d9	2026-09-15T17:43:21+08:00	Hona-Cao	docs: stage v1.14.0 bilingual guides 3/4 [skip ci]
 809c7ec0b027cd7f038242e187f9faf5230a053c	2026-09-15T17:44:04+08:00	Hona-Cao	docs: stage v1.14.0 bilingual guides 4/4 [skip ci]
 a03e819c3eb3a102f32364ed5eca35075adcc71f	2026-09-15T17:48:05+08:00	Hona-Cao	release: publish v1.14.0 with current guides and portable/setup ZIPs
+0e7e38beb3d303b99453db975b86fe51e6f88ee1	2026-09-15T09:48:55Z	github-actions[bot]	docs: publish v1.14.0 guides, current desktop and phone GUI, and development record
+637fa1a1af637921d06f5915bae1dfad7ba85564	2026-09-15T22:59:18+08:00	Hona-Cao	ci: use the persisted Width field for v1.14.0 installer migration check
