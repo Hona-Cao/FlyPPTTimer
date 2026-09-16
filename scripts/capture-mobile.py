@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "src/FlyPPTTimer/Web"
-OUT = ROOT / "docs/media/v1.14.0"
+OUT = ROOT / "docs/media/v1.15.0"
 
 def sample_state(language, theme):
     english = language == "en"
@@ -20,7 +20,7 @@ def sample_state(language, theme):
                   fileSize=1048576*(i+1), modifiedMs=1789203600000) for i,n in enumerate(names)]
     timer = dict(mode="倒计时", state="运行中", running=True, durationMs=480000,
                  elapsedMs=168000, remainingMs=312000, displayText="05:12", isOvertime=False,
-                 continueOvertime=True, windowVisible=True, muted=False, timeUpBlackoutActive=False,
+                 continueOvertime=True, unlimited=False, windowVisible=True, muted=False, timeUpBlackoutActive=False,
                  ruleCount=len(items))
     ppt = dict(powerPointInstalled=True, powerPointRunning=True, hasPresentation=True,
                isSlideShowRunning=True, presentationName=names[1],
@@ -33,7 +33,12 @@ def sample_state(language, theme):
     return dict(ok=True,message="",timerState=timer,presentationState=ppt,**timer,
                 fileBrowsingEnabled=True, slideTiming=dict(presentationName=names[1],currentSlide=7,currentSeconds=23,totalSlides=24,
                     pages=[dict(slide=i,seconds=seconds) for i,seconds in enumerate([31,42,18,65,27,36,23],1)]),
-                connectedClients=1,version="1.14.0",revision=1,serverInstance="docs-fixture",uiTheme=theme)
+                scenarios=[
+                    dict(id="scenario-1",name="Competition" if english else "竞赛模式",badgeColor="#E53935",active=True),
+                    dict(id="scenario-2",name="Recruiting" if english else "人事招聘",badgeColor="#1E88E5",active=False),
+                    dict(id="scenario-3",name="Speaker Reminder" if english else "演讲者提醒",badgeColor="#43A047",active=False)],
+                activeScenarioId="scenario-1",
+                connectedClients=1,version="1.15.0",revision=1,serverInstance="docs-fixture",uiTheme=theme)
 
 def main():
     parser=argparse.ArgumentParser()
@@ -74,6 +79,11 @@ def main():
                 page.locator("#connection.connected").wait_for()
                 page.wait_for_timeout(350)
                 page.screenshot(animations="disabled", path=OUT/f"mobile-{language}-{theme}-timer.png",full_page=True)
+                page.locator("#scenarioCard .select-trigger").click()
+                page.locator(".select-popup.visible").wait_for()
+                page.wait_for_timeout(180)
+                page.screenshot(animations="disabled", path=OUT/f"mobile-{language}-{theme}-scenario.png",full_page=True)
+                page.keyboard.press("Escape")
                 page.locator('[data-page="pptPage"]').click()
                 page.wait_for_timeout(350)
                 page.screenshot(animations="disabled", path=OUT/f"mobile-{language}-{theme}-presentation.png",full_page=True)

@@ -652,3 +652,7 @@ Documentation only: English/Chinese README and complete tutorials describe conne
 ## 2026-09-16: existing v1.14.1 publication
 
 The user authorizes publishing the previously delivered v1.14.1 ZIPs to GitHub/Gitee, repairing release synchronization, and updating download links. No runtime change, new compilation or repackaging. Actual outcomes are recorded by the publication workflow.
+
+## v1.15.0 — 2026-09-16
+
+Implemented the authorized scenario, unlimited timing, update-source/automatic-installation, big-screen and fresh stopwatch-default changes. Final Windows CI, packaging, installation/updater helper checks and public Release identifiers are recorded in HANDOFF.md after publication.

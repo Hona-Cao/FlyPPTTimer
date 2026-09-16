@@ -56,6 +56,12 @@ Continued work after 1.13.1: slide timing/history, opt-in phone PPT browsing, co
 
 Delivered on 2026-09-15 and authorized for public release on 2026-09-16. The same ZIPs are published without rebuilding. Implementation and later illustrated documentation retain their real ancestry; previous releases stay unchanged.
 
+## v1.15.0 — 2026-09-16
+
+Added fresh-default slide timing, time-only big-screen defaults, selectable-source automatic updates, eight scenario snapshots with desktop/mobile switching and icon badges, and unlimited count-up timing. The implementation, focused CI fixes and release validation remain as real Git commits.
+
+新增逐页计时新默认、大屏仅时间默认、可选来源自动更新、最多八个情景模式及无限制正计时；实现、修复和验证提交按真实历史保留。
+
 ## Detailed records / 逐轮原始记录
 
 The following files retain the original requests, reviews and explicit limitations. Later approved requirements supersede older instructions; a historical “do not release yet” is not a current release prohibition.

@@ -2,15 +2,66 @@
 
 [Home](../README.md) · [简体中文](USER_GUIDE.zh-CN.md)
 
-For **v1.14.1 public release / Windows 10 and 11 x64**. [Download and install](../README.md#download).
+For **v1.15.0 public release / Windows 10 and 11 x64**. [Download and install](../README.md#download).
 
-Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to show slide numbers, use a different duration for each presentation, and control your talk from a phone browser. This guide follows the six Settings pages, then covers phone controls and everyday maintenance.
+Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to show slide numbers, use a different duration for each presentation, and control your talk from a phone browser. This guide follows the seven Settings pages, then covers phone controls and everyday maintenance.
 
 ## Contents
 
 [v1.14.1 illustrated workflow](#v1141) · [Connection and authorization](#file-access) · [Compact timer](#compact-timer) · [Zero-offset edges](#edge-placement)
 
-[Getting started](#start) · [Saving settings](#save) · [1. Timer](#timer) · [2. Behavior](#behavior) · [3. Appearance & Display](#appearance) · [4. Remote Control](#remote) · [5. Controls](#controls) · [6. Other](#other) · [Phone controls](#phone) · [Troubleshooting](#faq)
+[Getting started](#start) · [Saving settings](#save) · [1. Timer](#timer) · [2. Behavior](#behavior) · [3. Appearance & Display](#appearance) · [4. Remote Control](#remote) · [5. Controls](#controls) · [6. Scenarios](#scenarios) · [7. Other](#other) · [Phone controls](#phone) · [Troubleshooting](#faq)
+
+<a id="v1150"></a>
+## v1.15.0 complete feature guide
+
+### Default slide stopwatch and time-only big screen
+
+Fresh configurations enable the slide stopwatch. The ordinary overlay reserves its second row from startup: `00` at lower left is current-slide dwell seconds and `-/-` at lower right is the slide placeholder. During a show these update normally; revisiting a slide adds to the phone's accumulated table while the overlay's current visit restarts at `00`.
+
+The dedicated big-screen timer now has a separate purpose: **fresh configurations show main time only**. Enable the big-screen metadata option under Appearance & Display only when that fullscreen display also needs slide numbers and per-slide seconds. This does not change the ordinary overlay.
+
+### Unlimited timing for teaching and open sessions
+
+**Unlimited**, beside Default duration, is a distinct mode. Once applied it:
+
+- forces Count up from zero and does not allow Countdown;
+- has no effective target, hiding/disabling target and time-up actions;
+- does not run the two advance reminders, end reminder, or overtime styling for that round;
+- ignores ±1 minute and 3/5/8/10/15-minute presets while unlimited is active;
+- keeps presentation rules stored so they resume after Unlimited is disabled.
+
+This is useful for open-ended teaching, discussion, or elapsed-time tracking. It is not implemented as a fake very-large user-visible duration.
+
+### Scenarios: save a complete working setup
+
+<a id="scenarios"></a>
+Scenarios sits between Controls and Other. Up to eight snapshots store timer, behavior/alerts, appearance, displays, controls and presentation rules. Language, update source and Remote credentials stay outside snapshots so a business-mode switch does not alter maintenance/security settings.
+
+**Create:** configure and Apply the working state first, then open Scenarios, enter a name and save the current configuration. The first eight receive distinct red/blue/green/orange/purple/cyan/yellow/brown badge colors, which remain editable.
+
+**Maintain:** rename a scenario, assign a global switch hotkey, change its badge color, overwrite the saved snapshot from the current configuration, or delete the snapshot. Deleting a scenario never deletes PPT files.
+
+**Switch:** apply it on the Scenarios page, press its hotkey, choose it from the tray/timer context menus, or use the scenario selector on the phone Timer page. The active scenario adds its color as a bottom-right dot on the application/tray icon. The phone selector sends the same Remote scenario command to the PC.
+
+![Scenarios settings](media/v1.15.0/settings/en-06-scenarios-part-1.png)
+
+<img src="media/v1.15.0/mobile-en-light-scenario.png" width="360" alt="Scenario selector on the phone Timer page">
+
+Examples you can create include Competition, Recruiting with big screen enabled in its snapshot, or Speaker Reminder with the ordinary overlay limited to the primary screen. They are examples, not mandatory built-in presets.
+
+### Update source and automatic installation
+
+Choose **Gitee** or **GitHub** under Other → Software Updates. With no saved source, the application reads the Windows geographic-region setting: CN (mainland China) selects Gitee; other regions select GitHub. It does not query GPS or precise IP location, and a later explicit user choice is retained.
+
+When a newer stable version exists, the dialog shows the complete release notes from that selected source. Choose **Download and install**:
+
+| Edition | Automatic update path |
+|---|---|
+| Installed | Download `setup-win-x64.zip` → extract in a temporary directory → exit current process → run the installer silently → restart FlyPPTTimer. |
+| Portable | Download `portable-win-x64.zip` → extract → exit → replace application files in place → preserve `FlyPPTTimer.config.json` and `alert-sounds` → restart. |
+
+This is an **in-app automatic update**, not an in-memory hot patch with the current process kept alive. Normal network access and write permission are still required; save unsaved PowerPoint/WPS work before updating.
 
 <a id="v1141"></a>
 ## v1.14.1 illustrated instructions
@@ -474,7 +525,15 @@ Click-through prevents the timer from blocking clicks. Lock window prevents acci
 Closing Settings leaves timing and remote control available. To end the application entirely, use **Exit** in the notification-area menu.
 
 <a id="other"></a>
-## 6. Other: language, updates, backups, and file locations
+## 6. Scenarios: switch a complete working configuration
+
+Save up to eight snapshots. Names identify them, hotkeys switch them globally, badge colors mark the active scenario on the tray icon, and Overwrite with current configuration refreshes an existing snapshot. Switching applies timer, alert, appearance, display, control and presentation-rule settings together.
+
+![Scenarios settings page](media/v1.15.0/settings/en-06-scenarios-part-1.png)
+
+See the [v1.15.0 scenario section](#scenarios) above for the complete workflow.
+
+## 7. Other: language, updates, backups, and file locations
 
 ### Language and updates
 

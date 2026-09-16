@@ -1,5 +1,14 @@
 # CHANGELOG / 更新记录
 
+## 1.15.0 — 2026-09-16
+
+- Fresh configurations enable the per-slide stopwatch; dedicated big-screen timing is time-only by default with an optional metadata switch.
+- Select GitHub/Gitee update source; Windows region CN defaults to Gitee, elsewhere GitHub. Updates now download, extract, install/replace and restart in-app.
+- Added up to eight named Scenarios with hotkeys, badge colors, tray/timer menus and phone Remote switching.
+- Added Unlimited count-up mode with no target, time-up action, reminders or overtime behavior.
+- 新增情景模式、无限制计时、应用内自动更新、逐页秒表新默认值和大屏仅时间默认值。
+- Full notes: [docs/RELEASE_NOTES_v1.15.0.md](docs/RELEASE_NOTES_v1.15.0.md).
+
 ## 1.14.1 — 2026-09-16（正式发布 / public release）
 
 - 手机连接后，未开放文件浏览时自动定位到电脑授权开关；勾选并应用才生效，连接本身不授权。

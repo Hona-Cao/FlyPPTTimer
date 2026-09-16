@@ -1,4 +1,4 @@
-# Building and packaging FlyPPTTimer v1.14.1
+# Building and packaging FlyPPTTimer v1.15.0
 
 [Home](../README.md) · [中文用法](USER_GUIDE.zh-CN.md)
 
@@ -11,7 +11,7 @@ Requirements: Windows x64; Rust **1.92.0** with the MSVC toolchain, rustfmt and 
 ```powershell
 git clone https://github.com/Hona-Cao/FlyPPTTimer.git
 cd FlyPPTTimer
-git checkout v1.14.1
+git checkout v1.15.0
 rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
 cargo fmt --all -- --check
 cargo clippy --locked --all-targets --all-features -- -D warnings
@@ -30,14 +30,14 @@ Run these in an environment with the Windows SDK resource compiler on PATH. A C+
 
 Run from a PowerShell development session where your local build scripts are permitted. This script is a developer packaging tool, not a runtime dependency; the application does not launch PowerShell for audio.
 
-The script uses `docs/v1141-default-config.json` for clean current defaults, includes app-local VC runtime DLLs, license and current documentation, compiles the per-user installer, and emits:
+The script uses `docs/v1150-default-config.json` for clean current defaults, includes app-local VC runtime DLLs, license and current documentation, compiles the per-user installer, and emits:
 
-- `artifacts/release/v1.14.1/FlyPPTTimer-v1.14.1-portable-win-x64.zip`
-- `artifacts/release/v1.14.1/FlyPPTTimer-v1.14.1-setup-win-x64.zip`
+- `artifacts/release/v1.15.0/FlyPPTTimer-v1.15.0-portable-win-x64.zip`
+- `artifacts/release/v1.15.0/FlyPPTTimer-v1.15.0-setup-win-x64.zip`
 
 Use `-IsccPath 'C:\...\ISCC.exe'` when Inno Setup is not in its conventional location. The installer keeps the existing AppId and does not replace a user's existing configuration with defaults. `docs/default-config.json` remains the **v0.30.2 compatibility test fixture**; do not repurpose it as current packaging defaults.
 
-For public v1.14.1, publication reuses the existing ZIPs without repackaging. Their original packaging reused the exact application accepted by the user, from Actions run `34992459836`, product source `6e8bd3aeaec7ae8c247e09b535157db7f490047a`:
+For public v1.15.0, publication reuses the existing ZIPs without repackaging. Their original packaging reused the exact application accepted by the user, from Actions run `34992459836`, product source `6e8bd3aeaec7ae8c247e09b535157db7f490047a`:
 
 ```powershell
 ./scripts/build-release.ps1 -ApplicationDirectory C:\path\to\accepted\app
@@ -51,4 +51,4 @@ The optional directory must contain `FlyPPTTimer.exe` with matching version meta
 
 The publication workflow prepares the two ZIP assets, smoke-tests installation, and publishes only on the authorized `main` branch. It creates no separate checksum assets. Repository commits, Actions provenance and the package `BUILD.txt` retain source traceability.
 
-[Real development timeline](DEVELOPMENT_HISTORY.md) · [Screenshot reproduction](media/v1.14.1/README.md)
+[Real development timeline](DEVELOPMENT_HISTORY.md) · [Screenshot reproduction](media/v1.15.0/README.md)

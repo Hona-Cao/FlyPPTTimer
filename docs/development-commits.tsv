@@ -216,3 +216,29 @@ d36fb7eb80acebf453103e924b6f0d2675d38642	2026-09-15T17:41:43+08:00	Hona-Cao	docs
 a03e819c3eb3a102f32364ed5eca35075adcc71f	2026-09-15T17:48:05+08:00	Hona-Cao	release: publish v1.14.0 with current guides and portable/setup ZIPs
 0e7e38beb3d303b99453db975b86fe51e6f88ee1	2026-09-15T09:48:55Z	github-actions[bot]	docs: publish v1.14.0 guides, current desktop and phone GUI, and development record
 637fa1a1af637921d06f5915bae1dfad7ba85564	2026-09-15T22:59:18+08:00	Hona-Cao	ci: use the persisted Width field for v1.14.0 installer migration check
+e72fdec7e305ecb74193f477a1391348747da4f5	2026-09-16T08:56:02+08:00	Hona-Cao	fix: finish v1.14.1 Gitee uploads with separate connection and transfer timeouts
+26ecff129ae120028e65593e6c83a81d6163789a	2026-09-16T08:56:36+08:00	Hona-Cao	fix: preserve Python indentation in the Gitee transfer repair
+8ad615e648269a05d8c8555b14b067a4b35a0a0d	2026-09-16T00:56:46Z	github-actions[bot]	fix: give Gitee multipart uploads a full transfer timeout and correct remaining version note
+59d66c28bd000b8bc6fc54a9a989c2d1579e2745	2026-09-16T00:57:54Z	github-actions[bot]	docs: record verified v1.14.1 publication on GitHub and Gitee
+863dcdcfcf40a8d9b5c963403a1632f0e12a60af	2026-09-16T09:52:34+08:00	Hona-Cao	ci: harden permanent GitHub to Gitee release mirroring
+384225c3a98f333f723d6c3b9fe0c45d6b14ba0a	2026-09-16T09:52:42+08:00	Hona-Cao	ci: make Gitee release mirror permanent and retryable
+da899c72e868c8139073112f2786e3e438ad5c3a	2026-09-16T11:52:12+08:00	Hona-Cao	build: stage v1.15.0 product patch (1/3)
+bf61229807cad98f8aec349a28072078a47d794f	2026-09-16T11:53:09+08:00	Hona-Cao	build: stage v1.15.0 product patch (2/3)
+b4d0091f3c967a17fa88064978b90f7fda8e74ad	2026-09-16T11:55:03+08:00	Hona-Cao	build: stage v1.15.0 product patch (3/3)
+581b165bab46bd66ce06fa9a5f481ed4499b80a8	2026-09-16T11:55:25+08:00	Hona-Cao	ci: apply and validate staged v1.15.0 product changes
+cc5b116c596d9738cbebc19e841ada4e59013503	2026-09-16T03:55:37Z	github-actions[bot]	feat: implement v1.15.0 scenarios, unlimited timing and automatic updates
+85b89dfb128803e19e5ac5a9f77174fce43e8a48	2026-09-16T11:56:14+08:00	Hona-Cao	ci: bootstrap and validate v1.15.0 release branch
+c3069815c2d86e39badf1990f6131294addf9dbd	2026-09-16T11:57:54+08:00	Hona-Cao	ci: format and revalidate v1.15.0 release branch
+627f4ce9483b49ce951eeb09ddbef9ebbdf7f884	2026-09-16T03:58:11Z	github-actions[bot]	style: format v1.15.0 Rust sources
+609d610220b5aa4103e3616feb3588b1b20c4e09	2026-09-16T12:02:57+08:00	Hona-Cao	ci: fix three v1.15.0 compile blockers and revalidate
+2ce51688e5b23364deb2abfd85e1402012866e39	2026-09-16T04:03:12Z	github-actions[bot]	fix: resolve v1.15.0 Windows compile blockers
+dde57f16d9e680668de93cfdd7bf65e4869381ce	2026-09-16T12:08:51+08:00	Hona-Cao	ci: correct v1.15.0 tray mutability and continue validation
+5d5b74a6a7975870307885314e9d47d3a4c10e81	2026-09-16T04:09:07Z	github-actions[bot]	fix: correct tray notification mutability
+8c9932a7f56ada19fba6998ca9221300eac6f609	2026-09-16T12:28:33+08:00	Hona-Cao	ci: fix remaining v1.15.0 clippy blockers and continue validation
+5e746632c674da8e2756d995c91a3e683b233559	2026-09-16T04:28:53Z	github-actions[bot]	fix: satisfy v1.15.0 strict lint checks
+154c818a855e3772e75587c88b3a1fda1f46590d	2026-09-16T12:31:58+08:00	Hona-Cao	chore: remove one-shot v1.15.0 patch workflow before release
+5d62015cc31c0909dc4aa1da8583dd73179ba77c	2026-09-16T12:38:43+08:00	Hona-Cao	ci: align legacy default regression with v1.15.0 stopwatch default
+aed9763bfe7073c9c906ebfc25998d2d02ffea22	2026-09-16T04:39:01Z	github-actions[bot]	test: exclude v1.15 stopwatch default from legacy parity
+74cddc41a3b9e461d394f1fa4aadd8e7507f65a5	2026-09-16T12:55:47+08:00	Hona-Cao	Merge v1.15.0 scenarios, unlimited timing and automatic updates
+6f65d9df0059ac44134f76c8593e672efea50f77	2026-09-16T12:58:00+08:00	Hona-Cao	build: stage v1.15.0 documentation updater
+f634448d710768dfc5c8ab6c301d4c498f7bdbc9	2026-09-16T12:59:04+08:00	Hona-Cao	release: publish validated v1.15.0 with current guides and updater smoke tests

@@ -116,3 +116,7 @@ A successful phone connection should lead directly to the desktop file-access au
 ## 2026-09-16: existing v1.14.1 publication
 
 The user authorizes publishing the previously delivered v1.14.1 ZIPs to GitHub/Gitee, repairing release synchronization, and updating download links. No runtime change, new compilation or repackaging. Actual outcomes are recorded by the publication workflow.
+
+## v1.15.0 authorization (2026-09-16)
+
+The user explicitly authorized implementing and publicly releasing v1.15.0 with: per-slide timing on for fresh configurations; time-only big-screen default; selectable GitHub/Gitee update source with Windows-region default and automatic download/install/restart; up to eight scenario snapshots with hotkeys, colored icon badges, desktop/mobile/Remote switching; and Unlimited count-up mode with no target/reminder/end-action semantics.

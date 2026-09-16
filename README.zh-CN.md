@@ -8,23 +8,51 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download)
 [![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**当前正式版：v1.14.1。** 支持 Windows 10 / 11 x64，无需安装 .NET。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机无需安装 App。
+**当前正式版：v1.15.0。** 支持 Windows 10 / 11 x64，无需安装 .NET。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机无需安装 App。
 
 ## 导航
 
-[下载与安装](#download) · [v1.14.1 新用法](#v1141) · [快速开始](#quick-start) · [六个设置模块](#settings) · [手机遥控](#phone) · [常见问题](#faq) · [完整教程](docs/USER_GUIDE.zh-CN.md)
+[下载与安装](#download) · [v1.15.0 新功能](#v1150) · [v1.15.0 新用法](#v1141) · [快速开始](#quick-start) · [七个设置模块](#settings) · [手机遥控](#phone) · [常见问题](#faq) · [完整教程](docs/USER_GUIDE.zh-CN.md)
 
 <a id="download"></a>
 ## 下载与安装
 
-以下下载均为 **v1.14.1**：直接发布之前已交付的便携版和安装版 ZIP，没有重新编译或重新打包。网上图文教程已更新；为保持安装包原样，包内文档保留构建时的版本。
+以下下载均为 **v1.15.0**：直接发布之前已交付的便携版和安装版 ZIP，没有重新编译或重新打包。网上图文教程已更新；为保持安装包原样，包内文档保留构建时的版本。
 
-**中国大陆用户建议从 [Gitee 发布页](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) 下载。** Gitee 是本项目的国内镜像；镜像同步可能有延迟，请以页面实际版本为准。如果当前网络可以正常访问 GitHub，也可以使用右侧的 GitHub 直链。
+**中国大陆用户建议从 [Gitee 发布页](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.15.0) 下载。** Gitee 是本项目的国内镜像；镜像同步可能有延迟，请以页面实际版本为准。如果当前网络可以正常访问 GitHub，也可以使用右侧的 GitHub 直链。
 
 | 版本 | 中国大陆下载 | GitHub 下载 | 使用方式 |
 |---|---|---|---|
-| 便携版 | [Gitee 发布页（选择便携版）](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) | [FlyPPTTimer-v1.14.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
-| 安装版 | [Gitee 发布页（选择安装版）](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) | [FlyPPTTimer-v1.14.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
+| 便携版 | [Gitee 发布页（选择便携版）](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.15.0) | [FlyPPTTimer-v1.15.0-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.15.0/FlyPPTTimer-v1.15.0-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
+| 安装版 | [Gitee 发布页（选择安装版）](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.15.0) | [FlyPPTTimer-v1.15.0-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.15.0/FlyPPTTimer-v1.15.0-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
+
+<a id="v1150"></a>
+## v1.15.0：情景模式、无限制计时与应用内自动更新
+
+**全新配置默认开启逐页秒表。** 普通悬浮窗仍是主时间在上，下一行左侧为当前页秒数、右侧为页数；尚未读取到演示状态时显示 `00` 和 `-/-`。如果你不需要逐页停留时间，可在“外观与显示”关闭。
+
+**大屏计时器默认改为只显示主时间。** 大屏模式主要用于独立计时，因此新配置不会把 PPT 页数或逐页秒表带到扩展屏。确实用于 PPT 汇报时，可在“外观与显示”单独开启“大屏显示页数与逐页秒表”。
+
+**软件更新现在可以在应用内完成。** “其他设置 → 软件更新”选择 Gitee 或 GitHub。首次没有保存过来源时，Windows 地理区域设置为中国大陆（CN）默认 Gitee，其他地区默认 GitHub；这读取的是 Windows 区域设置，不使用 GPS 或精确定位。发现新版后阅读完整更新说明，点击“下载并安装”：安装版自动下载 setup ZIP、解压并静默安装；便携版自动下载 portable ZIP，退出后原地替换程序文件，同时保留 `FlyPPTTimer.config.json` 和 `alert-sounds`，完成后自动重启。
+
+**新增“情景模式”主页面，最多保存 8 个配置快照。** 先把当前计时、外观、显示器、快捷键、文件规则等调好，再点“保存当前配置”为它命名。每个模式可自定义切换快捷键和图标右下角圆点颜色；前 8 个新模式会自动分配易区分的颜色。当前模式可以从设置、托盘右键、计时浮窗右键、手机计时页或 Remote 命令切换。切换后立即应用整套快照。
+
+例如，你可以自己创建：**“竞赛模式”**（普通 PPT 计时）、**“人事招聘”**（快照中开启大屏）、**“演讲者提醒”**（快照中只把普通浮窗放在主屏）。这些只是使用示例，不是程序预装的固定模式。
+
+**默认时长旁新增“无限制”。** 勾选后固定使用正计时，不存在预设到达时间，因此到时动作、提前提醒、结束提醒和超时样式都会隐藏／停用，时长预设和加减一分钟也不会改变这一轮。关闭“无限制”后，原有默认时长、文件规则和正常提醒继续可用。
+
+| 新功能 | 入口 |
+|---|---|
+| 情景模式 | 设置 → 情景模式；也可从托盘／计时器右键菜单和手机计时页切换 |
+| 无限制授课 | 设置 → 时长设置 → 默认时长右侧“无限制” |
+| 更新源与自动安装 | 设置 → 其他设置 → 软件更新 |
+| 大屏是否显示 PPT 元数据 | 设置 → 外观与显示 → 大屏显示页数与逐页秒表 |
+
+![v1.15.0 情景模式设置示例](docs/media/v1.15.0/settings/zh-CN-06-scenarios-part-1.png)
+
+<img src="docs/media/v1.15.0/mobile-zh-CN-light-scenario.png" width="360" alt="v1.15.0手机计时页切换情景模式">
+
+[完整操作说明](docs/USER_GUIDE.zh-CN.md#v1150)
 
 <a id="v1141"></a>
 ## v1.14.1：连接后授权、紧凑浮窗与贴边定位
@@ -65,10 +93,10 @@
 4. 手机和电脑连接同一网络，从电脑右键菜单打开“远程控制”，用手机扫描实时二维码。v1.14.1 尚未开放文件浏览时会在电脑引导授权；仅遥控计时或已有文稿不必开放浏览。
 5. 在手机“演示”页打开文稿，再选“从头放映”或“从当前页放映”。
 
-只需要独立计时，完成前两步即可。默认是 **8 分钟倒计时**。每次启动都会显示计时浮窗，本次运行中按 **F5** 可显示／隐藏。
+只需要独立计时，完成前两步即可。默认是 **8 分钟倒计时**，**逐页秒表默认开启**。每次启动都会显示计时浮窗，本次运行中按 **F5** 可显示／隐藏。
 
 <a id="settings"></a>
-## 六个设置模块
+## 七个设置模块
 
 打开方式：**右键计时浮窗或任务栏通知区图标 → 设置**。
 
@@ -81,7 +109,8 @@
 | [外观与显示](#settings-appearance) | 主题、配色、尺寸、页数排版、圆角、不透明度、多屏和位置。 |
 | [远程控制](#settings-remote) | 服务开关、端口、连接设备、访问地址和连接管理。 |
 | [控制设置](#settings-controls) | 快捷键、鼠标穿透、窗口锁定、托盘和关闭行为。 |
-| [其他设置](#settings-other) | 语言、更新、配置导入导出、恢复默认、配置与日志位置。 |
+| [情景模式](#settings-scenarios) | 保存最多 8 个配置快照，设置名称、快捷键和图标角标颜色。 |
+| [其他设置](#settings-other) | 语言、更新来源与自动安装、配置导入导出、恢复默认、配置与日志位置。 |
 
 <a id="settings-timer"></a>
 ### 1. 时长设置
@@ -155,8 +184,17 @@
 
 [查看完整快捷键表和窗口行为说明](docs/USER_GUIDE.zh-CN.md#controls)
 
+<a id="settings-scenarios"></a>
+### 6. 情景模式
+
+最多保存 8 个当前配置快照。先把时长、提醒、外观、显示器、快捷键和文件规则调整好，再保存为一个自定义名称。可以给每个模式设置独立快捷键和角标颜色，切换后立即应用整套保存内容。当前模式会在托盘图标右下角显示对应颜色圆点。
+
+![情景模式列表与快捷键、角标颜色](docs/media/v1.15.0/settings/zh-CN-06-scenarios-part-1.png)
+
+[查看创建、覆盖、切换和删除情景模式的详细说明](docs/USER_GUIDE.zh-CN.md#scenarios)
+
 <a id="settings-other"></a>
-### 6. 其他设置
+### 7. 其他设置
 
 ![语言、版本检查和配置管理](docs/media/v1.14.0/settings/zh-CN-06-other-part-1.png)
 

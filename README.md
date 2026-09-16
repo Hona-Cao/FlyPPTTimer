@@ -8,23 +8,51 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download)
 [![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**Current public release: v1.14.1.** For Windows 10/11 x64; .NET is not required. Standalone timing works without Office. Slide numbers and presentation control require compatible desktop PowerPoint or WPS Presentation. The phone only needs a browser.
+**Current public release: v1.15.0.** For Windows 10/11 x64; .NET is not required. Standalone timing works without Office. Slide numbers and presentation control require compatible desktop PowerPoint or WPS Presentation. The phone only needs a browser.
 
 ## Contents
 
-[Download](#download) · [v1.14.1 workflow](#v1141) · [Quick start](#quick-start) · [Settings](#settings) · [Phone remote](#phone) · [FAQ](#faq) · [Complete guide](docs/USER_GUIDE.en.md)
+[Download](#download) · [v1.15.0 features](#v1150) · [v1.15.0 workflow](#v1141) · [Quick start](#quick-start) · [Settings](#settings) · [Phone remote](#phone) · [FAQ](#faq) · [Complete guide](docs/USER_GUIDE.en.md)
 
 <a id="download"></a>
 ## Download and install
 
-Both downloads provide **v1.14.1**: the exact previously delivered portable/setup ZIPs, without rebuilding or repackaging. Online guides are current; documentation inside the unchanged archives reflects their original build.
+Both downloads provide **v1.15.0**: the exact previously delivered portable/setup ZIPs, without rebuilding or repackaging. Online guides are current; documentation inside the unchanged archives reflects their original build.
 
-**For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1).** Gitee is the mainland mirror; synchronization can lag, so check the version shown there. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
+**For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.15.0).** Gitee is the mainland mirror; synchronization can lag, so check the version shown there. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
 
 | Edition | Mainland China | GitHub | Instructions |
 |---|---|---|---|
-| Portable | [Gitee Releases — choose Portable](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) | [FlyPPTTimer-v1.14.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
-| Setup | [Gitee Releases — choose Setup](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) | [FlyPPTTimer-v1.14.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
+| Portable | [Gitee Releases — choose Portable](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.15.0) | [FlyPPTTimer-v1.15.0-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.15.0/FlyPPTTimer-v1.15.0-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
+| Setup | [Gitee Releases — choose Setup](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.15.0) | [FlyPPTTimer-v1.15.0-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.15.0/FlyPPTTimer-v1.15.0-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
+
+<a id="v1150"></a>
+## v1.15.0: scenarios, unlimited timing, and automatic in-app updates
+
+**Fresh configurations enable the per-slide stopwatch by default.** The ordinary overlay keeps main time above, current-slide seconds at lower left, and slide numbers at lower right. Before presentation state is available it shows `00` and `-/-`. Turn the stopwatch off under Appearance & Display when you do not need slide dwell time.
+
+**The big-screen timer is time-only by default.** It is intended primarily for standalone timing, so a fresh configuration does not put slide numbers or the slide stopwatch on the dedicated fullscreen display. Enable **Show slide numbers and per-slide stopwatch on big screen** when a presentation workflow needs them.
+
+**Updates can now finish inside FlyPPTTimer.** Choose Gitee or GitHub under Other → Software Updates. When no source has been saved, a Windows geographic-region setting of mainland China (CN) defaults to Gitee; other regions default to GitHub. This uses the Windows region setting, not GPS or precise location. After reading the complete release notes, choose **Download and install**. Installed editions download/extract the setup ZIP and run it silently; portable editions download the portable ZIP, replace application files after exit while preserving `FlyPPTTimer.config.json` and `alert-sounds`, then restart automatically.
+
+**A new Scenarios page stores up to eight configuration snapshots.** Prepare timer, appearance, displays, controls and presentation rules, then save the current configuration with a custom name. Each scenario can have its own switch hotkey and bottom-right tray-icon badge color; the first eight receive distinct default colors. Switch from Settings, the tray/timer context menus, the phone Timer page, or a Remote command. Switching immediately applies the saved snapshot.
+
+For example, you can create **Competition**, **Recruiting** (snapshot with big screen enabled), or **Speaker Reminder** (ordinary overlay on the primary display only). These are examples you create yourself, not built-in mandatory presets.
+
+**Unlimited** now sits beside Default duration. It forces count-up and removes the concept of a target time, so time-up actions, advance/end reminders, overtime styling, presets and ±1 minute controls do not affect that unlimited round. Disable Unlimited to resume the saved duration, per-file rules and normal alerts.
+
+| Feature | Entry point |
+|---|---|
+| Scenarios | Settings → Scenarios; tray/timer context menus and phone Timer page also switch them |
+| Unlimited teaching | Settings → Timer → Unlimited beside Default duration |
+| Update source + automatic installation | Settings → Other → Software Updates |
+| Big-screen PPT metadata | Settings → Appearance & Display → big-screen metadata option |
+
+![v1.15.0 Scenarios settings example](docs/media/v1.15.0/settings/en-06-scenarios-part-1.png)
+
+<img src="docs/media/v1.15.0/mobile-en-light-scenario.png" width="360" alt="v1.15.0 phone Timer page scenario selector">
+
+[Complete instructions](docs/USER_GUIDE.en.md#v1150)
 
 <a id="v1141"></a>
 ## v1.14.1: connection guidance, a compact timer, and exact screen edges
@@ -65,7 +93,7 @@ The **update window** now shows complete, scrollable release notes and can be re
 4. Connect the phone and computer to the same network. Open Remote Control from the context menu and scan the live QR code.
 5. On the phone's Presentation page, open a listed file and start the slide show from the beginning or current slide.
 
-For standalone timing, only the first two steps are needed. The default is an **eight-minute countdown**, with overtime available. The floating timer appears whenever the application starts; **F5** shows/hides it during the session.
+For standalone timing, only the first two steps are needed. The fresh default is an **eight-minute countdown** with the **per-slide stopwatch enabled**; overtime remains available. The floating timer appears whenever the application starts; **F5** shows/hides it during the session.
 
 <a id="settings"></a>
 ## Settings: what each page does
@@ -81,7 +109,8 @@ Open Settings by right-clicking the floating timer or its notification-area icon
 | [Appearance & Display](#settings-appearance) | Theme, timer colors, sizing, slide-number layout, corners, opacity, displays, and position. |
 | [Remote Control](#settings-remote) | Service, ports, connected devices, addresses, connection credentials, and firewall tools. |
 | [Controls](#settings-controls) | Function keys, click-through, position locking, tray minimization, and close behavior. |
-| [Other](#settings-other) | Language, update checks, configuration import/export, defaults, file locations, and project information. |
+| [Scenarios](#settings-scenarios) | Save up to eight configuration snapshots with names, hotkeys and icon badge colors. |
+| [Other](#settings-other) | Language, update source/automatic installation, configuration import/export, defaults, locations and project information. |
 
 <a id="settings-timer"></a>
 ### 1. Timer
@@ -155,8 +184,17 @@ Minimize to tray hides the minimized Settings window in the notification area. C
 
 [Complete shortcut table and window-behavior guide](docs/USER_GUIDE.en.md#controls)
 
+<a id="settings-scenarios"></a>
+### 6. Scenarios
+
+Store up to eight snapshots of the current timer, alerts, appearance, displays, controls and presentation rules. Give each scenario a custom name, switch hotkey and badge color. Switching applies the whole snapshot immediately, and the tray icon shows the active color as a bottom-right dot.
+
+![Scenario list, hotkeys and badge colors](docs/media/v1.15.0/settings/en-06-scenarios-part-1.png)
+
+[Detailed create, overwrite, switch and delete instructions](docs/USER_GUIDE.en.md#scenarios)
+
 <a id="settings-other"></a>
-### 6. Other
+### 7. Other
 
 ![Language, updates, and configuration management](docs/media/v1.14.0/settings/en-06-other-part-1.png)
 
