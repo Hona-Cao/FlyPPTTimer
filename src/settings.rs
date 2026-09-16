@@ -654,7 +654,6 @@ pub fn create(
                             | "timer.per_slide"
                             | "timer.unlimited"
                             | "timer.duration_pair"
-                            | "placement.big"
                             | "appearance.slide_font_follow"
                             | "appearance.slide_color_follow"
                     ) {

@@ -115,7 +115,7 @@ impl DesktopIntegration {
     }
 
     pub fn notify(&self, message: &str, milliseconds: u32) {
-        let mut data = NOTIFYICONDATAW {
+        let data = NOTIFYICONDATAW {
             cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
             hWnd: self.hwnd,
             uID: TRAY_ID,
@@ -721,8 +721,8 @@ fn load_badged_app_icon(color: Option<&str>) -> windows_sys::Win32::UI::WindowsA
         let mut slot = TRAY_ICON.get_or_init(Default::default).lock().unwrap();
         let old = std::mem::replace(&mut *slot, icon as isize);
         if old != 0 {
-            unsafe { DestroyIcon(old as _) }
-        };
+            let _ = unsafe { DestroyIcon(old as _) };
+        }
         icon
     }
 }
