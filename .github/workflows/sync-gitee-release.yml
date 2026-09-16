@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing stable GitHub Release tag to retry, for example v1.14.1
+        description: Existing stable GitHub Release tag to retry, for example v1.15.0
         required: true
         type: string
   workflow_call:
@@ -17,12 +17,25 @@ on:
     secrets:
       GITEE_TOKEN:
         required: true
+  # GitHub suppresses most event cascades caused by GITHUB_TOKEN. A stable
+  # Release created inside Actions can therefore miss the `release` trigger.
+  # Hourly reconciliation makes the mirror self-healing even when a publisher
+  # forgets to call this reusable workflow explicitly.
+  schedule:
+    - cron: '17 * * * *'
+  # Editing the mirror logic also reconciles the current latest release. This
+  # provides an immediate recovery path without a one-off workflow.
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-gitee-release.yml'
+      - 'scripts/sync-gitee-release.py'
 
 permissions:
   contents: read
 
 concurrency:
-  group: gitee-release-${{ github.event.release.tag_name || inputs.tag }}
+  group: gitee-release-${{ github.event.release.tag_name || inputs.tag || 'latest' }}
   cancel-in-progress: false
 
 jobs:
@@ -35,7 +48,7 @@ jobs:
       GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
       GITEE_OWNER: hona-cao
       GITEE_REPO: fly-ppttimer
-      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      REQUESTED_TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GITHUB_ASSET_WAIT_SECONDS: '240'
       GITHUB_ASSET_POLL_SECONDS: '10'
       GITEE_UPLOAD_ATTEMPTS: '3'
@@ -50,11 +63,27 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Resolve stable release tag
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$REQUESTED_TAG"
+          if [ -z "$tag" ]; then
+            tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease --jq 'select(.isDraft == false and .isPrerelease == false) | .tagName')"
+          fi
+          if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "No stable semantic-version Release is available to mirror." >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Mirroring $tag"
+
       - name: Install sync dependency
         run: python -m pip install 'requests>=2.32,<3'
 
       - name: Mirror release notes and two ZIP assets to Gitee
-        run: python scripts/sync-gitee-release.py "$RELEASE_TAG"
+        run: python scripts/sync-gitee-release.py "${{ steps.release.outputs.tag }}"
 
       - name: Preserve synchronization evidence
         uses: actions/upload-artifact@v4
