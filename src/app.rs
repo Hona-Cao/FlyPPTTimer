@@ -1860,11 +1860,11 @@ fn execute_remote_timer_command(
                 })
             });
             let mut settings = config.timer.clone();
-            if !settings.unlimited {
-                if let Some(rule) = rule {
-                    settings.default_duration = rule.duration.clone();
-                    settings.mode = rule.mode;
-                }
+            if !settings.unlimited
+                && let Some(rule) = rule
+            {
+                settings.default_duration = rule.duration.clone();
+                settings.mode = rule.mode;
             }
             timer
                 .set_duration(settings.runtime_duration())
@@ -1950,6 +1950,7 @@ fn remote_path(id: &str) -> Option<String> {
     Some(id.to_owned())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_scenario_runtime(
     id: &str,
     window: &slint::Weak<AppWindow>,

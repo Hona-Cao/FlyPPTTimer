@@ -540,10 +540,6 @@ pub mod native {
         Cancel,
     }
 
-    pub fn open_url(value: &str) {
-        let _ = crate::remote::open_url(value);
-    }
-
     fn wide(value: &str) -> Vec<u16> {
         value.encode_utf16().chain(Some(0)).collect()
     }
@@ -801,82 +797,82 @@ pub fn create(
                     }
                     return;
                 }
-                if let Some(rest) = action_key.strip_prefix("scenario.") {
-                    if let Some((id, action)) = rest.rsplit_once('.') {
-                        if action == "delete" {
-                            crate::scenario::remove(&mut draft.borrow_mut(), id);
-                            if let Some(w) = weak.upgrade() {
-                                refresh(
-                                    &w,
-                                    &draft.borrow(),
-                                    *page.borrow(),
-                                    w.get_selected_rule(),
-                                    &selected_rules.borrow(),
-                                    true,
-                                    ui_language,
-                                    &remote_for_action,
-                                    &addresses_for_action,
-                                );
-                            }
-                            return;
-                        }
-                        if action == "save" {
-                            if let Err(message) =
-                                crate::scenario::save_current(&mut draft.borrow_mut(), id)
-                            {
-                                native::message(&message, "FlyPPTTimer", true);
-                            }
-                            if let Some(w) = weak.upgrade() {
-                                refresh(
-                                    &w,
-                                    &draft.borrow(),
-                                    *page.borrow(),
-                                    w.get_selected_rule(),
-                                    &selected_rules.borrow(),
-                                    true,
-                                    ui_language,
-                                    &remote_for_action,
-                                    &addresses_for_action,
-                                );
-                            }
-                            return;
-                        }
-                        if action == "apply" {
-                            let mut candidate = applied_for_action.borrow().clone();
-                            // Keep metadata edits made in this Settings draft before switching.
-                            candidate.scenarios = draft.borrow().scenarios.clone();
-                            if let Err(message) = crate::scenario::apply(&mut candidate, id) {
-                                native::message(&message, "FlyPPTTimer", true);
-                                return;
-                            }
-                            match apply_immediate_config(
-                                candidate,
+                if let Some(rest) = action_key.strip_prefix("scenario.")
+                    && let Some((id, action)) = rest.rsplit_once('.')
+                {
+                    if action == "delete" {
+                        crate::scenario::remove(&mut draft.borrow_mut(), id);
+                        if let Some(w) = weak.upgrade() {
+                            refresh(
+                                &w,
+                                &draft.borrow(),
+                                *page.borrow(),
+                                w.get_selected_rule(),
+                                &selected_rules.borrow(),
+                                true,
                                 ui_language,
-                                &action_config_path,
-                                &applied_for_action,
-                                &draft,
-                                &baseline_for_action,
-                                &on_applied_for_action,
-                            ) {
-                                Ok(final_config) => {
-                                    if let Some(w) = weak.upgrade() {
-                                        refresh(
-                                            &w,
-                                            &final_config,
-                                            *page.borrow(),
-                                            w.get_selected_rule(),
-                                            &selected_rules.borrow(),
-                                            false,
-                                            ui_language,
-                                            &remote_for_action,
-                                            &addresses_for_action,
-                                        );
-                                    }
-                                }
-                                Err(message) => native::message(&message, "FlyPPTTimer", true),
-                            }
+                                &remote_for_action,
+                                &addresses_for_action,
+                            );
+                        }
+                        return;
+                    }
+                    if action == "save" {
+                        if let Err(message) =
+                            crate::scenario::save_current(&mut draft.borrow_mut(), id)
+                        {
+                            native::message(&message, "FlyPPTTimer", true);
+                        }
+                        if let Some(w) = weak.upgrade() {
+                            refresh(
+                                &w,
+                                &draft.borrow(),
+                                *page.borrow(),
+                                w.get_selected_rule(),
+                                &selected_rules.borrow(),
+                                true,
+                                ui_language,
+                                &remote_for_action,
+                                &addresses_for_action,
+                            );
+                        }
+                        return;
+                    }
+                    if action == "apply" {
+                        let mut candidate = applied_for_action.borrow().clone();
+                        // Keep metadata edits made in this Settings draft before switching.
+                        candidate.scenarios = draft.borrow().scenarios.clone();
+                        if let Err(message) = crate::scenario::apply(&mut candidate, id) {
+                            native::message(&message, "FlyPPTTimer", true);
                             return;
                         }
+                        match apply_immediate_config(
+                            candidate,
+                            ui_language,
+                            &action_config_path,
+                            &applied_for_action,
+                            &draft,
+                            &baseline_for_action,
+                            &on_applied_for_action,
+                        ) {
+                            Ok(final_config) => {
+                                if let Some(w) = weak.upgrade() {
+                                    refresh(
+                                        &w,
+                                        &final_config,
+                                        *page.borrow(),
+                                        w.get_selected_rule(),
+                                        &selected_rules.borrow(),
+                                        false,
+                                        ui_language,
+                                        &remote_for_action,
+                                        &addresses_for_action,
+                                    );
+                                }
+                            }
+                            Err(message) => native::message(&message, "FlyPPTTimer", true),
+                        }
+                        return;
                     }
                 }
                 if action_key == "update.check" {
@@ -2359,14 +2355,14 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
     let float = || value.parse::<f64>().unwrap_or_default();
     if key.starts_with("scenario.") {
         let parts = key.split('.').collect::<Vec<_>>();
-        if parts.len() == 3 {
-            if let Some(item) = c.scenarios.iter_mut().find(|x| x.id == parts[1]) {
-                match parts[2] {
-                    "name" => item.name = value.trim().chars().take(32).collect(),
-                    "hotkey" => item.hotkey = value.trim().to_owned(),
-                    "color" => item.badge_color = value.into(),
-                    _ => {}
-                }
+        if parts.len() == 3
+            && let Some(item) = c.scenarios.iter_mut().find(|x| x.id == parts[1])
+        {
+            match parts[2] {
+                "name" => item.name = value.trim().chars().take(32).collect(),
+                "hotkey" => item.hotkey = value.trim().to_owned(),
+                "color" => item.badge_color = value.into(),
+                _ => {}
             }
         }
         return;
