@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    io::Cursor,
     ptr::{null, null_mut},
     sync::{Mutex, OnceLock, mpsc},
     thread,
@@ -20,7 +21,7 @@ use windows_sys::Win32::{
             AppendMenuW, CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateIconFromResourceEx,
             CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyIcon, DestroyMenu,
             DestroyWindow, DispatchMessageW, GetCursorPos, GetMessageW, HMENU, LR_DEFAULTCOLOR,
-            MB_ICONWARNING, MB_OK, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage,
+            MB_ICONWARNING, MB_OK, MF_CHECKED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage,
             RegisterClassW, SetForegroundWindow, TPM_RIGHTBUTTON, TPM_VERTICAL, TrackPopupMenu,
             TranslateMessage, WM_APP, WM_CLOSE, WM_COMMAND, WM_DESTROY, WM_HOTKEY,
             WM_LBUTTONDBLCLK, WM_RBUTTONUP, WNDCLASSW,
@@ -40,6 +41,7 @@ const MENU_REMOTE: usize = 1003;
 const MENU_SETTINGS: usize = 1004;
 const MENU_UPDATE: usize = 1005;
 const MENU_EXIT: usize = 1006;
+const MENU_SCENARIO_BASE: usize = 1100;
 
 static EVENT_SENDER: OnceLock<Mutex<Option<mpsc::Sender<DesktopEvent>>>> = OnceLock::new();
 static HOTKEY_COMMANDS: OnceLock<Mutex<HashMap<i32, String>>> = OnceLock::new();
@@ -54,6 +56,7 @@ pub enum DesktopEvent {
     OpenSettings,
     Remote,
     CheckUpdate,
+    ApplyScenario(String),
     Exit,
 }
 
@@ -61,6 +64,8 @@ pub enum DesktopEvent {
 struct DesktopSettings {
     hotkeys: Vec<(String, String)>,
     english: bool,
+    scenarios: Vec<(String, String, String, bool)>,
+    badge_color: Option<String>,
 }
 
 pub struct DesktopIntegration {
@@ -95,7 +100,7 @@ impl DesktopIntegration {
             .get_or_init(Default::default)
             .lock()
             .unwrap() = settings(config);
-        unsafe { PostMessageW(self.hwnd, RECONFIGURE_MESSAGE, 0, 0) };
+        unsafe { update_tray_icon(self.hwnd); PostMessageW(self.hwnd, RECONFIGURE_MESSAGE, 0, 0) };
     }
 
     pub fn show_timer_menu(&self) {
@@ -150,10 +155,12 @@ fn settings(config: &AppConfig) -> DesktopSettings {
         "toggleWindow".to_owned(),
         config.controls.toggle_window_hotkey.clone(),
     );
-    DesktopSettings {
-        hotkeys: hotkeys.into_iter().collect(),
-        english: crate::config::ui_is_english(&config.language),
+    for item in &config.scenarios {
+        if !item.hotkey.trim().is_empty() { hotkeys.insert(format!("scenario:{}", item.id), item.hotkey.clone()); }
     }
+    let scenarios=config.scenarios.iter().map(|item|(item.id.clone(),item.name.clone(),item.badge_color.clone(),item.id==config.active_scenario_id)).collect::<Vec<_>>();
+    let badge_color=config.scenarios.iter().find(|item|item.id==config.active_scenario_id).map(|item|item.badge_color.clone());
+    DesktopSettings { hotkeys: hotkeys.into_iter().collect(), english: crate::config::ui_is_english(&config.language), scenarios, badge_color }
 }
 
 fn desktop_thread(ready: mpsc::SyncSender<Result<isize, String>>) {
@@ -215,7 +222,7 @@ unsafe extern "system" fn window_proc(
                 .get(&(wparam as i32))
                 .cloned()
             {
-                send(DesktopEvent::Command(command));
+                if let Some(id)=command.strip_prefix("scenario:") { send(DesktopEvent::ApplyScenario(id.to_owned())); } else { send(DesktopEvent::Command(command)); }
             }
             0
         }
@@ -239,7 +246,12 @@ unsafe extern "system" fn window_proc(
             0
         }
         WM_COMMAND => {
-            match wparam & 0xffff {
+            let id=wparam & 0xffff;
+            if (MENU_SCENARIO_BASE..MENU_SCENARIO_BASE+8).contains(&id) {
+                if let Some((scenario_id,_,_,_))=DESKTOP_SETTINGS.get_or_init(Default::default).lock().unwrap().scenarios.get(id-MENU_SCENARIO_BASE).cloned() { send(DesktopEvent::ApplyScenario(scenario_id)); }
+                return 0;
+            }
+            match id {
                 MENU_RESET_POSITION => send(DesktopEvent::ResetPosition),
                 MENU_MUTE => send(DesktopEvent::Command("toggleMute".to_owned())),
                 MENU_REMOTE => send(DesktopEvent::Remote),
@@ -291,7 +303,7 @@ unsafe fn add_tray_icon(hwnd: HWND) {
         uID: TRAY_ID,
         uFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP,
         uCallbackMessage: TRAY_MESSAGE,
-        hIcon: load_app_icon(),
+        hIcon: load_badged_app_icon(current_badge_color().as_deref()),
         ..Default::default()
     };
     copy_wide(&mut data.szTip, "FlyPPTTimer");
@@ -311,6 +323,19 @@ unsafe fn delete_tray_icon(hwnd: HWND) {
         unsafe { DestroyIcon(icon as _) };
     }
 }
+
+unsafe fn append_scenarios(menu: HMENU, english: bool) {
+    let settings=DESKTOP_SETTINGS.get_or_init(Default::default).lock().unwrap().clone();
+    if settings.scenarios.is_empty() { return; }
+    let submenu=unsafe { CreatePopupMenu() };
+    for (index,(_,name,_,active)) in settings.scenarios.iter().enumerate() {
+        let text=wide(name);
+        unsafe { AppendMenuW(submenu, MF_STRING | if *active { MF_CHECKED } else { 0 }, MENU_SCENARIO_BASE+index, text.as_ptr()); }
+    }
+    let title=wide(if english { "Scenarios" } else { "情景模式" });
+    unsafe { AppendMenuW(menu, MF_POPUP, submenu as usize, title.as_ptr()); }
+}
+
 unsafe fn show_timer_menu(hwnd: HWND) {
     let english = DESKTOP_SETTINGS
         .get_or_init(Default::default)
@@ -345,6 +370,7 @@ unsafe fn show_timer_menu(hwnd: HWND) {
             "远程控制"
         },
     );
+    unsafe { append_scenarios(menu, english); }
     append(
         menu,
         MENU_SETTINGS,
@@ -418,6 +444,7 @@ unsafe fn show_tray_menu(hwnd: HWND) {
         MENU_SETTINGS,
         if english { "Settings" } else { "设置" },
     );
+    unsafe { append_scenarios(menu, english); }
     append(
         menu,
         MENU_UPDATE,
@@ -502,7 +529,7 @@ unsafe fn unregister_hotkeys(hwnd: HWND) {
     commands.clear();
 }
 
-fn parse_hotkey(binding: &str) -> Option<(u32, u32)> {
+pub(crate) fn parse_hotkey(binding: &str) -> Option<(u32, u32)> {
     let parts = binding.split('+').map(str::trim).collect::<Vec<_>>();
     let mut modifiers = 0;
     let mut key = None;
@@ -550,7 +577,46 @@ fn copy_wide<const N: usize>(destination: &mut [u16; N], value: &str) {
     }
 }
 
+fn current_badge_color() -> Option<String> {
+    DESKTOP_SETTINGS.get_or_init(Default::default).lock().ok()?.badge_color.clone()
+}
+
+unsafe fn update_tray_icon(hwnd: HWND) {
+    let icon=load_badged_app_icon(current_badge_color().as_deref());
+    let mut data=NOTIFYICONDATAW { cbSize:std::mem::size_of::<NOTIFYICONDATAW>() as u32,hWnd:hwnd,uID:TRAY_ID,uFlags:NIF_ICON,hIcon:icon,..Default::default() };
+    unsafe { Shell_NotifyIconW(NIM_MODIFY,&data); }
+}
+
+fn load_badged_app_icon(color: Option<&str>) -> windows_sys::Win32::UI::WindowsAndMessaging::HICON {
+    let Some((r,g,b))=color.and_then(parse_badge_color) else { return load_app_icon(); };
+    let source=include_bytes!("FlyPPTTimer/Assets/app.png");
+    let decoder=png::Decoder::new(Cursor::new(source.as_slice()));
+    let Ok(mut reader)=decoder.read_info() else { return load_app_icon(); };
+    let Some(size)=reader.output_buffer_size() else { return load_app_icon(); };
+    let mut buffer=vec![0u8;size];
+    let Ok(info)=reader.next_frame(&mut buffer) else { return load_app_icon(); };
+    if info.width!=64 || info.height!=64 || info.color_type!=png::ColorType::Rgba { return load_app_icon(); }
+    let pixels=&mut buffer[..info.buffer_size()];
+    let cx=52i32; let cy=52i32;
+    for y in 0..64i32 { for x in 0..64i32 {
+        let d=(x-cx)*(x-cx)+(y-cy)*(y-cy); let i=((y*64+x)*4) as usize;
+        if d<=100 { pixels[i..i+4].copy_from_slice(&[255,255,255,255]); }
+        if d<=64 { pixels[i..i+4].copy_from_slice(&[r,g,b,255]); }
+    }}
+    let mut encoded=Vec::new();
+    { let mut encoder=png::Encoder::new(&mut encoded,64,64); encoder.set_color(png::ColorType::Rgba); encoder.set_depth(png::BitDepth::Eight); let Ok(mut writer)=encoder.write_header() else{return load_app_icon();}; if writer.write_image_data(pixels).is_err(){return load_app_icon();} }
+    let icon=unsafe { CreateIconFromResourceEx(encoded.as_mut_ptr(),encoded.len() as u32,1,0x00030000,64,64,LR_DEFAULTCOLOR) };
+    if icon.is_null(){load_app_icon()}else{let mut slot=TRAY_ICON.get_or_init(Default::default).lock().unwrap();let old=std::mem::replace(&mut *slot,icon as isize);if old!=0{unsafe{DestroyIcon(old as _)}};icon}
+}
+fn parse_badge_color(value:&str)->Option<(u8,u8,u8)>{let v=value.strip_prefix('#')?; if v.len()!=6{return None};Some((u8::from_str_radix(&v[0..2],16).ok()?,u8::from_str_radix(&v[2..4],16).ok()?,u8::from_str_radix(&v[4..6],16).ok()?))}
+
 fn load_app_icon() -> windows_sys::Win32::UI::WindowsAndMessaging::HICON {
+    // The resource icon is shared by Windows. Release any previous dynamically
+    // generated badge before switching back to the plain application icon.
+    if let Ok(mut slot) = TRAY_ICON.get_or_init(Default::default).lock() {
+        let old = std::mem::take(&mut *slot);
+        if old != 0 { unsafe { DestroyIcon(old as _) }; }
+    }
     let file = include_bytes!("FlyPPTTimer/Assets/app.ico");
     let custom = (|| {
         let entry = file.get(6..22)?;

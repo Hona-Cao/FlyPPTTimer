@@ -703,7 +703,7 @@ component FieldRow inherits Rectangle {
     }
 
     field-label := Text {
-        visible: (item.kind >= 1 && item.kind <= 4) || item.kind == 7 || item.kind == 8;
+        visible: (item.kind >= 1 && item.kind <= 4) || item.kind == 7 || item.kind == 8 || item.kind == 9;
         x: 16px;
         y: 8px;
         width: root.control-x - 32px;
@@ -789,6 +789,20 @@ component FieldRow inherits Rectangle {
             edited(value) => { root.edited(row-index, value, false, 0); }
         }
         Button { width: 84px; text: item.button-text; enabled: item.enabled && root.interactive; clicked => { root.action(row-index); } }
+    }
+
+    if item.kind == 9: HorizontalLayout {
+        x: root.control-x; y: (parent.height - 32px) / 2;
+        width: root.control-width; height: 32px; spacing: 10px;
+        duration-edit := CommitLineEdit {
+            min-width: 110px; horizontal-stretch: 1;
+            text: item.value; enabled: item.enabled && root.interactive && !unlimited-check.checked;
+            edited(value) => { root.edited(row-index, value, unlimited-check.checked, 0); }
+        }
+        unlimited-check := CheckBox {
+            width: 96px; checked: item.checked; text: item.button-text; enabled: item.enabled && root.interactive;
+            toggled => { root.edited(row-index, duration-edit.text, self.checked, 0); }
+        }
     }
 
     if item.kind == 3: ComboBox {

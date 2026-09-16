@@ -65,6 +65,8 @@ pub struct AppConfig {
     pub language: String,
     pub ui_theme: String,
     pub update: UpdateSettings,
+    pub scenarios: Vec<ScenarioPreset>,
+    pub active_scenario_id: String,
     pub timer: TimerSettings,
     pub behavior: BehaviorSettings,
     pub appearance: AppearanceSettings,
@@ -81,6 +83,8 @@ impl Default for AppConfig {
             language: "auto".to_owned(),
             ui_theme: "system".to_owned(),
             update: UpdateSettings::default(),
+            scenarios: Vec::new(),
+            active_scenario_id: String::new(),
             timer: TimerSettings::default(),
             behavior: BehaviorSettings::default(),
             appearance: AppearanceSettings::default(),
@@ -107,6 +111,8 @@ impl AppConfig {
         if (major, minor) < (1, 14) {
             config.update.check_on_startup = true;
         }
+        if config.timer.unlimited { config.timer.mode = TimerMode::CountUp; }
+        config.scenarios.truncate(8);
         // The metadata row has a fixed layout from 1.14 onward. Keep legacy fields readable.
         config.appearance.page_alignment = PageAlignment::Right;
         config.appearance.page_position = PagePosition::Below;
@@ -182,14 +188,39 @@ fn replace_file(temporary_path: &Path, destination: &Path) -> io::Result<()> {
 #[serde(default, rename_all = "PascalCase")]
 pub struct UpdateSettings {
     pub check_on_startup: bool,
+    pub source: UpdateSource,
 }
 impl Default for UpdateSettings {
     fn default() -> Self {
-        Self {
-            check_on_startup: true,
-        }
+        Self { check_on_startup: true, source: default_update_source() }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
+#[repr(u8)]
+pub enum UpdateSource {
+    Gitee = 0,
+    GitHub = 1,
+}
+impl Default for UpdateSource {
+    fn default() -> Self { default_update_source() }
+}
+
+fn default_update_source() -> UpdateSource {
+    if user_geo_is_mainland_china() { UpdateSource::Gitee } else { UpdateSource::GitHub }
+}
+
+#[cfg(windows)]
+fn user_geo_is_mainland_china() -> bool {
+    #[link(name = "kernel32")]
+    unsafe extern "system" { fn GetUserDefaultGeoName(buffer: *mut u16, count: i32) -> i32; }
+    let mut name = [0u16; 16];
+    let length = unsafe { GetUserDefaultGeoName(name.as_mut_ptr(), name.len() as i32) };
+    if length <= 1 { return false; }
+    String::from_utf16_lossy(&name[..(length as usize - 1)]).eq_ignore_ascii_case("CN")
+}
+#[cfg(not(windows))]
+fn user_geo_is_mainland_china() -> bool { false }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
@@ -197,6 +228,7 @@ pub struct TimerSettings {
     pub default_duration: String,
     pub mode: TimerMode,
     pub enable_per_slide_timer: bool,
+    pub unlimited: bool,
     pub continue_overtime: bool,
     pub end_action: TimerEndAction,
 }
@@ -206,7 +238,8 @@ impl Default for TimerSettings {
         Self {
             default_duration: "00:08:00".to_owned(),
             mode: TimerMode::Countdown,
-            enable_per_slide_timer: false,
+            enable_per_slide_timer: true,
+            unlimited: false,
             continue_overtime: true,
             end_action: TimerEndAction::None,
         }
@@ -220,7 +253,13 @@ impl TimerSettings {
     }
 
     pub fn effective_continue_overtime(&self) -> bool {
-        self.end_action == TimerEndAction::None && self.continue_overtime
+        self.unlimited || (self.end_action == TimerEndAction::None && self.continue_overtime)
+    }
+    pub fn runtime_mode(&self) -> TimerMode {
+        if self.unlimited { TimerMode::CountUp } else { self.mode }
+    }
+    pub fn runtime_duration(&self) -> Duration {
+        if self.unlimited { Duration::from_secs(100 * 365 * 24 * 3600) } else { self.duration() }
     }
 }
 
@@ -559,6 +598,7 @@ pub struct WindowPlacement {
     pub visible: bool,
     pub big_screen_enabled: bool,
     pub big_screen_device_name: String,
+    pub big_screen_show_metadata: bool,
     pub show_on_all_screens: bool,
     pub target_screen_device_name: String,
     pub anchor: OverlayAnchor,
@@ -576,6 +616,7 @@ impl Default for WindowPlacement {
             visible: true,
             big_screen_enabled: false,
             big_screen_device_name: String::new(),
+            big_screen_show_metadata: false,
             show_on_all_screens: true,
             target_screen_device_name: String::new(),
             anchor: OverlayAnchor::TopCenter,
@@ -603,6 +644,54 @@ pub enum OverlayAnchor {
     BottomCenter = 7,
     BottomRight = 8,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "PascalCase")]
+pub struct ScenarioPreset {
+    pub id: String,
+    pub name: String,
+    pub hotkey: String,
+    pub badge_color: String,
+    pub snapshot: ScenarioSnapshot,
+}
+impl Default for ScenarioPreset {
+    fn default() -> Self { Self { id: String::new(), name: "情景模式".into(), hotkey: String::new(), badge_color: "#E53935".into(), snapshot: ScenarioSnapshot::default() } }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "PascalCase")]
+pub struct ScenarioSnapshot {
+    pub timer: TimerSettings,
+    pub behavior: BehaviorSettings,
+    pub appearance: AppearanceSettings,
+    pub controls: ControlSettings,
+    pub placement: WindowPlacement,
+    pub rules: Vec<FileRule>,
+}
+impl Default for ScenarioSnapshot {
+    fn default() -> Self {
+        let config = AppConfig::default();
+        Self { timer: config.timer, behavior: config.behavior, appearance: config.appearance, controls: config.controls, placement: config.placement, rules: config.rules }
+    }
+}
+impl ScenarioSnapshot {
+    pub fn capture(config: &AppConfig) -> Self {
+        Self { timer: config.timer.clone(), behavior: config.behavior.clone(), appearance: config.appearance.clone(), controls: config.controls.clone(), placement: config.placement.clone(), rules: config.rules.clone() }
+    }
+    pub fn apply_to(&self, config: &mut AppConfig) {
+        config.timer = self.timer.clone();
+        config.behavior = self.behavior.clone();
+        config.appearance = self.appearance.clone();
+        config.controls = self.controls.clone();
+        config.placement = self.placement.clone();
+        config.rules = self.rules.clone();
+    }
+}
+
+pub const SCENARIO_BADGE_COLORS: [&str; 8] = [
+    "#E53935", "#1E88E5", "#43A047", "#FB8C00",
+    "#8E24AA", "#00ACC1", "#FDD835", "#6D4C41",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
@@ -675,6 +764,8 @@ mod tests {
     fn update_default_migrates_once_and_new_opt_out_is_preserved() {
         let c = AppConfig::default();
         assert!(c.update.check_on_startup);
+        assert!(c.timer.enable_per_slide_timer);
+        assert!(!c.placement.big_screen_show_metadata);
         assert_eq!(
             (c.placement.offset_x_percent, c.placement.offset_y_percent),
             (0.0, 0.0)
@@ -691,6 +782,19 @@ mod tests {
                 .update
                 .check_on_startup
         );
+    }
+
+
+    #[test]
+    fn unlimited_mode_is_count_up_without_a_real_target() {
+        let mut c = AppConfig::default();
+        c.timer.unlimited = true;
+        c.timer.mode = TimerMode::Countdown;
+        assert_eq!(c.timer.runtime_mode(), TimerMode::CountUp);
+        assert!(c.timer.runtime_duration() > Duration::from_secs(50 * 365 * 24 * 3600));
+        assert!(c.timer.effective_continue_overtime());
+        let loaded = AppConfig::from_json(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert_eq!(loaded.timer.mode, TimerMode::CountUp);
     }
 
     #[test]
@@ -727,7 +831,13 @@ mod tests {
             ..AppConfig::default()
         };
         let mut actual = serde_json::to_value(config).unwrap();
-        actual.as_object_mut().unwrap().remove("UiTheme");
+        for key in ["UiTheme", "Scenarios", "ActiveScenarioId"] {
+            actual.as_object_mut().unwrap().remove(key);
+        }
+        actual["Update"].as_object_mut().unwrap().remove("Source");
+        actual["Timer"].as_object_mut().unwrap().remove("EnablePerSlideTimer");
+        actual["Timer"].as_object_mut().unwrap().remove("Unlimited");
+        actual["Placement"].as_object_mut().unwrap().remove("BigScreenShowMetadata");
         // U10 explicitly adds this default; all pre-existing defaults still match.
         assert_eq!(actual["Appearance"]["ShowSlideNumbers"], true);
         actual["Appearance"]

@@ -221,6 +221,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     &preserve_time_up_for_updates,
                     &config_path_for_updates,
                     &remote_for_updates,
+                    &desktop_for_updates,
+                    &display_rebuild_for_updates,
                 );
             }
             while let Some(response) = update_for_updates.try_recv() {
@@ -295,17 +297,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             let config = config_for_updates.borrow();
-            let mut events = alerts_for_updates
-                .borrow_mut()
-                .check(&update.snapshot, &config);
-            if update.just_finished
+            let mut events = if config.timer.unlimited { Vec::new() } else { alerts_for_updates.borrow_mut().check(&update.snapshot, &config) };
+            if update.just_finished && !config.timer.unlimited
                 && let Some(event) = alerts_for_updates
                     .borrow_mut()
                     .end(&update.snapshot, &config)
             {
                 events.push(event);
             }
-            if update.just_finished {
+            if update.just_finished && !config.timer.unlimited {
                 match config.timer.end_action {
                     TimerEndAction::BlackScreen => {
                         if let Err(error) =
@@ -381,9 +381,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 for overlay in &displays.overlays { overlay.set_page_text(label.clone().into()); overlay.set_slide_text(slide_text.clone().into());
                     overlay.set_page_reserve(page_reserve(presentation_state.total_slides).into()); }
                 if let Some(big) = &displays.big_screen {
-                    big.set_page_text(label.into());
-                    big.set_slide_text(slide_text.into());
-                    big.set_page_reserve(page_reserve(presentation_state.total_slides).into());
+                    if preview.placement.big_screen_show_metadata {
+                        big.set_page_text(label.into()); big.set_slide_text(slide_text.into());
+                        big.set_page_reserve(page_reserve(presentation_state.total_slides).into());
+                    } else { big.set_page_text("".into()); big.set_slide_text("".into()); big.set_page_reserve("".into()); }
                 }
             }
             update_display_windows(
@@ -580,6 +581,11 @@ fn handle_desktop_event(
     match event {
         DesktopEvent::Command(command) => {
             handle_command(&command, window, timer, config, alerts, flash, config_path)
+        }
+        DesktopEvent::ApplyScenario(id) => {
+            if let Err(error)=apply_scenario_runtime(&id,window,timer,config,alerts,desktop,display_rebuild,config_path) {
+                desktop.notify(&error,4000);
+            }
         }
         DesktopEvent::CloseBigScreen => {
             config.borrow_mut().placement.big_screen_enabled = false;
@@ -1586,6 +1592,8 @@ fn handle_remote_request(
     preserve_time_up: &Rc<Cell<bool>>,
     config_path: &std::path::Path,
     remote: &RemoteServer,
+    desktop: &Rc<DesktopIntegration>,
+    display_rebuild: &Rc<Cell<bool>>,
 ) {
     let result = execute_remote_command(
         &request.command,
@@ -1598,6 +1606,8 @@ fn handle_remote_request(
         time_up_window,
         preserve_time_up,
         config_path,
+        desktop,
+        display_rebuild,
     );
     let response = result.map(|message| {
         let snapshot = timer.borrow().snapshot();
@@ -1629,8 +1639,14 @@ fn execute_remote_command(
     time_up_window: &Rc<RefCell<Vec<TimeUpWindow>>>,
     preserve_time_up: &Rc<Cell<bool>>,
     config_path: &std::path::Path,
+    desktop: &Rc<DesktopIntegration>,
+    display_rebuild: &Rc<Cell<bool>>,
 ) -> Result<String, String> {
     let name = command.command.as_str();
+    if name == "scenario.apply" {
+        let id=command.scenario_id.as_deref().ok_or("请选择情景模式。")?;
+        return apply_scenario_runtime(id,window,timer,config,alerts,desktop,display_rebuild,config_path);
+    }
     if name.starts_with("timer.") || name == "state.get" {
         let result = execute_remote_timer_command(command, timer, config, alerts, config_path);
         if result.is_ok()
@@ -1826,14 +1842,11 @@ fn execute_remote_timer_command(
                 })
             });
             let mut settings = config.timer.clone();
-            if let Some(rule) = rule {
-                settings.default_duration = rule.duration.clone();
-                settings.mode = rule.mode;
-            }
+            if !settings.unlimited { if let Some(rule) = rule { settings.default_duration = rule.duration.clone(); settings.mode = rule.mode; } }
             timer
-                .set_duration(settings.duration())
+                .set_duration(settings.runtime_duration())
                 .map_err(|error| error.to_string())?;
-            timer.set_mode(timer_mode(settings.mode));
+            timer.set_mode(timer_mode(settings.runtime_mode()));
             timer.restart();
             alerts.borrow_mut().reset();
             Ok(match rule {
@@ -1842,6 +1855,7 @@ fn execute_remote_timer_command(
             })
         }
         "timer.setDuration" => {
+            if config.borrow().timer.unlimited { return Err("无限制模式下不需要设置时长。".into()); }
             let seconds = if let Some(ms) = command.duration_ms.filter(|ms| *ms > 0) {
                 (ms as f64 / 1000.0).round_ties_even()
             } else {
@@ -1877,6 +1891,7 @@ fn execute_remote_timer_command(
             Ok("时长已设置".to_owned())
         }
         "timer.setMode" => {
+            if config.borrow().timer.unlimited { return Err("无限制模式固定使用正计时。".into()); }
             let mode = match command.mode.as_deref() {
                 Some("正计时") | Some("countup") => TimerMode::CountUp,
                 _ => TimerMode::Countdown,
@@ -1906,6 +1921,21 @@ fn remote_path(id: &str) -> Option<String> {
     // presentation ids are normalized full paths (case-insensitive);
     // the presentation service re-validates the file on disk.
     Some(id.to_owned())
+}
+
+fn apply_scenario_runtime(
+    id:&str, window:&slint::Weak<AppWindow>, timer:&Rc<RefCell<Timer<SystemClock>>>,
+    config:&Rc<RefCell<AppConfig>>, alerts:&Rc<RefCell<AlertTracker>>, desktop:&Rc<DesktopIntegration>,
+    display_rebuild:&Rc<Cell<bool>>, config_path:&std::path::Path,
+)->Result<String,String>{
+    let mut updated=config.borrow().clone();
+    crate::scenario::apply(&mut updated,id)?;
+    updated.save(config_path).map_err(|e|e.to_string())?;
+    apply_timer_config(&mut timer.borrow_mut(),&updated); alerts.borrow_mut().reset();
+    desktop.reconfigure(&updated);
+    if let Some(w)=window.upgrade(){ apply_config(&w,&updated); window::apply_native_window(w.window(),updated.controls.click_through,updated.appearance.always_on_top,updated.appearance.background_opacity,&updated.appearance.shape); set_window_visible(&w,updated.placement.visible); }
+    let name=updated.scenarios.iter().find(|x|x.id==id).map(|x|x.name.clone()).unwrap_or_default();
+    *config.borrow_mut()=updated; display_rebuild.set(true); Ok(format!("已切换情景模式：{name}"))
 }
 
 fn handle_command(
@@ -1959,6 +1989,7 @@ fn handle_command(
             }
         }
         "toggleMode" => {
+            if config.borrow().timer.unlimited { return; }
             let mut config = config.borrow_mut();
             config.timer.mode = match config.timer.mode {
                 TimerMode::Countdown => TimerMode::CountUp,
@@ -1984,6 +2015,7 @@ fn change_duration(
     config_path: &std::path::Path,
     delta_seconds: i64,
 ) {
+    if config.borrow().timer.unlimited { return; }
     let seconds = (timer.borrow().duration().as_secs() as i64 + delta_seconds).max(60) as u64;
     set_duration(timer, config, config_path, Duration::from_secs(seconds));
 }
@@ -1994,6 +2026,7 @@ fn set_duration_minutes(
     config_path: &std::path::Path,
     minutes: u64,
 ) {
+    if config.borrow().timer.unlimited { return; }
     set_duration(
         timer,
         config,
@@ -2045,8 +2078,8 @@ fn save_config(config: &AppConfig, path: &std::path::Path) {
 }
 
 fn apply_timer_config(timer: &mut Timer<SystemClock>, config: &AppConfig) {
-    let _ = timer.set_duration(config.timer.duration());
-    timer.set_mode(timer_mode(config.timer.mode));
+    let _ = timer.set_duration(config.timer.runtime_duration());
+    timer.set_mode(timer_mode(config.timer.runtime_mode()));
     timer.set_continue_overtime(config.timer.effective_continue_overtime());
 }
 
@@ -2055,8 +2088,8 @@ fn timer_from_config(
 ) -> Result<Timer<SystemClock>, crate::timer::InvalidDuration> {
     Timer::new(
         SystemClock::new(),
-        config.timer.duration(),
-        timer_mode(config.timer.mode),
+        config.timer.runtime_duration(),
+        timer_mode(config.timer.runtime_mode()),
         config.timer.effective_continue_overtime(),
     )
 }

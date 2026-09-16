@@ -46,6 +46,7 @@ pub struct TimerRemoteState {
     pub muted: bool,
     pub time_up_blackout_active: bool,
     pub rule_count: usize,
+    pub unlimited: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -95,6 +96,15 @@ pub struct PresentationRemoteState {
     pub list_sort_descending: bool,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteScenario {
+    pub id: String,
+    pub name: String,
+    pub badge_color: String,
+    pub active: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteState {
@@ -122,6 +132,8 @@ pub struct RemoteState {
     pub ui_theme: String,
     pub file_browsing_enabled: bool,
     pub slide_timing: crate::slide_timer::SlideTiming,
+    pub scenarios: Vec<RemoteScenario>,
+    pub active_scenario_id: String,
 }
 
 impl Default for RemoteState {
@@ -150,6 +162,8 @@ impl Default for RemoteState {
             ui_theme: "system".into(),
             file_browsing_enabled: false,
             slide_timing: Default::default(),
+            scenarios: Vec::new(),
+            active_scenario_id: String::new(),
         }
     }
 }
@@ -171,6 +185,7 @@ pub struct RemoteCommand {
     pub before_presentation_id: Option<String>,
     pub expected_order: Option<Vec<String>>,
     pub include_hidden: Option<bool>,
+    pub scenario_id: Option<String>,
 }
 
 pub struct RemoteRequest {
@@ -939,16 +954,17 @@ pub fn remote_state(
         mode: mode.clone(),
         state: state_text.clone(),
         running: snapshot.state == TimerState::Running,
-        duration_ms: snapshot.duration.as_millis() as i64,
+        duration_ms: if config.timer.unlimited { 0 } else { snapshot.duration.as_millis() as i64 },
         elapsed_ms: snapshot.elapsed.as_millis() as i64,
-        remaining_ms: snapshot.remaining.as_millis() as i64,
+        remaining_ms: if config.timer.unlimited { 0 } else { snapshot.remaining.as_millis() as i64 },
         display_text: display_text.clone(),
         is_overtime: snapshot.is_overtime,
-        continue_overtime: config.timer.continue_overtime,
+        continue_overtime: config.timer.effective_continue_overtime(),
         window_visible: config.placement.visible,
         muted,
         time_up_blackout_active: time_up,
         rule_count: config.rules.len(),
+        unlimited: config.timer.unlimited,
     };
     let presentation_state = presentation_remote_state_with_config(presentation, config);
     RemoteState {
@@ -975,6 +991,8 @@ pub fn remote_state(
         ui_theme: config.ui_theme.clone(),
         file_browsing_enabled: config.remote_control.allow_file_browsing,
         slide_timing: Default::default(),
+        scenarios: config.scenarios.iter().map(|item| RemoteScenario { id:item.id.clone(), name:item.name.clone(), badge_color:item.badge_color.clone(), active:item.id==config.active_scenario_id }).collect(),
+        active_scenario_id: config.active_scenario_id.clone(),
     }
 }
 
