@@ -1,4 +1,4 @@
-name: Bootstrap v1.15.0 release branch
+name: Format and validate v1.15.0 release branch
 
 on:
   push:
@@ -12,7 +12,7 @@ env:
   RUST_TOOLCHAIN: '1.92.0'
 
 jobs:
-  apply:
+  format:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -20,33 +20,22 @@ jobs:
         with:
           ref: release/v1.15.0
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Apply staged v1.15.0 source patch
+      - name: Install rustfmt
+        run: rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt
+      - name: Format and commit only formatter changes
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          import base64,lzma,subprocess
-          chunks=[Path(f'.github/v1150-product-{i:02}.b64') for i in range(3)]
-          data=''.join(p.read_text().strip() for p in chunks)
-          patch=lzma.decompress(base64.b64decode(data))
-          subprocess.run(['git','apply','--whitespace=nowarn','-'],input=patch,check=True)
-          for p in chunks: p.unlink()
-          Path('.github/workflows/v1150-apply.yml').unlink(missing_ok=True)
-          PY
-          node --check src/FlyPPTTimer/Web/app.js
+          cargo +$RUST_TOOLCHAIN fmt --all
           git diff --check
-      - name: Commit real product source
-        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'feat: implement v1.15.0 scenarios, unlimited timing and automatic updates'
-          git push origin HEAD:release/v1.15.0
+          if ! git diff --quiet; then
+            git add src ui build.rs Cargo.toml Cargo.lock
+            git commit -m 'style: format v1.15.0 Rust sources'
+            git push origin HEAD:release/v1.15.0
+          fi
 
   validate:
-    needs: apply
+    needs: format
     runs-on: windows-latest
     timeout-minutes: 40
     defaults:
@@ -71,10 +60,10 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: v1150-bootstrap-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
+          key: v1150-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
           restore-keys: |
             rust-windows-1.92-${{ hashFiles('Cargo.lock') }}-
-      - name: Format
+      - name: Format check
         run: |
           cargo fmt --all -- --check
           if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
@@ -101,7 +90,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v1150-bootstrap-validation
+          name: v1150-validation
           path: |
             artifacts/ci/**
             clippy.log
