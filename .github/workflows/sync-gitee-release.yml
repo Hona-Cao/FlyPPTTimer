@@ -40,7 +40,7 @@ jobs:
   mirror:
     if: github.event_name != 'release' || (!github.event.release.draft && !github.event.release.prerelease)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       GH_TOKEN: ${{ github.token }}
       GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
@@ -50,7 +50,7 @@ jobs:
       GITHUB_ASSET_WAIT_SECONDS: '240'
       GITHUB_ASSET_POLL_SECONDS: '10'
       GITEE_UPLOAD_ATTEMPTS: '2'
-      GITEE_UPLOAD_MAX_SECONDS: '180'
+      GITEE_UPLOAD_MAX_SECONDS: '300'
       GITEE_ATTACHMENT_POLL_SECONDS: '60'
       GITEE_PUBLIC_VERIFY_ATTEMPTS: '2'
       GITEE_PUBLIC_VERIFY_MAX_SECONDS: '90'
