@@ -17,14 +17,12 @@ on:
     secrets:
       GITEE_TOKEN:
         required: true
-  # GitHub suppresses most event cascades caused by GITHUB_TOKEN. A stable
-  # Release created inside Actions can therefore miss the `release` trigger.
-  # Hourly reconciliation makes the mirror self-healing even when a publisher
-  # forgets to call this reusable workflow explicitly.
+  # Releases created with GITHUB_TOKEN do not always cascade another workflow.
+  # Hourly reconciliation keeps the mirror self-healing even in that case.
   schedule:
     - cron: '17 * * * *'
-  # Editing the mirror logic also reconciles the current latest release. This
-  # provides an immediate recovery path without a one-off workflow.
+  # A mirror implementation change immediately reconciles the latest stable
+  # release, so repairing the sync never requires a one-off workflow.
   push:
     branches: [main]
     paths:
@@ -42,7 +40,7 @@ jobs:
   mirror:
     if: github.event_name != 'release' || (!github.event.release.draft && !github.event.release.prerelease)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     env:
       GH_TOKEN: ${{ github.token }}
       GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
@@ -51,8 +49,11 @@ jobs:
       REQUESTED_TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GITHUB_ASSET_WAIT_SECONDS: '240'
       GITHUB_ASSET_POLL_SECONDS: '10'
-      GITEE_UPLOAD_ATTEMPTS: '3'
-      GITEE_PUBLIC_VERIFY_ATTEMPTS: '6'
+      GITEE_UPLOAD_ATTEMPTS: '2'
+      GITEE_UPLOAD_MAX_SECONDS: '180'
+      GITEE_ATTACHMENT_POLL_SECONDS: '60'
+      GITEE_PUBLIC_VERIFY_ATTEMPTS: '2'
+      GITEE_PUBLIC_VERIFY_MAX_SECONDS: '90'
 
     steps:
       - uses: actions/checkout@v4
