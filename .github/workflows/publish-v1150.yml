@@ -1,0 +1,297 @@
+name: Publish FlyPPTTimer v1.15.0
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/publish-v1150.yml]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: publish-v1150
+  cancel-in-progress: false
+
+env:
+  RUSTUP_TOOLCHAIN: '1.92.0'
+  PRODUCT_SOURCE_SHA: 'aed9763bfe7073c9c906ebfc25998d2d02ffea22'
+  VALIDATION_RUN_ID: '35056396804'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard release state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ((git rev-parse HEAD) -eq '') { throw 'Missing source checkout' }
+          gh release view v1.15.0 --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) { throw 'v1.15.0 already exists; refusing duplicate publication' }
+          git show-ref --verify --quiet refs/tags/v1.15.0
+          if ($LASTEXITCODE -eq 0) { throw 'v1.15.0 tag already exists; refusing duplicate publication' }
+          exit 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: v1150-final-validation
+          run-id: ${{ env.VALIDATION_RUN_ID }}
+          github-token: ${{ github.token }}
+          path: accepted-application
+
+      - name: Verify accepted application provenance
+        run: |
+          $source=(Get-Content accepted-application/SOURCE.txt -Raw).Trim()
+          if ($source -ne $env:PRODUCT_SOURCE_SHA) { throw "Unexpected executable source $source" }
+          $exe='accepted-application/FlyPPTTimer.exe'
+          if (-not (Test-Path $exe)) { throw 'Validated EXE missing' }
+          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '1.15.0') { throw 'Validated EXE version mismatch' }
+
+      - name: Install documentation renderer toolchain
+        run: |
+          rustup toolchain install $env:RUSTUP_TOOLCHAIN --profile minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain setup failed' }
+          $rc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter rc.exe -Recurse | Where-Object FullName -Match '\\x64\\rc.exe$' | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'rc.exe not found' }
+          $rc.Directory.FullName | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+          Invoke-WebRequest 'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf' -OutFile doc-font.otf
+          python scripts/prepare-doc-capture.py
+          if ($LASTEXITCODE -ne 0) { throw 'Documentation font preparation failed' }
+
+      - name: Seed example scenarios only in disposable documentation captures
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/capture.rs')
+          s=p.read_text(encoding='utf-8')
+          old='''        let config = Rc::new(RefCell::new(AppConfig {\n            language: language.to_owned(),\n            ui_theme: std::env::var("FLYPPT_CAPTURE_THEME").unwrap_or_else(|_| "light".into()),\n            ..AppConfig::default()\n        }));'''
+          new='''        let mut seeded = AppConfig {\n            language: language.to_owned(),\n            ui_theme: std::env::var("FLYPPT_CAPTURE_THEME").unwrap_or_else(|_| "light".into()),\n            ..AppConfig::default()\n        };\n        let names = if language == "en" {\n            ["Competition", "Recruiting", "Speaker Reminder"]\n        } else {\n            ["竞赛模式", "人事招聘", "演讲者提醒"]\n        };\n        for (index, name) in names.into_iter().enumerate() {\n            seeded.placement.big_screen_enabled = index == 1;\n            seeded.placement.show_on_all_screens = index != 2;\n            crate::scenario::add_from_current(&mut seeded, name.to_owned())\n                .map_err(std::io::Error::other)?;\n        }\n        for (index, item) in seeded.scenarios.iter_mut().enumerate() {\n            item.hotkey = format!("F{}", index + 9);\n        }\n        let config = Rc::new(RefCell::new(seeded));'''
+          if s.count(old) != 1: raise SystemExit('Capture seed point changed')
+          p.write_text(s.replace(old,new,1),encoding='utf-8',newline='\n')
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1150-docs-${{ github.run_id }}
+          restore-keys: |
+            v1150-final-
+            v1150-windows-1.92-
+            rust-windows-1.92-
+
+      - name: Capture current desktop GUI
+        run: |
+          cargo build --locked --release
+          if ($LASTEXITCODE -ne 0) { throw 'Documentation renderer build failed' }
+          foreach ($theme in @('light','dark')) {
+            $env:FLYPPT_CAPTURE_THEME=$theme
+            foreach ($mode in @('settings','windows')) {
+              $out=Join-Path $PWD "gui-captures/$theme/$mode"
+              New-Item -ItemType Directory -Force $out | Out-Null
+              $p=Start-Process target/release/FlyPPTTimer.exe -ArgumentList @("--capture-$mode",$out) -Wait -PassThru -RedirectStandardOutput "$out/stdout.log" -RedirectStandardError "$out/stderr.log"
+              if ($p.ExitCode -ne 0) { throw "Capture failed: $theme/$mode" }
+            }
+          }
+
+      - name: Restore product files after disposable documentation render
+        run: |
+          git restore src/capture.rs ui/app-window.slint
+          Remove-Item doc-font.otf -Force -ErrorAction SilentlyContinue
+
+      - name: Update mobile fixture for v1.15 scenarios
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('scripts/capture-mobile.py')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('docs/media/v1.14.0','docs/media/v1.15.0')
+          s=s.replace('version="1.14.0"','version="1.15.0"')
+          s=s.replace('continueOvertime=True, windowVisible=True, muted=False, timeUpBlackoutActive=False,', 'continueOvertime=True, unlimited=False, windowVisible=True, muted=False, timeUpBlackoutActive=False,')
+          needle='''                connectedClients=1,version="1.15.0",revision=1,serverInstance="docs-fixture",uiTheme=theme)'''
+          replacement='''                scenarios=[\n                    dict(id="scenario-1",name="Competition" if english else "竞赛模式",badgeColor="#E53935",active=True),\n                    dict(id="scenario-2",name="Recruiting" if english else "人事招聘",badgeColor="#1E88E5",active=False),\n                    dict(id="scenario-3",name="Speaker Reminder" if english else "演讲者提醒",badgeColor="#43A047",active=False)],\n                activeScenarioId="scenario-1",\n                connectedClients=1,version="1.15.0",revision=1,serverInstance="docs-fixture",uiTheme=theme)'''
+          if needle not in s: raise SystemExit('Mobile state insertion point changed')
+          s=s.replace(needle,replacement,1)
+          needle='''                page.screenshot(animations="disabled", path=OUT/f"mobile-{language}-{theme}-timer.png",full_page=True)'''
+          replacement='''                page.screenshot(animations="disabled", path=OUT/f"mobile-{language}-{theme}-timer.png",full_page=True)\n                page.locator("#scenarioCard .select-trigger").click()\n                page.locator(".select-popup.visible").wait_for()\n                page.wait_for_timeout(180)\n                page.screenshot(animations="disabled", path=OUT/f"mobile-{language}-{theme}-scenario.png",full_page=True)\n                page.keyboard.press("Escape")'''
+          if needle not in s: raise SystemExit('Mobile screenshot insertion point changed')
+          p.write_text(s.replace(needle,replacement,1),encoding='utf-8',newline='\n')
+
+      - name: Install Playwright library and find installed Edge
+        run: |
+          python -m pip install 'playwright==1.57.0'
+          if ($LASTEXITCODE -ne 0) { throw 'Playwright install failed' }
+          $edge=@(
+            "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+            "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $edge) { throw 'Microsoft Edge not found on Windows runner' }
+          $edge | Set-Content edge-path.txt
+
+      - name: Render and test mobile scenarios
+        run: |
+          $edge=(Get-Content edge-path.txt -Raw).Trim()
+          python scripts/capture-mobile.py --browser "$edge"
+          if ($LASTEXITCODE -ne 0) { throw 'Mobile capture failed' }
+          @'
+          import argparse, importlib.util, re
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          root=Path.cwd(); web=root/'src/FlyPPTTimer/Web'
+          spec=importlib.util.spec_from_file_location('fixture',root/'scripts/capture-mobile.py'); fixture=importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
+          parser=argparse.ArgumentParser();parser.add_argument('--browser',required=True);args=parser.parse_args()
+          with sync_playwright() as pw:
+              browser=pw.chromium.launch(headless=True,executable_path=args.browser)
+              for language in ['zh-CN','en']:
+                  context=browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,locale=language)
+                  page=context.new_page(); errors=[]; page.on('pageerror',lambda e:errors.append(str(e)))
+                  state=fixture.sample_state(language,'light')
+                  html=(web/'index.html').read_text(encoding='utf-8');html=re.sub(r'<link[^>]+rel="stylesheet"[^>]*>','',html);html=re.sub(r'<script[^>]+src=[^>]*></script>','',html)
+                  page.set_content(html);page.add_style_tag(path=web/'app.css')
+                  page.evaluate('''state => { window.testState=state; window.fetch=async(path,options={})=>{ const request=JSON.parse(options.body||'{}'); if(request.command==='scenario.apply'){ state.activeScenarioId=request.scenarioId; state.scenarios.forEach(x=>x.active=x.id===request.scenarioId); state.revision++; } return new Response(JSON.stringify(state),{status:200,headers:{'Content-Type':'application/json'}}); }; }''',state)
+                  page.add_script_tag(path=web/'app.js');page.locator('#connection.connected').wait_for();page.locator('#scenarioCard').wait_for(state='visible')
+                  assert page.locator('#scenarioChoice option').count()==3
+                  page.select_option('#scenarioChoice','scenario-2');page.wait_for_timeout(250)
+                  assert page.evaluate('testState.activeScenarioId')=='scenario-2'
+                  assert not errors, errors
+                  context.close()
+              browser.close()
+          print('Mobile scenario switch passed in Chinese and English.')
+          '@ | Set-Content $env:RUNNER_TEMP/check-mobile-v1150.py -Encoding utf8
+          python $env:RUNNER_TEMP/check-mobile-v1150.py --browser "$edge"
+          if ($LASTEXITCODE -ne 0) { throw 'Mobile scenario test failed' }
+
+      - name: Select desktop illustrations
+        shell: python
+        run: |
+          from pathlib import Path
+          import shutil
+          out=Path('docs/media/v1.15.0'); settings=out/'settings';settings.mkdir(parents=True,exist_ok=True)
+          for source in Path('gui-captures/light/settings').glob('settings-*.png'):
+              shutil.copyfile(source,settings/source.name.removeprefix('settings-'))
+          windows=Path('gui-captures/light/windows')
+          for source,name in [('timer-v1141-idle','timer-idle'),('timer-v1141-slide','timer-slide'),('update-notes-top','update-notes'),('remote-connection','pc-remote-connection'),('remote-presentation','pc-remote-rules')]:
+              shutil.copyfile(windows/f'{source}.png',out/f'{name}.png')
+          (out/'README.md').write_text('''# v1.15.0 GUI images\n\nDesktop images are rendered from the shipping Slint UI with example data; the disposable documentation renderer selects a CJK font because hosted headless Windows font fallback is unreliable. That font and renderer are not shipped. Mobile images render the shipping HTML/CSS/JavaScript with in-memory example state. Scenario names, presentation paths and connection data are documentation examples, not private user data or physical-device acceptance evidence.\n''',encoding='utf-8')
+
+      - name: Materialize one-shot documentation updater
+        shell: python
+        run: |
+          from pathlib import Path
+          import base64, lzma
+          payload=Path('.github/update-v1150-docs.b64').read_text(encoding='ascii').strip()
+          Path('scripts/update-v1150-docs.py').write_bytes(lzma.decompress(base64.b64decode(payload)))
+
+      - name: Update bilingual documentation
+        run: |
+          python scripts/update-v1150-docs.py
+          if ($LASTEXITCODE -ne 0) { throw 'Documentation update failed' }
+          Remove-Item scripts/update-v1150-docs.py -Force
+
+      - name: Record final handoff and remove one-shot release machinery
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+          source=Path('accepted-application/SOURCE.txt').read_text().strip()
+          validation=os.environ['VALIDATION_RUN_ID']
+          publication=os.environ['GITHUB_RUN_ID']
+          text=(
+              '# v1.15.0 public release handoff\n\n'
+              'Authorized scope: fresh per-slide stopwatch default; time-only big-screen default; GitHub/Gitee update-source selection with Windows-region initial default and automatic update installation; up to eight scenario snapshots with hotkeys/icon badge colors/desktop and mobile switching; Unlimited count-up mode.\n\n'
+              f'Validated application source: {source}.\n'
+              f'Validation run: {validation}.\n'
+              f'Publication workflow: {publication}.\n\n'
+              'The public release must contain only the portable ZIP and setup ZIP. Generic GitHub→Gitee mirroring remains in `.github/workflows/sync-gitee-release.yml`; Gitee status is verified from that workflow after GitHub publication. GUI renders use example state and are not physical phone/Office tests.\n'
+          )
+          Path('docs/v1/HANDOFF.md').write_text(text,encoding='utf-8')
+
+      - name: Commit docs and screenshots, clean one-shot files
+        id: docs
+        run: |
+          git rm .github/workflows/publish-v1150.yml .github/workflows/v1150-bootstrap.yml .github/update-v1150-docs.b64
+          git add README.md README.zh-CN.md CHANGELOG.md docs scripts/capture-mobile.py
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: publish v1.15.0 scenarios, unlimited timing and automatic updates'
+          git push origin HEAD:main
+          "sha=$(git rev-parse HEAD)" | Out-File $env:GITHUB_OUTPUT -Append
+
+      - name: Package the exact validated executable
+        env:
+          PRODUCT_SOURCE_SHA: ${{ env.PRODUCT_SOURCE_SHA }}
+        run: |
+          & scripts/build-release.ps1 -ApplicationDirectory accepted-application
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging failed' }
+          $files=@(Get-ChildItem artifacts/release/v1.15.0/*.zip)
+          if ($files.Count -ne 2) { throw "Expected exactly two release ZIPs, got $($files.Count)" }
+
+      - name: Setup package smoke test and configuration preservation
+        run: |
+          $installer=(Resolve-Path artifacts/release/v1.15.0/installer-output/FlyPPTTimer-v1.15.0-setup-win-x64.exe).Path
+          $install=Join-Path $env:LOCALAPPDATA 'FlyPPTTimer'
+          $p=Start-Process $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Fresh installation failed' }
+          $config=Join-Path $install 'FlyPPTTimer.config.json'
+          $cfg=Get-Content $config -Raw | ConvertFrom-Json
+          $cfg.Version='1.14.1';$cfg.Timer.DefaultDuration='00:19:00';$cfg.Update.CheckOnStartup=$false
+          $cfg | ConvertTo-Json -Depth 40 | Set-Content $config -Encoding utf8
+          $before=Get-Content $config -Raw
+          $p=Start-Process $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Upgrade installation failed' }
+          if ((Get-Content $config -Raw) -ne $before) { throw 'Installer overwrote existing user configuration' }
+          if ((Get-FileHash (Join-Path $install 'FlyPPTTimer.exe')).Hash -ne (Get-FileHash accepted-application/FlyPPTTimer.exe).Hash) { throw 'Installed executable differs from validated executable' }
+
+      - name: Automatic-update handoff smoke tests
+        run: |
+          $helper=(Resolve-Path accepted-application/FlyPPTTimer.exe).Path
+          $staging=(Resolve-Path artifacts/release/v1.15.0/portable).Path
+          $target=Join-Path $env:RUNNER_TEMP 'portable-update-target';New-Item -ItemType Directory -Force $target | Out-Null
+          'keep-config' | Set-Content (Join-Path $target 'FlyPPTTimer.config.json')
+          New-Item -ItemType Directory -Force (Join-Path $target 'alert-sounds') | Out-Null
+          'keep-sound' | Set-Content (Join-Path $target 'alert-sounds/custom.wav')
+          'old' | Set-Content (Join-Path $target 'old-marker.txt')
+          $parent=Start-Process powershell -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 1' -PassThru
+          $restart="$env:WINDIR\System32\where.exe"
+          $p=Start-Process $helper -ArgumentList @('--portable-update-after',$parent.Id,$staging,$target,$restart) -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Portable automatic-update helper failed' }
+          if ((Get-Content (Join-Path $target 'FlyPPTTimer.config.json') -Raw).Trim() -ne 'keep-config') { throw 'Portable update did not preserve configuration' }
+          if ((Get-Content (Join-Path $target 'alert-sounds/custom.wav') -Raw).Trim() -ne 'keep-sound') { throw 'Portable update did not preserve sounds' }
+          if ((Get-FileHash (Join-Path $target 'FlyPPTTimer.exe')).Hash -ne (Get-FileHash accepted-application/FlyPPTTimer.exe).Hash) { throw 'Portable update did not install validated executable' }
+          $installer=(Resolve-Path artifacts/release/v1.15.0/installer-output/FlyPPTTimer-v1.15.0-setup-win-x64.exe).Path
+          $parent=Start-Process powershell -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 1' -PassThru
+          $p=Start-Process $helper -ArgumentList @('--install-update-after',$parent.Id,$installer,$restart) -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Installed automatic-update helper failed' }
+
+      - name: Publish GitHub Release with two ZIP assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files=@(Get-ChildItem artifacts/release/v1.15.0/*.zip | Sort-Object Name)
+          gh release create v1.15.0 $files[0].FullName $files[1].FullName --target '${{ steps.docs.outputs.sha }}' --title 'FlyPPTTimer v1.15.0' --notes-file docs/RELEASE_NOTES_v1.15.0.md --latest
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed' }
+          $release=gh release view v1.15.0 --json tagName,isDraft,isPrerelease,url,assets | ConvertFrom-Json
+          if ($release.isDraft -or $release.isPrerelease -or $release.assets.Count -ne 2) { throw 'Published Release verification failed' }
+          $release | ConvertTo-Json -Depth 20 | Set-Content published-release.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v1150-publication-evidence
+          path: |
+            published-release.json
+            docs/media/v1.15.0/**
+            artifacts/release/v1.15.0/*.zip
+          retention-days: 14
