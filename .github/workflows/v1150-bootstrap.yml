@@ -1,4 +1,4 @@
-name: Correct and validate v1.15.0 release branch
+name: Finalize and validate v1.15.0 release branch
 
 on:
   push:
@@ -14,67 +14,32 @@ env:
 jobs:
   fix:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           ref: release/v1.15.0
           fetch-depth: 0
-      - name: Apply focused Clippy corrections
+      - name: Normalize the legacy default comparison for the approved new stopwatch default
         shell: python
         run: |
           from pathlib import Path
-
-          app=Path('src/app.rs')
-          s=app.read_text(encoding='utf-8')
-          old='''            if !settings.unlimited {\n                if let Some(rule) = rule {\n                    settings.default_duration = rule.duration.clone();\n                    settings.mode = rule.mode;\n                }\n            }'''
-          new='''            if !settings.unlimited && let Some(rule) = rule {\n                settings.default_duration = rule.duration.clone();\n                settings.mode = rule.mode;\n            }'''
-          assert s.count(old) == 1
-          s=s.replace(old,new,1)
-          marker='''fn apply_scenario_runtime(\n'''
-          assert s.count(marker) == 1
-          s=s.replace(marker,'''#[allow(clippy::too_many_arguments)]\nfn apply_scenario_runtime(\n''',1)
-          app.write_text(s,encoding='utf-8',newline='\n')
-
-          settings=Path('src/settings.rs')
-          s=settings.read_text(encoding='utf-8')
-          unused='''    pub fn open_url(value: &str) {\n        let _ = crate::remote::open_url(value);\n    }\n\n'''
-          assert s.count(unused) == 1
-          s=s.replace(unused,'',1)
-
-          opening='''                if let Some(rest) = action_key.strip_prefix("scenario.") {\n                    if let Some((id, action)) = rest.rsplit_once('.') {'''
-          combined='''                if let Some(rest) = action_key.strip_prefix("scenario.")\n                    && let Some((id, action)) = rest.rsplit_once('.')\n                {'''
-          assert s.count(opening) == 1
-          s=s.replace(opening,combined,1)
-          tail='''                        }\n                    }\n                }\n                if action_key == "update.check" {'''
-          fixed_tail='''                        }\n                }\n                if action_key == "update.check" {'''
-          assert s.count(tail) == 1
-          s=s.replace(tail,fixed_tail,1)
-
-          field='''        if parts.len() == 3 {\n            if let Some(item) = c.scenarios.iter_mut().find(|x| x.id == parts[1]) {'''
-          fixed_field='''        if parts.len() == 3\n            && let Some(item) = c.scenarios.iter_mut().find(|x| x.id == parts[1])\n        {'''
-          assert s.count(field) == 1
-          s=s.replace(field,fixed_field,1)
-          field_tail='''                }\n            }\n        }\n        return;'''
-          fixed_field_tail='''                }\n        }\n        return;'''
-          start=s.index('fn update_field(')
-          pos=s.index(field_tail,start)
-          s=s[:pos]+s[pos:].replace(field_tail,fixed_field_tail,1)
-          settings.write_text(s,encoding='utf-8',newline='\n')
-      - name: Format and commit focused fix
+          p=Path('src/config.rs')
+          s=p.read_text(encoding='utf-8')
+          needle='''        let mut expected: Value = serde_json::from_str(V0302_DEFAULT_CONFIG).unwrap();\n        let config = AppConfig {'''
+          replacement='''        let mut expected: Value = serde_json::from_str(V0302_DEFAULT_CONFIG).unwrap();\n        // v1.15 intentionally changes only the fresh per-slide-stopwatch default;\n        // it is not a v0.30.2 parity field anymore.\n        expected["Timer"]\n            .as_object_mut()\n            .unwrap()\n            .remove("EnablePerSlideTimer");\n        let config = AppConfig {'''
+          assert s.count(needle) == 1
+          p.write_text(s.replace(needle,replacement,1),encoding='utf-8',newline='\n')
+      - name: Commit the focused regression-test correction
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt
           cargo +$RUST_TOOLCHAIN fmt --all
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/app.rs src/settings.rs
-          if git diff --cached --quiet; then
-            echo 'No source changes required.'
-          else
-            git commit -m 'fix: satisfy v1.15.0 strict lint checks'
-            git push origin HEAD:release/v1.15.0
-          fi
+          git add src/config.rs
+          git commit -m 'test: exclude v1.15 stopwatch default from legacy parity'
+          git push origin HEAD:release/v1.15.0
 
   validate:
     needs: fix
@@ -102,37 +67,32 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: v1150-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          key: v1150-final-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
           restore-keys: |
             v1150-windows-1.92-${{ hashFiles('Cargo.lock') }}-
             rust-windows-1.92-${{ hashFiles('Cargo.lock') }}-
-      - name: Format and Clippy
-        run: |
-          cargo fmt --all -- --check
-          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
-          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object clippy.log
-          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
-      - name: Tests and web syntax
+      - name: Format, Clippy, tests, web syntax and release build
         run: |
           New-Item -ItemType Directory -Force artifacts/ci | Out-Null
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object artifacts/ci/clippy.log
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
           cargo test --locked 2>&1 | Tee-Object artifacts/ci/tests.log
           if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
           node --check src/FlyPPTTimer/Web/app.js
           if ($LASTEXITCODE -ne 0) { throw 'Web syntax failed' }
-      - name: Release build
-        run: |
           cargo build --locked --release
           if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
-          $version=(Get-Item target/release/FlyPPTTimer.exe).VersionInfo.ProductVersion
+          $exe='target/release/FlyPPTTimer.exe'
+          $version=(Get-Item $exe).VersionInfo.ProductVersion
           if ($version -ne '1.15.0') { throw "Unexpected ProductVersion $version" }
-          Copy-Item target/release/FlyPPTTimer.exe artifacts/ci/FlyPPTTimer.exe
+          Copy-Item $exe artifacts/ci/FlyPPTTimer.exe
           Get-ChildItem target/release/*.dll -ErrorAction SilentlyContinue | Copy-Item -Destination artifacts/ci
           git rev-parse HEAD | Set-Content artifacts/ci/SOURCE.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: v1150-validation
-          path: |
-            artifacts/ci/**
-            clippy.log
+          name: v1150-final-validation
+          path: artifacts/ci/**
           retention-days: 14
