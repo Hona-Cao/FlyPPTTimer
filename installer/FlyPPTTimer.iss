@@ -44,6 +44,7 @@ AllowNoIcons=yes
 MinVersion=10.0
 ShowLanguageDialog=auto
 AppMutex=Local\FlyPPTTimer.SingleInstance
+LicenseFile={#SourceDir}\LICENSE
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -55,8 +56,9 @@ Source: "{#SourceDir}\FlyPPTTimer.config.json"; DestDir: "{app}"; Flags: onlyifd
 Source: "{#SourceDir}\app.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README.zh-CN.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourceDir}\CONTRIBUTING.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\TRADEMARKS.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\THIRD_PARTY_NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\BUILD.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
