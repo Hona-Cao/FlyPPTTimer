@@ -1,4 +1,4 @@
-name: Format and validate v1.15.0 release branch
+name: Fix and validate v1.15.0 release branch
 
 on:
   push:
@@ -12,7 +12,7 @@ env:
   RUST_TOOLCHAIN: '1.92.0'
 
 jobs:
-  format:
+  fix:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -20,22 +20,36 @@ jobs:
         with:
           ref: release/v1.15.0
           fetch-depth: 0
-      - name: Install rustfmt
-        run: rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt
-      - name: Format and commit only formatter changes
+      - name: Apply focused compile fixes and format
+        shell: python
         run: |
+          from pathlib import Path
+          p=Path('src/desktop.rs'); s=p.read_text(encoding='utf-8')
+          old='let mut data = NOTIFYICONDATAW {'
+          assert old in s
+          s=s.replace(old,'let data = NOTIFYICONDATAW {',1)
+          old='''        if old != 0 {\n            unsafe { DestroyIcon(old as _) }\n        };'''
+          assert old in s
+          s=s.replace(old,'''        if old != 0 {\n            let _ = unsafe { DestroyIcon(old as _) };\n        }''',1)
+          p.write_text(s,encoding='utf-8',newline='\n')
+          p=Path('src/settings.rs'); s=p.read_text(encoding='utf-8')
+          needle='''                            | "timer.unlimited"\n                            | "timer.duration_pair"\n                            | "placement.big"\n                            | "appearance.slide_font_follow"'''
+          assert needle in s
+          s=s.replace(needle,'''                            | "timer.unlimited"\n                            | "timer.duration_pair"\n                            | "appearance.slide_font_follow"''',1)
+          p.write_text(s,encoding='utf-8',newline='\n')
+      - name: Install rustfmt, format and commit
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt
           cargo +$RUST_TOOLCHAIN fmt --all
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if ! git diff --quiet; then
-            git add src ui build.rs Cargo.toml Cargo.lock
-            git commit -m 'style: format v1.15.0 Rust sources'
-            git push origin HEAD:release/v1.15.0
-          fi
+          git add src
+          git commit -m 'fix: resolve v1.15.0 Windows compile blockers'
+          git push origin HEAD:release/v1.15.0
 
   validate:
-    needs: format
+    needs: fix
     runs-on: windows-latest
     timeout-minutes: 40
     defaults:
@@ -63,12 +77,10 @@ jobs:
           key: v1150-windows-1.92-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
           restore-keys: |
             rust-windows-1.92-${{ hashFiles('Cargo.lock') }}-
-      - name: Format check
+      - name: Format and Clippy
         run: |
           cargo fmt --all -- --check
           if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
-      - name: Clippy
-        run: |
           cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object clippy.log
           if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
       - name: Tests and web syntax
