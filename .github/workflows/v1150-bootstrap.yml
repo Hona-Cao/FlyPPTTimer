@@ -20,19 +20,47 @@ jobs:
         with:
           ref: release/v1.15.0
           fetch-depth: 0
-      - name: Correct only the two NOTIFYICONDATAW declarations
+      - name: Apply focused Clippy corrections
         shell: python
         run: |
           from pathlib import Path
-          p=Path('src/desktop.rs')
-          s=p.read_text(encoding='utf-8')
-          notify='''    pub fn notify(&self, message: &str, milliseconds: u32) {\n        let data = NOTIFYICONDATAW {'''
-          assert notify in s
-          s=s.replace(notify,'''    pub fn notify(&self, message: &str, milliseconds: u32) {\n        let mut data = NOTIFYICONDATAW {''',1)
-          tray='''unsafe fn update_tray_icon(hwnd: HWND) {\n    let icon = load_badged_app_icon(current_badge_color().as_deref());\n    let mut data = NOTIFYICONDATAW {'''
-          assert tray in s
-          s=s.replace(tray,'''unsafe fn update_tray_icon(hwnd: HWND) {\n    let icon = load_badged_app_icon(current_badge_color().as_deref());\n    let data = NOTIFYICONDATAW {''',1)
-          p.write_text(s,encoding='utf-8',newline='\n')
+
+          app=Path('src/app.rs')
+          s=app.read_text(encoding='utf-8')
+          old='''            if !settings.unlimited {\n                if let Some(rule) = rule {\n                    settings.default_duration = rule.duration.clone();\n                    settings.mode = rule.mode;\n                }\n            }'''
+          new='''            if !settings.unlimited && let Some(rule) = rule {\n                settings.default_duration = rule.duration.clone();\n                settings.mode = rule.mode;\n            }'''
+          assert s.count(old) == 1
+          s=s.replace(old,new,1)
+          marker='''fn apply_scenario_runtime(\n'''
+          assert s.count(marker) == 1
+          s=s.replace(marker,'''#[allow(clippy::too_many_arguments)]\nfn apply_scenario_runtime(\n''',1)
+          app.write_text(s,encoding='utf-8',newline='\n')
+
+          settings=Path('src/settings.rs')
+          s=settings.read_text(encoding='utf-8')
+          unused='''    pub fn open_url(value: &str) {\n        let _ = crate::remote::open_url(value);\n    }\n\n'''
+          assert s.count(unused) == 1
+          s=s.replace(unused,'',1)
+
+          opening='''                if let Some(rest) = action_key.strip_prefix("scenario.") {\n                    if let Some((id, action)) = rest.rsplit_once('.') {'''
+          combined='''                if let Some(rest) = action_key.strip_prefix("scenario.")\n                    && let Some((id, action)) = rest.rsplit_once('.')\n                {'''
+          assert s.count(opening) == 1
+          s=s.replace(opening,combined,1)
+          tail='''                        }\n                    }\n                }\n                if action_key == "update.check" {'''
+          fixed_tail='''                        }\n                }\n                if action_key == "update.check" {'''
+          assert s.count(tail) == 1
+          s=s.replace(tail,fixed_tail,1)
+
+          field='''        if parts.len() == 3 {\n            if let Some(item) = c.scenarios.iter_mut().find(|x| x.id == parts[1]) {'''
+          fixed_field='''        if parts.len() == 3\n            && let Some(item) = c.scenarios.iter_mut().find(|x| x.id == parts[1])\n        {'''
+          assert s.count(field) == 1
+          s=s.replace(field,fixed_field,1)
+          field_tail='''                }\n            }\n        }\n        return;'''
+          fixed_field_tail='''                }\n        }\n        return;'''
+          start=s.index('fn update_field(')
+          pos=s.index(field_tail,start)
+          s=s[:pos]+s[pos:].replace(field_tail,fixed_field_tail,1)
+          settings.write_text(s,encoding='utf-8',newline='\n')
       - name: Format and commit focused fix
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt
@@ -40,9 +68,13 @@ jobs:
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/desktop.rs
-          git commit -m 'fix: correct tray notification mutability'
-          git push origin HEAD:release/v1.15.0
+          git add src/app.rs src/settings.rs
+          if git diff --cached --quiet; then
+            echo 'No source changes required.'
+          else
+            git commit -m 'fix: satisfy v1.15.0 strict lint checks'
+            git push origin HEAD:release/v1.15.0
+          fi
 
   validate:
     needs: fix
