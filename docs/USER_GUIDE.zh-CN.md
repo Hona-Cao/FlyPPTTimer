@@ -162,7 +162,7 @@ FlyPPTTimer 可以独立显示演讲时间，也可以配合 PowerPoint / WPS �
 
 ### 下载和安装
 
-下载前先看[本页版本说明](../README.zh-CN.md#download)：公开安装包目前仍为 v1.14.0，不能据此期待 v1.14.1 的新行为。
+从[下载与安装](../README.zh-CN.md#download)选择 v1.14.1 的便携版或安装版，二者都包含本教程说明的新功能。
 
 到 [GitHub 下载页](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest) 或 [Gitee 下载页](https://gitee.com/hona-cao/fly-ppttimer/releases)，选择适合自己的版本。
 

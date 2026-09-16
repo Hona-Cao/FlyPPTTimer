@@ -31,3 +31,6 @@ logs/
 *.suo
 .vs/
 *.bad.json
+
+__pycache__/
+*.py[cod]

@@ -31,6 +31,7 @@ def main() -> None:
     session.headers.update({'Authorization': f'Bearer {token}', 'User-Agent': 'FlyPPTTimer-release-sync'})
 
     def request(method: str, suffix: str, *, missing_ok: bool = False, **kwargs):
+        print(f"Gitee API: {method} {suffix}", flush=True)
         response = session.request(method, api + suffix, timeout=(20, 180), **kwargs)
         if missing_ok and response.status_code == 404:
             return None
@@ -127,10 +128,18 @@ def main() -> None:
         else:
             if previous:
                 raise RuntimeError(f'Existing Gitee attachment {name} cannot be verified as identical; not deleting it automatically.')
-            with path.open('rb') as data:
-                request('POST', endpoint, data={'access_token': token, 'owner': owner, 'repo': repo,
-                                              'release_id': str(release_id)},
-                        files={'file': (name, data, 'application/zip')})
+            # curl separates connection timeout from the full multipart transfer.
+            # Credentials go through stdin, never command arguments or logs.
+            auth = f'header = "Authorization: Bearer {token}"\nform-string = "access_token={token}"\n'
+            upload = subprocess.run([
+                'curl', '--config', '-', '--fail-with-body', '--silent', '--show-error',
+                '--connect-timeout', '30', '--max-time', '900', '--header', 'Expect:',
+                '--form-string', f'owner={owner}', '--form-string', f'repo={repo}',
+                '--form-string', f'release_id={release_id}',
+                '--form', f'file=@{path};type=application/zip', api + endpoint,
+            ], input=auth, capture_output=True, text=True)
+            if upload.returncode:
+                raise RuntimeError(f'Gitee upload failed for {name}: ' + upload.stderr[-600:] + upload.stdout[-400:])
             print(f'Uploaded: {name}')
         verified.append({'name': name, 'bytes': path.stat().st_size})
     final = request('GET', endpoint)
