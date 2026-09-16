@@ -115,7 +115,7 @@ impl DesktopIntegration {
     }
 
     pub fn notify(&self, message: &str, milliseconds: u32) {
-        let data = NOTIFYICONDATAW {
+        let mut data = NOTIFYICONDATAW {
             cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
             hWnd: self.hwnd,
             uID: TRAY_ID,
@@ -645,7 +645,7 @@ fn current_badge_color() -> Option<String> {
 
 unsafe fn update_tray_icon(hwnd: HWND) {
     let icon = load_badged_app_icon(current_badge_color().as_deref());
-    let mut data = NOTIFYICONDATAW {
+    let data = NOTIFYICONDATAW {
         cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
         hWnd: hwnd,
         uID: TRAY_ID,
