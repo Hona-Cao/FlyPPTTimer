@@ -9,3 +9,7 @@ Public assets must be the original portable/setup ZIPs. No checksum assets or fo
 Gitee requires separate release metadata and attachment uploads; git mirroring does not copy them. The previous workflow was manual-only and expected an installer EXE. The repaired workflow accepts the actual two ZIPs and publication invokes it explicitly. GITEE_TOKEN stays in Actions secrets, not repository files or logs.
 
 Read artifacts/publication and current remote release state for the actual GitHub/Gitee result. A prepared script does not establish successful uploading. No new runtime testing is claimed for this publication-only task.
+
+## Publication completed
+
+GitHub v1.14.1 is published as Latest with exactly two original ZIPs. Gitee release metadata and both public downloads are verified byte-for-byte. Publication workflow 35041893653; Gitee transfer repair and verification 35042075110. No compilation, repackaging or prior tag changes. Current README and bilingual guide links refer to v1.14.1.
