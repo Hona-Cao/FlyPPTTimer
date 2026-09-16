@@ -1,8 +1,7 @@
-"""Mirror a published stable GitHub Release and its two ZIP assets to Gitee.
+"""Mirror a stable GitHub Release and its two ZIP assets to Gitee.
 
-The operation is idempotent and self-healing: rerunning the same tag updates release
-text and replaces a same-name Gitee attachment only when its public bytes do not
-match the corresponding GitHub asset. It never rebuilds application binaries.
+The operation is idempotent: it updates the Gitee release text, reuses identical
+attachments, replaces stale ones, and never rebuilds application binaries.
 """
 from __future__ import annotations
 
@@ -34,44 +33,36 @@ def main() -> None:
     args = parser.parse_args()
 
     if not re.fullmatch(r"v\d+\.\d+\.\d+", args.tag):
-        raise RuntimeError("Use a stable version tag such as v1.14.1")
+        raise RuntimeError("Use a stable version tag such as v1.15.0")
 
     token = os.environ.get("GITEE_TOKEN", "")
     if not token:
-        raise RuntimeError(
-            "Set repository Actions secret GITEE_TOKEN with repository/release write access."
-        )
+        raise RuntimeError("Set Actions secret GITEE_TOKEN with Gitee repository/release write access.")
 
     owner = os.environ.get("GITEE_OWNER", "hona-cao")
     repo = os.environ.get("GITEE_REPO", "fly-ppttimer")
     github_repo = os.environ.get("GITHUB_REPOSITORY", "Hona-Cao/FlyPPTTimer")
     github_wait_seconds = env_int("GITHUB_ASSET_WAIT_SECONDS", 240)
     github_poll_seconds = env_int("GITHUB_ASSET_POLL_SECONDS", 10)
-    public_verify_attempts = env_int("GITEE_PUBLIC_VERIFY_ATTEMPTS", 6)
-    upload_attempts = env_int("GITEE_UPLOAD_ATTEMPTS", 3)
+    upload_attempts = env_int("GITEE_UPLOAD_ATTEMPTS", 2)
+    upload_max_seconds = env_int("GITEE_UPLOAD_MAX_SECONDS", 240)
+    attachment_poll_seconds = env_int("GITEE_ATTACHMENT_POLL_SECONDS", 75)
+    public_verify_attempts = env_int("GITEE_PUBLIC_VERIFY_ATTEMPTS", 3)
+    public_verify_max_seconds = env_int("GITEE_PUBLIC_VERIFY_MAX_SECONDS", 120)
 
     api = f"https://gitee.com/api/v5/repos/{owner}/{repo}"
     session = requests.Session()
-    session.headers.update(
-        {
-            "Authorization": f"Bearer {token}",
-            "User-Agent": "FlyPPTTimer-release-sync",
-        }
-    )
+    session.headers.update({
+        "Authorization": f"Bearer {token}",
+        "User-Agent": "FlyPPTTimer-release-sync",
+    })
 
-    def request(
-        method: str,
-        suffix: str,
-        *,
-        missing_ok: bool = False,
-        attempts: int = 3,
-        **kwargs,
-    ):
+    def request(method: str, suffix: str, *, missing_ok: bool = False, attempts: int = 2, **kwargs):
         last_error: Exception | None = None
         for attempt in range(1, attempts + 1):
             try:
                 print(f"Gitee API: {method} {suffix} (attempt {attempt}/{attempts})", flush=True)
-                response = session.request(method, api + suffix, timeout=(20, 180), **kwargs)
+                response = session.request(method, api + suffix, timeout=(10, 45), **kwargs)
                 if missing_ok and response.status_code == 404:
                     return None
                 if response.ok:
@@ -80,26 +71,22 @@ def main() -> None:
                     detail = response.json().get("message", "")
                 except (ValueError, AttributeError):
                     detail = "non-JSON API response"
-                last_error = RuntimeError(
-                    f"Gitee {method} {suffix}: HTTP {response.status_code}; {str(detail)[:400]}"
+                error = RuntimeError(
+                    f"Gitee {method} {suffix}: HTTP {response.status_code}; {str(detail)[:300]}"
                 )
                 if response.status_code in {400, 401, 403, 404, 409, 422}:
-                    raise last_error
-            except (requests.RequestException, RuntimeError) as error:
+                    raise error
                 last_error = error
-                if isinstance(error, RuntimeError):
-                    message = str(error)
-                    if any(f"HTTP {code}" in message for code in (400, 401, 403, 404, 409, 422)):
-                        raise
+            except requests.RequestException as error:
+                last_error = error
             if attempt < attempts:
-                time.sleep(3 * attempt)
+                time.sleep(2 * attempt)
         assert last_error is not None
         raise last_error
 
-    info = request("GET", "")
-    print(f'Gitee credentials can read {info.get("full_name", owner + "/" + repo)}.')
     if args.preflight:
-        print("Gitee preflight passed. Writes/uploads will be verified during synchronization.")
+        request("GET", "/releases", params={"page": 1, "per_page": 1})
+        print("Gitee release API preflight passed.")
         return
 
     def gh_json(*command: str):
@@ -110,78 +97,39 @@ def main() -> None:
         for edition in ("portable", "setup")
     }
 
-    # The release:published event can arrive while `gh release create ... assets` is
-    # still finishing its uploads. Poll instead of racing the two expected ZIPs.
     deadline = time.monotonic() + github_wait_seconds
     while True:
         release = gh_json(
-            "release",
-            "view",
-            args.tag,
-            "--repo",
-            github_repo,
-            "--json",
-            "name,body,isDraft,isPrerelease,assets,url",
+            "release", "view", args.tag, "--repo", github_repo,
+            "--json", "name,body,isDraft,isPrerelease,assets,url",
         )
         if release["isDraft"] or release["isPrerelease"]:
             raise RuntimeError("Only published stable releases are synchronized")
         names = {asset["name"] for asset in release["assets"]}
         unexpected = names - expected
         if unexpected:
-            raise RuntimeError(
-                "Release contains unexpected uploaded assets: " + ", ".join(sorted(unexpected))
-            )
+            raise RuntimeError("Release contains unexpected uploaded assets: " + ", ".join(sorted(unexpected)))
         if names == expected:
             break
         if time.monotonic() >= deadline:
-            missing = expected - names
-            raise RuntimeError(
-                "GitHub release assets were not ready before timeout. Missing: "
-                + ", ".join(sorted(missing))
-            )
-        print(
-            "Waiting for GitHub release ZIPs: " + ", ".join(sorted(expected - names)),
-            flush=True,
-        )
+            raise RuntimeError("GitHub release ZIPs were not ready: " + ", ".join(sorted(expected - names)))
+        print("Waiting for GitHub release ZIPs: " + ", ".join(sorted(expected - names)), flush=True)
         time.sleep(github_poll_seconds)
 
     assets = args.assets or Path("release-assets")
     assets.mkdir(parents=True, exist_ok=True)
     if args.assets is None:
-        subprocess.run(
-            [
-                "gh",
-                "release",
-                "download",
-                args.tag,
-                "--repo",
-                github_repo,
-                "--dir",
-                str(assets),
-                "--pattern",
-                "*.zip",
-                "--clobber",
-            ],
-            check=True,
-        )
-
+        subprocess.run([
+            "gh", "release", "download", args.tag, "--repo", github_repo,
+            "--dir", str(assets), "--pattern", "*.zip", "--clobber",
+        ], check=True)
     for name in expected:
         path = assets / name
-        if not path.is_file():
-            raise RuntimeError(f"Required release ZIP is missing locally: {name}")
-        if not zipfile.is_zipfile(path):
-            raise RuntimeError(f"Downloaded release asset is not a valid ZIP: {name}")
+        if not path.is_file() or not zipfile.is_zipfile(path):
+            raise RuntimeError(f"Required GitHub release asset is missing or invalid: {name}")
 
-    # Git mirroring alone does not carry release descriptions or attachments. Push
-    # the authorized tag so Gitee can attach a Release to the same commit. Never force.
-    subprocess.run(
-        ["git", "fetch", "origin", f"refs/tags/{args.tag}:refs/tags/{args.tag}"],
-        check=True,
-    )
-    sha = subprocess.check_output(
-        ["git", "rev-parse", f"{args.tag}^{{commit}}"], text=True
-    ).strip()
-
+    subprocess.run(["git", "fetch", "origin", f"refs/tags/{args.tag}:refs/tags/{args.tag}"], check=True)
+    sha = subprocess.check_output(["git", "rev-parse", f"{args.tag}^{{commit}}"], text=True).strip()
     with tempfile.TemporaryDirectory() as directory:
         askpass = Path(directory) / "askpass.py"
         askpass.write_text(
@@ -190,51 +138,15 @@ def main() -> None:
         askpass.chmod(0o700)
         env = dict(
             os.environ,
-            GIT_ASKPASS=str(askpass),
-            GIT_TERMINAL_PROMPT="0",
-            GITEE_OWNER=owner,
+            GIT_ASKPASS=str(askpass), GIT_TERMINAL_PROMPT="0", GITEE_OWNER=owner,
+            GIT_HTTP_LOW_SPEED_LIMIT="1024", GIT_HTTP_LOW_SPEED_TIME="30",
         )
-        tag_push = subprocess.run(
-            [
-                "git",
-                "-c",
-                "credential.helper=",
-                "push",
-                f"https://gitee.com/{owner}/{repo}.git",
-                f"{sha}:refs/tags/{args.tag}",
-            ],
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-        if tag_push.returncode:
-            tags = request("GET", "/tags", params={"per_page": 100})
-            same = next((tag for tag in tags if tag.get("name") == args.tag), None)
-            tag_sha = (same or {}).get("commit", {}).get("sha")
-            if tag_sha != sha:
-                raise RuntimeError(
-                    "Gitee rejected the tag push and the matching mirrored tag is unavailable: "
-                    + tag_push.stderr[-600:]
-                )
-
-        branch = info.get("default_branch") or "main"
-        branch_push = subprocess.run(
-            [
-                "git",
-                "-c",
-                "credential.helper=",
-                "push",
-                f"https://gitee.com/{owner}/{repo}.git",
-                f"{sha}:refs/heads/{branch}",
-            ],
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-        if branch_push.returncode:
-            print(
-                "Gitee default branch was not fast-forwarded; its configured mirror may update it separately. No force push used."
-            )
+        pushed = subprocess.run([
+            "git", "-c", "credential.helper=", "push",
+            f"https://gitee.com/{owner}/{repo}.git", f"{sha}:refs/tags/{args.tag}",
+        ], env=env, capture_output=True, text=True, timeout=120)
+        if pushed.returncode:
+            raise RuntimeError("Gitee tag push failed; refusing to force: " + pushed.stderr[-500:])
 
     release_url = f"https://gitee.com/{owner}/{repo}/releases/tag/{args.tag}"
     payload = {
@@ -244,43 +156,19 @@ def main() -> None:
         "target_commitish": sha,
         "prerelease": False,
     }
-    mirror = request(
-        "GET", "/releases/tags/" + quote(args.tag, safe=""), missing_ok=True
-    )
+    mirror = request("GET", "/releases/tags/" + quote(args.tag, safe=""), missing_ok=True)
     if mirror and mirror.get("id"):
         mirror = request("PATCH", f'/releases/{mirror["id"]}', json=payload)
     else:
         mirror = request("POST", "/releases", json=payload)
-
     release_id = mirror["id"]
     endpoint = f"/releases/{release_id}/attach_files"
 
-    def attachment_link(item) -> str | None:
-        link = item.get("browser_download_url") or item.get("download_url")
-        if link and link.startswith("/"):
-            return "https://gitee.com" + link
-        return link
-
-    def attachment_digest(item, attempts: int = public_verify_attempts) -> str | None:
-        link = attachment_link(item)
-        if not link:
-            return None
-        for attempt in range(1, attempts + 1):
-            try:
-                response = requests.get(link, timeout=(20, 180))
-                if response.ok:
-                    return hashlib.sha256(response.content).hexdigest()
-            except requests.RequestException:
-                pass
-            if attempt < attempts:
-                time.sleep(5 * attempt)
-        return None
-
     def list_attachments():
-        attachments = request("GET", endpoint)
-        if not isinstance(attachments, list):
+        value = request("GET", endpoint)
+        if not isinstance(value, list):
             raise RuntimeError("Unexpected Gitee attachment listing")
-        return attachments
+        return value
 
     def delete_attachment(item) -> None:
         attach_id = item.get("id")
@@ -288,71 +176,103 @@ def main() -> None:
             raise RuntimeError("Cannot replace a Gitee attachment without its id")
         request("DELETE", f"{endpoint}/{attach_id}")
 
-    def upload_attachment(path: Path, wanted_digest: str) -> None:
-        # curl separates connection timeout from full multipart transfer. Secret
-        # values are supplied through stdin and never appear in command arguments.
-        for attempt in range(1, upload_attempts + 1):
-            auth = (
-                f'header = "Authorization: Bearer {token}"\n'
-                f'form-string = "access_token={token}"\n'
-            )
-            upload = subprocess.run(
-                [
-                    "curl",
-                    "--config",
-                    "-",
-                    "--fail-with-body",
-                    "--silent",
-                    "--show-error",
-                    "--connect-timeout",
-                    "30",
-                    "--max-time",
-                    "900",
-                    "--header",
-                    "Expect:",
-                    "--form-string",
-                    f"owner={owner}",
-                    "--form-string",
-                    f"repo={repo}",
-                    "--form-string",
-                    f"release_id={release_id}",
-                    "--form",
-                    f"file=@{path};type=application/zip",
-                    api + endpoint,
-                ],
-                input=auth,
-                capture_output=True,
-                text=True,
-            )
-            item = next(
-                (entry for entry in list_attachments() if entry.get("name") == path.name),
-                None,
-            )
-            if item and attachment_digest(item) == wanted_digest:
-                print(f"Uploaded and verified: {path.name}")
-                return
-            if item:
-                print(f"Removing incomplete/mismatched upload before retry: {path.name}")
-                delete_attachment(item)
-            if attempt == upload_attempts:
-                detail = upload.stderr[-600:] + upload.stdout[-400:]
-                raise RuntimeError(f"Gitee upload failed for {path.name}: {detail}")
-            time.sleep(5 * attempt)
+    def attachment_url(item) -> str | None:
+        url = item.get("browser_download_url") or item.get("download_url")
+        if url and url.startswith("/"):
+            url = "https://gitee.com" + url
+        return url
 
-    verified = []
+    def public_digest(item) -> str | None:
+        url = attachment_url(item)
+        if not url:
+            return None
+        for attempt in range(1, public_verify_attempts + 1):
+            with tempfile.NamedTemporaryFile(delete=False) as output:
+                output_path = Path(output.name)
+            try:
+                result = subprocess.run([
+                    "curl", "--http1.1", "--location", "--fail", "--silent", "--show-error",
+                    "--connect-timeout", "15", "--max-time", str(public_verify_max_seconds),
+                    "--speed-time", "30", "--speed-limit", "1024",
+                    "--output", str(output_path), url,
+                ], capture_output=True, text=True)
+                if result.returncode == 0:
+                    return hashlib.sha256(output_path.read_bytes()).hexdigest()
+            finally:
+                output_path.unlink(missing_ok=True)
+            if attempt < public_verify_attempts:
+                time.sleep(5 * attempt)
+        return None
+
+    def find_attachment(name: str):
+        return next((item for item in list_attachments() if item.get("name") == name), None)
+
+    def wait_for_attachment(name: str, wanted_size: int):
+        deadline = time.monotonic() + attachment_poll_seconds
+        while True:
+            item = find_attachment(name)
+            if item:
+                remote_size = item.get("size") or item.get("file_size")
+                if remote_size is None or int(remote_size) == wanted_size:
+                    return item
+                return item
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(5)
+
+    def upload_once(path: Path) -> subprocess.CompletedProcess[str]:
+        auth = f'header = "Authorization: Bearer {token}"\n'
+        return subprocess.run([
+            "curl", "--config", "-", "--http1.1", "--fail-with-body", "--silent", "--show-error",
+            "--connect-timeout", "20", "--max-time", str(upload_max_seconds),
+            "--speed-time", "45", "--speed-limit", "1024", "--header", "Expect:",
+            "--form-string", f"owner={owner}", "--form-string", f"repo={repo}",
+            "--form-string", f"release_id={release_id}",
+            "--form", f"file=@{path};type=application/zip", api + endpoint,
+        ], input=auth, capture_output=True, text=True)
+
+    def ensure_attachment(path: Path) -> None:
+        wanted_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        wanted_size = path.stat().st_size
+        existing = find_attachment(path.name)
+        if existing:
+            remote_size = existing.get("size") or existing.get("file_size")
+            if remote_size is not None and int(remote_size) != wanted_size:
+                print(f"Replacing size-mismatched Gitee attachment: {path.name}")
+                delete_attachment(existing)
+            elif public_digest(existing) == wanted_digest:
+                print(f"Already synchronized: {path.name}")
+                return
+            else:
+                print(f"Replacing unverifiable/mismatched Gitee attachment: {path.name}")
+                delete_attachment(existing)
+
+        last_detail = ""
+        for attempt in range(1, upload_attempts + 1):
+            print(f"Uploading {path.name} (attempt {attempt}/{upload_attempts}, max {upload_max_seconds}s)", flush=True)
+            upload = upload_once(path)
+            last_detail = (upload.stderr[-500:] + upload.stdout[-300:]).strip()
+            item = wait_for_attachment(path.name, wanted_size)
+            if item:
+                remote_size = item.get("size") or item.get("file_size")
+                if remote_size is not None and int(remote_size) != wanted_size:
+                    delete_attachment(item)
+                elif public_digest(item) == wanted_digest:
+                    print(f"Uploaded and publicly verified: {path.name}")
+                    return
+                else:
+                    print(f"Attachment appeared but public verification did not match: {path.name}")
+                    delete_attachment(item)
+            elif upload.returncode == 0:
+                print(f"Upload returned success but attachment is not listed yet: {path.name}")
+            else:
+                print(f"Upload ended before confirmation ({upload.returncode}); checking/retrying: {path.name}")
+            if attempt < upload_attempts:
+                time.sleep(5 * attempt)
+        raise RuntimeError(f"Gitee upload could not be verified for {path.name}: {last_detail}")
+
     for name in sorted(expected):
-        path = assets / name
-        wanted = hashlib.sha256(path.read_bytes()).hexdigest()
-        current = list_attachments()
-        previous = next((item for item in current if item.get("name") == name), None)
-        if previous and attachment_digest(previous) == wanted:
-            print(f"Already synchronized: {name}")
-        else:
-            if previous:
-                print(f"Replacing stale/mismatched Gitee attachment: {name}")
-                delete_attachment(previous)
-            upload_attachment(path, wanted)
-        verified.append({"name": name, "bytes": path.stat().st_size})
+        ensure_attachment(assets / name)
 
     final = list_attachments()
     final_names = {item.get("name") for item in final}
@@ -362,27 +282,21 @@ def main() -> None:
             + ", ".join(sorted(name for name in final_names if name))
         )
     for item in final:
-        actual = attachment_digest(item)
         wanted = hashlib.sha256((assets / item["name"]).read_bytes()).hexdigest()
-        if actual != wanted:
-            raise RuntimeError(
-                "Public Gitee attachment download is not identical: " + item["name"]
-            )
+        if public_digest(item) != wanted:
+            raise RuntimeError("Public Gitee attachment differs from GitHub asset: " + item["name"])
 
+    evidence = Path("artifacts/publication")
+    evidence.mkdir(parents=True, exist_ok=True)
     result = {
         "tag": args.tag,
         "source": sha,
         "url": release_url,
         "github_release": release["url"],
-        "assets": verified,
+        "assets": [{"name": name, "bytes": (assets / name).stat().st_size} for name in sorted(expected)],
         "public_downloads_match": True,
-        "default_branch_updated": branch_push.returncode == 0,
     }
-    evidence = Path("artifacts/publication")
-    evidence.mkdir(parents=True, exist_ok=True)
-    (evidence / "gitee-release.json").write_text(
-        json.dumps(result, ensure_ascii=False, indent=2) + "\n"
-    )
+    (evidence / "gitee-release.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(f"Gitee release and both public downloads verified: {release_url}")
 
 
