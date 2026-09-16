@@ -954,9 +954,17 @@ pub fn remote_state(
         mode: mode.clone(),
         state: state_text.clone(),
         running: snapshot.state == TimerState::Running,
-        duration_ms: if config.timer.unlimited { 0 } else { snapshot.duration.as_millis() as i64 },
+        duration_ms: if config.timer.unlimited {
+            0
+        } else {
+            snapshot.duration.as_millis() as i64
+        },
         elapsed_ms: snapshot.elapsed.as_millis() as i64,
-        remaining_ms: if config.timer.unlimited { 0 } else { snapshot.remaining.as_millis() as i64 },
+        remaining_ms: if config.timer.unlimited {
+            0
+        } else {
+            snapshot.remaining.as_millis() as i64
+        },
         display_text: display_text.clone(),
         is_overtime: snapshot.is_overtime,
         continue_overtime: config.timer.effective_continue_overtime(),
@@ -991,7 +999,16 @@ pub fn remote_state(
         ui_theme: config.ui_theme.clone(),
         file_browsing_enabled: config.remote_control.allow_file_browsing,
         slide_timing: Default::default(),
-        scenarios: config.scenarios.iter().map(|item| RemoteScenario { id:item.id.clone(), name:item.name.clone(), badge_color:item.badge_color.clone(), active:item.id==config.active_scenario_id }).collect(),
+        scenarios: config
+            .scenarios
+            .iter()
+            .map(|item| RemoteScenario {
+                id: item.id.clone(),
+                name: item.name.clone(),
+                badge_color: item.badge_color.clone(),
+                active: item.id == config.active_scenario_id,
+            })
+            .collect(),
         active_scenario_id: config.active_scenario_id.clone(),
     }
 }

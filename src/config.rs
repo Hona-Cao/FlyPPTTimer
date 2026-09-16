@@ -111,7 +111,9 @@ impl AppConfig {
         if (major, minor) < (1, 14) {
             config.update.check_on_startup = true;
         }
-        if config.timer.unlimited { config.timer.mode = TimerMode::CountUp; }
+        if config.timer.unlimited {
+            config.timer.mode = TimerMode::CountUp;
+        }
         config.scenarios.truncate(8);
         // The metadata row has a fixed layout from 1.14 onward. Keep legacy fields readable.
         config.appearance.page_alignment = PageAlignment::Right;
@@ -192,7 +194,10 @@ pub struct UpdateSettings {
 }
 impl Default for UpdateSettings {
     fn default() -> Self {
-        Self { check_on_startup: true, source: default_update_source() }
+        Self {
+            check_on_startup: true,
+            source: default_update_source(),
+        }
     }
 }
 
@@ -203,24 +208,36 @@ pub enum UpdateSource {
     GitHub = 1,
 }
 impl Default for UpdateSource {
-    fn default() -> Self { default_update_source() }
+    fn default() -> Self {
+        default_update_source()
+    }
 }
 
 fn default_update_source() -> UpdateSource {
-    if user_geo_is_mainland_china() { UpdateSource::Gitee } else { UpdateSource::GitHub }
+    if user_geo_is_mainland_china() {
+        UpdateSource::Gitee
+    } else {
+        UpdateSource::GitHub
+    }
 }
 
 #[cfg(windows)]
 fn user_geo_is_mainland_china() -> bool {
     #[link(name = "kernel32")]
-    unsafe extern "system" { fn GetUserDefaultGeoName(buffer: *mut u16, count: i32) -> i32; }
+    unsafe extern "system" {
+        fn GetUserDefaultGeoName(buffer: *mut u16, count: i32) -> i32;
+    }
     let mut name = [0u16; 16];
     let length = unsafe { GetUserDefaultGeoName(name.as_mut_ptr(), name.len() as i32) };
-    if length <= 1 { return false; }
+    if length <= 1 {
+        return false;
+    }
     String::from_utf16_lossy(&name[..(length as usize - 1)]).eq_ignore_ascii_case("CN")
 }
 #[cfg(not(windows))]
-fn user_geo_is_mainland_china() -> bool { false }
+fn user_geo_is_mainland_china() -> bool {
+    false
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
@@ -256,10 +273,18 @@ impl TimerSettings {
         self.unlimited || (self.end_action == TimerEndAction::None && self.continue_overtime)
     }
     pub fn runtime_mode(&self) -> TimerMode {
-        if self.unlimited { TimerMode::CountUp } else { self.mode }
+        if self.unlimited {
+            TimerMode::CountUp
+        } else {
+            self.mode
+        }
     }
     pub fn runtime_duration(&self) -> Duration {
-        if self.unlimited { Duration::from_secs(100 * 365 * 24 * 3600) } else { self.duration() }
+        if self.unlimited {
+            Duration::from_secs(100 * 365 * 24 * 3600)
+        } else {
+            self.duration()
+        }
     }
 }
 
@@ -655,7 +680,15 @@ pub struct ScenarioPreset {
     pub snapshot: ScenarioSnapshot,
 }
 impl Default for ScenarioPreset {
-    fn default() -> Self { Self { id: String::new(), name: "情景模式".into(), hotkey: String::new(), badge_color: "#E53935".into(), snapshot: ScenarioSnapshot::default() } }
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: "情景模式".into(),
+            hotkey: String::new(),
+            badge_color: "#E53935".into(),
+            snapshot: ScenarioSnapshot::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -671,12 +704,26 @@ pub struct ScenarioSnapshot {
 impl Default for ScenarioSnapshot {
     fn default() -> Self {
         let config = AppConfig::default();
-        Self { timer: config.timer, behavior: config.behavior, appearance: config.appearance, controls: config.controls, placement: config.placement, rules: config.rules }
+        Self {
+            timer: config.timer,
+            behavior: config.behavior,
+            appearance: config.appearance,
+            controls: config.controls,
+            placement: config.placement,
+            rules: config.rules,
+        }
     }
 }
 impl ScenarioSnapshot {
     pub fn capture(config: &AppConfig) -> Self {
-        Self { timer: config.timer.clone(), behavior: config.behavior.clone(), appearance: config.appearance.clone(), controls: config.controls.clone(), placement: config.placement.clone(), rules: config.rules.clone() }
+        Self {
+            timer: config.timer.clone(),
+            behavior: config.behavior.clone(),
+            appearance: config.appearance.clone(),
+            controls: config.controls.clone(),
+            placement: config.placement.clone(),
+            rules: config.rules.clone(),
+        }
     }
     pub fn apply_to(&self, config: &mut AppConfig) {
         config.timer = self.timer.clone();
@@ -689,8 +736,7 @@ impl ScenarioSnapshot {
 }
 
 pub const SCENARIO_BADGE_COLORS: [&str; 8] = [
-    "#E53935", "#1E88E5", "#43A047", "#FB8C00",
-    "#8E24AA", "#00ACC1", "#FDD835", "#6D4C41",
+    "#E53935", "#1E88E5", "#43A047", "#FB8C00", "#8E24AA", "#00ACC1", "#FDD835", "#6D4C41",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -784,7 +830,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn unlimited_mode_is_count_up_without_a_real_target() {
         let mut c = AppConfig::default();
@@ -835,9 +880,15 @@ mod tests {
             actual.as_object_mut().unwrap().remove(key);
         }
         actual["Update"].as_object_mut().unwrap().remove("Source");
-        actual["Timer"].as_object_mut().unwrap().remove("EnablePerSlideTimer");
+        actual["Timer"]
+            .as_object_mut()
+            .unwrap()
+            .remove("EnablePerSlideTimer");
         actual["Timer"].as_object_mut().unwrap().remove("Unlimited");
-        actual["Placement"].as_object_mut().unwrap().remove("BigScreenShowMetadata");
+        actual["Placement"]
+            .as_object_mut()
+            .unwrap()
+            .remove("BigScreenShowMetadata");
         // U10 explicitly adds this default; all pre-existing defaults still match.
         assert_eq!(actual["Appearance"]["ShowSlideNumbers"], true);
         actual["Appearance"]

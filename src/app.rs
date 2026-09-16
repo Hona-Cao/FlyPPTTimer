@@ -583,8 +583,17 @@ fn handle_desktop_event(
             handle_command(&command, window, timer, config, alerts, flash, config_path)
         }
         DesktopEvent::ApplyScenario(id) => {
-            if let Err(error)=apply_scenario_runtime(&id,window,timer,config,alerts,desktop,display_rebuild,config_path) {
-                desktop.notify(&error,4000);
+            if let Err(error) = apply_scenario_runtime(
+                &id,
+                window,
+                timer,
+                config,
+                alerts,
+                desktop,
+                display_rebuild,
+                config_path,
+            ) {
+                desktop.notify(&error, 4000);
             }
         }
         DesktopEvent::CloseBigScreen => {
@@ -1644,8 +1653,17 @@ fn execute_remote_command(
 ) -> Result<String, String> {
     let name = command.command.as_str();
     if name == "scenario.apply" {
-        let id=command.scenario_id.as_deref().ok_or("请选择情景模式。")?;
-        return apply_scenario_runtime(id,window,timer,config,alerts,desktop,display_rebuild,config_path);
+        let id = command.scenario_id.as_deref().ok_or("请选择情景模式。")?;
+        return apply_scenario_runtime(
+            id,
+            window,
+            timer,
+            config,
+            alerts,
+            desktop,
+            display_rebuild,
+            config_path,
+        );
     }
     if name.starts_with("timer.") || name == "state.get" {
         let result = execute_remote_timer_command(command, timer, config, alerts, config_path);
@@ -1842,7 +1860,12 @@ fn execute_remote_timer_command(
                 })
             });
             let mut settings = config.timer.clone();
-            if !settings.unlimited { if let Some(rule) = rule { settings.default_duration = rule.duration.clone(); settings.mode = rule.mode; } }
+            if !settings.unlimited {
+                if let Some(rule) = rule {
+                    settings.default_duration = rule.duration.clone();
+                    settings.mode = rule.mode;
+                }
+            }
             timer
                 .set_duration(settings.runtime_duration())
                 .map_err(|error| error.to_string())?;
@@ -1855,7 +1878,9 @@ fn execute_remote_timer_command(
             })
         }
         "timer.setDuration" => {
-            if config.borrow().timer.unlimited { return Err("无限制模式下不需要设置时长。".into()); }
+            if config.borrow().timer.unlimited {
+                return Err("无限制模式下不需要设置时长。".into());
+            }
             let seconds = if let Some(ms) = command.duration_ms.filter(|ms| *ms > 0) {
                 (ms as f64 / 1000.0).round_ties_even()
             } else {
@@ -1891,7 +1916,9 @@ fn execute_remote_timer_command(
             Ok("时长已设置".to_owned())
         }
         "timer.setMode" => {
-            if config.borrow().timer.unlimited { return Err("无限制模式固定使用正计时。".into()); }
+            if config.borrow().timer.unlimited {
+                return Err("无限制模式固定使用正计时。".into());
+            }
             let mode = match command.mode.as_deref() {
                 Some("正计时") | Some("countup") => TimerMode::CountUp,
                 _ => TimerMode::Countdown,
@@ -1924,18 +1951,41 @@ fn remote_path(id: &str) -> Option<String> {
 }
 
 fn apply_scenario_runtime(
-    id:&str, window:&slint::Weak<AppWindow>, timer:&Rc<RefCell<Timer<SystemClock>>>,
-    config:&Rc<RefCell<AppConfig>>, alerts:&Rc<RefCell<AlertTracker>>, desktop:&Rc<DesktopIntegration>,
-    display_rebuild:&Rc<Cell<bool>>, config_path:&std::path::Path,
-)->Result<String,String>{
-    let mut updated=config.borrow().clone();
-    crate::scenario::apply(&mut updated,id)?;
-    updated.save(config_path).map_err(|e|e.to_string())?;
-    apply_timer_config(&mut timer.borrow_mut(),&updated); alerts.borrow_mut().reset();
+    id: &str,
+    window: &slint::Weak<AppWindow>,
+    timer: &Rc<RefCell<Timer<SystemClock>>>,
+    config: &Rc<RefCell<AppConfig>>,
+    alerts: &Rc<RefCell<AlertTracker>>,
+    desktop: &Rc<DesktopIntegration>,
+    display_rebuild: &Rc<Cell<bool>>,
+    config_path: &std::path::Path,
+) -> Result<String, String> {
+    let mut updated = config.borrow().clone();
+    crate::scenario::apply(&mut updated, id)?;
+    updated.save(config_path).map_err(|e| e.to_string())?;
+    apply_timer_config(&mut timer.borrow_mut(), &updated);
+    alerts.borrow_mut().reset();
     desktop.reconfigure(&updated);
-    if let Some(w)=window.upgrade(){ apply_config(&w,&updated); window::apply_native_window(w.window(),updated.controls.click_through,updated.appearance.always_on_top,updated.appearance.background_opacity,&updated.appearance.shape); set_window_visible(&w,updated.placement.visible); }
-    let name=updated.scenarios.iter().find(|x|x.id==id).map(|x|x.name.clone()).unwrap_or_default();
-    *config.borrow_mut()=updated; display_rebuild.set(true); Ok(format!("已切换情景模式：{name}"))
+    if let Some(w) = window.upgrade() {
+        apply_config(&w, &updated);
+        window::apply_native_window(
+            w.window(),
+            updated.controls.click_through,
+            updated.appearance.always_on_top,
+            updated.appearance.background_opacity,
+            &updated.appearance.shape,
+        );
+        set_window_visible(&w, updated.placement.visible);
+    }
+    let name = updated
+        .scenarios
+        .iter()
+        .find(|x| x.id == id)
+        .map(|x| x.name.clone())
+        .unwrap_or_default();
+    *config.borrow_mut() = updated;
+    display_rebuild.set(true);
+    Ok(format!("已切换情景模式：{name}"))
 }
 
 fn handle_command(
@@ -1989,7 +2039,9 @@ fn handle_command(
             }
         }
         "toggleMode" => {
-            if config.borrow().timer.unlimited { return; }
+            if config.borrow().timer.unlimited {
+                return;
+            }
             let mut config = config.borrow_mut();
             config.timer.mode = match config.timer.mode {
                 TimerMode::Countdown => TimerMode::CountUp,
@@ -2015,7 +2067,9 @@ fn change_duration(
     config_path: &std::path::Path,
     delta_seconds: i64,
 ) {
-    if config.borrow().timer.unlimited { return; }
+    if config.borrow().timer.unlimited {
+        return;
+    }
     let seconds = (timer.borrow().duration().as_secs() as i64 + delta_seconds).max(60) as u64;
     set_duration(timer, config, config_path, Duration::from_secs(seconds));
 }
@@ -2026,7 +2080,9 @@ fn set_duration_minutes(
     config_path: &std::path::Path,
     minutes: u64,
 ) {
-    if config.borrow().timer.unlimited { return; }
+    if config.borrow().timer.unlimited {
+        return;
+    }
     set_duration(
         timer,
         config,

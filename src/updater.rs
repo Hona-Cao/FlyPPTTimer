@@ -9,8 +9,8 @@ use std::{
     thread,
 };
 
-use serde_json::Value;
 use crate::config::UpdateSource;
+use serde_json::Value;
 use slint::ComponentHandle;
 use windows_sys::Win32::Networking::WinHttp::{
     WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE, WINHTTP_QUERY_FLAG_NUMBER,
@@ -43,14 +43,17 @@ pub struct ReleaseInfo {
 impl ReleaseInfo {
     pub fn setup_archive(&self) -> Option<&ReleaseAsset> {
         let expected = format!("FlyPPTTimer-v{}-setup-win-x64.zip", self.version);
-        self.assets.iter().find(|asset| asset.name.eq_ignore_ascii_case(&expected))
+        self.assets
+            .iter()
+            .find(|asset| asset.name.eq_ignore_ascii_case(&expected))
     }
     pub fn portable_archive(&self) -> Option<&ReleaseAsset> {
         let expected = format!("FlyPPTTimer-v{}-portable-win-x64.zip", self.version);
-        self.assets.iter().find(|asset| asset.name.eq_ignore_ascii_case(&expected))
+        self.assets
+            .iter()
+            .find(|asset| asset.name.eq_ignore_ascii_case(&expected))
     }
 }
-
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckStatus {
@@ -67,9 +70,10 @@ pub enum Response {
         user_initiated: bool,
         result: Result<CheckStatus, Box<dyn std::error::Error + Send + Sync>>,
     },
-    Downloaded { result: Result<DownloadedUpdate, String> },
+    Downloaded {
+        result: Result<DownloadedUpdate, String>,
+    },
 }
-
 
 #[derive(Debug)]
 pub enum DownloadedUpdate {
@@ -147,8 +151,14 @@ pub fn start_check_ui(
         desktop.notify(
             text(
                 config,
-                match config.update.source { UpdateSource::Gitee => "正在从 Gitee 检查新版本…", UpdateSource::GitHub => "正在从 GitHub 检查新版本…" },
-                match config.update.source { UpdateSource::Gitee => "Checking Gitee for updates...", UpdateSource::GitHub => "Checking GitHub for updates..." },
+                match config.update.source {
+                    UpdateSource::Gitee => "正在从 Gitee 检查新版本…",
+                    UpdateSource::GitHub => "正在从 GitHub 检查新版本…",
+                },
+                match config.update.source {
+                    UpdateSource::Gitee => "Checking Gitee for updates...",
+                    UpdateSource::GitHub => "Checking GitHub for updates...",
+                },
             ),
             2000,
         );
@@ -171,7 +181,14 @@ pub fn handle_response_ui(
         }
         Response::Accepted(release) => {
             service.window.borrow_mut().take();
-            desktop.notify(text(config, "正在下载并准备更新...", "Downloading and preparing update..."), 3000);
+            desktop.notify(
+                text(
+                    config,
+                    "正在下载并准备更新...",
+                    "Downloading and preparing update...",
+                ),
+                3000,
+            );
             service.download(release);
         }
         Response::Checked {
@@ -181,7 +198,9 @@ pub fn handle_response_ui(
         Response::Downloaded { result } => {
             match result {
                 Ok(update) => match launch_update_after_exit(&update) {
-                    Ok(()) => { let _ = slint::quit_event_loop(); }
+                    Ok(()) => {
+                        let _ = slint::quit_event_loop();
+                    }
                     Err(error) => show_error(config, &error),
                 },
                 Err(error) => show_error(config, &error),
@@ -350,7 +369,9 @@ pub fn is_installed_edition() -> bool {
 
 pub fn launch_update_after_exit(update: &DownloadedUpdate) -> Result<(), String> {
     let executable = std::env::current_exe().map_err(|e| e.to_string())?;
-    let helper_dir = std::env::temp_dir().join("FlyPPTTimer").join("updater-helper");
+    let helper_dir = std::env::temp_dir()
+        .join("FlyPPTTimer")
+        .join("updater-helper");
     fs::create_dir_all(&helper_dir).map_err(|e| e.to_string())?;
     let helper = helper_dir.join(format!("FlyPPTTimer-updater-{}.exe", std::process::id()));
     fs::copy(&executable, &helper).map_err(|e| e.to_string())?;
@@ -358,24 +379,41 @@ pub fn launch_update_after_exit(update: &DownloadedUpdate) -> Result<(), String>
     command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
     match update {
         DownloadedUpdate::Installed { installer } => {
-            command.arg("--install-update-after").arg(std::process::id().to_string()).arg(installer).arg(&executable);
+            command
+                .arg("--install-update-after")
+                .arg(std::process::id().to_string())
+                .arg(installer)
+                .arg(&executable);
         }
         DownloadedUpdate::Portable { staging } => {
-            let target = executable.parent().ok_or("Cannot determine portable directory")?;
-            command.arg("--portable-update-after").arg(std::process::id().to_string()).arg(staging).arg(target).arg(&executable);
+            let target = executable
+                .parent()
+                .ok_or("Cannot determine portable directory")?;
+            command
+                .arg("--portable-update-after")
+                .arg(std::process::id().to_string())
+                .arg(staging)
+                .arg(target)
+                .arg(&executable);
         }
     }
     command.spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
 
-fn check_latest(source: UpdateSource) -> Result<CheckStatus, Box<dyn std::error::Error + Send + Sync>> {
+fn check_latest(
+    source: UpdateSource,
+) -> Result<CheckStatus, Box<dyn std::error::Error + Send + Sync>> {
     let result = match source {
         UpdateSource::Gitee => fetch_release(LATEST_RELEASE_API, RELEASES_URL, true),
         UpdateSource::GitHub => fetch_release(GITHUB_API, GITHUB_RELEASES, false),
     }?;
     match result {
-        Some(release) if parse_version(&release.version) > parse_version(env!("CARGO_PKG_VERSION")) => Ok(CheckStatus::UpdateAvailable(release)),
+        Some(release)
+            if parse_version(&release.version) > parse_version(env!("CARGO_PKG_VERSION")) =>
+        {
+            Ok(CheckStatus::UpdateAvailable(release))
+        }
         Some(_) => Ok(CheckStatus::UpToDate),
         None => Ok(CheckStatus::NoRelease),
     }
@@ -420,47 +458,95 @@ fn fetch_release(api: &str, releases_url: &str, gitee: bool) -> ReleaseResult {
     }))
 }
 
-fn download_update(release: &ReleaseInfo) -> Result<DownloadedUpdate, Box<dyn std::error::Error + Send + Sync>> {
+fn download_update(
+    release: &ReleaseInfo,
+) -> Result<DownloadedUpdate, Box<dyn std::error::Error + Send + Sync>> {
     let installed = is_installed_edition();
-    let asset = if installed { release.setup_archive() } else { release.portable_archive() }
-        .ok_or("This release does not contain the required Windows x64 ZIP package.")?;
-    let base = std::env::temp_dir().join("FlyPPTTimer").join("updates").join(format!("v{}", release.version));
+    let asset = if installed {
+        release.setup_archive()
+    } else {
+        release.portable_archive()
+    }
+    .ok_or("This release does not contain the required Windows x64 ZIP package.")?;
+    let base = std::env::temp_dir()
+        .join("FlyPPTTimer")
+        .join("updates")
+        .join(format!("v{}", release.version));
     fs::create_dir_all(&base)?;
-    let archive = base.join(Path::new(&asset.name).file_name().ok_or("Invalid update package name")?);
+    let archive = base.join(
+        Path::new(&asset.name)
+            .file_name()
+            .ok_or("Invalid update package name")?,
+    );
     let temporary = archive.with_extension("download");
     let response = http_get(&asset.download_url)?;
-    if !(200..300).contains(&response.status) { return Err(format!("Update download failed: HTTP {}", response.status).into()); }
+    if !(200..300).contains(&response.status) {
+        return Err(format!("Update download failed: HTTP {}", response.status).into());
+    }
     fs::write(&temporary, response.body)?;
-    if archive.exists() { fs::remove_file(&archive)?; }
+    if archive.exists() {
+        fs::remove_file(&archive)?;
+    }
     fs::rename(&temporary, &archive)?;
-    let staging = base.join(if installed { "setup-extracted" } else { "portable-extracted" });
+    let staging = base.join(if installed {
+        "setup-extracted"
+    } else {
+        "portable-extracted"
+    });
     extract_zip(&archive, &staging)?;
     if installed {
-        let installer = find_file(&staging, |name| name.to_ascii_lowercase().ends_with(".exe") && name.to_ascii_lowercase().contains("setup"))
-            .ok_or("Setup executable was not found after extracting the update ZIP")?;
+        let installer = find_file(&staging, |name| {
+            name.to_ascii_lowercase().ends_with(".exe")
+                && name.to_ascii_lowercase().contains("setup")
+        })
+        .ok_or("Setup executable was not found after extracting the update ZIP")?;
         Ok(DownloadedUpdate::Installed { installer })
     } else {
-        let exe = find_file(&staging, |name| name.eq_ignore_ascii_case("FlyPPTTimer.exe"))
-            .ok_or("Portable FlyPPTTimer.exe was not found after extracting the update ZIP")?;
-        Ok(DownloadedUpdate::Portable { staging: exe.parent().unwrap_or(&staging).to_path_buf() })
+        let exe = find_file(&staging, |name| {
+            name.eq_ignore_ascii_case("FlyPPTTimer.exe")
+        })
+        .ok_or("Portable FlyPPTTimer.exe was not found after extracting the update ZIP")?;
+        Ok(DownloadedUpdate::Portable {
+            staging: exe.parent().unwrap_or(&staging).to_path_buf(),
+        })
     }
 }
 
-fn extract_zip(archive: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    if destination.exists() { fs::remove_dir_all(destination)?; }
+fn extract_zip(
+    archive: &Path,
+    destination: &Path,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if destination.exists() {
+        fs::remove_dir_all(destination)?;
+    }
     fs::create_dir_all(destination)?;
     let status = std::process::Command::new("tar.exe")
         .creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW)
-        .arg("-xf").arg(archive).arg("-C").arg(destination).status()?;
-    if !status.success() { return Err("Windows could not extract the update ZIP".into()); }
+        .arg("-xf")
+        .arg(archive)
+        .arg("-C")
+        .arg(destination)
+        .status()?;
+    if !status.success() {
+        return Err("Windows could not extract the update ZIP".into());
+    }
     Ok(())
 }
 
 fn find_file(root: &Path, predicate: impl Fn(&str) -> bool + Copy) -> Option<PathBuf> {
     for entry in fs::read_dir(root).ok()?.flatten() {
-        let path=entry.path();
-        if path.is_dir() { if let Some(found)=find_file(&path,predicate) { return Some(found); } }
-        else if path.file_name().and_then(|v| v.to_str()).is_some_and(predicate) { return Some(path); }
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_file(&path, predicate) {
+                return Some(found);
+            }
+        } else if path
+            .file_name()
+            .and_then(|v| v.to_str())
+            .is_some_and(predicate)
+        {
+            return Some(path);
+        }
     }
     None
 }
@@ -748,7 +834,13 @@ mod tests {
                 },
             ],
         };
-        assert_eq!(release.portable_archive().map(|asset| asset.name.as_str()), Some("FlyPPTTimer-v1.15.0-portable-win-x64.zip"));
-        assert_eq!(release.setup_archive().map(|asset| asset.name.as_str()), Some("FlyPPTTimer-v1.15.0-setup-win-x64.zip"));
+        assert_eq!(
+            release.portable_archive().map(|asset| asset.name.as_str()),
+            Some("FlyPPTTimer-v1.15.0-portable-win-x64.zip")
+        );
+        assert_eq!(
+            release.setup_archive().map(|asset| asset.name.as_str()),
+            Some("FlyPPTTimer-v1.15.0-setup-win-x64.zip")
+        );
     }
 }

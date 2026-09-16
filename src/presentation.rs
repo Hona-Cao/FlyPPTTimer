@@ -1283,7 +1283,9 @@ pub fn matching_rule<'a>(config: &'a AppConfig, presentation_path: &str) -> Opti
 }
 
 pub fn timer_settings_for(config: &AppConfig, presentation_path: &str) -> (Duration, TimerMode) {
-    if config.timer.unlimited { return (config.timer.runtime_duration(), TimerMode::CountUp); }
+    if config.timer.unlimited {
+        return (config.timer.runtime_duration(), TimerMode::CountUp);
+    }
     matching_rule(config, presentation_path)
         .map(|rule| {
             let duration =

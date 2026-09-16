@@ -10,7 +10,10 @@ use slint::{ComponentHandle, Model, ModelRc, SharedString, VecModel};
 
 use crate::{
     app::{RuleItem, SettingItem, SettingsWindow},
-    config::{AppConfig, CloseButtonBehavior, FileRule, OverlayAnchor, TimerEndAction, TimerMode, UpdateSource},
+    config::{
+        AppConfig, CloseButtonBehavior, FileRule, OverlayAnchor, TimerEndAction, TimerMode,
+        UpdateSource,
+    },
     display,
     remote::RemoteServer,
 };
@@ -84,10 +87,16 @@ fn localize(lang: Language, value: &str) -> &str {
         "情景模式" => "Scenarios",
         "无限制" => "Unlimited",
         "更新地址" => "Update source",
-        "中国大陆首次使用默认 Gitee，其他地区默认 GitHub" => "Gitee is the first-use default in mainland China; GitHub elsewhere",
-        "大屏显示页数与逐页秒表" => "Show slide numbers and per-slide stopwatch on full-screen timer",
+        "中国大陆首次使用默认 Gitee，其他地区默认 GitHub" => {
+            "Gitee is the first-use default in mainland China; GitHub elsewhere"
+        }
+        "大屏显示页数与逐页秒表" => {
+            "Show slide numbers and per-slide stopwatch on full-screen timer"
+        }
         "情景模式管理" => "Scenario management",
-        "最多保存 8 个模式；切换会应用保存的计时、行为、外观、控制、显示与文件规则。" => "Save up to 8 scenarios. Switching applies saved timer, behavior, appearance, controls, displays and presentation rules.",
+        "最多保存 8 个模式；切换会应用保存的计时、行为、外观、控制、显示与文件规则。" => {
+            "Save up to 8 scenarios. Switching applies saved timer, behavior, appearance, controls, displays and presentation rules."
+        }
         "保存当前配置为新模式" => "Save current configuration as a new scenario",
         "名称" => "Name",
         "切换快捷键" => "Switch hotkey",
@@ -766,26 +775,106 @@ pub fn create(
                     return;
                 }
                 if action_key == "scenario.add" {
-                    let mut candidate=draft.borrow().clone();
-                    let number=candidate.scenarios.len()+1;
-                    let name=if ui_language.english(){format!("Scenario {number}")}else{format!("情景模式 {number}")};
-                    if let Err(message)=crate::scenario::add_from_current(&mut candidate,name){ native::message(&message,"FlyPPTTimer",true); return; }
-                    *draft.borrow_mut()=candidate;
-                    if let Some(w)=weak.upgrade(){ refresh(&w,&draft.borrow(),*page.borrow(),w.get_selected_rule(),&selected_rules.borrow(),true,ui_language,&remote_for_action,&addresses_for_action); }
+                    let mut candidate = draft.borrow().clone();
+                    let number = candidate.scenarios.len() + 1;
+                    let name = if ui_language.english() {
+                        format!("Scenario {number}")
+                    } else {
+                        format!("情景模式 {number}")
+                    };
+                    if let Err(message) = crate::scenario::add_from_current(&mut candidate, name) {
+                        native::message(&message, "FlyPPTTimer", true);
+                        return;
+                    }
+                    *draft.borrow_mut() = candidate;
+                    if let Some(w) = weak.upgrade() {
+                        refresh(
+                            &w,
+                            &draft.borrow(),
+                            *page.borrow(),
+                            w.get_selected_rule(),
+                            &selected_rules.borrow(),
+                            true,
+                            ui_language,
+                            &remote_for_action,
+                            &addresses_for_action,
+                        );
+                    }
                     return;
                 }
-                if let Some(rest)=action_key.strip_prefix("scenario.") {
-                    if let Some((id,action))=rest.rsplit_once('.') {
-                        if action=="delete" { crate::scenario::remove(&mut draft.borrow_mut(),id); if let Some(w)=weak.upgrade(){refresh(&w,&draft.borrow(),*page.borrow(),w.get_selected_rule(),&selected_rules.borrow(),true,ui_language,&remote_for_action,&addresses_for_action);} return; }
-                        if action=="save" { if let Err(message)=crate::scenario::save_current(&mut draft.borrow_mut(),id){native::message(&message,"FlyPPTTimer",true);} if let Some(w)=weak.upgrade(){refresh(&w,&draft.borrow(),*page.borrow(),w.get_selected_rule(),&selected_rules.borrow(),true,ui_language,&remote_for_action,&addresses_for_action);} return; }
-                        if action=="apply" {
-                            let mut candidate=applied_for_action.borrow().clone();
+                if let Some(rest) = action_key.strip_prefix("scenario.") {
+                    if let Some((id, action)) = rest.rsplit_once('.') {
+                        if action == "delete" {
+                            crate::scenario::remove(&mut draft.borrow_mut(), id);
+                            if let Some(w) = weak.upgrade() {
+                                refresh(
+                                    &w,
+                                    &draft.borrow(),
+                                    *page.borrow(),
+                                    w.get_selected_rule(),
+                                    &selected_rules.borrow(),
+                                    true,
+                                    ui_language,
+                                    &remote_for_action,
+                                    &addresses_for_action,
+                                );
+                            }
+                            return;
+                        }
+                        if action == "save" {
+                            if let Err(message) =
+                                crate::scenario::save_current(&mut draft.borrow_mut(), id)
+                            {
+                                native::message(&message, "FlyPPTTimer", true);
+                            }
+                            if let Some(w) = weak.upgrade() {
+                                refresh(
+                                    &w,
+                                    &draft.borrow(),
+                                    *page.borrow(),
+                                    w.get_selected_rule(),
+                                    &selected_rules.borrow(),
+                                    true,
+                                    ui_language,
+                                    &remote_for_action,
+                                    &addresses_for_action,
+                                );
+                            }
+                            return;
+                        }
+                        if action == "apply" {
+                            let mut candidate = applied_for_action.borrow().clone();
                             // Keep metadata edits made in this Settings draft before switching.
-                            candidate.scenarios=draft.borrow().scenarios.clone();
-                            if let Err(message)=crate::scenario::apply(&mut candidate,id){native::message(&message,"FlyPPTTimer",true);return;}
-                            match apply_immediate_config(candidate,ui_language,&action_config_path,&applied_for_action,&draft,&baseline_for_action,&on_applied_for_action){
-                                Ok(final_config)=>if let Some(w)=weak.upgrade(){refresh(&w,&final_config,*page.borrow(),w.get_selected_rule(),&selected_rules.borrow(),false,ui_language,&remote_for_action,&addresses_for_action);},
-                                Err(message)=>native::message(&message,"FlyPPTTimer",true),
+                            candidate.scenarios = draft.borrow().scenarios.clone();
+                            if let Err(message) = crate::scenario::apply(&mut candidate, id) {
+                                native::message(&message, "FlyPPTTimer", true);
+                                return;
+                            }
+                            match apply_immediate_config(
+                                candidate,
+                                ui_language,
+                                &action_config_path,
+                                &applied_for_action,
+                                &draft,
+                                &baseline_for_action,
+                                &on_applied_for_action,
+                            ) {
+                                Ok(final_config) => {
+                                    if let Some(w) = weak.upgrade() {
+                                        refresh(
+                                            &w,
+                                            &final_config,
+                                            *page.borrow(),
+                                            w.get_selected_rule(),
+                                            &selected_rules.borrow(),
+                                            false,
+                                            ui_language,
+                                            &remote_for_action,
+                                            &addresses_for_action,
+                                        );
+                                    }
+                                }
+                                Err(message) => native::message(&message, "FlyPPTTimer", true),
                             }
                             return;
                         }
@@ -1485,17 +1574,34 @@ fn rows_for(
 ) -> Vec<Row> {
     match page {
         0 => {
-            let mut rows=vec![
+            let mut rows = vec![
                 Row::section("基础计时"),
                 Row::duration_with_unlimited(&c.timer.default_duration, c.timer.unlimited),
-                Row::combo("timer.mode", "计时模式", vec!["倒计时", "正计时"], c.timer.runtime_mode() as i32).available(!c.timer.unlimited),
+                Row::combo(
+                    "timer.mode",
+                    "计时模式",
+                    vec!["倒计时", "正计时"],
+                    c.timer.runtime_mode() as i32,
+                )
+                .available(!c.timer.unlimited),
             ];
             if !c.timer.unlimited {
-                rows.push(Row::combo("timer.overtime", "到达预设时间后", vec!["停止计时", "继续显示超时"], c.timer.continue_overtime as i32));
-                rows.push(Row::combo("timer.end_action", "时间到后的操作", vec!["仅提示", "黑屏并显示“时间到”", "退出放映"], c.timer.end_action as i32));
+                rows.push(Row::combo(
+                    "timer.overtime",
+                    "到达预设时间后",
+                    vec!["停止计时", "继续显示超时"],
+                    c.timer.continue_overtime as i32,
+                ));
+                rows.push(Row::combo(
+                    "timer.end_action",
+                    "时间到后的操作",
+                    vec!["仅提示", "黑屏并显示“时间到”", "退出放映"],
+                    c.timer.end_action as i32,
+                ));
             }
-            rows.push(Row::section("文件规则")); rows
-        },
+            rows.push(Row::section("文件规则"));
+            rows
+        }
         1 => behavior_rows(c),
         2 => appearance_rows(c),
         3 => remote_rows(c, lang, remote, addresses),
@@ -1573,7 +1679,9 @@ fn behavior_rows(c: &AppConfig) -> Vec<Row> {
             c.behavior.flash_paused_time,
         ),
     ];
-    if c.timer.unlimited { return rows; }
+    if c.timer.unlimited {
+        return rows;
+    }
     rows.extend(prompt_rows("提示 1", "p1", &c.behavior.prompt1, "提示1"));
     rows.extend(prompt_rows("提示 2", "p2", &c.behavior.prompt2, "提示2"));
     rows.extend(prompt_rows(
@@ -1870,8 +1978,12 @@ fn appearance_rows(c: &AppConfig) -> Vec<Row> {
             big_screen_selected,
         )
         .available(has_extended && c.placement.big_screen_enabled),
-        Row::check("placement.bigmeta", "大屏显示页数与逐页秒表", c.placement.big_screen_show_metadata)
-            .available(has_extended && c.placement.big_screen_enabled),
+        Row::check(
+            "placement.bigmeta",
+            "大屏显示页数与逐页秒表",
+            c.placement.big_screen_show_metadata,
+        )
+        .available(has_extended && c.placement.big_screen_enabled),
         Row::section("默认位置"),
         Row::combo(
             "placement.anchor",
@@ -2052,17 +2164,62 @@ fn remote_rows(
 }
 
 fn scenario_rows(c: &AppConfig, lang: Language) -> Vec<Row> {
-    let mut rows=vec![Row::section("情景模式管理"), Row::info("最多保存 8 个模式；切换会应用保存的计时、行为、外观、控制、显示与文件规则。", "")];
-    if c.scenarios.len()<8 { rows.push(Row::action("scenario.add", "保存当前配置为新模式", "保存当前配置为新模式")); }
-    for (index,item) in c.scenarios.iter().enumerate() {
-        let mark=if item.id==c.active_scenario_id { " ●" } else { "" };
-        rows.push(Row::section(format!("{} {}{}", if lang.english(){"Scenario"}else{"模式"}, index+1, mark)));
-        rows.push(Row::text(format!("scenario.{}.name",item.id), "名称", &item.name));
-        rows.push(Row::text(format!("scenario.{}.hotkey",item.id), "切换快捷键", &item.hotkey));
-        rows.push(Row::color(format!("scenario.{}.color",item.id), "图标角标颜色", &item.badge_color));
-        rows.push(Row::action(format!("scenario.{}.save",item.id), "保存当前配置", "更新此模式"));
-        rows.push(Row::action(format!("scenario.{}.apply",item.id), "切换到此模式", "切换"));
-        rows.push(Row::action(format!("scenario.{}.delete",item.id), "删除情景模式", "删除"));
+    let mut rows = vec![
+        Row::section("情景模式管理"),
+        Row::info(
+            "最多保存 8 个模式；切换会应用保存的计时、行为、外观、控制、显示与文件规则。",
+            "",
+        ),
+    ];
+    if c.scenarios.len() < 8 {
+        rows.push(Row::action(
+            "scenario.add",
+            "保存当前配置为新模式",
+            "保存当前配置为新模式",
+        ));
+    }
+    for (index, item) in c.scenarios.iter().enumerate() {
+        let mark = if item.id == c.active_scenario_id {
+            " ●"
+        } else {
+            ""
+        };
+        rows.push(Row::section(format!(
+            "{} {}{}",
+            if lang.english() { "Scenario" } else { "模式" },
+            index + 1,
+            mark
+        )));
+        rows.push(Row::text(
+            format!("scenario.{}.name", item.id),
+            "名称",
+            &item.name,
+        ));
+        rows.push(Row::text(
+            format!("scenario.{}.hotkey", item.id),
+            "切换快捷键",
+            &item.hotkey,
+        ));
+        rows.push(Row::color(
+            format!("scenario.{}.color", item.id),
+            "图标角标颜色",
+            &item.badge_color,
+        ));
+        rows.push(Row::action(
+            format!("scenario.{}.save", item.id),
+            "保存当前配置",
+            "更新此模式",
+        ));
+        rows.push(Row::action(
+            format!("scenario.{}.apply", item.id),
+            "切换到此模式",
+            "切换",
+        ));
+        rows.push(Row::action(
+            format!("scenario.{}.delete", item.id),
+            "删除情景模式",
+            "删除",
+        ));
     }
     rows
 }
@@ -2176,13 +2333,20 @@ fn normalize_before_save(c: &mut AppConfig) {
     c.placement.offset_y_percent = c.placement.offset_y_percent.clamp(-50.0, 50.0);
     c.remote_control.port = c.remote_control.port.clamp(1, 65535);
     c.controls.hotkeys.remove("openSettings");
-    if c.timer.unlimited { c.timer.mode = TimerMode::CountUp; }
+    if c.timer.unlimited {
+        c.timer.mode = TimerMode::CountUp;
+    }
     c.scenarios.truncate(8);
     for scenario in &mut c.scenarios {
         scenario.name = scenario.name.trim().to_owned();
         scenario.hotkey = scenario.hotkey.trim().to_owned();
     }
-    if !c.active_scenario_id.is_empty() && !c.scenarios.iter().any(|item| item.id == c.active_scenario_id) {
+    if !c.active_scenario_id.is_empty()
+        && !c
+            .scenarios
+            .iter()
+            .any(|item| item.id == c.active_scenario_id)
+    {
         c.active_scenario_id.clear();
     }
 }
@@ -2195,22 +2359,36 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
     let int = || value.parse::<i32>().unwrap_or_default();
     let float = || value.parse::<f64>().unwrap_or_default();
     if key.starts_with("scenario.") {
-        let parts=key.split('.').collect::<Vec<_>>();
-        if parts.len()==3 {
-            if let Some(item)=c.scenarios.iter_mut().find(|x|x.id==parts[1]) {
-                match parts[2] { "name"=>item.name=value.trim().chars().take(32).collect(), "hotkey"=>item.hotkey=value.trim().to_owned(), "color"=>item.badge_color=value.into(), _=>{} }
+        let parts = key.split('.').collect::<Vec<_>>();
+        if parts.len() == 3 {
+            if let Some(item) = c.scenarios.iter_mut().find(|x| x.id == parts[1]) {
+                match parts[2] {
+                    "name" => item.name = value.trim().chars().take(32).collect(),
+                    "hotkey" => item.hotkey = value.trim().to_owned(),
+                    "color" => item.badge_color = value.into(),
+                    _ => {}
+                }
             }
         }
         return;
     }
     match key {
         "timer.duration_pair" => {
-            if !value.trim().is_empty() { c.timer.default_duration = value.into(); }
+            if !value.trim().is_empty() {
+                c.timer.default_duration = value.into();
+            }
             c.timer.unlimited = checked;
-            if checked { c.timer.mode = TimerMode::CountUp; }
-        },
+            if checked {
+                c.timer.mode = TimerMode::CountUp;
+            }
+        }
         "timer.duration" => c.timer.default_duration = value.into(),
-        "timer.unlimited" => { c.timer.unlimited=checked; if checked { c.timer.mode=TimerMode::CountUp; } },
+        "timer.unlimited" => {
+            c.timer.unlimited = checked;
+            if checked {
+                c.timer.mode = TimerMode::CountUp;
+            }
+        }
         "timer.mode" => {
             c.timer.mode = if selected == 0 {
                 TimerMode::Countdown
@@ -2385,7 +2563,13 @@ fn update_field(c: &mut AppConfig, key: &str, value: &str, checked: bool, select
             }
         }
         "update.start" => c.update.check_on_startup = checked,
-        "update.source" => c.update.source = if selected == 0 { UpdateSource::Gitee } else { UpdateSource::GitHub },
+        "update.source" => {
+            c.update.source = if selected == 0 {
+                UpdateSource::Gitee
+            } else {
+                UpdateSource::GitHub
+            }
+        }
         _ => {}
     }
 }
@@ -2507,21 +2691,57 @@ fn validate(c: &AppConfig, lang: Language) -> Result<(), String> {
         )
         .to_owned());
     }
-    if c.scenarios.len()>8 { return Err(t(lang,"情景模式最多保存 8 个。","At most 8 scenarios can be saved.").into()); }
+    if c.scenarios.len() > 8 {
+        return Err(t(
+            lang,
+            "情景模式最多保存 8 个。",
+            "At most 8 scenarios can be saved.",
+        )
+        .into());
+    }
     let mut scenario_hotkeys = std::collections::HashSet::new();
-    for binding in c.controls.hotkeys.values()
-        .chain([&c.controls.start_pause_hotkey, &c.controls.stop_reset_hotkey, &c.controls.toggle_window_hotkey]) {
-        if let Some(parsed) = crate::desktop::parse_hotkey(binding.trim()) { scenario_hotkeys.insert(parsed); }
+    for binding in c.controls.hotkeys.values().chain([
+        &c.controls.start_pause_hotkey,
+        &c.controls.stop_reset_hotkey,
+        &c.controls.toggle_window_hotkey,
+    ]) {
+        if let Some(parsed) = crate::desktop::parse_hotkey(binding.trim()) {
+            scenario_hotkeys.insert(parsed);
+        }
     }
     for item in &c.scenarios {
-        if item.name.trim().is_empty() { return Err(t(lang,"情景模式名称不能为空。","Scenario names cannot be empty.").into()); }
-        if crate::color_picker::parse_hex(&item.badge_color).is_none() { return Err(t(lang,"情景模式角标颜色无效。","A scenario badge color is invalid.").into()); }
+        if item.name.trim().is_empty() {
+            return Err(t(
+                lang,
+                "情景模式名称不能为空。",
+                "Scenario names cannot be empty.",
+            )
+            .into());
+        }
+        if crate::color_picker::parse_hex(&item.badge_color).is_none() {
+            return Err(t(
+                lang,
+                "情景模式角标颜色无效。",
+                "A scenario badge color is invalid.",
+            )
+            .into());
+        }
         if !item.hotkey.trim().is_empty() {
             let Some(parsed) = crate::desktop::parse_hotkey(item.hotkey.trim()) else {
-                return Err(t(lang,"情景模式快捷键无效。示例：Ctrl+Alt+1、F9。","A scenario hotkey is invalid. Examples: Ctrl+Alt+1, F9.").into());
+                return Err(t(
+                    lang,
+                    "情景模式快捷键无效。示例：Ctrl+Alt+1、F9。",
+                    "A scenario hotkey is invalid. Examples: Ctrl+Alt+1, F9.",
+                )
+                .into());
             };
             if !scenario_hotkeys.insert(parsed) {
-                return Err(t(lang,"情景模式快捷键不能与其他快捷键重复。","A scenario hotkey cannot duplicate another global hotkey.").into());
+                return Err(t(
+                    lang,
+                    "情景模式快捷键不能与其他快捷键重复。",
+                    "A scenario hotkey cannot duplicate another global hotkey.",
+                )
+                .into());
             }
         }
     }
