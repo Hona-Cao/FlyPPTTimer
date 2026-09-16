@@ -45,10 +45,10 @@ def main() -> None:
     github_wait_seconds = env_int("GITHUB_ASSET_WAIT_SECONDS", 240)
     github_poll_seconds = env_int("GITHUB_ASSET_POLL_SECONDS", 10)
     upload_attempts = env_int("GITEE_UPLOAD_ATTEMPTS", 2)
-    upload_max_seconds = env_int("GITEE_UPLOAD_MAX_SECONDS", 240)
-    attachment_poll_seconds = env_int("GITEE_ATTACHMENT_POLL_SECONDS", 75)
-    public_verify_attempts = env_int("GITEE_PUBLIC_VERIFY_ATTEMPTS", 3)
-    public_verify_max_seconds = env_int("GITEE_PUBLIC_VERIFY_MAX_SECONDS", 120)
+    upload_max_seconds = env_int("GITEE_UPLOAD_MAX_SECONDS", 180)
+    attachment_poll_seconds = env_int("GITEE_ATTACHMENT_POLL_SECONDS", 60)
+    public_verify_attempts = env_int("GITEE_PUBLIC_VERIFY_ATTEMPTS", 2)
+    public_verify_max_seconds = env_int("GITEE_PUBLIC_VERIFY_MAX_SECONDS", 90)
 
     api = f"https://gitee.com/api/v5/repos/{owner}/{repo}"
     session = requests.Session()
@@ -220,16 +220,22 @@ def main() -> None:
                 return None
             time.sleep(5)
 
-    def upload_once(path: Path) -> subprocess.CompletedProcess[str]:
-        auth = f'header = "Authorization: Bearer {token}"\n'
-        return subprocess.run([
-            "curl", "--config", "-", "--http1.1", "--fail-with-body", "--silent", "--show-error",
-            "--connect-timeout", "20", "--max-time", str(upload_max_seconds),
-            "--speed-time", "45", "--speed-limit", "1024", "--header", "Expect:",
-            "--form-string", f"owner={owner}", "--form-string", f"repo={repo}",
-            "--form-string", f"release_id={release_id}",
-            "--form", f"file=@{path};type=application/zip", api + endpoint,
-        ], input=auth, capture_output=True, text=True)
+    def upload_once(path: Path) -> tuple[bool, str]:
+        # Use the simple multipart form used by Gitee's own API examples: the
+        # endpoint already contains owner/repo/release_id, so only `file` is sent.
+        try:
+            with path.open("rb") as stream:
+                response = session.post(
+                    api + endpoint,
+                    files={"file": (path.name, stream, "application/zip")},
+                    timeout=(20, upload_max_seconds),
+                )
+            detail = f"HTTP {response.status_code}"
+            if not response.ok:
+                detail += "; " + response.text[:300]
+            return response.ok, detail
+        except requests.RequestException as error:
+            return False, str(error)
 
     def ensure_attachment(path: Path) -> None:
         wanted_digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -249,9 +255,8 @@ def main() -> None:
 
         last_detail = ""
         for attempt in range(1, upload_attempts + 1):
-            print(f"Uploading {path.name} (attempt {attempt}/{upload_attempts}, max {upload_max_seconds}s)", flush=True)
-            upload = upload_once(path)
-            last_detail = (upload.stderr[-500:] + upload.stdout[-300:]).strip()
+            print(f"Uploading {path.name} with Gitee multipart API (attempt {attempt}/{upload_attempts})", flush=True)
+            upload_ok, last_detail = upload_once(path)
             item = wait_for_attachment(path.name, wanted_size)
             if item:
                 remote_size = item.get("size") or item.get("file_size")
@@ -263,10 +268,10 @@ def main() -> None:
                 else:
                     print(f"Attachment appeared but public verification did not match: {path.name}")
                     delete_attachment(item)
-            elif upload.returncode == 0:
+            elif upload_ok:
                 print(f"Upload returned success but attachment is not listed yet: {path.name}")
             else:
-                print(f"Upload ended before confirmation ({upload.returncode}); checking/retrying: {path.name}")
+                print(f"Upload ended before confirmation; checking/retrying: {path.name}: {last_detail}")
             if attempt < upload_attempts:
                 time.sleep(5 * attempt)
         raise RuntimeError(f"Gitee upload could not be verified for {path.name}: {last_detail}")
