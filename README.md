@@ -12,12 +12,12 @@
 
 ## Contents
 
-[Download](#download) · [v1.15.0 features](#v1150) · [v1.15.0 workflow](#v1141) · [Quick start](#quick-start) · [Settings](#settings) · [Phone remote](#phone) · [FAQ](#faq) · [Complete guide](docs/USER_GUIDE.en.md)
+[Download](#download) · [v1.15.0 features](#v1150) · [v1.14.1 workflow](#v1141) · [Quick start](#quick-start) · [Settings](#settings) · [Phone remote](#phone) · [FAQ](#faq) · [Complete guide](docs/USER_GUIDE.en.md)
 
 <a id="download"></a>
 ## Download and install
 
-Both downloads provide **v1.15.0**: the exact previously delivered portable/setup ZIPs, without rebuilding or repackaging. Online guides are current; documentation inside the unchanged archives reflects their original build.
+Both downloads provide **v1.15.0**. The portable and setup editions are packaged from the same validated v1.15.0 executable, and their bundled README, detailed guides, and current illustrations all describe v1.15.0.
 
 **For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.15.0).** Gitee is the mainland mirror; synchronization can lag, so check the version shown there. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
 
