@@ -52,9 +52,6 @@ jobs:
                       ], input=auth, capture_output=True, text=True)
                       if upload.returncode:
                           raise RuntimeError(f'Gitee upload failed for {name}: ' + upload.stderr[-600:] + upload.stdout[-400:])'''
-          # Remove YAML's common indentation from the replacement after the first line.
-          old=old.replace('\n              ','\n')
-          replacement=replacement.replace('\n              ','\n')
           assert old in s, 'Upload block changed; inspect before patching'
           s=s.replace(old,replacement,1)
           ast.parse(s)
