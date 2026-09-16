@@ -8,7 +8,7 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download)
 [![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**Guide updated for v1.14.1; latest public Release remains v1.14.0.** For Windows 10/11 x64; .NET is not required. Standalone timing works without Office. Slide numbers and presentation control require compatible desktop PowerPoint or WPS Presentation. The phone only needs a browser.
+**Current public release: v1.14.1.** For Windows 10/11 x64; .NET is not required. Standalone timing works without Office. Slide numbers and presentation control require compatible desktop PowerPoint or WPS Presentation. The phone only needs a browser.
 
 ## Contents
 
@@ -17,19 +17,19 @@
 <a id="download"></a>
 ## Download and install
 
-The public links below still download **v1.14.0**, not v1.14.1. The delivered v1.14.1 build is recorded with its packages in [Actions](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/34992459836); downloads may require sign-in and artifact retention is limited. Its [source commit](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a) is permanent. This documentation update does not publish a new Release.
+Both downloads provide **v1.14.1**: the exact previously delivered portable/setup ZIPs, without rebuilding or repackaging. Online guides are current; documentation inside the unchanged archives reflects their original build.
 
-**For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases).** Gitee is the mainland mirror; synchronization can lag, so check the version shown there. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
+**For users in mainland China, use the [Gitee Releases page](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1).** Gitee is the mainland mirror; synchronization can lag, so check the version shown there. If GitHub is directly accessible from your network, the GitHub package links are also provided below.
 
 | Edition | Mainland China | GitHub | Instructions |
 |---|---|---|---|
-| Portable | [Gitee Releases — choose Portable](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
-| Setup | [Gitee Releases — choose Setup](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
+| Portable | [Gitee Releases — choose Portable](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) | [FlyPPTTimer-v1.14.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-portable-win-x64.zip) | Extract everything into a writable folder and run `FlyPPTTimer.exe`. Keep the DLLs beside it. Suitable for occasional use or a USB drive. |
+| Setup | [Gitee Releases — choose Setup](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) | [FlyPPTTimer-v1.14.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-setup-win-x64.zip) | Extract and run the installer inside. Suitable for regular use on one computer. |
 
 <a id="v1141"></a>
 ## v1.14.1: connection guidance, a compact timer, and exact screen edges
 
-**These changes apply to the delivered v1.14.1 build.** With public v1.14.0, open the permission setting manually; it does not navigate there automatically.
+**These changes are included in v1.14.1.** With public v1.14.0, open the permission setting manually; it does not navigate there automatically.
 
 **Connect the phone → desktop Settings opens at Remote Control → check the highlighted “Allow phone to browse computer PPT files” option → click Apply → use Presentation → Browse computer PPT files on the phone.** Checking the box without applying is not authorization. Timing and slide navigation do not require file-browsing permission.
 

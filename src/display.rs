@@ -175,7 +175,7 @@ pub fn timer_position(
     placement: &WindowPlacement,
     window_size: PhysicalSize,
 ) -> PhysicalPosition {
-    let (origin_x, origin_y) = anchor_origin(monitor, placement.anchor);
+    let (origin_x, origin_y) = anchor_origin(monitor, placement.anchor, window_size);
     let center_x = origin_x
         + monitor.work_area.width as f64 * placement.offset_x_percent.clamp(-50.0, 50.0) / 100.0;
     let center_y = origin_y
@@ -199,7 +199,7 @@ pub fn capture_timer_position(
         .find(|monitor| contains(monitor.bounds, center_x, center_y))
         .or_else(|| monitors.iter().find(|monitor| monitor.primary))
         .unwrap_or(&monitors[0]);
-    let (origin_x, origin_y) = anchor_origin(monitor, placement.anchor);
+    let (origin_x, origin_y) = anchor_origin(monitor, placement.anchor, window_size);
     placement.offset_x_percent =
         ((center_x - origin_x) * 100.0 / monitor.work_area.width as f64).clamp(-50.0, 50.0);
     placement.offset_y_percent =
@@ -218,28 +218,31 @@ fn contains(rect: DisplayRect, x: f64, y: f64) -> bool {
         && y < (rect.y + rect.height) as f64
 }
 
-fn anchor_origin(monitor: &DisplayMonitor, anchor: OverlayAnchor) -> (f64, f64) {
-    let area = monitor.work_area;
-    let scale = monitor.dpi.max(96) as f64 / 96.0;
-    let baseline_width = 140.0 * scale;
-    let baseline_height = 50.0 * scale;
+fn anchor_origin(
+    monitor: &DisplayMonitor,
+    anchor: OverlayAnchor,
+    size: PhysicalSize,
+) -> (f64, f64) {
+    let area = monitor.bounds;
+    let half_width = size.width as f64 / 2.0;
+    let half_height = size.height as f64 / 2.0;
     let x = match anchor {
         OverlayAnchor::TopCenter | OverlayAnchor::Center | OverlayAnchor::BottomCenter => {
-            monitor.bounds.x as f64 + monitor.bounds.width as f64 / 2.0
+            area.x as f64 + area.width as f64 / 2.0
         }
         OverlayAnchor::TopRight | OverlayAnchor::MiddleRight | OverlayAnchor::BottomRight => {
-            (area.x + area.width) as f64 - baseline_width / 2.0
+            (area.x + area.width) as f64 - half_width
         }
-        _ => area.x as f64 + baseline_width / 2.0,
+        _ => area.x as f64 + half_width,
     };
     let y = match anchor {
         OverlayAnchor::MiddleLeft | OverlayAnchor::Center | OverlayAnchor::MiddleRight => {
             area.y as f64 + area.height as f64 / 2.0
         }
         OverlayAnchor::BottomLeft | OverlayAnchor::BottomCenter | OverlayAnchor::BottomRight => {
-            (area.y + area.height) as f64 - baseline_height / 2.0
+            (area.y + area.height) as f64 - half_height
         }
-        _ => area.y as f64 + baseline_height / 2.0,
+        _ => area.y as f64 + half_height,
     };
     (x, y)
 }
@@ -269,14 +272,14 @@ mod tests {
     }
 
     #[test]
-    fn top_center_matches_v0302_baseline() {
+    fn top_center_zero_offset_is_flush_with_the_screen() {
         let placement = WindowPlacement::default();
         let position = timer_position(&monitor(96), &placement, PhysicalSize::new(100, 35));
-        assert_eq!(position, PhysicalPosition::new(910, 8));
+        assert_eq!(position, PhysicalPosition::new(910, 0));
     }
 
     #[test]
-    fn right_bottom_uses_dpi_scaled_baseline_and_offsets() {
+    fn right_bottom_uses_actual_size_and_saved_offsets() {
         let placement = WindowPlacement {
             anchor: OverlayAnchor::BottomRight,
             offset_x_percent: -10.0,
@@ -284,7 +287,7 @@ mod tests {
             ..WindowPlacement::default()
         };
         let position = timer_position(&monitor(144), &placement, PhysicalSize::new(150, 53));
-        assert_eq!(position, PhysicalPosition::new(1548, 872));
+        assert_eq!(position, PhysicalPosition::new(1578, 923));
     }
 
     #[test]
@@ -300,6 +303,52 @@ mod tests {
                 let p = timer_position(&screen, &WindowPlacement::default(), size);
                 let center = p.x as f64 + size.width as f64 / 2.0;
                 assert!((center - (-1280.0)).abs() <= 0.5);
+            }
+        }
+    }
+
+    #[test]
+    fn zero_offset_anchors_use_real_edges_for_all_sizes_and_monitor_origins() {
+        for dpi in [96, 144, 192] {
+            let mut m = monitor(dpi);
+            m.bounds.x = -2560;
+            m.bounds.y = -1440;
+            m.bounds.width = 2560;
+            m.bounds.height = 1440;
+            m.work_area = DisplayRect {
+                x: -2480,
+                y: -1410,
+                width: 2480,
+                height: 1360,
+            };
+            for (w, h) in [(80, 28), (100, 59), (219, 113)] {
+                let size = logical_size_physical(w, h, dpi);
+                for anchor in [
+                    OverlayAnchor::TopCenter,
+                    OverlayAnchor::BottomCenter,
+                    OverlayAnchor::TopLeft,
+                    OverlayAnchor::BottomRight,
+                ] {
+                    let mut placement = WindowPlacement {
+                        anchor,
+                        ..Default::default()
+                    };
+                    let pos = timer_position(&m, &placement, size);
+                    if matches!(anchor, OverlayAnchor::TopCenter | OverlayAnchor::TopLeft) {
+                        assert_eq!(pos.y, m.bounds.y);
+                    } else {
+                        assert_eq!(pos.y + size.height as i32, m.bounds.y + m.bounds.height);
+                    }
+                    if anchor == OverlayAnchor::TopLeft {
+                        assert_eq!(pos.x, m.bounds.x);
+                    }
+                    if anchor == OverlayAnchor::BottomRight {
+                        assert_eq!(pos.x + size.width as i32, m.bounds.x + m.bounds.width);
+                    }
+                    capture_timer_position(&mut placement, pos, size, std::slice::from_ref(&m));
+                    assert_eq!(timer_position(&m, &placement, size), pos);
+                    assert!(placement.offset_y_percent.abs() < 0.00001);
+                }
             }
         }
     }

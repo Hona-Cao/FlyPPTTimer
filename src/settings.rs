@@ -1262,7 +1262,24 @@ pub fn create(
     Ok(window)
 }
 
+pub fn show_file_access_request(
+    window: &SettingsWindow,
+    config: &AppConfig,
+    address: std::net::IpAddr,
+) {
+    window.invoke_navigate(3);
+    window.set_preview_scroll_y(0.0);
+    window.set_file_access_notice(if crate::config::ui_is_english(&config.language) {
+        format!("Device {address} is connected. To browse this computer's PPT files, enable the highlighted option below and click Apply. This permits devices with the current Remote link, not arbitrary file access.")
+    } else {
+        format!("设备 {address} 已连接。要在手机选择电脑 PPT，请勾选下方高亮的“允许手机浏览电脑 PPT 文件”，再点“应用”。此权限适用于持有当前遥控地址的设备。")
+    }.into());
+}
+
 pub fn refresh_remote_status(window: &SettingsWindow, remote: &RemoteServer, config: &AppConfig) {
+    if config.remote_control.allow_file_browsing && !window.get_file_access_notice().is_empty() {
+        window.set_file_access_notice("".into());
+    }
     if window.get_current_page() != 3 {
         return;
     }

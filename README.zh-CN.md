@@ -8,7 +8,7 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-blue)](#download)
 [![MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-**教程已更新至 v1.14.1；公开 Release 仍为 v1.14.0。** 支持 Windows 10 / 11 x64，无需安装 .NET。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机无需安装 App。
+**当前正式版：v1.14.1。** 支持 Windows 10 / 11 x64，无需安装 .NET。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机无需安装 App。
 
 ## 导航
 
@@ -17,19 +17,19 @@
 <a id="download"></a>
 ## 下载与安装
 
-以下直链是仍在公开发布的 **v1.14.0**，并不是 v1.14.1。已交付的 v1.14.1 可在[构建记录与附件](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/34992459836)查看；Actions 下载可能需要登录，附件有保留期限。其[源码提交](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a)长期保留。本次只更新图文，不新增 Release。
+以下下载均为 **v1.14.1**：直接发布之前已交付的便携版和安装版 ZIP，没有重新编译或重新打包。网上图文教程已更新；为保持安装包原样，包内文档保留构建时的版本。
 
-**中国大陆用户建议从 [Gitee 发布页](https://gitee.com/hona-cao/fly-ppttimer/releases) 下载。** Gitee 是本项目的国内镜像；镜像同步可能有延迟，请以页面实际版本为准。如果当前网络可以正常访问 GitHub，也可以使用右侧的 GitHub 直链。
+**中国大陆用户建议从 [Gitee 发布页](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) 下载。** Gitee 是本项目的国内镜像；镜像同步可能有延迟，请以页面实际版本为准。如果当前网络可以正常访问 GitHub，也可以使用右侧的 GitHub 直链。
 
 | 版本 | 中国大陆下载 | GitHub 下载 | 使用方式 |
 |---|---|---|---|
-| 便携版 | [Gitee 发布页（选择便携版）](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
-| 安装版 | [Gitee 发布页（选择安装版）](https://gitee.com/hona-cao/fly-ppttimer/releases) | [FlyPPTTimer-v1.14.0-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.0/FlyPPTTimer-v1.14.0-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
+| 便携版 | [Gitee 发布页（选择便携版）](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) | [FlyPPTTimer-v1.14.1-portable-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-portable-win-x64.zip) | 完整解压到可写文件夹，运行 `FlyPPTTimer.exe`，保留旁边的 DLL。适合临时使用或放在 U 盘里。 |
+| 安装版 | [Gitee 发布页（选择安装版）](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1) | [FlyPPTTimer-v1.14.1-setup-win-x64.zip](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-setup-win-x64.zip) | 解压后运行安装程序，按向导安装。适合日常固定使用。 |
 
 <a id="v1141"></a>
 ## v1.14.1：连接后授权、紧凑浮窗与贴边定位
 
-**已经拿到 v1.14.1 的用户，按下面的新流程操作。** v1.14.0 的用户仍需手动进入授权设置，不会自动跳转。
+**v1.14.1 用户按下面的新流程操作。** v1.14.0 的用户仍需手动进入授权设置，不会自动跳转。
 
 **手机扫码成功 → 电脑自动打开“设置 → 远程控制” → 勾选高亮的“允许手机浏览电脑 PPT 文件” → 点击“应用” → 手机“演示 → 浏览电脑 PPT 文件”。** 勾选但未应用，手机仍没有权限；仅需翻页、计时的用户可以不授权。
 

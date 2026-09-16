@@ -647,3 +647,8 @@ Eight requested improvements are implemented on `release/v1.14.0`. Added focused
 ## v1.14.1 illustrated-guide update
 
 Documentation only: English/Chinese README and complete tutorials describe connection-triggered permission guidance, explicit Apply, token-wide browsing scope, tighter automatic timer sizing and actual full-screen edge anchoring. Public downloads remain v1.14.0 and are labeled separately from delivered v1.14.1. Ten GUI images are selected from successful capture run 34994278753; intermediate images that did not accurately show the selected checkbox are not used. Original runtime verification and package provenance remain linked rather than rerun or relabeled as new tests. Main runtime files and existing release assets/tags are unchanged.
+
+
+## 2026-09-16: existing v1.14.1 publication
+
+The user authorizes publishing the previously delivered v1.14.1 ZIPs to GitHub/Gitee, repairing release synchronization, and updating download links. No runtime change, new compilation or repackaging. Actual outcomes are recorded by the publication workflow.

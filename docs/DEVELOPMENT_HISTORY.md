@@ -54,7 +54,7 @@ Continued work after 1.13.1: slide timing/history, opt-in phone PPT browsing, co
 
 [阶段记录与验证口径](development/stages/stage-30.md) · [中文图解](USER_GUIDE.zh-CN.md#v1141) · [English instructions](USER_GUIDE.en.md#v1141)
 
-This is a delivered branch build, not a new public Release. The documentation refresh preserves the public v1.14.0 tag/packages and main's application source. Source dates and original validation results are retained.
+Delivered on 2026-09-15 and authorized for public release on 2026-09-16. The same ZIPs are published without rebuilding. Implementation and later illustrated documentation retain their real ancestry; previous releases stay unchanged.
 
 ## Detailed records / 逐轮原始记录
 

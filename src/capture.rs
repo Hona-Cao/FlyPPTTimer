@@ -82,6 +82,18 @@ pub fn capture_all(output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
         }
+        settings::show_file_access_request(
+            &preview,
+            &config.borrow(),
+            "192.0.2.10".parse().unwrap(),
+        );
+        slint::platform::update_timers_and_animations();
+        HEADLESS_WINDOW.with(|window| window.request_redraw());
+        write_png(
+            output.join(format!("file-access-connected-{language_name}.png")),
+            &preview.window().take_snapshot()?,
+        )?;
+        preview.set_file_access_notice("".into());
         // Reuse the production info callback, rather than a hand-written mock.
         preview.invoke_navigate(5);
         let rows = preview.get_items();
@@ -146,8 +158,8 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
         )?;
     }
     for (name, page, seconds) in [
-        ("timer-v1140-idle", "-/-", "00"),
-        ("timer-v1140-slide", "7/24", "123"),
+        ("timer-v1141-idle", "-/-", "00"),
+        ("timer-v1141-slide", "7/24", "123"),
     ] {
         timer_window.set_page_text(page.into());
         timer_window.set_page_reserve("24/24".into());

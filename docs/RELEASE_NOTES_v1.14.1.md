@@ -1,6 +1,6 @@
-# FlyPPTTimer v1.14.1 — 已交付构建说明 / Delivered-build notes
+# FlyPPTTimer v1.14.1
 
-**状态：已交付使用，尚未创建 v1.14.1 公开 Release。** 本页是变更说明，不是新发布公告。当前公开下载仍为 [v1.14.0](https://github.com/Hona-Cao/FlyPPTTimer/releases/tag/v1.14.0)。[中文使用图解](USER_GUIDE.zh-CN.md#v1141) · [Illustrated English guide](USER_GUIDE.en.md#v1141)
+**v1.14.1 正式发布。** 直接发布之前已交付的两个 ZIP，不重新编译、不重新打包。 The exact previously delivered portable/setup ZIPs are published unchanged.
 
 Source: [`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a) · [Build and package record](https://github.com/Hona-Cao/FlyPPTTimer/actions/runs/34992459836).
 
@@ -26,4 +26,19 @@ Source: [`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7a
 - Tighter timer row spacing and outer padding, preserving font sizes, fixed left/right metadata and custom window sizes.
 - Zero-offset anchors use the actual window dimensions and full monitor edges. Top-center is flush with the top; bottom-center is flush with the bottom. The same rule covers other edge anchors, negative-origin monitors, DPI scaling, resizing and drag capture.
 
-This build is delivered on the review branch. Existing public release tags are unchanged; no public Release was requested for this follow-up.
+
+
+
+## Downloads / 下载
+
+- [Portable ZIP / 便携版](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-portable-win-x64.zip)
+- [Setup ZIP / 安装版](https://github.com/Hona-Cao/FlyPPTTimer/releases/download/v1.14.1/FlyPPTTimer-v1.14.1-setup-win-x64.zip)
+- [Gitee release / 国内下载](https://gitee.com/hona-cao/fly-ppttimer/releases/tag/v1.14.1)
+
+完整解压便携包后运行程序；安装版先解压，再运行其中的安装器。升级前退出旧版，保留自己的配置和提示音。只上传这两个 ZIP，不上传 SHA256 附件。GitHub 自动生成的 Source code 是源码，不是运行程序。
+
+Extract the entire portable archive, or extract the setup archive and run its installer. Exit the old program and preserve personal configuration/sounds. Only these two ZIP assets are uploaded, without checksum attachments.
+
+Application source: `6e8bd3aeaec7ae8c247e09b535157db7f490047a`. Existing validation: 102 passed, 0 failed, 3 ignored; packaging run 34992459836. Publication changes no runtime and performs no new compilation. Package documentation is retained byte-for-byte; use the online guides for current illustrated instructions.
+
+[中文图文教程](https://github.com/Hona-Cao/FlyPPTTimer/blob/v1.14.1/docs/USER_GUIDE.zh-CN.md) · [English guide](https://github.com/Hona-Cao/FlyPPTTimer/blob/v1.14.1/docs/USER_GUIDE.en.md)

@@ -1,13 +1,13 @@
 # CHANGELOG / 更新记录
 
-## 1.14.1 — 2026-09-15（已交付构建，非公开 Release / delivered build, not a public release）
+## 1.14.1 — 2026-09-16（正式发布 / public release）
 
 - 手机连接后，未开放文件浏览时自动定位到电脑授权开关；勾选并应用才生效，连接本身不授权。
 - 收紧主时间、逐页秒表、页数之间及外围的间距，保留字号与固定左右布局；自动尺寸随内容收紧。
 - 零偏移使用实际窗口宽高贴齐完整屏幕边缘：上中贴顶、下中贴底；保存的非零偏移仍保留。
 - Added connection-to-permission guidance, compact readout spacing and true window-edge anchoring. The existing Remote token-wide permission is unchanged.
 - [中英文变更说明](docs/RELEASE_NOTES_v1.14.1.md) · [中文图解](docs/USER_GUIDE.zh-CN.md#v1141) · [English guide](docs/USER_GUIDE.en.md#v1141).
-- 本次仓库文档同步不改动程序、公开 Release、安装包或历史标签。Documentation-only synchronization changes no runtime, public releases, packages or existing tags.
+- 发布之前已交付的原始便携／安装 ZIP，更新下载链接，并修复独立的 Gitee Release 附件同步；不重新构建、不改写历史标签。 Publish the existing ZIPs unchanged and repair Gitee release synchronization.
 
 ## 1.14.0 — 2026-09-15
 

@@ -59,19 +59,18 @@ component TimerReadout inherits Rectangle {
     in property <int> page-alignment: 2;
     in property <bool> page-above: false;
     in property <bool> text-visible: true;
-    private property <bool> has-meta: root.page-text != "" || root.slide-text != "";
-    private property <length> row-gap: root.has-meta ? 2px : 0px;
+    private property <length> row-gap: 0px;
     private property <length> page-width: root.page-text == "" ? 0px : max(page-measure.preferred-width, page-actual.preferred-width);
     private property <length> slide-width: root.slide-text == "" ? 0px : slide-measure.preferred-width;
-    private property <length> meta-gap: root.page-text != "" && root.slide-text != "" ? 8px : 0px;
+    private property <length> meta-gap: root.page-text != "" && root.slide-text != "" ? 4px : 0px;
     private property <length> meta-height: max(root.page-text == "" ? 0px : page-actual.preferred-height, root.slide-text == "" ? 0px : slide-measure.preferred-height);
     private property <length> block-height: time-measure.preferred-height + root.meta-height + root.row-gap;
     private property <length> block-width: max(time-measure.preferred-width, root.page-width + root.slide-width + root.meta-gap);
-    private property <length> draw-width: min(root.block-width, max(1px, root.width - 16px));
+    private property <length> draw-width: min(root.block-width, max(1px, root.width - 12px));
     private property <length> block-left: (root.width - root.draw-width) / 2;
     private property <length> block-top: (root.height - root.block-height) / 2;
-    out property <length> required-width: root.block-width + 16px;
-    out property <length> required-height: root.block-height + 12px;
+    out property <length> required-width: root.block-width + 12px;
+    out property <length> required-height: root.block-height + 4px;
     out property <length> top-space: root.block-top;
     out property <length> bottom-space: root.height - root.block-top - root.block-height;
     clip: true;
@@ -868,6 +867,7 @@ export component SettingsWindow inherits Window {
     in property <bool> dirty: false;
     in property <string> dirty-text;
     in property <string> saved-text;
+    in property <string> file-access-notice;
     in property <string> ok-text;
     in property <string> cancel-text;
     in property <string> apply-text;
@@ -1003,8 +1003,19 @@ export component SettingsWindow inherits Window {
                     spacing: 10px;
                     padding-bottom: 12px;
 
+                    if root.current-page == 3 && root.file-access-notice != "": Rectangle {
+                        height: access-notice.preferred-height + 20px;
+                        background: DesktopTheme.selected; border-radius: 6px;
+                        access-notice := Text {
+                            x: 12px; y: 10px; width: parent.width - 24px;
+                            text: root.file-access-notice; wrap: word-wrap;
+                            color: DesktopTheme.text; font-size: 13px;
+                        }
+                    }
+
                     for item[index] in root.items: FieldRow {
                         item: item;
+                        background: item.key == "remote.browse" && root.file-access-notice != "" ? DesktopTheme.selected : (item.kind == 0 ? DesktopTheme.canvas : DesktopTheme.surface);
                         interactive: !root.modal-open;
                         row-index: index;
                         edited(index, value, checked, selected) => { root.field-edited(index, value, checked, selected); }

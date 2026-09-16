@@ -2,7 +2,7 @@
 
 [Home](../README.md) · [简体中文](USER_GUIDE.zh-CN.md)
 
-For the **delivered v1.14.1 build · Windows 10 / 11 x64**. Latest public Release remains v1.14.0. [Version and download distinction](../README.md#download).
+For **v1.14.1 public release / Windows 10 and 11 x64**. [Download and install](../README.md#download).
 
 Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to show slide numbers, use a different duration for each presentation, and control your talk from a phone browser. This guide follows the six Settings pages, then covers phone controls and everyday maintenance.
 
@@ -15,7 +15,7 @@ Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to
 <a id="v1141"></a>
 ## v1.14.1 illustrated instructions
 
-This section describes the delivered **v1.14.1** build. Check the running version in **Settings → Other**; a folder name is not proof of the executable version. The latest public Release is still v1.14.0, whose download does not include this new navigation or edge fix. The six settings chapters below continue to describe shared features.
+This section describes the public v1.14.1 release. Check your actual version in Settings before following the new permission workflow.
 
 <a id="file-access"></a>
 ### Allow computer PPT browsing after the phone connects
@@ -160,7 +160,7 @@ Existing custom offsets remain. To use the new position, choose a centered ancho
 
 ### Download and install
 
-Check the [version note](../README.md#download) first: the public packages still contain v1.14.0, not the delivered v1.14.1 changes described above.
+Download the current v1.14.1 portable or setup ZIP from the [download links](../README.md#download).
 
 Choose an edition from [GitHub Releases](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest) or [Gitee Releases](https://gitee.com/hona-cao/fly-ppttimer/releases).
 
@@ -592,3 +592,9 @@ End slide show stops the presentation playback. Close active presentation closes
 Before an event, check presentation order, timing allowances, displays, sound, and the phone connection. Share remote-control credentials only with trusted people; do not publish QR codes or forward the control port to the public internet.
 
 For further help, open a [GitHub issue](https://github.com/Hona-Cao/FlyPPTTimer/issues) with the application version, Windows and presentation-software versions, steps, and screenshots. Remove tokens, private paths, and sensitive presentation content first.
+
+## 1.14.1 connection guidance and edge placement
+
+A newly connected phone opens desktop Remote settings at the highlighted file-browsing checkbox. Check it and Apply; connection alone never grants access. Polling from the same device does not reopen Settings.
+
+The timer uses tighter rows/padding. Zero-offset top/bottom anchors now meet the full screen edge with no baseline inset, using actual window dimensions. Saved custom offsets remain unchanged. [Full notes](RELEASE_NOTES_v1.14.1.md).
