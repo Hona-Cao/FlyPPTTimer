@@ -34,7 +34,7 @@ permissions:
 
 concurrency:
   group: gitee-release-${{ github.event.release.tag_name || inputs.tag || 'latest' }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   mirror:
