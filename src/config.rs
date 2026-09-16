@@ -871,6 +871,12 @@ mod tests {
     #[test]
     fn new_configuration_matches_all_v0302_default_fields() {
         let mut expected: Value = serde_json::from_str(V0302_DEFAULT_CONFIG).unwrap();
+        // v1.15 intentionally changes only the fresh per-slide-stopwatch default;
+        // it is not a v0.30.2 parity field anymore.
+        expected["Timer"]
+            .as_object_mut()
+            .unwrap()
+            .remove("EnablePerSlideTimer");
         let config = AppConfig {
             version: "0.30.2".to_owned(),
             ..AppConfig::default()
