@@ -184,3 +184,5 @@ summary { cursor:pointer; padding:6px 0; font-weight:700; }
 .folder-button::after { content:"\203A"; float:right; font-size:20px; margin-left:8px; color:var(--muted); }
 @keyframes browser-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
+
+.scenario-switch-row{display:flex;align-items:center;gap:10px;margin-top:8px}.scenario-switch-row .select-widget{flex:1}.scenario-badge{width:12px;height:12px;border-radius:50%;box-shadow:0 0 0 2px var(--card),0 0 0 3px var(--line);flex:none}.scenario-switch-card .hint{margin-bottom:0}

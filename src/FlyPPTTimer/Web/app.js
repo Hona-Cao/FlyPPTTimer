@@ -1,6 +1,7 @@
 const effectiveLanguage=navigator.language.toLowerCase().startsWith('zh')?'zh-CN':'en';
 document.documentElement.lang=effectiveLanguage;
 const webEnglish={
+  "情景模式":"Scenarios","切换后立即应用电脑中保存的整套配置":"Switching immediately applies the complete saved computer configuration","无限制":"Unlimited","无限制模式固定使用正计时":"Unlimited mode always uses count up",
 "请在电脑弹出的远程控制设置中勾选文件浏览权限，再点应用。":"On the computer, enable the highlighted PPT browsing option and click Apply (Settings > Remote control).",
 "浏览电脑 PPT 文件":"Browse computer PPT files",
 "需在电脑设置中允许手机浏览":"On the computer, enable the highlighted PPT browsing option and click Apply (Settings > Remote control).",
@@ -198,6 +199,11 @@ function paint(s){
   if(Number.isFinite(revision))lastPaintedRevision=revision;
   lastState=s;applyTheme();durationStatus();pollFailures=0;connection(true);const t=timerState(s),p=s.presentationState||{};
   $('timerText').textContent=t.displayText||'--:--';$('timerStatus').textContent=t.isOvertime?'已超时':(t.state||'停止');$('timerMode').textContent=t.mode||'倒计时';
+  renderScenarios(s.scenarios||[],s.activeScenarioId||'');
+  const unlimited=!!t.unlimited;
+  ['durationHours','durationMinutes','durationSeconds','applyDuration'].forEach(id=>$(id).disabled=busy||!connected||unlimited);
+  timerModeButtons.forEach(button=>{button.disabled=busy||!connected||unlimited; if(unlimited&&button.dataset.timerMode==='countup')button.classList.add('selected')});
+  if(unlimited){$('durationHint').textContent=wt('无限制');$('timerMode').textContent=wt('正计时')+' · '+wt('无限制');}
   const muted=!!t.muted;$('muteButton').textContent=muted?'电脑已静音（点击恢复声音）':'电脑声音正常（点击静音）';$('muteButton').classList.toggle('selected',muted);$('muteButton').setAttribute('aria-pressed',String(muted));
   document.querySelector('.timer-card').classList.toggle('overtime',!!t.isOvertime);
   const timeUpActive=!!t.timeUpBlackoutActive;
@@ -422,8 +428,8 @@ function setAvailability(t,p){
     button.disabled=disabled;
   });
   const max=Math.max(1,Number(p.totalSlides)||1);$('slideNumber').max=String(max);$('slideNumber').disabled=busy||!connected||!show;$('gotoSlide').disabled=busy||!connected||!show;
-  $('applyDuration').disabled=busy||!connected;
-  timerModeButtons.forEach(button=>button.disabled=busy||!connected);
+  $('applyDuration').disabled=busy||!connected||!!timerState(lastState||{}).unlimited;
+  timerModeButtons.forEach(button=>button.disabled=busy||!connected||!!timerState(lastState||{}).unlimited);
   refreshPresentationButtons();
   $('browseComputer').disabled=!connected||busy;
   $('browsePermissionHint').hidden=!!lastState?.fileBrowsingEnabled;
@@ -516,7 +522,7 @@ commandButtons.forEach(button=>button.addEventListener('click',()=>{
 $('durationHours').addEventListener('input',()=>{const ms=(Number($('durationHours').value)*3600+Number($('durationMinutes').value)*60+Number($('durationSeconds').value))*1000;timerEditorDirty=ms!==Number(timerState(lastState||{}).durationMs);durationStatus()});
 $('durationMinutes').addEventListener('input',()=>{const ms=(Number($('durationHours').value)*3600+Number($('durationMinutes').value)*60+Number($('durationSeconds').value))*1000;timerEditorDirty=ms!==Number(timerState(lastState||{}).durationMs);durationStatus()});
 $('durationSeconds').addEventListener('input',()=>{const ms=(Number($('durationHours').value)*3600+Number($('durationMinutes').value)*60+Number($('durationSeconds').value))*1000;timerEditorDirty=ms!==Number(timerState(lastState||{}).durationMs);durationStatus()});
-$('applyDuration').addEventListener('click',async()=>{
+$('applyDuration').addEventListener('click',async()=>{if(timerState(lastState||{}).unlimited){notify('无限制模式固定使用正计时',true);return}
   const hours=Number($('durationHours').value),minutes=Number($('durationMinutes').value),seconds=Number($('durationSeconds').value);
   if(!Number.isInteger(hours)||hours<0||hours>23||!Number.isInteger(minutes)||minutes<0||minutes>59||!Number.isInteger(seconds)||seconds<0||seconds>59){notify('请输入有效的时、分、秒',true);return}
   const durationMs=(hours*3600+minutes*60+seconds)*1000;
@@ -525,7 +531,7 @@ $('applyDuration').addEventListener('click',async()=>{
   if(ruleCount>0){requestDurationConfirmation(durationMs,ruleCount);return}
   if(await command('timer.setDuration',{durationMs,syncAllRules:false})){timerEditorDirty=false;durationStatus();notify('计时时长已同步到电脑')}
 });
-timerModeButtons.forEach(button=>button.addEventListener('click',async()=>{if(await command('timer.setMode',{mode:button.dataset.timerMode,presentationId:selectedPresentationId}))notify(`已切换为${button.dataset.timerMode==='countup'?'正计时':'倒计时'}`)}));
+timerModeButtons.forEach(button=>button.addEventListener('click',async()=>{if(timerState(lastState||{}).unlimited){notify('无限制模式固定使用正计时',true);return}if(await command('timer.setMode',{mode:button.dataset.timerMode,presentationId:selectedPresentationId}))notify(`已切换为${button.dataset.timerMode==='countup'?'正计时':'倒计时'}`)}));
 $('gotoSlide').addEventListener('click',()=>{const input=$('slideNumber'),value=Number(input.value),max=Number(input.max);if(!Number.isInteger(value)||value<1||value>max){notify(`请输入 1 到 ${max} 之间的页码`,true);input.focus();return}command('ppt.gotoSlide',{slideNumber:value})});
 window.addEventListener('online',()=>{if(!busy)schedulePoll(0)});
 window.addEventListener('focus',()=>{if(!busy)schedulePoll(0)});
@@ -613,6 +619,23 @@ function showSelect(widget,key){
 document.addEventListener('pointerdown',event=>{if(openSelect&&!openSelect.popup.contains(event.target)&&!openSelect.widget.wrapper.contains(event.target))closeSelect(false)});
 window.addEventListener('resize',()=>closeSelect(false));
 document.addEventListener('scroll',event=>{if(openSelect&&!openSelect.popup.contains(event.target))closeSelect(false)},true);
+
+function renderScenarios(items,activeId){
+  const card=$('scenarioCard'),select=$('scenarioChoice'),signature=JSON.stringify(items.map(x=>[x.id,x.name,x.badgeColor,x.active]));
+  card.hidden=!items.length;
+  if(!items.length)return;
+  if(select.dataset.signature!==signature){
+    select.dataset.signature=signature;select.replaceChildren();
+    for(const item of items){const option=document.createElement('option');option.value=item.id;option.textContent=item.name;select.append(option)}
+    syncSelects();
+  }
+  if(activeId&&select.value!==activeId)select.value=activeId;
+  const active=items.find(x=>x.id===activeId)||items[0];$('scenarioBadge').style.background=active?.badgeColor||'#888';syncSelects();
+}
+$('scenarioChoice').addEventListener('change',async()=>{
+  const id=$('scenarioChoice').value;if(!id)return;
+  if(await command('scenario.apply',{scenarioId:id}))notify('已切换情景模式');
+});
 
 function renderSlideTiming(timing){
   const t=timing||{};text($('slideElapsed'),String(t.currentSeconds||0).padStart(2,'0'));

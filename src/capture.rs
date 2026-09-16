@@ -43,7 +43,7 @@ pub fn capture_all(output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         )?;
         preview.show()?;
 
-        for page in 0usize..6 {
+        for page in 0usize..7 {
             preview.invoke_navigate(page as i32);
             for (part, offset) in page_offsets(page).iter().copied().enumerate() {
                 preview.set_preview_scroll_y(offset);
@@ -95,7 +95,7 @@ pub fn capture_all(output: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
         )?;
         preview.set_file_access_notice("".into());
         // Reuse the production info callback, rather than a hand-written mock.
-        preview.invoke_navigate(5);
+        preview.invoke_navigate(6);
         let rows = preview.get_items();
         for index in 0..rows.row_count() {
             if let Some(row) = rows.row_data(index)
@@ -235,8 +235,8 @@ pub fn capture_windows(output: PathBuf) -> Result<(), Box<dyn std::error::Error>
         ..Default::default()
     };
     let release = crate::updater::ReleaseInfo {
-        version: "1.14.0".into(),
-        body: include_str!("../docs/RELEASE_NOTES_v1.14.0.md").into(),
+        version: "1.15.0".into(),
+        body: include_str!("../docs/RELEASE_NOTES_v1.15.0.md").into(),
         release_url: String::new(),
         assets: Vec::new(),
     };
@@ -259,7 +259,8 @@ fn page_offsets(page: usize) -> &'static [f32] {
     match page {
         0 | 4 => &[0.0],
         1 | 2 => &[0.0, -500.0, -1_000.0, -1_500.0, -2_000.0],
-        3 | 5 => &[0.0, -500.0, -1_000.0],
+        3 | 6 => &[0.0, -500.0, -1_000.0],
+        5 => &[0.0, -500.0, -1_000.0, -1_500.0],
         _ => &[0.0],
     }
 }
@@ -271,6 +272,7 @@ fn page_name(page: usize) -> &'static str {
         "appearance",
         "remote",
         "controls",
+        "scenarios",
         "other",
     ]
     .get(page)

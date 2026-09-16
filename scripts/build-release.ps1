@@ -28,7 +28,7 @@ $setupOut = Join-Path $out "installer-output"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Force $stage,$setupOut | Out-Null
 Copy-Item $exe $stage
-Copy-Item (Join-Path $root "docs\v1141-default-config.json") (Join-Path $stage "FlyPPTTimer.config.json")
+Copy-Item (Join-Path $root "docs\v1150-default-config.json") (Join-Path $stage "FlyPPTTimer.config.json")
 Copy-Item (Join-Path $root "src\FlyPPTTimer\Assets\app.ico") $stage
 foreach ($file in @("README.md","README.zh-CN.md","LICENSE","CHANGELOG.md","CONTRIBUTING.md")) {
     Copy-Item (Join-Path $root $file) $stage
