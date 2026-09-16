@@ -1,0 +1,141 @@
+name: Publish existing FlyPPTTimer v1.14.1
+on:
+  push:
+    branches: [publish/v1.14.1]
+    paths: [.github/workflows/publish-v1141.yml]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: public-v1141
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      source: ${{ steps.commit.outputs.source }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PRODUCT_SOURCE: 6e8bd3aeaec7ae8c247e09b535157db7f490047a
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Integrate actual product ancestry while preserving current guides
+        shell: python
+        run: |
+          import subprocess
+          def run(*args, **kw): return subprocess.run(args, check=True, **kw)
+          run('git', 'config', 'user.name', 'github-actions[bot]')
+          run('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
+          run('git', 'fetch', 'origin', 'main')
+          run('git', 'merge', '--ff-only', 'origin/main')
+          merged = subprocess.run(['git','merge','--no-ff','--no-commit','6e8bd3aeaec7ae8c247e09b535157db7f490047a'])
+          if merged.returncode:
+              conflicts = subprocess.check_output(['git','diff','--name-only','--diff-filter=U'], text=True).splitlines()
+              if not conflicts: raise RuntimeError('Merge failed without resolvable document conflicts')
+              for path in conflicts:
+                  if path.startswith('docs/') or path in ('README.md','README.zh-CN.md','CHANGELOG.md','scripts/capture-mobile.py','scripts/check-user-guide.py'):
+                      run('git','checkout','--ours','--',path)
+                  elif path == 'scripts/build-release.ps1':
+                      run('git','checkout','--theirs','--',path)
+                  else: raise RuntimeError('Unexpected conflict: ' + path)
+                  run('git','add','--',path)
+          run('git','diff','--exit-code','6e8bd3aeaec7ae8c247e09b535157db7f490047a','--','Cargo.toml','Cargo.lock','src','ui','resources','build.rs')
+      - name: Update live download links and public notes
+        run: |
+          python scripts/prepare-v1141-publication.py
+          python scripts/check-user-guide.py
+          python -m py_compile scripts/sync-gitee-release.py
+      - uses: actions/download-artifact@v4
+        with:
+          name: FlyPPTTimer-v1.14.1-packages
+          run-id: 34992459836
+          github-token: ${{ github.token }}
+          path: release-assets
+      - name: Verify the two already-delivered packages without modifying them
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,json
+          expected = {
+              'FlyPPTTimer-v1.14.1-portable-win-x64.zip':'f47266eb210e2aae4e1a55a18a0d7eab43daf0cacbaf529b7a66165408bc9228',
+              'FlyPPTTimer-v1.14.1-setup-win-x64.zip':'c7c595de3461e9362426552303cee1f6436775d3563b4a06ff31ade7a2271003',
+          }
+          paths=list(Path('release-assets').glob('*.zip'))
+          assert {p.name for p in paths}==set(expected), 'Exactly two ZIPs required'
+          for p in paths:
+              assert hashlib.sha256(p.read_bytes()).hexdigest()==expected[p.name], p.name
+              print(f'Original package verified: {p.name}, {p.stat().st_size} bytes')
+          Path('artifacts/publication/package-identity.json').write_text(json.dumps(expected,indent=2)+'\n')
+      - name: Commit publication links and synchronize main
+        id: commit
+        run: |
+          git add Cargo.toml Cargo.lock src ui resources scripts docs README.md README.zh-CN.md CHANGELOG.md .github
+          git diff --cached --check
+          git commit -m 'release: publish original v1.14.1 packages, current guides and Gitee synchronization'
+          git push --atomic origin HEAD:refs/heads/publish/v1.14.1 HEAD:refs/heads/main
+          echo "source=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Upload draft, verify identical bytes and publish Latest
+        shell: python
+        run: |
+          from pathlib import Path
+          import hashlib,json,subprocess
+          def gh(*args): return subprocess.check_output(['gh',*args],text=True)
+          tag='v1.14.1'
+          sha=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          files=sorted(Path('release-assets').glob('*.zip'))
+          gh('release','create',tag,*map(str,files),'--target',sha,'--title','FlyPPTTimer v1.14.1','--notes-file','artifacts/publication/release-body.md','--draft')
+          gh('release','download',tag,'--dir','artifacts/publication/github-downloads','--pattern','*.zip')
+          for p in files:
+              uploaded=Path('artifacts/publication/github-downloads')/p.name
+              assert hashlib.sha256(uploaded.read_bytes()).digest()==hashlib.sha256(p.read_bytes()).digest(),p.name
+          gh('release','edit',tag,'--draft=false','--latest')
+          result=json.loads(gh('release','view',tag,'--json','url,tagName,isDraft,isPrerelease,assets'))
+          assert not result['isDraft'] and not result['isPrerelease']
+          assert {a['name'] for a in result['assets']}=={p.name for p in files}
+          result['release_source']=sha
+          result['executable_source']='6e8bd3aeaec7ae8c247e09b535157db7f490047a'
+          result['original_packages_unchanged']=True
+          Path('artifacts/publication/github-release.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(result['url'])
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v1141-github-publication
+          path: |
+            artifacts/publication/*.json
+            artifacts/publication/*.md
+          if-no-files-found: ignore
+          retention-days: 14
+  gitee:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GITEE_OWNER: hona-cao
+      GITEE_REPO: fly-ppttimer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.publish.outputs.source }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install requests
+      - name: Explicitly copy release and attachments to Gitee
+        run: python scripts/sync-gitee-release.py v1.14.1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v1141-gitee-publication
+          path: artifacts/publication/**
+          if-no-files-found: ignore
+          retention-days: 14
