@@ -1,0 +1,108 @@
+name: Bootstrap v1.15.0 release branch
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/v1150-bootstrap.yml]
+
+permissions:
+  contents: write
+
+env:
+  RUST_TOOLCHAIN: '1.92.0'
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/v1.15.0
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply staged v1.15.0 source patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64,lzma,subprocess
+          chunks=[Path(f'.github/v1150-product-{i:02}.b64') for i in range(3)]
+          data=''.join(p.read_text().strip() for p in chunks)
+          patch=lzma.decompress(base64.b64decode(data))
+          subprocess.run(['git','apply','--whitespace=nowarn','-'],input=patch,check=True)
+          for p in chunks: p.unlink()
+          Path('.github/workflows/v1150-apply.yml').unlink(missing_ok=True)
+          PY
+          node --check src/FlyPPTTimer/Web/app.js
+          git diff --check
+      - name: Commit real product source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: implement v1.15.0 scenarios, unlimited timing and automatic updates'
+          git push origin HEAD:release/v1.15.0
+
+  validate:
+    needs: apply
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          ref: release/v1.15.0
+          fetch-depth: 0
+      - name: Install pinned Rust and Windows SDK resource compiler
+        run: |
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust setup failed' }
+          $rc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter rc.exe -Recurse | Where-Object FullName -Match '\\x64\\rc.exe$' | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'rc.exe not found' }
+          $rc.Directory.FullName | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1150-bootstrap-${{ hashFiles('Cargo.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            rust-windows-1.92-${{ hashFiles('Cargo.lock') }}-
+      - name: Format
+        run: |
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+      - name: Clippy
+        run: |
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object clippy.log
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+      - name: Tests and web syntax
+        run: |
+          New-Item -ItemType Directory -Force artifacts/ci | Out-Null
+          cargo test --locked 2>&1 | Tee-Object artifacts/ci/tests.log
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+          node --check src/FlyPPTTimer/Web/app.js
+          if ($LASTEXITCODE -ne 0) { throw 'Web syntax failed' }
+      - name: Release build
+        run: |
+          cargo build --locked --release
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+          $version=(Get-Item target/release/FlyPPTTimer.exe).VersionInfo.ProductVersion
+          if ($version -ne '1.15.0') { throw "Unexpected ProductVersion $version" }
+          Copy-Item target/release/FlyPPTTimer.exe artifacts/ci/FlyPPTTimer.exe
+          Get-ChildItem target/release/*.dll -ErrorAction SilentlyContinue | Copy-Item -Destination artifacts/ci
+          git rev-parse HEAD | Set-Content artifacts/ci/SOURCE.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v1150-bootstrap-validation
+          path: |
+            artifacts/ci/**
+            clippy.log
+          retention-days: 14
