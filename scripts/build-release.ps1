@@ -30,41 +30,57 @@ New-Item -ItemType Directory -Force $stage,$setupOut | Out-Null
 Copy-Item $exe $stage
 Copy-Item (Join-Path $root "docs\v1150-default-config.json") (Join-Path $stage "FlyPPTTimer.config.json")
 Copy-Item (Join-Path $root "src\FlyPPTTimer\Assets\app.ico") $stage
-foreach ($file in @("README.md","README.zh-CN.md","LICENSE","CHANGELOG.md","CONTRIBUTING.md")) {
+
+# End-user packages intentionally contain user-facing documentation and legal
+# notices only. Developer handoffs, build notes, historical patch records, and
+# contribution instructions stay in the private/source repository.
+foreach ($file in @(
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "TRADEMARKS.md",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md"
+)) {
     Copy-Item (Join-Path $root $file) $stage
 }
+
 foreach ($dll in @("vcruntime140.dll","vcruntime140_1.dll","msvcp140.dll")) {
     $source = Join-Path $ApplicationDirectory $dll
     if (-not (Test-Path $source)) { $source = Join-Path $env:WINDIR "System32\$dll" }
     Copy-Item $source $stage
 }
+
 $docs = Join-Path $stage "docs"
 New-Item -ItemType Directory -Force $docs | Out-Null
-foreach ($file in @("USER_GUIDE.en.md","USER_GUIDE.zh-CN.md","BUILDING.md","DEVELOPMENT_HISTORY.md","RELEASE_NOTES_v$version.md","development-commits.tsv")) {
+foreach ($file in @("USER_GUIDE.en.md","USER_GUIDE.zh-CN.md","RELEASE_NOTES_v$version.md")) {
     Copy-Item (Join-Path $root "docs\$file") $docs
 }
-New-Item -ItemType Directory -Force (Join-Path $docs "v1") | Out-Null
-Copy-Item (Join-Path $root "docs\v1\*.md") (Join-Path $docs "v1")
+
 New-Item -ItemType Directory -Force (Join-Path $docs "media") | Out-Null
 foreach ($media in @("v1.13.1", "v1.14.0", "v$version")) {
     $source = Join-Path $root "docs\media\$media"
     if (Test-Path $source) { Copy-Item $source (Join-Path $docs "media") -Recurse -Force }
 }
 foreach ($file in @("donate-alipay.jpg","donate-wechat.png")) {
-    Copy-Item (Join-Path $root "docs\media\$file") (Join-Path $docs "media")
+    $source = Join-Path $root "docs\media\$file"
+    if (Test-Path $source) { Copy-Item $source (Join-Path $docs "media") }
 }
+
 # Preserve the icon's README-relative path for offline documentation.
 $assets = Join-Path $stage "src\FlyPPTTimer\Assets"
 New-Item -ItemType Directory -Force $assets | Out-Null
 Copy-Item (Join-Path $root "src\FlyPPTTimer\Assets\app.png") $assets
+
 $sourceSha = if ($env:PRODUCT_SOURCE_SHA) { $env:PRODUCT_SOURCE_SHA } else { (git -C $root rev-parse HEAD).Trim() }
 @(
     "FlyPPTTimer v$version"
-    "Executable source: $sourceSha"
+    "Executable source revision: $sourceSha"
     "Change notes: docs/RELEASE_NOTES_v$version.md"
     "Both editions contain the same application executable."
     "Settings and imported alert sounds are local. Back up personal configuration before upgrading."
     "Read README.md or README.zh-CN.md and docs/USER_GUIDE.*.md."
+    "License and brand terms: LICENSE, TRADEMARKS.md, THIRD_PARTY_NOTICES.md."
 ) | Set-Content (Join-Path $stage "BUILD.txt") -Encoding utf8
 
 $portableZip = Join-Path $out "FlyPPTTimer-v$version-portable-win-x64.zip"
