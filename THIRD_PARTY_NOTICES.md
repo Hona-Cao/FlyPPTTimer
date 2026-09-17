@@ -1,8 +1,8 @@
 # Third-party notices and acknowledgements
 
 FlyPPTTimer includes or depends on third-party software. Those components remain
-subject to their own licenses; the FlyPPTTimer project license does not replace
-or narrow rights granted by those third-party licenses.
+subject to their own licenses; the FlyPPTTimer MIT License does not replace or
+narrow rights granted by those third-party licenses.
 
 ## Runtime and library dependencies
 
@@ -22,13 +22,11 @@ independent implementation and does not intentionally reuse old9/ppttimer source
 code, icons, images, sound assets, UI, or its AHK build chain.
 
 The acknowledgement is retained as a courtesy and development-history note.
-The old9/ppttimer project used the MIT License; that fact does not make later
-FlyPPTTimer releases derivatives of that project and does not determine the
-license of later FlyPPTTimer releases.
+The old9/ppttimer project used the MIT License; that fact does not make
+FlyPPTTimer a derivative of that project.
 
-## Historical FlyPPTTimer releases
+## FlyPPTTimer license
 
-FlyPPTTimer releases up to and including v1.15.0 were themselves published
-under the MIT License. Their historical license remains applicable to those
-versions. See `LICENSE` for the licensing boundary governing later original
-material and official releases.
+FlyPPTTimer is distributed under the MIT License. This applies to the project's
+own source code unless a file or bundled third-party component states otherwise.
+See `LICENSE` for the full terms.
