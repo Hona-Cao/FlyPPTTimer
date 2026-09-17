@@ -2,7 +2,7 @@
 
 [中文首页](../README.zh-CN.md) · [English guide](USER_GUIDE.en.md)
 
-教程对应 **v1.16.0 正式版 · Windows 10 / 11 x64**。[下载与安装](../README.zh-CN.md#download)。
+教程对应 **v1.16.0 正式版 · Windows 10 / 11 x64**。[下载与安装](../README.zh-CN.md#下载)。
 
 FlyPPTTimer 可以独立显示演讲时间，也可以配合 PowerPoint / WPS 显示页数、按文稿切换时长，并通过手机浏览器控制演示。下面按设置窗口的七个页面介绍，再说明手机操作和日常维护。
 
@@ -220,7 +220,7 @@ FlyPPTTimer 可以独立显示演讲时间，也可以配合 PowerPoint / WPS �
 
 ### 下载和安装
 
-从[下载与安装](../README.zh-CN.md#download)选择 v1.14.1 的便携版或安装版，二者都包含本教程说明的新功能。
+从[下载与安装](../README.zh-CN.md#下载)选择 v1.14.1 的便携版或安装版，二者都包含本教程说明的新功能。
 
 到 [GitHub 下载页](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest) 或 [Gitee 下载页](https://gitee.com/hona-cao/fly-ppttimer/releases)，选择适合自己的版本。
 
