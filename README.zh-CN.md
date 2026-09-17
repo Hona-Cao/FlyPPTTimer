@@ -18,12 +18,15 @@ FlyPPTTimer 是一款面向 Windows 的演示计时工具，支持倒计时、�
 
 ## 源码
 
-1.14 系列及之前的历史源码现在可以直接在本仓库查看：
+1.14 系列及之前的历史源码现在可以直接在本仓库查看。
 
-- [v1.14.1 可浏览源码快照](source/v1.14.1/)：对应产品提交 [`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a) 的完整源码树。
-- [`source/v1.14.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.1)：保持原始仓库目录结构和真实 Git 提交祖先链的 v1.14.1 源码。
-- [`source/v1.14.0`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.0)：v1.14.0 源码状态。
-- [`source/v1.13.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.13.1)：v1.13.1，以及进入 1.14 系列之前的更早开发历史。
+`main` 分支上的可浏览源码快照：
+
+- [v1.14.1](source/v1.14.1/)：对应产品提交 [`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a) 的完整源码树。
+- [v1.14.0](source/v1.14.0/)：保留的 v1.14.0 源码状态。
+- [v1.13.1](source/v1.13.1/)：保留的 v1.13.1 源码状态，以及进入 1.14 系列之前的更早开发历史。
+
+另外提供保持原始仓库根目录结构和 Git 祖先链的源码分支：[`source/v1.14.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.1)、[`source/v1.14.0`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.0) 和 [`source/v1.13.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.13.1)。
 
 构建说明、源码来源和版本关系见 [source/README.md](source/README.md)。历史源码与当前发布/文档文件分开存放，避免把旧版本源码误认为当前二进制版本的源码。
 

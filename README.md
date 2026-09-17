@@ -18,12 +18,15 @@ Use download locations identified by the author as official. Mirrors, repackaged
 
 ## Source code
 
-Historical source through the 1.14 series is now available directly in this repository:
+Historical source through the 1.14 series is now available directly in this repository.
 
-- [Browsable v1.14.1 source snapshot](source/v1.14.1/) — exact tree from product commit [`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a).
-- [`source/v1.14.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.1) — v1.14.1 in its original repository layout with real commit ancestry preserved.
-- [`source/v1.14.0`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.0) — v1.14.0 source state.
-- [`source/v1.13.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.13.1) — v1.13.1 and earlier development ancestry leading into the 1.14 series.
+Browsable snapshots on `main`:
+
+- [v1.14.1](source/v1.14.1/) — exact tree from product commit [`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a).
+- [v1.14.0](source/v1.14.0/) — preserved v1.14.0 source state.
+- [v1.13.1](source/v1.13.1/) — preserved v1.13.1 source state and the earlier development line leading into 1.14.
+
+Exact source branches keep the historical project at repository root and preserve its Git ancestry: [`source/v1.14.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.1), [`source/v1.14.0`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.0), and [`source/v1.13.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.13.1).
 
 For build notes and source provenance, see [source/README.md](source/README.md). The archive is separated from the current release/documentation files so historical source remains easy to inspect without confusing it with the current binary release.
 

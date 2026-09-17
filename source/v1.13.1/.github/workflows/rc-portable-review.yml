@@ -1,0 +1,52 @@
+name: RC portable review
+
+on:
+  push:
+    branches: [codex/v1-06-manual-test]
+    paths: [src/presentation.rs]
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select project toolchain and Windows resource compiler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Toolchain installation failed' }
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\rc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'Windows SDK rc.exe not found' }
+          "RC=$($rc.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Verify and build locked release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+          cargo test --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+          cargo build --locked --release
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+      - name: Stage portable test application
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force portable | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe portable/FlyPPTTimer.exe
+          Copy-Item docs/default-config.json portable/FlyPPTTimer.config.json
+          Copy-Item LICENSE portable/LICENSE
+          "Review build from $env:GITHUB_SHA`r`nWindows x64 portable test build. Not an installer or official release.`r`nExtract into a writable folder and run FlyPPTTimer.exe. Windows/Office interactive acceptance is still required." | Set-Content portable/BUILD.txt -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlyPPTTimer-portable-win-x64-${{ github.sha }}
+          path: portable/
+          if-no-files-found: error
+          retention-days: 7

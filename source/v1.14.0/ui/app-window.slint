@@ -1,0 +1,1230 @@
+import { Button, CheckBox, ComboBox, LineEdit, ScrollView, Slider, Palette } from "std-widgets.slint";
+
+export struct SettingItem {
+    key: string,
+    label: string,
+    kind: int,
+    value: string,
+    checked: bool,
+    options: [string],
+    selected: int,
+    enabled: bool,
+    read-only: bool,
+    button-text: string,
+    row-height: int,
+    color-preview: color,
+    minimum: float,
+    maximum: float,
+    step: float,
+}
+
+export struct RuleItem {
+    file-name: string,
+    file-path: string,
+    duration: string,
+    mode: int,
+    enabled: bool,
+    selected: bool,
+}
+
+export struct PresentationItem {
+    name: string,
+    path: string,
+    duration: string,
+    mode: int,
+    enabled: bool,
+    is-rule: bool,
+    selected: bool,
+}
+
+// One fixed metadata row: slide stopwatch on the left, page numbers on the right.
+component TimerReadout inherits Rectangle {
+    min-width: 0px; min-height: 0px; max-width: 65535px; max-height: 65535px;
+    horizontal-stretch: 1; vertical-stretch: 1; preferred-width: 1px; preferred-height: 1px;
+    in property <string> display-text;
+    in property <string> page-text;
+    in property <string> page-reserve;
+    in property <string> slide-text;
+    in property <length> timer-font-size: 18px;
+    in property <length> page-font-size: root.timer-font-size;
+    in property <length> slide-font-size: root.page-font-size;
+    in property <string> font-family: "Microsoft YaHei UI";
+    in property <int> font-weight: 700;
+    in property <bool> font-italic: false;
+    in property <bool> page-italic: false;
+    in property <color> foreground-color;
+    in property <color> page-color: root.foreground-color;
+    in property <color> slide-color: root.foreground-color;
+    // Legacy properties remain readable by earlier capture clients, but no longer change layout.
+    in property <int> page-alignment: 2;
+    in property <bool> page-above: false;
+    in property <bool> text-visible: true;
+    private property <bool> has-meta: root.page-text != "" || root.slide-text != "";
+    private property <length> row-gap: root.has-meta ? 2px : 0px;
+    private property <length> page-width: root.page-text == "" ? 0px : max(page-measure.preferred-width, page-actual.preferred-width);
+    private property <length> slide-width: root.slide-text == "" ? 0px : slide-measure.preferred-width;
+    private property <length> meta-gap: root.page-text != "" && root.slide-text != "" ? 8px : 0px;
+    private property <length> meta-height: max(root.page-text == "" ? 0px : page-actual.preferred-height, root.slide-text == "" ? 0px : slide-measure.preferred-height);
+    private property <length> block-height: time-measure.preferred-height + root.meta-height + root.row-gap;
+    private property <length> block-width: max(time-measure.preferred-width, root.page-width + root.slide-width + root.meta-gap);
+    private property <length> draw-width: min(root.block-width, max(1px, root.width - 16px));
+    private property <length> block-left: (root.width - root.draw-width) / 2;
+    private property <length> block-top: (root.height - root.block-height) / 2;
+    out property <length> required-width: root.block-width + 16px;
+    out property <length> required-height: root.block-height + 12px;
+    out property <length> top-space: root.block-top;
+    out property <length> bottom-space: root.height - root.block-top - root.block-height;
+    clip: true;
+    time-measure := Text { text: root.display-text; font-family: root.font-family; font-size: root.timer-font-size; font-weight: root.font-weight; font-italic: root.font-italic; visible: false; }
+    page-measure := Text { text: root.page-text == "" ? "" : root.page-reserve; font-family: root.font-family; font-size: root.page-font-size; font-weight: root.font-weight; font-italic: root.page-italic; visible: false; }
+    page-actual := Text { text: root.page-text; font-family: root.font-family; font-size: root.page-font-size; font-weight: root.font-weight; font-italic: root.page-italic; visible: false; }
+    slide-measure := Text { text: root.slide-text; font-family: root.font-family; font-size: root.slide-font-size; font-weight: root.font-weight; visible: false; }
+    Text {
+        x: root.block-left; y: root.block-top; width: root.draw-width; height: time-measure.preferred-height;
+        text: root.display-text; font-family: root.font-family; font-size: root.timer-font-size;
+        font-weight: root.font-weight; font-italic: root.font-italic; color: root.foreground-color;
+        horizontal-alignment: center; vertical-alignment: center; visible: root.text-visible;
+    }
+    Text {
+        x: root.block-left; y: root.block-top + time-measure.preferred-height + root.row-gap;
+        width: root.slide-width; height: root.meta-height;
+        text: root.slide-text; font-family: root.font-family; font-size: root.slide-font-size;
+        font-weight: root.font-weight; color: root.slide-color; horizontal-alignment: left; vertical-alignment: center;
+        visible: root.slide-text != "" && root.text-visible;
+    }
+    Text {
+        x: root.block-left + root.draw-width - root.page-width; y: root.block-top + time-measure.preferred-height + root.row-gap;
+        width: root.page-width; height: root.meta-height;
+        text: root.page-text; font-family: root.font-family; font-size: root.page-font-size;
+        font-weight: root.font-weight; font-italic: root.page-italic; color: root.page-color;
+        horizontal-alignment: right; vertical-alignment: center; visible: root.page-text != "" && root.text-visible;
+    }
+}
+
+export component AppWindow inherits Window {
+    icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
+    in-out property <int> native-opacity: -1;
+    in-out property <string> assigned-display;
+    in-out property <float> applied-offset-x;
+    in-out property <float> applied-offset-y;
+    in property <length> content-width: 100px;
+    in property <length> content-height: 35px;
+    in property <string> page-text;
+    in property <string> page-reserve;
+    in property <string> slide-text;
+    in property <color> slide-color: root.foreground-color;
+    in property <string> display-text: "08:00";
+    in property <brush> surface-color: #f3f8fc;
+    in property <color> foreground-color: #0b3a66;
+    in property <length> timer-font-size: 18px;
+    in property <length> page-font-size: root.timer-font-size;
+    in property <length> slide-font-size: root.page-font-size;
+    in-out property <bool> dragging: false;
+    in property <color> page-color: root.foreground-color;
+    in property <bool> page-italic: false;
+    in property <int> page-alignment: 1;
+    in property <bool> page-above: false;
+    in property <string> excluded-display;
+    in property <string> timer-font-family: "Microsoft YaHei UI";
+    in property <int> timer-font-weight: 700;
+    in property <bool> timer-font-italic: false;
+    in property <length> corner-radius: 7px;
+    in property <bool> keep-on-top: true;
+    in property <bool> drag-enabled: true;
+    in property <bool> flash-text-visible: true;
+    in property <bool> flash-background-active: false;
+    in property <bool> flash-border-active: false;
+    in property <color> flash-color: #4ea3d8;
+    out property <length> required-text-width: readout.required-width;
+    out property <length> required-text-height: readout.required-height;
+    out property <length> text-top-space: readout.top-space;
+    out property <length> text-bottom-space: readout.bottom-space;
+    callback begin-drag();
+    callback drag-move();
+    callback end-drag();
+    callback show-menu();
+    title: "";
+    width: root.content-width;
+    height: root.content-height;
+    no-frame: true;
+    always-on-top: root.keep-on-top;
+    background: root.flash-background-active ? root.flash-color : root.surface-color;
+    Rectangle {
+        width: root.width;
+        height: root.height;
+        background: root.flash-background-active ? root.flash-color : root.surface-color;
+        border-radius: root.corner-radius;
+        border-width: root.flash-border-active ? 3px : 0px;
+        border-color: root.flash-color;
+        readout := TimerReadout {
+            width: parent.width;
+            height: parent.height;
+            display-text: root.display-text;
+            page-text: root.page-text;
+            page-reserve: root.page-reserve;
+            slide-text: root.slide-text;
+            slide-color: root.slide-color;
+            slide-font-size: root.slide-font-size;
+            timer-font-size: root.timer-font-size;
+            page-font-size: root.page-font-size;
+            font-family: root.timer-font-family;
+            font-weight: root.timer-font-weight;
+            font-italic: root.timer-font-italic;
+            page-italic: root.page-italic;
+            foreground-color: root.foreground-color;
+            page-color: root.page-color;
+            page-alignment: root.page-alignment;
+            page-above: root.page-above;
+            text-visible: root.flash-text-visible;
+        }
+        TouchArea {
+            pointer-event(event) => {
+                if root.drag-enabled && event.button == PointerEventButton.left && event.kind == PointerEventKind.down { root.begin-drag(); }
+                if root.drag-enabled && event.kind == PointerEventKind.move { root.drag-move(); }
+                if root.drag-enabled && ((event.button == PointerEventButton.left && event.kind == PointerEventKind.up) || event.kind == PointerEventKind.cancel) { root.end-drag(); }
+                if event.button == PointerEventButton.right && event.kind == PointerEventKind.up { root.show-menu(); }
+            }
+        }
+    }
+}
+export component BigScreenWindow inherits Window {
+    icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
+    max-width: 65535px;
+    max-height: 65535px;
+    in property <string> page-text;
+    in property <string> page-reserve;
+    in property <string> slide-text;
+    in property <color> slide-color: root.foreground-color;
+    in property <string> display-text: "08:00";
+    in property <brush> surface-color: #f3f8fc;
+    in property <color> foreground-color: #0b3a66;
+    in property <color> page-color: root.foreground-color;
+    in property <float> page-font-ratio: 1;
+    in property <float> slide-font-ratio: 1;
+    in property <bool> page-italic: false;
+    in property <int> page-alignment: 1;
+    in property <bool> page-above: false;
+    in property <string> timer-font-family: "Microsoft YaHei UI";
+    in property <bool> keep-on-top: true;
+    in property <length> timer-font-size: 162px;
+    // Fit the entire measured block rather than clipping the second line.
+    private property <float> fit: min(1, min(max(1px, root.width - 32px) / big-measure.required-width, max(1px, root.height - 32px) / big-measure.required-height));
+    title: "FlyPPTTimer";
+    preferred-width: 960px;
+    preferred-height: 540px;
+    min-width: 640px;
+    min-height: 360px;
+    always-on-top: root.keep-on-top;
+    background: root.surface-color;
+    big-measure := TimerReadout {
+        display-text: root.display-text;
+        page-text: root.page-text;
+        page-reserve: root.page-reserve;
+        slide-text: root.slide-text;
+        slide-color: root.slide-color;
+        timer-font-size: root.timer-font-size;
+        page-font-size: root.timer-font-size * root.page-font-ratio;
+        slide-font-size: root.timer-font-size * root.slide-font-ratio;
+        font-family: root.timer-font-family;
+        page-italic: root.page-italic;
+        visible: false;
+    }
+    TimerReadout {
+        width: parent.width;
+        height: parent.height;
+        display-text: root.display-text;
+        page-text: root.page-text;
+        page-reserve: root.page-reserve;
+        slide-text: root.slide-text;
+        slide-color: root.slide-color;
+        timer-font-size: root.timer-font-size * root.fit;
+        page-font-size: root.timer-font-size * root.page-font-ratio * root.fit;
+        slide-font-size: root.timer-font-size * root.slide-font-ratio * root.fit;
+        font-family: root.timer-font-family;
+        page-italic: root.page-italic;
+        foreground-color: root.foreground-color;
+        page-color: root.page-color;
+        page-alignment: root.page-alignment;
+        page-above: root.page-above;
+    }
+}
+
+export component TimeUpWindow inherits Window {
+    icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
+    in property <string> message: "时间到";
+
+    title: "";
+    no-frame: true;
+    always-on-top: true;
+    background: #000000;
+
+    Rectangle {
+        background: #000000;
+        Text {
+            width: parent.width;
+            height: parent.height;
+            text: root.message;
+            color: #ffffff;
+            font-family: "Microsoft YaHei UI";
+            font-size: 72px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Desktop management windows only. Timer colors remain driven by user configuration.
+global DesktopTheme {
+    in-out property <bool> dark: false;
+    out property <color> on-accent: #ffffff;
+    out property <color> canvas: dark ? #141820 : #eef2f7;
+    out property <color> surface: dark ? #1d2430 : #ffffff;
+    out property <color> subtle: dark ? #252e3c : #f3f6fa;
+    out property <color> text: dark ? #edf2fa : #1e293b;
+    out property <color> secondary: dark ? #d2dbe8 : #475569;
+    out property <color> muted: dark ? #a5b3c7 : #64748b;
+    out property <color> border: dark ? #3b495e : #e2e8f0;
+    out property <color> accent: dark ? #4285f4 : #2563eb;
+    out property <color> accent-hover: dark ? #3375e0 : #1d4ed8;
+    out property <color> accent-pressed: dark ? #2866c7 : #1e40af;
+    out property <color> selected: dark ? #243c60 : #eff6ff;
+    out property <color> success: dark ? #6ed6a0 : #15803d;
+    out property <color> warning: dark ? #ffd080 : #b45309;
+    out property <color> danger: dark ? #ff9b95 : #b42318;
+    out property <color> danger-soft: dark ? #402b30 : #fff3f2;
+    out property <color> danger-hover: dark ? #50323a : #fee4e2;
+    out property <color> danger-pressed: dark ? #613c43 : #fecdca;
+    out property <color> disabled-text: dark ? #718197 : #94a3b8;
+    out property <color> pressed: dark ? #36445b : #e2e8f0;
+    out property <color> scrim: dark ? #99000000 : #66000000;
+}
+
+component CommitLineEdit inherits LineEdit {
+    accepted(value) => { self.clear-focus(); }
+}
+
+// Keep incomplete numeric input local, while valid edits preview immediately.
+component PercentageInput inherits LineEdit {
+    in property <float> value;
+    in property <float> minimum;
+    in property <float> maximum;
+    in property <float> step: 1;
+    callback value-edited(float);
+    text: "" + root.value;
+    input-type: decimal;
+    horizontal-alignment: right;
+    changed value => { if !self.has-focus { self.text = "" + root.value; } }
+    edited(text) => {
+        if text.is-float() {
+            root.value-edited(clamp(round(text.to-float() / root.step) * root.step, root.minimum, root.maximum));
+        }
+    }
+    accepted(text) => { self.clear-focus(); }
+    changed has-focus => {
+        // Valid input is already applied; never replay old text over a slider change.
+        if !self.has-focus { self.text = "" + root.value; }
+    }
+}
+
+component RemoteButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <bool> primary: false;
+    in property <bool> danger: false;
+    callback clicked();
+    forward-focus: keyboard;
+
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: !root.enabled ? DesktopTheme.border : root.primary ? DesktopTheme.accent : root.danger ? DesktopTheme.danger : DesktopTheme.border;
+    background: !root.enabled ? DesktopTheme.subtle
+        : root.primary ? (hit.pressed ? DesktopTheme.accent-pressed : hit.has-hover ? DesktopTheme.accent-hover : DesktopTheme.accent)
+        : root.danger ? (hit.pressed ? DesktopTheme.danger-pressed : hit.has-hover ? DesktopTheme.danger-hover : DesktopTheme.danger-soft)
+        : hit.pressed ? DesktopTheme.pressed : hit.has-hover ? DesktopTheme.selected : DesktopTheme.surface;
+
+    Text {
+        x: 8px;
+        width: parent.width - 16px;
+        height: parent.height;
+        text: root.text;
+        color: !root.enabled ? DesktopTheme.disabled-text : root.primary ? DesktopTheme.on-accent : root.danger ? DesktopTheme.danger : DesktopTheme.secondary;
+        font-size: 12px;
+        font-weight: root.primary ? 600 : 500;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        wrap: word-wrap;
+    }
+
+    if keyboard.has-focus && root.enabled: Rectangle {
+        x: 3px; y: 3px; width: parent.width - 6px; height: parent.height - 6px;
+        background: transparent; border-radius: 4px; border-width: 2px;
+        border-color: root.primary ? DesktopTheme.on-accent : DesktopTheme.accent;
+    }
+
+    keyboard := FocusScope {
+        width: 0;
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if event.text == " " || event.text == "\n" { return accept; }
+            return reject;
+        }
+        key-released(event) => {
+            if event.text == " " || event.text == "\n" {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    hit := TouchArea {
+        enabled: root.enabled;
+        clicked => { keyboard.focus(); root.clicked(); }
+    }
+}
+
+export component PresentationWindow inherits Window {
+    in-out property <int> show-generation: 0;
+    icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
+    in property <bool> dark-theme: false;
+    in-out property <bool> theme-initialized: false;
+    init => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    changed dark-theme => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+
+    in property <string> window-title: "远程控制";
+    in property <[PresentationItem]> presentations;
+    in-out property <int> selected-presentation: -1;
+    in-out property <string> goto-page: "1";
+    in-out property <string> rule-duration: "00:08:00";
+    in-out property <int> rule-mode: 0;
+    in-out property <bool> rule-enabled: true;
+    in property <[string]> timer-modes: ["倒计时", "正计时"];
+    in property <string> open-text: "打开演示文稿";
+    in property <string> beginning-text: "从头放映";
+    in property <string> current-text: "当前页放映";
+    in property <string> previous-text: "上一页";
+    in property <string> next-text: "下一页";
+    in property <string> goto-text: "跳转";
+    in property <string> black-text: "黑屏";
+    in property <string> white-text: "白屏";
+    in property <string> restore-text: "恢复";
+    in property <string> end-text: "结束放映";
+    in property <string> close-active-text: "关闭当前文档";
+    in property <string> close-managed-text: "关闭最后打开的文稿";
+    in property <string> exit-text: "退出演示软件";
+    in-out property <bool> confirm-exit: false;
+    in-out property <bool> batch-open: false;
+    in-out property <string> batch-duration: "00:08:00";
+    in property <string> batch-error;
+    in-out property <int> batch-mode: 0;
+    in property <string> batch-title: "批量设置";
+    in property <string> batch-count-text: "已选择 0 条规则";
+    in property <string> batch-duration-text: "统一时长";
+    in property <string> batch-mode-text: "统一计时方式";
+    in property <string> confirm-title: "确认退出软件";
+    in property <string> confirm-message: "将强制关闭全部 PowerPoint/WPS 演示进程，未保存内容会丢失。";
+    in property <string> cancel-command-text: "取消";
+    in property <string> add-file-text: "添加";
+    in property <string> delete-file-text: "删除";
+    in property <string> refresh-list-text: "刷新";
+    in property <string> clear-list-text: "清空列表";
+    in property <string> rule-file-text: "文件名 / 文件路径";
+    in property <string> rule-duration-text: "时长";
+    in property <string> rule-mode-text: "模式";
+    in property <string> rule-status-text: "状态";
+    in property <string> rule-enabled-text: "启用规则";
+    in property <string> rule-disabled-text: "禁用规则";
+    in property <string> save-rule-text: "保存";
+    in property <string> batch-rule-text: "批量设置";
+    in property <string> batch-cancel-text: "取消";
+    in property <string> batch-confirm-text: "应用";
+    in-out property <int> current-page: 0;
+    in property <string> connection-page-text: "远程连接";
+    in property <string> presentation-page-text: "演示文稿";
+    in property <string> connection-subtitle-text: "通过手机或浏览器控制演示";
+    in property <string> presentation-subtitle-text: "规则与放映";
+    in property <string> service-status-text;
+    in property <string> current-port-text;
+    in property <string> next-port-label: "下次服务端口";
+    in property <string> saved-port;
+    in property <string> unsaved-text: "有未保存的修改";
+    in property <string> saved-text: "已保存";
+    private property <bool> rule-dirty: root.selected-presentation >= 0 && (root.rule-duration != root.presentations[root.selected-presentation].duration || root.rule-mode != root.presentations[root.selected-presentation].mode);
+    private property <bool> port-dirty: root.next-port != root.saved-port;
+    in-out property <string> next-port: "4080";
+    in property <string> client-count-text;
+    in property <string> recommended-url;
+    in property <string> connection-url;
+    in property <string> address-list-text;
+    in property <image> qr-image;
+    in property <string> restart-service-text: "重启远程服务";
+    in property <string> service-toggle-text: "停止服务";
+    in property <string> apply-port-text: "重启远程服务并应用端口";
+    in property <string> regenerate-token-text: "重新生成令牌";
+    in property <string> disconnect-text: "断开所有设备";
+    in property <string> copy-address-text: "复制访问地址";
+    in property <string> open-local-text: "打开本机控制页";
+    in property <string> firewall-text;
+    in property <string> copy-firewall-text: "复制修复命令";
+
+    callback command(int, string);
+    callback remote-action(int, string, bool);
+    callback rule-action(int, string);
+    callback presentation-selected(int, bool, bool);
+    callback batch-confirm(string, int);
+    property <bool> modal-open: root.confirm-exit || root.batch-open;
+
+    title: root.window-title;
+    preferred-width: 700px;
+    preferred-height: 510px;
+    min-width: 560px;
+    min-height: 460px;
+    background: DesktopTheme.canvas;
+    focus-sink := FocusScope { width: parent.width; height: parent.height; enabled: !root.modal-open; focus-on-tab-navigation: false; }
+
+
+    Rectangle {
+        x: 24px; y: 16px; width: parent.width - 48px; height: 40px;
+        background: DesktopTheme.subtle; border-radius: 8px;
+        Rectangle {
+            x: root.current-page == 0 ? 4px : parent.width / 2;
+            y: 4px; width: parent.width / 2 - 4px; height: 32px;
+            background: DesktopTheme.surface; border-radius: 8px;
+        }
+        Text { x: 0; width: parent.width / 2; height: parent.height; text: root.connection-page-text; color: DesktopTheme.text; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        Text { x: parent.width / 2; width: parent.width / 2; height: parent.height; text: root.presentation-page-text; color: DesktopTheme.text; font-size: 14px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        TouchArea { enabled: !root.modal-open; x: 0; width: parent.width / 2; clicked => { focus-sink.focus(); root.current-page = 0; } }
+        TouchArea { enabled: !root.modal-open; x: parent.width / 2; width: parent.width / 2; clicked => { focus-sink.focus(); root.current-page = 1; } }
+    }
+
+    Text {
+        x: 28px; y: 64px; width: parent.width - 56px; height: 18px;
+        text: root.current-page == 0 ? root.connection-subtitle-text : root.presentation-subtitle-text;
+        color: DesktopTheme.muted; font-size: 13px; vertical-alignment: center;
+    }
+
+    Rectangle {
+        visible: root.current-page == 0;
+        x: 24px; y: 88px; width: parent.width - 48px; height: parent.height - 128px;
+        background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
+
+        Rectangle {
+            x: 16px; y: 16px; width: parent.width - 24px; height: parent.height - 32px;
+            clip: true;
+            connection-scroll := ScrollView {
+                width: parent.width; height: parent.height;
+
+                viewport-width: self.visible-width;
+                VerticalLayout {
+                    width: connection-scroll.visible-width;
+                    padding-left: 18px;
+                    padding-right: 36px;
+                    alignment: start;
+                    spacing: 8px;
+                    Rectangle {
+                        height: max(148px, recommended.y + recommended.preferred-height + 8px);
+                        Text { x: 0; y: 0; width: parent.width - 164px; height: 28px; text: root.service-status-text; color: DesktopTheme.text; font-size: 18px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+                        Text { x: 0; y: 36px; width: parent.width - 164px; height: 22px; text: root.current-port-text; color: DesktopTheme.secondary; font-size: 13px; vertical-alignment: center; }
+                        Text { x: 0; y: 60px; width: parent.width - 164px; height: 22px; text: root.client-count-text; color: DesktopTheme.secondary; font-size: 13px; vertical-alignment: center; }
+                        recommended := Text { x: 0; y: 94px; width: parent.width - 164px; height: self.preferred-height; text: root.recommended-url; color: DesktopTheme.accent; font-size: 14px; font-weight: 600; wrap: word-wrap; }
+                        Image { x: parent.width - 144px; y: 0; width: 144px; height: 144px; source: root.qr-image; image-fit: contain; }
+                    }
+                    Rectangle { height: 1px; background: DesktopTheme.border; }
+                    HorizontalLayout {
+                        height: 36px; spacing: 8px;
+                        Text { width: 120px; text: root.next-port-label; color: DesktopTheme.secondary; font-size: 12px; wrap: word-wrap; vertical-alignment: center; }
+                        CommitLineEdit { enabled: !root.confirm-exit; width: 96px; text <=> root.next-port; }
+                    }
+                    RemoteButton { enabled: !root.confirm-exit; height: 36px; text: root.apply-port-text; primary: true; clicked => { root.remote-action(1, root.next-port, false); } }
+                    HorizontalLayout {
+                        height: 36px; spacing: 8px;
+                        RemoteButton { enabled: !root.confirm-exit; text: root.service-toggle-text; clicked => { root.remote-action(7, "", false); } }
+                        RemoteButton { enabled: !root.confirm-exit; text: root.restart-service-text; clicked => { root.remote-action(0, "", false); } }
+                    }
+                    HorizontalLayout {
+                        height: 36px; spacing: 8px;
+                        RemoteButton { enabled: !root.confirm-exit; text: root.regenerate-token-text; clicked => { root.remote-action(2, "", false); } }
+                        RemoteButton { enabled: !root.confirm-exit; text: root.disconnect-text; clicked => { root.remote-action(3, "", false); } }
+                    }
+                    HorizontalLayout {
+                        height: 40px; spacing: 8px;
+                        RemoteButton { enabled: !root.confirm-exit; text: root.copy-address-text; clicked => { root.remote-action(4, "", false); } }
+                        RemoteButton { enabled: !root.confirm-exit; text: root.open-local-text; clicked => { root.remote-action(5, "", false); } }
+                        RemoteButton { enabled: !root.confirm-exit; text: root.copy-firewall-text; clicked => { root.remote-action(6, "", false); } }
+                    }
+                    Text { text: root.firewall-text; color: DesktopTheme.muted; font-size: 12px; wrap: word-wrap; }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        visible: root.current-page == 1;
+        x: 24px; y: 88px; width: parent.width - 48px; height: root.height - 252px;
+        background: DesktopTheme.surface; border-radius: 10px; border-width: 1px; border-color: DesktopTheme.border;
+        // Header and rows share the data viewport width and scrollbar reservation.
+        Rectangle {
+            x: 26px; y: 12px; width: rules-scroll.visible-width - 54px; height: 18px;
+            Text { x: 12px; width: parent.width - 244px; height: 18px; text: root.rule-file-text; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; overflow: elide; }
+            Text { x: parent.width - 220px; width: 84px; height: 18px; text: root.rule-duration-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
+            Text { x: parent.width - 120px; width: 100px; height: 18px; text: root.rule-mode-text; color: DesktopTheme.muted; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; }
+        }
+        Rectangle {
+            x: 8px; y: 34px; width: parent.width - 12px; height: parent.height - 42px;
+            clip: true;
+            rules-scroll := ScrollView {
+                width: parent.width; height: parent.height;
+
+                viewport-width: self.visible-width;
+                VerticalLayout {
+                    width: rules-scroll.visible-width;
+                    padding-left: 18px;
+                    padding-right: 36px;
+                    alignment: start;
+                    spacing: 4px;
+                    for item[index] in root.presentations: Rectangle {
+                        height: 48px; border-radius: 8px;
+                        background: item.selected ? DesktopTheme.selected : transparent;
+                        border-width: item.selected ? 1px : 0px;
+                        border-color: DesktopTheme.accent;
+                        Text { x: 12px; y: 3px; width: parent.width - 244px; height: 20px; text: item.name; color: DesktopTheme.text; font-size: 13px; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                        Text { x: 12px; y: 25px; width: parent.width - 244px; height: 20px; text: item.path; color: DesktopTheme.muted; font-size: 11px; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 220px; y: 3px; width: 84px; height: 20px; text: item.duration; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 120px; y: 3px; width: 100px; height: 20px; text: item.is-rule ? root.timer-modes[item.mode] : ""; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 220px; y: 25px; width: 208px; height: 18px; text: item.is-rule ? (item.enabled ? root.rule-enabled-text : root.rule-disabled-text) : ""; color: item.enabled ? DesktopTheme.success : DesktopTheme.warning; font-size: 11px; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                        TouchArea {
+                            enabled: !root.modal-open;
+                            x: 0px; y: 0px; width: parent.width; height: parent.height;
+                            pointer-event(event) => {
+                                if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                                    focus-sink.focus(); root.selected-presentation = index;
+                                    root.presentation-selected(index, event.modifiers.control, event.modifiers.shift);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Rectangle { visible: root.current-page == 1 && root.selected-presentation >= 0; x: 24px; y: root.height - 154px; width: parent.width - 48px; height: 54px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
+        HorizontalLayout {
+            x: 12px; y: 10px; width: parent.width - 24px; height: 34px; alignment: center; spacing: 10px;
+            Text { width: 42px; text: root.rule-duration-text; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+            CommitLineEdit { enabled: !root.modal-open; width: 112px; text <=> root.rule-duration; }
+            Text { width: 42px; text: root.rule-mode-text; color: DesktopTheme.secondary; font-size: 12px; horizontal-alignment: center; vertical-alignment: center; }
+            ComboBox { enabled: !root.modal-open; width: 132px; model: root.timer-modes; current-index <=> root.rule-mode; }
+            RemoteButton { enabled: !root.modal-open; width: 86px; text: root.save-rule-text; primary: true; clicked => { root.rule-action(4, root.rule-duration); } }
+        }
+    }
+
+    RemoteButton { enabled: !root.modal-open; visible: root.current-page == 1; x: 24px; y: root.height - 78px; width: (parent.width - 76px) / 4; height: 36px; text: root.add-file-text; clicked => { root.rule-action(0, ""); } }
+    RemoteButton { visible: root.current-page == 1; x: 32px + (parent.width - 76px) / 4; y: root.height - 78px; width: (parent.width - 76px) / 4; height: 36px; text: root.delete-file-text; enabled: (root.selected-presentation >= 0) && !root.modal-open; clicked => { root.rule-action(1, ""); } }
+    RemoteButton { enabled: !root.modal-open; visible: root.current-page == 1; x: 40px + 2 * (parent.width - 76px) / 4; y: root.height - 78px; width: (parent.width - 76px) / 4; height: 36px; text: root.clear-list-text; clicked => { root.rule-action(3, ""); } }
+    RemoteButton { enabled: (root.selected-presentation >= 0) && !root.modal-open; visible: root.current-page == 1; x: 48px + 3 * (parent.width - 76px) / 4; y: root.height - 78px; width: (parent.width - 76px) / 4; height: 36px; text: root.batch-rule-text; clicked => { root.rule-action(5, ""); } }
+
+    Text {
+        x: 28px; y: root.height - 32px; width: root.width - 56px; height: 22px;
+        text: (root.rule-dirty || root.port-dirty) ? root.unsaved-text : root.saved-text;
+        color: (root.rule-dirty || root.port-dirty) ? DesktopTheme.warning : DesktopTheme.muted;
+        font-size: 12px; vertical-alignment: center;
+    }
+
+    if root.batch-open: Rectangle {
+        init => { batch-input.focus(); }
+        x: 0; y: 0; width: parent.width; height: parent.height; background: DesktopTheme.scrim;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - 430px) / 2; y: (parent.height - 260px) / 2; width: 430px; height: 260px;
+            background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
+            Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.batch-title; color: DesktopTheme.text; font-size: 20px; font-weight: 700; vertical-alignment: top; }
+            Text { x: 24px; y: 58px; width: parent.width - 48px; text: root.batch-count-text; color: DesktopTheme.muted; font-size: 13px; vertical-alignment: top; }
+            Text { x: 24px; y: 102px; width: 118px; text: root.batch-duration-text; color: DesktopTheme.secondary; vertical-alignment: top; }
+            batch-input := CommitLineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
+            Text { x: 24px; y: 150px; width: 118px; text: root.batch-mode-text; color: DesktopTheme.secondary; vertical-alignment: top; }
+            ComboBox { x: 148px; y: 140px; width: 258px; height: 34px; model: root.timer-modes; current-index <=> root.batch-mode; }
+            Text { x: 24px; y: 178px; width: parent.width - 48px; height: 22px; text: root.batch-error; color: DesktopTheme.danger; font-size: 12px; }
+            RemoteButton { x: 222px; y: 202px; width: 88px; height: 36px; text: root.batch-cancel-text; clicked => { root.batch-open = false; } }
+            RemoteButton { x: 318px; y: 202px; width: 88px; height: 36px; text: root.batch-confirm-text; primary: true; clicked => { root.batch-confirm(root.batch-duration, root.batch-mode); } }
+        }
+    }
+
+    if root.confirm-exit && root.current-page == 1: Rectangle {
+        init => { exit-cancel.focus(); }
+        background: DesktopTheme.scrim;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - 460px) / 2; y: (parent.height - 220px) / 2;
+            width: 460px; height: 220px; background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
+            Text { x: 24px; y: 22px; width: parent.width - 48px; height: 30px; text: root.confirm-title; color: DesktopTheme.danger; font-size: 19px; font-weight: 700; vertical-alignment: center; }
+            Text { x: 24px; y: 64px; width: parent.width - 48px; height: 96px; text: root.confirm-message; color: DesktopTheme.secondary; font-size: 13px; wrap: word-wrap; vertical-alignment: center; }
+            exit-cancel := RemoteButton { x: 244px; y: 162px; width: 88px; height: 36px; text: root.cancel-command-text; clicked => { root.confirm-exit = false; } }
+            RemoteButton { x: 342px; y: 162px; width: 94px; height: 36px; text: root.exit-text; danger: true; clicked => { root.confirm-exit = false; root.command(13, ""); } }
+        }
+    }
+}
+component FieldRow inherits Rectangle {
+    in property <SettingItem> item;
+    in property <int> row-index;
+    in property <bool> interactive: true;
+    callback edited(int, string, bool, int);
+    callback action(int);
+
+    property <length> control-x: min(260px, self.width * 0.44);
+    property <length> control-width: self.width - self.control-x - 16px;
+    height: item.kind == 0 ? (row-index == 0 ? 34px : 42px)
+        : item.kind == 5 ? 44px
+        : item.kind == 6 ? 44px
+        : max(item.row-height > 0 ? item.row-height * 1px : 40px, field-label.preferred-height + 12px);
+    background: item.kind == 0 ? DesktopTheme.canvas : DesktopTheme.surface;
+    border-radius: 8px;
+    border-width: item.kind == 0 ? 0px : 1px;
+    border-color: DesktopTheme.border;
+
+    FocusScope { width: parent.width; height: parent.height; enabled: root.interactive; focus-on-tab-navigation: false; }
+
+    if item.kind != 0: Rectangle {
+        x: 16px; y: parent.height - 1px;
+        width: parent.width - 32px; height: 1px;
+        background: DesktopTheme.border;
+    }
+
+    if item.kind == 0: Text {
+        x: 16px;
+        y: root.row-index == 0 ? 0px : 8px;
+        width: parent.width - 32px;
+        height: 32px;
+        text: item.label;
+        color: DesktopTheme.text;
+        font-size: 14px;
+        font-weight: 700;
+        vertical-alignment: center;
+    }
+
+    field-label := Text {
+        visible: (item.kind >= 1 && item.kind <= 4) || item.kind == 7 || item.kind == 8;
+        x: 16px;
+        y: 8px;
+        width: root.control-x - 32px;
+        height: parent.height - 16px;
+        text: item.label;
+        color: !item.enabled ? DesktopTheme.muted : DesktopTheme.secondary;
+        font-size: 13px;
+        vertical-alignment: center;
+        wrap: word-wrap;
+    }
+
+    if item.kind == 1: CheckBox {
+        x: root.control-x;
+        y: (parent.height - 32px) / 2;
+        width: root.control-width;
+        height: 32px;
+        checked: item.checked;
+        text: item.button-text;
+        enabled: item.enabled && root.interactive;
+        toggled => { root.edited(row-index, "", self.checked, 0); }
+    }
+
+    if item.kind == 2: CommitLineEdit {
+        x: root.control-x;
+        y: (parent.height - 32px) / 2;
+        width: item.read-only || item.key == "" ? root.control-width : min(200px, root.control-width);
+        height: 32px;
+        text: item.value;
+        read-only: item.read-only;
+        enabled: item.enabled && root.interactive;
+        opacity: item.read-only ? 0.72 : 1;
+        edited(value) => { root.edited(row-index, value, false, 0); }
+    }
+
+    if item.kind == 8: HorizontalLayout {
+        x: root.control-x; y: (parent.height - 34px) / 2;
+        width: root.control-width; height: 34px; spacing: 8px;
+        TouchArea {
+            horizontal-stretch: 1;
+            enabled: item.enabled && root.interactive;
+            scroll-event(event) => {
+                let delta = event.delta-y != 0px ? event.delta-y : event.delta-x;
+                if delta == 0px { return reject; }
+                percent-input.clear-focus();
+                let value = clamp(percent.value + (delta > 0px ? 1 : -1), item.minimum, item.maximum);
+                root.edited(row-index, "" + (round(value / item.step) * item.step), false, 0);
+                return accept;
+            }
+            percent := Slider {
+                width: parent.width; height: parent.height;
+                minimum: item.minimum; maximum: item.maximum; step: item.step;
+                value: item.value.to-float();
+                enabled: item.enabled && root.interactive;
+                changed(value) => {
+                    root.edited(row-index, "" + (round(value / item.step) * item.step), false, 0);
+                }
+            }
+        }
+        percent-input := PercentageInput {
+            width: 72px; value: item.value.to-float();
+            minimum: item.minimum; maximum: item.maximum; step: item.step;
+            enabled: item.enabled && root.interactive;
+            value-edited(value) => { root.edited(row-index, "" + value, false, 0); }
+        }
+        Text { width: 12px; text: "%"; color: DesktopTheme.text; vertical-alignment: center; }
+    }
+
+    if item.kind == 7: HorizontalLayout {
+        x: root.control-x;
+        y: (parent.height - 32px) / 2;
+        width: root.control-width;
+        height: 32px;
+        spacing: 8px;
+        Rectangle {
+            width: 24px; height: 24px;
+            background: item.color-preview;
+            border-width: 1px; border-color: DesktopTheme.muted; border-radius: 4px;
+            TouchArea { enabled: item.enabled && root.interactive; clicked => { root.action(row-index); } }
+        }
+        CommitLineEdit {
+            min-width: 72px; horizontal-stretch: 1;
+            text: item.value; enabled: item.enabled && root.interactive;
+            edited(value) => { root.edited(row-index, value, false, 0); }
+        }
+        Button { width: 84px; text: item.button-text; enabled: item.enabled && root.interactive; clicked => { root.action(row-index); } }
+    }
+
+    if item.kind == 3: ComboBox {
+        x: root.control-x;
+        y: (parent.height - 32px) / 2;
+        width: root.control-width;
+        height: 32px;
+        model: item.options;
+        current-index: item.selected;
+        enabled: item.enabled && root.interactive;
+        selected(value) => { root.edited(row-index, value, false, self.current-index); }
+    }
+
+    if item.kind == 4: Button {
+        x: root.control-x;
+        y: (parent.height - 34px) / 2;
+        width: root.control-width;
+        height: 34px;
+        text: item.button-text;
+        enabled: item.enabled && root.interactive;
+        clicked => { root.action(row-index); }
+    }
+
+    if item.kind == 5: Button {
+        x: 16px; y: 5px; width: parent.width - 32px; height: 34px;
+        text: item.label;
+        enabled: root.interactive;
+        clicked => { root.action(root.row-index); }
+    }
+
+    if item.kind == 6: HorizontalLayout {
+        x: 16px; y: 5px; width: parent.width - 32px; height: 34px; spacing: 8px;
+        for action[index] in item.options: Button {
+            text: action;
+            enabled: root.interactive;
+            clicked => { root.action(root.row-index * 100 + index); }
+        }
+    }
+
+}
+export component SettingsWindow inherits Window {
+    in-out property <int> show-generation: 0;
+    in-out property <bool> native-dialog-open: false;
+    icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
+    in property <bool> dark-theme: false;
+    in-out property <bool> theme-initialized: false;
+    init => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    changed dark-theme => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+
+    in-out property <string> timer-preview-theme: "system";
+    in-out property <int> timer-preview-opacity: 88;
+    in-out property <string> timer-preview-shape;
+    in-out property <float> timer-preview-offset-x: 0;
+    in-out property <float> timer-preview-offset-y: 0;
+    in-out property <bool> timer-preview-position: false;
+    in-out property <int> timer-preview-width: 100;
+    in-out property <int> timer-preview-height: 35;
+    in-out property <float> timer-preview-font: 18;
+    in-out property <bool> timer-preview-pages: true;
+    in-out property <bool> timer-preview-slide-enabled: false;
+    in-out property <float> timer-preview-slide-font: 0;
+    in-out property <string> timer-preview-slide-color;
+    in-out property <bool> timer-preview-auto: true;
+    in-out property <float> timer-preview-page-font: 0;
+    in-out property <string> timer-preview-page-color;
+    in-out property <bool> timer-preview-page-italic: false;
+    in-out property <int> timer-preview-page-alignment: 1;
+    in-out property <bool> timer-preview-page-above: false;
+    in property <string> settings-title: "FlyPPTTimer Settings";
+    in property <[string]> pages;
+    in property <[SettingItem]> items;
+    in property <[RuleItem]> rules;
+    in property <int> current-page: 0;
+    in property <int> selected-rule: -1;
+    in property <int> selected-rule-count: 0;
+    in property <bool> dirty: false;
+    in property <string> dirty-text;
+    in property <string> saved-text;
+    in property <string> ok-text;
+    in property <string> cancel-text;
+    in property <string> apply-text;
+    in property <string> rule-add-text;
+    in property <string> rule-delete-text;
+    in property <string> rule-clear-text;
+    in property <string> rule-batch-text;
+    in property <string> rule-file-label;
+    in property <string> rule-path-label;
+    in property <string> rule-duration-label;
+    in property <string> rule-mode-label;
+    in property <string> rule-status-label;
+    in property <[string]> timer-modes;
+    in-out property <bool> batch-open: false;
+    in-out property <bool> dialog-open: false;
+    in-out property <bool> dialog-restart: false;
+    in property <string> dialog-title;
+    in property <string> dialog-message;
+    property <bool> modal-open: root.batch-open || root.dialog-open || root.native-dialog-open;
+    callback dialog-confirm();
+    callback big-screen-disabled();
+    in-out property <string> batch-duration: "00:08:00";
+    in-out property <int> batch-mode: 0;
+    in property <string> batch-title;
+    in property <string> batch-count-text;
+    in property <string> batch-duration-label;
+    in property <string> batch-mode-label;
+    in-out property <length> preview-scroll-y: 0px;
+
+    callback navigate(int);
+    callback field-edited(int, string, bool, int);
+    callback field-action(int);
+    callback rule-selected(int, bool, bool);
+    callback rule-edited(int, string, bool, int);
+    callback rule-action(int);
+    callback batch-confirm(string, int);
+    callback accept();
+    callback cancel();
+    callback apply();
+
+    title: root.settings-title;
+    // Keep the initial size comfortable while allowing the native decorated
+    // settings window to be resized.  The minimum is large enough to keep the
+    // six-page navigation and the form rows readable at the narrowest layout.
+    preferred-width: 900px;
+    preferred-height: 650px;
+    min-width: 760px;
+    min-height: 520px;
+    background: DesktopTheme.canvas;
+    focus-sink := FocusScope { width: parent.width; height: parent.height; enabled: !root.modal-open; focus-on-tab-navigation: false; }
+
+
+    Rectangle {
+        x: 0;
+        width: 196px;
+        height: parent.height;
+        background: DesktopTheme.surface;
+        border-radius: 0px;
+        border-width: 1px;
+        border-color: DesktopTheme.border;
+
+        Text {
+            x: 24px;
+            y: 28px;
+            text: "FlyPPTTimer";
+            color: DesktopTheme.text;
+            font-size: 21px;
+            font-weight: 700;
+        }
+
+        for page[index] in pages: Rectangle {
+            x: 12px;
+            y: 74px + index * 44px;
+            width: 172px;
+            height: 36px;
+            border-radius: 0px;
+            background: root.current-page == index ? DesktopTheme.selected : transparent;
+
+            Text {
+                x: 14px;
+                width: parent.width - 28px;
+                height: parent.height;
+                text: page;
+                color: root.current-page == index ? DesktopTheme.accent : DesktopTheme.secondary;
+                font-size: 14px;
+                vertical-alignment: center;
+            }
+            TouchArea { enabled: !root.modal-open; clicked => { focus-sink.focus(); root.navigate(index); } }
+        }
+    }
+
+    Rectangle {
+        x: 196px;
+        width: parent.width - 196px;
+        // Leave a clear breathing room between the scroll viewport and the
+        // fixed action buttons.  The footer remains transparent, so the
+        // content surface must end before its buttons begin.
+        height: parent.height - 96px;
+        background: DesktopTheme.canvas;
+        // The footer is a sibling below this content surface.  Clip the
+        // scroll viewport at the surface boundary so its rows can never
+        // paint through the fixed action area while scrolling.
+        clip: true;
+
+        Text {
+            x: 22px;
+            y: 18px;
+            text: pages[root.current-page];
+            color: DesktopTheme.text;
+            font-size: 24px;
+            font-weight: 700;
+            vertical-alignment: top;
+        }
+
+        Rectangle {
+            x: 18px; y: 56px; width: parent.width - 26px; height: root.height - 180px;
+            clip: true;
+            settings-scroll := ScrollView {
+                width: parent.width; height: parent.height;
+
+                viewport-width: self.visible-width;
+                // Keep the scroll viewport above the fixed action bar.  Refer to
+                // the window height explicitly so it cannot extend under the
+                // footer when the settings content grows.
+
+                viewport-y <=> root.preview-scroll-y;
+
+                VerticalLayout {
+                    width: settings-scroll.visible-width;
+                    padding-left: 18px;
+                    padding-right: 36px;
+                    alignment: start;
+                    spacing: 10px;
+                    padding-bottom: 12px;
+
+                    for item[index] in root.items: FieldRow {
+                        item: item;
+                        interactive: !root.modal-open;
+                        row-index: index;
+                        edited(index, value, checked, selected) => { root.field-edited(index, value, checked, selected); }
+                        action(index) => { root.field-action(index); }
+                    }
+
+                    if root.current-page == 0: Rectangle {
+                        height: root.rules.length > 0 ? root.rules.length * 56px + 12px : 72px;
+                        background: DesktopTheme.surface;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: DesktopTheme.border;
+                        VerticalLayout {
+                            padding: 6px;
+                            spacing: 4px;
+                            for rule[index] in root.rules: Rectangle {
+                                height: 52px;
+                                border-radius: 8px;
+                                background: rule.selected ? DesktopTheme.selected : transparent;
+                                CheckBox { enabled: !root.modal-open;
+                                    x: 8px; y: 12px; width: 24px;
+                                    checked: rule.enabled;
+                                    toggled => { root.rule-edited(index, "enabled", self.checked, 0); }
+                                }
+                                Text {
+                                    x: 40px; y: 4px; width: parent.width - 250px; height: 20px;
+                                    text: rule.file-name; color: DesktopTheme.text; font-size: 13px; overflow: elide;
+                                }
+                                Text {
+                                    x: 40px; y: 29px; width: parent.width - 52px; height: 19px;
+                                    text: rule.file-path; color: DesktopTheme.muted; font-size: 12px; overflow: elide;
+                                }
+                                Text {
+                                    x: parent.width - 200px; y: 4px; width: 80px; height: 20px;
+                                    text: rule.duration; color: DesktopTheme.secondary; vertical-alignment: center;
+                                }
+                                Text {
+                                    x: parent.width - 112px; y: 4px; width: 104px; height: 20px;
+                                    text: root.timer-modes[rule.mode]; color: DesktopTheme.secondary; vertical-alignment: center;
+                                }
+                                TouchArea { enabled: !root.modal-open; x: 32px; width: parent.width - 32px; pointer-event(event) => { if event.kind == PointerEventKind.up && event.button == PointerEventButton.left { focus-sink.focus(); root.rule-selected(index, event.modifiers.control, event.modifiers.shift); } } }
+                            }
+                        }
+                    }
+
+                    if root.current-page == 0: Rectangle {
+                        height: 48px;
+                        background: DesktopTheme.subtle;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: DesktopTheme.border;
+                        HorizontalLayout {
+                            x: 10px; y: 8px; width: parent.width - 20px; height: 32px;
+                            alignment: end;
+                            spacing: 6px;
+                            Button { width: 68px; height: 32px; enabled: !root.modal-open; text: root.rule-add-text; clicked => { root.rule-action(0); } }
+                            Button { width: 52px; height: 32px; text: root.rule-delete-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(1); } }
+                            Button { width: 52px; height: 32px; text: root.rule-clear-text; enabled: (root.rules.length > 0) && !root.modal-open; clicked => { root.rule-action(2); } }
+                            Button { width: 68px; height: 32px; text: root.rule-batch-text; enabled: (root.selected-rule-count > 0) && !root.modal-open; clicked => { root.rule-action(3); } }
+                        }
+                    }
+
+                    if root.current-page == 0 && root.selected-rule >= 0: Rectangle {
+                        height: 54px;
+                        background: DesktopTheme.surface;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: DesktopTheme.border;
+                        HorizontalLayout {
+                            x: 16px; y: 10px; width: parent.width - 32px; height: 34px;
+                            alignment: center; spacing: 8px;
+                            Text { width: 44px; text: root.rule-duration-label; color: DesktopTheme.secondary; horizontal-alignment: center; vertical-alignment: center; }
+                            CommitLineEdit { enabled: !root.modal-open; width: 156px;
+                                text: root.rules[root.selected-rule].duration;
+                                edited(value) => { root.rule-edited(root.selected-rule, value, false, 1); }
+                            }
+                            Text { width: 44px; text: root.rule-mode-label; color: DesktopTheme.secondary; horizontal-alignment: center; vertical-alignment: center; }
+                            ComboBox { enabled: !root.modal-open; width: 156px;
+                                model: root.timer-modes; current-index: root.rules[root.selected-rule].mode;
+                                selected(value) => { root.rule-edited(root.selected-rule, value, false, self.current-index + 2); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        x: 196px;
+        y: parent.height - 96px;
+        width: parent.width - 196px;
+        height: 96px;
+        background: transparent;
+        border-radius: 0px;
+        border-width: 0px;
+
+        Text {
+            x: 26px; y: 30px; width: max(120px, parent.width - 394px); height: 36px;
+            text: root.dirty ? root.dirty-text : root.saved-text;
+            color: root.dirty ? DesktopTheme.warning : DesktopTheme.muted;
+            font-size: 12px; vertical-alignment: center; wrap: word-wrap;
+        }
+
+        HorizontalLayout {
+            x: parent.width - 348px;
+            y: 30px;
+            width: 320px;
+            height: 36px;
+            spacing: 16px;
+            Button { enabled: !root.modal-open; text: root.ok-text; clicked => { root.accept(); } }
+            Button { enabled: !root.modal-open; text: root.cancel-text; clicked => { root.cancel(); } }
+            Button { text: root.apply-text; enabled: (root.dirty) && !root.modal-open; clicked => { root.apply(); } }
+        }
+    }
+
+    if root.batch-open: Rectangle {
+        init => { batch-input.focus(); }
+        x: 0; y: 0; width: parent.width; height: parent.height;
+        background: DesktopTheme.scrim;
+        TouchArea { }
+        Rectangle {
+            x: (parent.width - 430px) / 2;
+            y: (parent.height - 260px) / 2;
+            width: 430px; height: 260px;
+            background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
+            Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.batch-title; color: DesktopTheme.text; font-size: 20px; font-weight: 700; vertical-alignment: top; }
+            Text { x: 24px; y: 58px; width: parent.width - 48px; text: root.batch-count-text; color: DesktopTheme.muted; font-size: 13px; vertical-alignment: top; }
+            Text { x: 24px; y: 102px; width: 118px; text: root.batch-duration-label; color: DesktopTheme.secondary; vertical-alignment: top; }
+            batch-input := CommitLineEdit { x: 148px; y: 92px; width: 258px; height: 34px; text <=> root.batch-duration; }
+            Text { x: 24px; y: 150px; width: 118px; text: root.batch-mode-label; color: DesktopTheme.secondary; vertical-alignment: top; }
+            ComboBox { x: 148px; y: 140px; width: 258px; height: 34px; model: root.timer-modes; current-index <=> root.batch-mode; }
+            Button { x: 222px; y: 202px; width: 88px; height: 36px; text: root.cancel-text; clicked => { root.batch-open = false; } }
+            Button { x: 318px; y: 202px; width: 88px; height: 36px; text: root.ok-text; clicked => { root.batch-confirm(root.batch-duration, root.batch-mode); } }
+        }
+    }
+    if root.dialog-open: Rectangle {
+        init => { dialog-ok.focus(); }
+        x: 0px; y: 0px; width: parent.width; height: parent.height;
+        background: DesktopTheme.scrim;
+        TouchArea { }
+        dialog-card := Rectangle {
+            width: min(660px, parent.width - 48px);
+            // Measure the actual visible text at its actual font and width.
+            // Long content scrolls inside the available window, never clips.
+            height: min(parent.height - 48px, max(190px, dialog-body.preferred-height + 158px));
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            background: DesktopTheme.surface; border-radius: 12px; border-width: 1px; border-color: DesktopTheme.border;
+            Text { x: 24px; y: 18px; width: parent.width - 48px; height: 34px; text: root.dialog-title; font-size: 18px; font-weight: 700; color: DesktopTheme.text; vertical-alignment: center; }
+            Rectangle { x: 24px; y: 62px; width: parent.width - 48px; height: parent.height - 132px; background: DesktopTheme.subtle; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border; }
+            Rectangle {
+            x: 28px; y: 66px; width: parent.width - 56px; height: parent.height - 140px;
+            clip: true;
+            dialog-scroll := ScrollView {
+                width: parent.width; height: parent.height;
+
+                viewport-width: self.visible-width;
+                viewport-height: dialog-body.preferred-height + 20px;
+                viewport-x: 0px;
+                viewport-y: 0px;
+                dialog-body := Text {
+                    x: 12px; y: 10px;
+                    width: dialog-card.width - 104px;
+                    height: self.preferred-height;
+                    text: root.dialog-message;
+                    wrap: word-wrap;
+                    vertical-alignment: top;
+                    color: DesktopTheme.secondary;
+                    font-size: 14px;
+                }
+            }
+        }
+            Button { visible: root.dialog-restart; x: parent.width - 212px; y: parent.height - 52px; width: 88px; height: 34px; text: root.cancel-text; clicked => { root.dialog-open = false; } }
+            dialog-ok := Button { x: parent.width - 112px; y: parent.height - 52px; width: 88px; height: 34px; text: root.ok-text; clicked => { root.dialog-open = false; root.dialog-confirm(); } }
+        }
+    }
+
+}
+
+export component UpdateWindow inherits Window {
+    icon: @image-url("../src/FlyPPTTimer/Assets/app.png");
+    title: root.heading;
+    preferred-width: 720px; preferred-height: 580px;
+    min-width: 420px; min-height: 340px;
+    in property <string> heading;
+    in property <string> subtitle;
+    in property <string> notes;
+    in property <string> hint;
+    in property <string> later-text;
+    in property <string> download-text;
+    in property <bool> dark-theme: false;
+    in-out property <bool> theme-initialized: false;
+    in-out property <length> notes-scroll-y: 0px;
+    out property <length> notes-content-height: body.preferred-height;
+    callback download();
+    callback later();
+    init => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    changed dark-theme => { DesktopTheme.dark = root.dark-theme; Palette.color-scheme = root.dark-theme ? ColorScheme.dark : ColorScheme.light; }
+    background: DesktopTheme.canvas;
+    FocusScope {
+        width: 100%; height: 100%;
+        key-pressed(event) => { if event.text == Key.Escape { root.later(); return accept; } return reject; }
+        Text { x: 20px; y: 14px; width: parent.width - 40px; height: 30px; text: root.heading; color: DesktopTheme.text; font-size: 22px; font-weight: 700; }
+        Text { x: 20px; y: 48px; width: parent.width - 40px; height: 22px; text: root.subtitle; color: DesktopTheme.muted; font-size: 13px; }
+        Rectangle {
+            x: 20px; y: 82px; width: parent.width - 40px; height: parent.height - 184px;
+            background: DesktopTheme.surface; border-radius: 8px; border-width: 1px; border-color: DesktopTheme.border;
+            ScrollView {
+                x: 4px; y: 4px; width: parent.width - 8px; height: parent.height - 8px;
+                viewport-width: self.visible-width; viewport-height: body.preferred-height + 24px;
+                viewport-x: 0px; viewport-y <=> root.notes-scroll-y;
+                body := Text {
+                    x: 12px; y: 12px; width: root.width - 88px; height: self.preferred-height;
+                    text: root.notes; wrap: word-wrap; color: DesktopTheme.text; font-size: 14px;
+                }
+            }
+        }
+        Text { x: 20px; y: parent.height - 92px; width: parent.width - 40px; height: 36px; text: root.hint; wrap: word-wrap; color: DesktopTheme.muted; font-size: 12px; }
+        Button { x: parent.width - 262px; y: parent.height - 46px; width: 90px; height: 32px; text: root.later-text; clicked => { root.later(); } }
+        Button { x: parent.width - 164px; y: parent.height - 46px; width: 144px; height: 32px; text: root.download-text; clicked => { root.download(); } }
+    }
+}

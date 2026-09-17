@@ -1,0 +1,1885 @@
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, mpsc},
+    thread,
+    time::Duration,
+};
+
+use windows::{
+    Win32::System::{
+        Com::{
+            CLSCTX_LOCAL_SERVER, CLSIDFromProgID, COINIT_APARTMENTTHREADED, CoCreateGuid,
+            CoCreateInstance, CoInitializeEx, DISPATCH_METHOD, DISPATCH_PROPERTYGET,
+            DISPATCH_PROPERTYPUT, DISPPARAMS, IDispatch,
+        },
+        Ole::GetActiveObject,
+        Variant::VARIANT,
+    },
+    core::{BSTR, Interface, PCWSTR},
+};
+
+use crate::config::{AppConfig, FileRule, TimerMode};
+
+const SLIDE_SHOW_RUNNING: i32 = 1;
+const SLIDE_SHOW_BLACK: i32 = 3;
+const SLIDE_SHOW_WHITE: i32 = 4;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresentationApp {
+    PowerPoint,
+    Wps,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PresentationState {
+    pub powerpoint_installed: bool,
+    pub wps_installed: bool,
+    pub application: Option<PresentationApp>,
+    pub running: bool,
+    pub has_presentation: bool,
+    pub slide_show_running: bool,
+    /// A COM failure is unknown, not evidence that the slideshow ended.
+    pub state_unavailable: bool,
+    pub presentation_name: String,
+    pub presentation_path: String,
+    pub current_slide: i32,
+    pub total_slides: i32,
+    pub screen_state: i32,
+    pub managed: bool,
+    pub message: String,
+    pub error: String,
+    pub presentations: Vec<OpenPresentation>,
+    pub operation: PresentationOperation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresentationOperation {
+    pub name: String,
+    pub message: String,
+    pub started_at: Option<String>,
+    pub id: String,
+    pub busy: bool,
+}
+
+impl Default for PresentationOperation {
+    fn default() -> Self {
+        Self {
+            name: "Idle".into(),
+            message: String::new(),
+            started_at: None,
+            id: String::new(),
+            busy: false,
+        }
+    }
+}
+
+impl PresentationOperation {
+    fn finish(&mut self, result: &Result<String, String>) {
+        match result {
+            Ok(message) => {
+                *self = Self {
+                    message: message.clone(),
+                    ..Self::default()
+                }
+            }
+            Err(error) => {
+                self.name = "Failed".into();
+                self.message = error.clone();
+                self.busy = false;
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OpenPresentation {
+    pub name: String,
+    pub path: String,
+    pub active: bool,
+    pub slide_show_running: bool,
+    pub managed: bool,
+}
+
+#[allow(dead_code)]
+pub enum PresentationCommand {
+    Refresh,
+    Open(PathBuf),
+    StartFromBeginning(Option<PathBuf>),
+    StartFromCurrent(Option<PathBuf>),
+    Previous,
+    Next,
+    GoToSlide(i32),
+    ToggleBlackScreen,
+    ToggleWhiteScreen,
+    RestoreScreen,
+    EndShow,
+    CloseActive,
+    CloseLastOpened,
+    ExitApplication,
+    ForceQuitAll { confirmed: bool },
+}
+
+impl PresentationCommand {
+    fn operation(&self) -> (&'static str, &'static str) {
+        match self {
+            Self::Open(_) => ("OpeningPresentation", "正在打开演示文稿"),
+            Self::StartFromBeginning(_) | Self::StartFromCurrent(_) => {
+                ("StartingSlideshow", "正在启动放映")
+            }
+            Self::EndShow => ("StoppingSlideshow", "正在结束放映"),
+            Self::CloseActive => ("ClosingPresentation", "正在关闭当前文稿"),
+            Self::CloseLastOpened => ("ClosingPresentation", "正在关闭最后打开的文稿"),
+            Self::ForceQuitAll { .. } => ("ForceExitingApplication", "正在强制退出演示程序"),
+            _ => ("Idle", "正在执行演示命令"),
+        }
+    }
+}
+
+enum Request {
+    Execute(
+        PresentationCommand,
+        String,
+        mpsc::SyncSender<Result<String, String>>,
+        Option<Vec<String>>,
+    ),
+    Stop,
+}
+
+pub struct PresentationService {
+    sender: mpsc::Sender<Request>,
+    state: Arc<Mutex<PresentationState>>,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl PresentationService {
+    pub fn start() -> Result<Self, String> {
+        let (sender, receiver) = mpsc::channel();
+        let state = Arc::new(Mutex::new(PresentationState::default()));
+        let state_for_thread = Arc::clone(&state);
+        let thread = thread::Builder::new()
+            .name("flyppttimer-presentation-sta".to_owned())
+            .spawn(move || presentation_thread(receiver, state_for_thread))
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            sender,
+            state,
+            thread: Some(thread),
+        })
+    }
+
+    pub fn state(&self) -> PresentationState {
+        self.state.lock().unwrap().clone()
+    }
+
+    #[allow(dead_code)]
+    pub fn execute(&self, command: PresentationCommand) -> Result<String, String> {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        self.enqueue(command, sender, None)?;
+        receiver
+            .recv_timeout(Duration::from_secs(15))
+            .map_err(|_| "PowerPoint 响应超时，计时遥控仍可继续使用。".to_owned())?
+    }
+
+    pub fn queue(&self, command: PresentationCommand) -> Result<String, String> {
+        let (sender, _receiver) = mpsc::sync_channel(1);
+        self.enqueue(command, sender, None)
+    }
+
+    pub fn queue_remote(
+        &self,
+        command: PresentationCommand,
+        allowed_paths: Vec<String>,
+    ) -> Result<String, String> {
+        let (sender, _receiver) = mpsc::sync_channel(1);
+        self.enqueue(command, sender, Some(allowed_paths))
+    }
+
+    fn enqueue(
+        &self,
+        command: PresentationCommand,
+        reply: mpsc::SyncSender<Result<String, String>>,
+        allowed_paths: Option<Vec<String>>,
+    ) -> Result<String, String> {
+        if matches!(
+            command,
+            PresentationCommand::ForceQuitAll { confirmed: false }
+        ) {
+            return Err("强制退出会丢失所有未保存内容，请再次确认。".into());
+        }
+        let mut state = self.state.lock().unwrap();
+        if state.operation.busy {
+            return Err("演示操作正在进行，请等待当前操作完成。".into());
+        }
+        let (name, message) = command.operation();
+        let id = format!(
+            "{:032x}",
+            unsafe { CoCreateGuid() }
+                .map_err(|e| e.to_string())?
+                .to_u128()
+        );
+        state.operation = PresentationOperation {
+            name: name.into(),
+            message: message.into(),
+            started_at: Some(crate::remote::utc_timestamp()),
+            id: id.clone(),
+            busy: name != "Idle" || allowed_paths.is_some(),
+        };
+        if self
+            .sender
+            .send(Request::Execute(command, id, reply, allowed_paths))
+            .is_err()
+        {
+            let result = Err("演示控制服务已关闭。".to_owned());
+            state.operation.finish(&result);
+            return result;
+        }
+        Ok(message.into())
+    }
+}
+
+impl Drop for PresentationService {
+    fn drop(&mut self) {
+        let _ = self.sender.send(Request::Stop);
+        if let Some(thread) = self.thread.take()
+            && thread.is_finished()
+        {
+            let _ = thread.join();
+        }
+    }
+}
+
+fn presentation_thread(receiver: mpsc::Receiver<Request>, state: Arc<Mutex<PresentationState>>) {
+    let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+    let mut session = Session::default();
+    loop {
+        match receiver.recv_timeout(Duration::from_millis(500)) {
+            Ok(Request::Execute(command, operation_id, reply, allowed_paths)) => {
+                let result = session.execute_scoped(command, allowed_paths.as_deref());
+                match &result {
+                    Ok(message) => session.message = message.clone(),
+                    Err(error) => session.message = error.clone(),
+                }
+                let mut current = session.read_state();
+                if result.is_err() {
+                    current.error = session.message.clone();
+                }
+                let mut shared = state.lock().unwrap();
+                if shared.operation.id == operation_id {
+                    shared.operation.finish(&result);
+                }
+                current.operation = shared.operation.clone();
+                *shared = current;
+                let _ = reply.send(result);
+            }
+            Ok(Request::Stop) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                let mut current = session.read_state();
+                let mut shared = state.lock().unwrap();
+                current.operation = shared.operation.clone();
+                *shared = current;
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct Session {
+    managed_paths: HashSet<String>,
+    opened_order: Vec<String>,
+    created_application: Option<PresentationApp>,
+    message: String,
+}
+
+impl Session {
+    fn read_state(&self) -> PresentationState {
+        let (powerpoint_installed, wps_installed) = installed_applications();
+        let Some((kind, app)) = running_application() else {
+            let process = running_process();
+            return PresentationState {
+                powerpoint_installed,
+                wps_installed,
+                application: process,
+                running: process.is_some(),
+                state_unavailable: process.is_some(),
+                message: self.message.clone(),
+                ..PresentationState::default()
+            };
+        };
+        match read_application_state(kind, &app, &self.managed_paths) {
+            Ok(mut state) => {
+                state.powerpoint_installed = powerpoint_installed;
+                state.wps_installed = wps_installed;
+                state.message = self.message.clone();
+                state
+            }
+            Err(error) => PresentationState {
+                powerpoint_installed,
+                wps_installed,
+                application: Some(kind),
+                running: true,
+                state_unavailable: true,
+                message: self.message.clone(),
+                error,
+                ..PresentationState::default()
+            },
+        }
+    }
+
+    fn execute_scoped(
+        &mut self,
+        command: PresentationCommand,
+        allowed: Option<&[String]>,
+    ) -> Result<String, String> {
+        if let Some(paths) = allowed {
+            let accepts = |path: &str| {
+                paths
+                    .iter()
+                    .any(|p| crate::remote::id_for_path(p) == crate::remote::id_for_path(path))
+            };
+            match &command {
+                PresentationCommand::Refresh => {}
+                PresentationCommand::Open(path)
+                | PresentationCommand::StartFromBeginning(Some(path))
+                | PresentationCommand::StartFromCurrent(Some(path)) => {
+                    if !accepts(&path.to_string_lossy()) {
+                        return Err("文件不在受控列表中，请先重新加入。".into());
+                    }
+                }
+                PresentationCommand::CloseActive => return self.close_active_scoped(Some(paths)),
+                PresentationCommand::CloseLastOpened => {
+                    return self.close_last_opened_scoped(Some(paths));
+                }
+                PresentationCommand::ForceQuitAll { confirmed: true } => {
+                    return force_quit_controlled(paths);
+                }
+                PresentationCommand::ForceQuitAll { confirmed: false } => {
+                    return Err("请先确认关闭并放弃未保存修改。".into());
+                }
+                _ => {
+                    let (_, app) = running_application().ok_or("演示软件未运行。")?;
+                    let path = active_presentation_path(&app).ok_or("无法确定当前文稿。")?;
+                    if !accepts(&path) {
+                        return Err("当前文稿不在受控列表中，请先重新加入。".into());
+                    }
+                }
+            }
+        }
+        self.execute(command)
+    }
+
+    fn execute(&mut self, command: PresentationCommand) -> Result<String, String> {
+        match command {
+            PresentationCommand::Refresh => Ok("状态已刷新".into()),
+            PresentationCommand::Open(path) => self.open(path),
+            PresentationCommand::StartFromBeginning(path) => self.start_show(path, false),
+            PresentationCommand::StartFromCurrent(path) => self.start_show(path, true),
+            PresentationCommand::Previous => with_show_view(|view| {
+                call(view, "Previous", &[]).map(|_| "已切换到上一页".to_owned())
+            }),
+            PresentationCommand::Next => {
+                with_show_view(|view| call(view, "Next", &[]).map(|_| "已切换到下一页".to_owned()))
+            }
+            PresentationCommand::GoToSlide(slide) if slide > 0 => with_show_view(|view| {
+                call(view, "GotoSlide", &[VARIANT::from(slide)])?;
+                Ok(format!("已跳转到第 {slide} 页"))
+            }),
+            PresentationCommand::GoToSlide(_) => Err("请输入有效页码。".to_owned()),
+            PresentationCommand::ToggleBlackScreen => toggle_screen(SLIDE_SHOW_BLACK, "黑屏"),
+            PresentationCommand::ToggleWhiteScreen => toggle_screen(SLIDE_SHOW_WHITE, "白屏"),
+            PresentationCommand::RestoreScreen => with_show_view(|view| {
+                put(view, "State", VARIANT::from(SLIDE_SHOW_RUNNING))?;
+                Ok("已恢复放映画面".to_owned())
+            }),
+            PresentationCommand::EndShow => with_show_view(|view| {
+                call(view, "Exit", &[])?;
+                Ok("已结束放映".to_owned())
+            }),
+            PresentationCommand::CloseActive => self.close_active(),
+            PresentationCommand::CloseLastOpened => self.close_last_opened(),
+            PresentationCommand::ExitApplication => self.exit_application(),
+            PresentationCommand::ForceQuitAll { confirmed: false } => {
+                Err("强制退出会丢失所有未保存内容，请再次确认。".to_owned())
+            }
+            PresentationCommand::ForceQuitAll { confirmed: true } => force_quit_all(),
+        }
+    }
+
+    fn open(&mut self, path: PathBuf) -> Result<String, String> {
+        let path = normalized_existing_path(&path)?;
+        let (_kind, app) = match running_application() {
+            Some(value) => value,
+            None => {
+                let value = create_application()?;
+                self.created_application = Some(value.0);
+                value
+            }
+        };
+        end_other_shows(&app, &path)?;
+        let already_showing = !matching_show_views(&app, &path, true)?.is_empty();
+        let presentations = dispatch(get(&app, "Presentations")?)?;
+        let presentation = if let Some(presentation) = find_presentation(&presentations, &path)? {
+            presentation
+        } else {
+            let presentation = dispatch(call(
+                &presentations,
+                "Open",
+                &[
+                    VARIANT::from(path.as_str()),
+                    VARIANT::from(true),
+                    VARIANT::from(false),
+                    VARIANT::from(true),
+                ],
+            )?)?;
+            let key = normalize_path(&path);
+            self.managed_paths.insert(key.clone());
+            self.opened_order.push(key);
+            presentation
+        };
+        if !already_showing {
+            show_document_maximized(&app, &presentation)?;
+        }
+        if already_showing {
+            Ok("目标文稿已在放映".into())
+        } else {
+            Ok(format!(
+                "已打开 {}",
+                Path::new(&path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+            ))
+        }
+    }
+
+    fn start_show(
+        &mut self,
+        requested: Option<PathBuf>,
+        from_current: bool,
+    ) -> Result<String, String> {
+        if let Some(path) = requested.as_ref() {
+            self.open(path.clone())?;
+        }
+        let (_, app) = running_application().ok_or("PowerPoint 或 WPS 演示未运行。")?;
+        let presentation = if let Some(path) = requested {
+            let presentations = dispatch(get(&app, "Presentations")?)?;
+            find_presentation(&presentations, &path.to_string_lossy())?.ok_or("未找到目标文稿。")?
+        } else {
+            dispatch(get(&app, "ActivePresentation")?)?
+        };
+        let target = string(get(&presentation, "FullName")?)?;
+        end_other_shows(&app, &target)?;
+        if !matching_show_views(&app, &target, true)?.is_empty() {
+            return Ok("放映已经在运行，本次重复启动已忽略".to_owned());
+        }
+        let settings = dispatch(get(&presentation, "SlideShowSettings")?)?;
+        let total = int(get(&dispatch(get(&presentation, "Slides")?)?, "Count")?)?;
+        let start = if from_current {
+            current_edit_slide(&app).unwrap_or(1).clamp(1, total)
+        } else {
+            1
+        };
+        // Obtain the complete snapshot before the first write. A failed read must
+        // never leave us guessing which settings or Saved flag are safe to restore.
+        let original = [
+            int(get(&settings, "RangeType")?)?,
+            int(get(&settings, "StartingSlide")?)?,
+            int(get(&settings, "EndingSlide")?)?,
+        ];
+        let was_saved = int(get(&presentation, "Saved")?)? != 0;
+        run_with_restored_range(
+            original,
+            [if from_current { 2 } else { 1 }, start, total],
+            was_saved,
+            |name, value| put(&settings, name, VARIANT::from(value)),
+            || call(&settings, "Run", &[]).map(|_| ()),
+            || put(&presentation, "Saved", VARIANT::from(true)),
+        )?;
+        Ok(if from_current {
+            format!("已从第 {start} 页开始放映")
+        } else {
+            "已从头开始放映".to_owned()
+        })
+    }
+
+    fn close_active(&mut self) -> Result<String, String> {
+        self.close_active_scoped(None)
+    }
+
+    fn close_active_scoped(&mut self, allowed: Option<&[String]>) -> Result<String, String> {
+        let (_, app) = running_application().ok_or("PowerPoint 或 WPS 演示未运行。")?;
+        let presentation = dispatch(get(&app, "ActivePresentation")?)?;
+        let path = string(get(&presentation, "FullName")?)?;
+        // Validate the very object that will be closed, not an earlier active
+        // window lookup which may change while the user switches Office focus.
+        if allowed.is_some_and(|paths| {
+            !paths
+                .iter()
+                .any(|p| crate::remote::id_for_path(p) == crate::remote::id_for_path(&path))
+        }) {
+            return Err("当前文稿不在受控列表中，请先重新加入。".into());
+        }
+        end_show_for(&app, &path)?;
+        close_without_saving(&presentation)?;
+        self.remove_managed(&path);
+        Ok(format!("已关闭当前文稿：{}。", file_name(&path)))
+    }
+
+    fn close_last_opened(&mut self) -> Result<String, String> {
+        self.close_last_opened_scoped(None)
+    }
+
+    fn close_last_opened_scoped(&mut self, allowed: Option<&[String]>) -> Result<String, String> {
+        let (_, app) = running_application().ok_or("演示软件未运行。")?;
+        let presentations = dispatch(get(&app, "Presentations")?)?;
+        for path in self.opened_order.clone().into_iter().rev() {
+            if allowed.is_some_and(|paths| {
+                !paths
+                    .iter()
+                    .any(|p| crate::remote::id_for_path(p) == crate::remote::id_for_path(&path))
+            }) {
+                continue;
+            }
+            if let Some(presentation) = find_presentation(&presentations, &path)? {
+                end_show_for(&app, &path)?;
+                close_without_saving(&presentation)?;
+                self.remove_managed(&path);
+                return Ok(format!("已关闭最后打开的文稿：{}。", file_name(&path)));
+            }
+            self.remove_managed(&path);
+        }
+        Err("当前没有可关闭的受控文稿。".into())
+    }
+
+    fn exit_application(&mut self) -> Result<String, String> {
+        let (kind, app) =
+            running_application().ok_or("未发现正在运行的 PowerPoint 或 WPS 演示进程。")?;
+        if self.created_application != Some(kind) {
+            return Err("演示软件不是由 FlyPPTTimer 启动，未执行退出。".to_owned());
+        }
+        let presentations = dispatch(get(&app, "Presentations")?)?;
+        let count = int(get(&presentations, "Count")?)?;
+        for index in 1..=count {
+            let item = dispatch(call(&presentations, "Item", &[VARIANT::from(index)])?)?;
+            let path = string(get(&item, "FullName")?)?;
+            if !self.managed_paths.contains(&normalize_path(&path)) {
+                return Err("检测到用户原先打开的文稿，未执行退出。".to_owned());
+            }
+        }
+        call(&app, "Quit", &[])?;
+        self.managed_paths.clear();
+        self.opened_order.clear();
+        self.created_application = None;
+        Ok("已退出演示软件。".to_owned())
+    }
+
+    fn remove_managed(&mut self, path: &str) {
+        let key = normalize_path(path);
+        self.managed_paths.remove(&key);
+        self.opened_order.retain(|candidate| candidate != &key);
+    }
+}
+
+fn show_document_maximized(app: &IDispatch, presentation: &IDispatch) -> Result<(), String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GA_ROOT, GetAncestor, SW_MAXIMIZE, SetForegroundWindow, ShowWindow,
+    };
+    // Setting Visible after WindowState can restore Office/WPS's previous small window.
+    put(app, "Visible", VARIANT::from(true))?;
+    let windows = dispatch(get(presentation, "Windows")?)?;
+    let document = dispatch(call(&windows, "Item", &[VARIANT::from(1)])?)?;
+    call(&document, "Activate", &[])?;
+    let _ = put(app, "WindowState", VARIANT::from(3));
+    put(&document, "WindowState", VARIANT::from(3))?;
+    // WPS may accept the COM property without resizing the actual frame.
+    // Address only this document's frame; no desktop enumeration or focus retry loop.
+    if let Ok(handle) = get(&document, "HWND")
+        .or_else(|_| get(app, "HWND"))
+        .and_then(int)
+    {
+        let handle = handle as usize as windows_sys::Win32::Foundation::HWND;
+        if !handle.is_null() {
+            unsafe {
+                let root = GetAncestor(handle, GA_ROOT);
+                let frame = if root.is_null() { handle } else { root };
+                ShowWindow(frame, SW_MAXIMIZE);
+                SetForegroundWindow(frame);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_with_restored_range(
+    original: [i32; 3],
+    requested: [i32; 3],
+    was_saved: bool,
+    mut write: impl FnMut(&str, i32) -> Result<(), String>,
+    run: impl FnOnce() -> Result<(), String>,
+    mark_saved: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    let properties = ["RangeType", "StartingSlide", "EndingSlide"];
+    let result = (|| {
+        for (name, value) in properties.iter().zip(requested) {
+            write(name, value)?;
+        }
+        run()
+    })();
+    // Even a failing property put may have changed the server. Attempt every
+    // restoration, including after the very first put or Run fails.
+    let mut errors = Vec::new();
+    for index in [1, 2, 0] {
+        if let Err(error) = write(properties[index], original[index]) {
+            errors.push(format!("{}: {error}", properties[index]));
+        }
+    }
+    if errors.is_empty()
+        && was_saved
+        && let Err(error) = mark_saved()
+    {
+        errors.push(format!("Saved: {error}"));
+    }
+    if !errors.is_empty() {
+        let cleanup = format!("无法完整恢复放映设置：{}", errors.join("; "));
+        return Err(match result {
+            Err(error) => format!("{error}; {cleanup}"),
+            Ok(()) => cleanup,
+        });
+    }
+    result
+}
+
+fn read_application_state(
+    kind: PresentationApp,
+    app: &IDispatch,
+    managed: &HashSet<String>,
+) -> Result<PresentationState, String> {
+    let presentations = dispatch(get(app, "Presentations")?)?;
+    let running = int(get(&presentations, "Count")?)? > 0;
+    let active_path = active_presentation_path(app);
+    let show_selection = show_window_for_target(app, active_path.as_deref())?;
+    let slide_show_running = show_selection.running;
+    let show_window = show_selection.window;
+    let presentation = if let Some(window) = show_window.as_ref() {
+        dispatch(get(window, "Presentation")?)?
+    } else if slide_show_running {
+        return Ok(PresentationState {
+            powerpoint_installed: kind == PresentationApp::PowerPoint,
+            wps_installed: kind == PresentationApp::Wps,
+            application: Some(kind),
+            running: true,
+            slide_show_running: true,
+            error: show_selection
+                .error
+                .unwrap_or_else(|| "无法确定当前正在放映的文稿。".to_owned()),
+            ..PresentationState::default()
+        });
+    } else if running {
+        dispatch(get(app, "ActivePresentation")?)?
+    } else {
+        return Ok(PresentationState {
+            application: Some(kind),
+            running: true,
+            ..PresentationState::default()
+        });
+    };
+    let path = string(get(&presentation, "FullName")?).unwrap_or_default();
+    let name = string(get(&presentation, "Name")?).unwrap_or_else(|_| file_name(&path));
+    let slides = dispatch(get(&presentation, "Slides")?)?;
+    let total_slides = int(get(&slides, "Count")?).unwrap_or(0);
+    let (current_slide, screen_state) = if slide_show_running {
+        let window = show_window
+            .as_ref()
+            .expect("show_window is present when slide_show_running is true");
+        let view = dispatch(get(window, "View")?)?;
+        let slide = dispatch(get(&view, "Slide")?)?;
+        (
+            int(get(&slide, "SlideIndex")?).unwrap_or(0),
+            int(get(&view, "State")?).unwrap_or(SLIDE_SHOW_RUNNING),
+        )
+    } else {
+        (current_edit_slide(app).unwrap_or(0), SLIDE_SHOW_RUNNING)
+    };
+    let count = int(get(&presentations, "Count")?).unwrap_or(0);
+    let mut open_presentations = Vec::new();
+    for index in 1..=count {
+        let Ok(item) = call(&presentations, "Item", &[VARIANT::from(index)]).and_then(dispatch)
+        else {
+            continue;
+        };
+        let item_path = string(get(&item, "FullName")?).unwrap_or_default();
+        let item_name = string(get(&item, "Name")?).unwrap_or_else(|_| file_name(&item_path));
+        open_presentations.push(OpenPresentation {
+            name: item_name,
+            active: same_path(&item_path, &path),
+            slide_show_running: slide_show_running && same_path(&item_path, &path),
+            managed: managed.contains(&normalize_path(&item_path)),
+            path: item_path,
+        });
+    }
+    Ok(PresentationState {
+        powerpoint_installed: kind == PresentationApp::PowerPoint,
+        wps_installed: kind == PresentationApp::Wps,
+        application: Some(kind),
+        running: true,
+        has_presentation: true,
+        slide_show_running,
+        state_unavailable: false,
+        presentation_name: name,
+        presentation_path: path.clone(),
+        current_slide,
+        total_slides,
+        screen_state,
+        managed: managed.contains(&normalize_path(&path)),
+        message: String::new(),
+        error: String::new(),
+        presentations: open_presentations,
+        operation: PresentationOperation::default(),
+    })
+}
+
+fn running_application() -> Option<(PresentationApp, IDispatch)> {
+    for (kind, prog_id) in application_prog_ids() {
+        if let Ok(clsid) = clsid(prog_id) {
+            let mut unknown = None;
+            if unsafe { GetActiveObject(&clsid, None, &mut unknown) }.is_ok()
+                && let Some(unknown) = unknown
+                && let Ok(dispatch) = unknown.cast::<IDispatch>()
+            {
+                return Some((kind, dispatch));
+            }
+        }
+    }
+    None
+}
+
+fn create_application() -> Result<(PresentationApp, IDispatch), String> {
+    for (kind, prog_id) in application_prog_ids() {
+        let Ok(clsid) = clsid(prog_id) else { continue };
+        if let Ok(app) =
+            unsafe { CoCreateInstance::<_, IDispatch>(&clsid, None, CLSCTX_LOCAL_SERVER) }
+        {
+            return Ok((kind, app));
+        }
+    }
+    Err("未安装 Microsoft PowerPoint 或 WPS 演示。".to_owned())
+}
+
+fn application_prog_ids() -> [(PresentationApp, &'static str); 3] {
+    [
+        (PresentationApp::PowerPoint, "PowerPoint.Application"),
+        (PresentationApp::Wps, "KWPP.Application"),
+        (PresentationApp::Wps, "WPP.Application"),
+    ]
+}
+
+fn installed_applications() -> (bool, bool) {
+    let powerpoint = clsid("PowerPoint.Application").is_ok();
+    let wps = clsid("KWPP.Application").is_ok() || clsid("WPP.Application").is_ok();
+    (powerpoint, wps)
+}
+
+fn running_process() -> Option<PresentationApp> {
+    process_names().values().find_map(|name| {
+        if name.eq_ignore_ascii_case("POWERPNT.EXE") {
+            Some(PresentationApp::PowerPoint)
+        } else if ["WPSOffice.exe", "wpp.exe", "wps.exe"]
+            .iter()
+            .any(|candidate| name.eq_ignore_ascii_case(candidate))
+        {
+            Some(PresentationApp::Wps)
+        } else {
+            None
+        }
+    })
+}
+
+fn process_names() -> HashMap<u32, String> {
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
+        System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+            TH32CS_SNAPPROCESS,
+        },
+    };
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return HashMap::new();
+        }
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        let mut processes = HashMap::new();
+        if Process32FirstW(snapshot, &mut entry) != 0 {
+            loop {
+                let length = entry
+                    .szExeFile
+                    .iter()
+                    .position(|value| *value == 0)
+                    .unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..length]);
+                processes.insert(entry.th32ProcessID, name);
+                if Process32NextW(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+        processes
+    }
+}
+
+pub fn fullscreen_whitelist_match(whitelist: &[String]) -> Option<String> {
+    use windows_sys::Win32::{
+        Foundation::{HWND, LPARAM, RECT},
+        Graphics::Gdi::{
+            GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+        },
+        UI::WindowsAndMessaging::{
+            EnumWindows, GetWindowRect, GetWindowThreadProcessId, IsWindowVisible,
+        },
+    };
+    struct Context<'a> {
+        whitelist: &'a [String],
+        processes: HashMap<u32, String>,
+        matched: Option<String>,
+    }
+    unsafe extern "system" fn callback(hwnd: HWND, parameter: LPARAM) -> i32 {
+        let context = unsafe { &mut *(parameter as *mut Context<'_>) };
+        if unsafe { IsWindowVisible(hwnd) } == 0 {
+            return 1;
+        }
+        let mut process_id = 0;
+        unsafe { GetWindowThreadProcessId(hwnd, &mut process_id) };
+        let Some(name) = context.processes.get(&process_id) else {
+            return 1;
+        };
+        if name.eq_ignore_ascii_case("POWERPNT.EXE")
+            || !context
+                .whitelist
+                .iter()
+                .any(|candidate| name.eq_ignore_ascii_case(candidate))
+        {
+            return 1;
+        }
+        let mut window = RECT::default();
+        if unsafe { GetWindowRect(hwnd, &mut window) } == 0 {
+            return 1;
+        }
+        let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+            return 1;
+        }
+        if window.left <= info.rcMonitor.left + 2
+            && window.top <= info.rcMonitor.top + 2
+            && window.right >= info.rcMonitor.right - 2
+            && window.bottom >= info.rcMonitor.bottom - 2
+        {
+            context.matched = Some(name.clone());
+            return 0;
+        }
+        1
+    }
+    let mut context = Context {
+        whitelist,
+        processes: process_names(),
+        matched: None,
+    };
+    unsafe { EnumWindows(Some(callback), (&mut context as *mut Context<'_>) as LPARAM) };
+    context.matched
+}
+
+fn clsid(prog_id: &str) -> windows::core::Result<windows::core::GUID> {
+    let value = BSTR::from(prog_id);
+    unsafe { CLSIDFromProgID(PCWSTR(value.as_ptr())) }
+}
+
+fn active_presentation_path(app: &IDispatch) -> Option<String> {
+    let presentation = get(app, "ActivePresentation").and_then(dispatch).ok()?;
+    let path = string(get(&presentation, "FullName").ok()?).ok()?;
+    (!path.is_empty()).then_some(path)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ShowWindowStatus {
+    running: bool,
+    index: Option<usize>,
+    error: Option<String>,
+}
+
+fn choose_show_window_index(
+    target_path: Option<&str>,
+    window_paths: &[String],
+) -> Result<Option<usize>, String> {
+    if window_paths.is_empty() {
+        return Ok(None);
+    }
+    // A known target must match even when only one other deck is showing.
+    // The unique-window fallback is safe only when no target is available.
+    if let Some(target_path) = target_path.filter(|path| !path.is_empty()) {
+        return window_paths
+            .iter()
+            .position(|path| same_path(path, target_path))
+            .map(Some)
+            .ok_or_else(|| "未能按目标文稿匹配放映窗口。".to_owned());
+    }
+    match window_paths.len() {
+        1 => Ok(Some(0)),
+        _ => Err("存在多个正在运行的放映，但无法确定当前文稿。".to_owned()),
+    }
+}
+
+fn show_window_status(target_path: Option<&str>, window_paths: &[String]) -> ShowWindowStatus {
+    match choose_show_window_index(target_path, window_paths) {
+        Ok(index) => ShowWindowStatus {
+            running: !window_paths.is_empty(),
+            index,
+            error: None,
+        },
+        Err(error) => ShowWindowStatus {
+            running: true,
+            index: None,
+            error: Some(error),
+        },
+    }
+}
+
+struct ShowWindowSelection {
+    running: bool,
+    window: Option<IDispatch>,
+    error: Option<String>,
+}
+
+fn show_window_for_target(
+    app: &IDispatch,
+    target_path: Option<&str>,
+) -> Result<ShowWindowSelection, String> {
+    let windows = dispatch(get(app, "SlideShowWindows")?)?;
+    let count = int(get(&windows, "Count")?)?;
+    if count <= 0 {
+        return Ok(ShowWindowSelection {
+            running: false,
+            window: None,
+            error: None,
+        });
+    }
+    let mut show_windows = Vec::with_capacity(count as usize);
+    let mut window_paths = Vec::with_capacity(count as usize);
+    for index in 1..=count {
+        let window = dispatch(call(&windows, "Item", &[VARIANT::from(index)])?)?;
+        let path = get(&window, "Presentation")
+            .and_then(dispatch)
+            .and_then(|presentation| get(&presentation, "FullName"))
+            .and_then(string)
+            .unwrap_or_default();
+        show_windows.push(window);
+        window_paths.push(path);
+    }
+    let status = show_window_status(target_path, &window_paths);
+    Ok(ShowWindowSelection {
+        running: status.running,
+        window: status
+            .index
+            .and_then(|index| show_windows.into_iter().nth(index)),
+        error: status.error,
+    })
+}
+
+fn with_show_view(
+    operation: impl FnOnce(&IDispatch) -> Result<String, String>,
+) -> Result<String, String> {
+    let (_, app) = running_application().ok_or("PowerPoint 或 WPS 演示未运行。")?;
+    let target_path = active_presentation_path(&app);
+    let selection = show_window_for_target(&app, target_path.as_deref())?;
+    if let Some(error) = selection.error {
+        return Err(error);
+    }
+    let window = selection
+        .window
+        .ok_or("当前没有正在运行的 PowerPoint 放映。".to_owned())?;
+    let view = dispatch(get(&window, "View")?)?;
+    operation(&view)
+}
+
+fn toggle_screen(target: i32, label: &str) -> Result<String, String> {
+    with_show_view(|view| {
+        let current = int(get(view, "State")?)?;
+        put(
+            view,
+            "State",
+            VARIANT::from(if current == target {
+                SLIDE_SHOW_RUNNING
+            } else {
+                target
+            }),
+        )?;
+        Ok(format!("已切换{label}状态"))
+    })
+}
+
+fn current_edit_slide(app: &IDispatch) -> Result<i32, String> {
+    let window = dispatch(get(app, "ActiveWindow")?)?;
+    let view = dispatch(get(&window, "View")?)?;
+    let slide = dispatch(get(&view, "Slide")?)?;
+    int(get(&slide, "SlideIndex")?)
+}
+
+fn find_presentation(presentations: &IDispatch, path: &str) -> Result<Option<IDispatch>, String> {
+    let count = int(get(presentations, "Count")?)?;
+    for index in 1..=count {
+        let item = dispatch(call(presentations, "Item", &[VARIANT::from(index)])?)?;
+        if same_path(&string(get(&item, "FullName")?)?, path) {
+            return Ok(Some(item));
+        }
+    }
+    Ok(None)
+}
+
+// Collect views before exiting: COM collection indexes change after Exit.
+fn matching_show_views(app: &IDispatch, path: &str, same: bool) -> Result<Vec<IDispatch>, String> {
+    let windows = dispatch(get(app, "SlideShowWindows")?)?;
+    let count = int(get(&windows, "Count")?)?;
+    let mut views = Vec::new();
+    for index in 1..=count {
+        let window = dispatch(call(&windows, "Item", &[VARIANT::from(index)])?)?;
+        let deck = dispatch(get(&window, "Presentation")?)?;
+        let showing = string(get(&deck, "FullName")?)?;
+        if same_path(&showing, path) == same {
+            views.push(dispatch(get(&window, "View")?)?);
+        }
+    }
+    Ok(views)
+}
+
+fn end_other_shows(app: &IDispatch, path: &str) -> Result<(), String> {
+    for view in matching_show_views(app, path, false)? {
+        call(&view, "Exit", &[])?;
+    }
+    Ok(())
+}
+
+fn end_show_for(app: &IDispatch, path: &str) -> Result<(), String> {
+    for view in matching_show_views(app, path, true)? {
+        call(&view, "Exit", &[])?;
+    }
+    Ok(())
+}
+
+fn close_without_saving(presentation: &IDispatch) -> Result<(), String> {
+    // Remote close is an explicitly confirmed "discard changes" action.
+    // Mark Saved before Close so Office cannot block the single STA worker on
+    // a save-confirmation dialog. If Close itself fails, restore the dirty bit
+    // so an open document is never silently left looking saved.
+    let was_saved = int(get(presentation, "Saved")?)? != 0;
+    put(presentation, "Saved", VARIANT::from(true))?;
+    match call(presentation, "Close", &[]).map(|_| ()) {
+        Ok(()) => Ok(()),
+        Err(close_error) => {
+            if !was_saved
+                && let Err(restore_error) = put(presentation, "Saved", VARIANT::from(false))
+            {
+                return Err(format!(
+                    "{close_error}; 关闭失败后无法恢复未保存状态：{restore_error}"
+                ));
+            }
+            Err(close_error)
+        }
+    }
+}
+
+fn get(object: &IDispatch, name: &str) -> Result<VARIANT, String> {
+    invoke(object, name, DISPATCH_PROPERTYGET, &[], None)
+}
+
+fn call(object: &IDispatch, name: &str, args: &[VARIANT]) -> Result<VARIANT, String> {
+    invoke(
+        object,
+        name,
+        DISPATCH_METHOD | DISPATCH_PROPERTYGET,
+        args,
+        None,
+    )
+}
+
+fn put(object: &IDispatch, name: &str, value: VARIANT) -> Result<(), String> {
+    invoke(object, name, DISPATCH_PROPERTYPUT, &[value], Some(-3)).map(|_| ())
+}
+
+fn invoke(
+    object: &IDispatch,
+    name: &str,
+    flags: windows::Win32::System::Com::DISPATCH_FLAGS,
+    args: &[VARIANT],
+    named: Option<i32>,
+) -> Result<VARIANT, String> {
+    let wide = name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
+    let name_ptr = PCWSTR(wide.as_ptr());
+    let mut id = 0;
+    unsafe {
+        object
+            .GetIDsOfNames(&windows::core::GUID::zeroed(), &name_ptr, 1, 0, &mut id)
+            .map_err(|error| format!("COM 成员 {name} 不可用：{error}"))?;
+    }
+    let mut reversed = args.iter().rev().cloned().collect::<Vec<_>>();
+    let mut named_id = named.unwrap_or_default();
+    let params = DISPPARAMS {
+        rgvarg: if reversed.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            reversed.as_mut_ptr()
+        },
+        rgdispidNamedArgs: if named.is_some() {
+            &mut named_id
+        } else {
+            std::ptr::null_mut()
+        },
+        cArgs: reversed.len() as u32,
+        cNamedArgs: u32::from(named.is_some()),
+    };
+    let mut result = VARIANT::default();
+    unsafe {
+        object
+            .Invoke(
+                id,
+                &windows::core::GUID::zeroed(),
+                0,
+                flags,
+                &params,
+                Some(&mut result),
+                None,
+                None,
+            )
+            .map_err(|error| format!("COM 调用 {name} 失败：{error}"))?;
+    }
+    Ok(result)
+}
+
+fn dispatch(value: VARIANT) -> Result<IDispatch, String> {
+    IDispatch::try_from(&value).map_err(|error| error.to_string())
+}
+
+fn int(value: VARIANT) -> Result<i32, String> {
+    i32::try_from(&value).map_err(|error| error.to_string())
+}
+
+fn string(value: VARIANT) -> Result<String, String> {
+    BSTR::try_from(&value)
+        .map(|value| value.to_string())
+        .map_err(|error| error.to_string())
+}
+
+fn normalized_existing_path(path: &Path) -> Result<String, String> {
+    if !path.is_file() {
+        return Err("演示文稿文件不存在。".to_owned());
+    }
+    path.canonicalize()
+        .map(|path| path.to_string_lossy().into_owned())
+        .map_err(|error| error.to_string())
+}
+
+fn normalize_path(path: &str) -> String {
+    Path::new(path)
+        .canonicalize()
+        .unwrap_or_else(|_| PathBuf::from(path))
+        .to_string_lossy()
+        .trim_end_matches(['\\', '/'])
+        .to_lowercase()
+}
+
+fn same_path(left: &str, right: &str) -> bool {
+    !left.is_empty() && !right.is_empty() && normalize_path(left) == normalize_path(right)
+}
+
+fn file_name(path: &str) -> String {
+    Path::new(path)
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
+}
+
+// A remote quit may not kill an excluded deck in a second Office instance.
+// Target only a positively identified single presentation process, never /IM or /T.
+fn force_quit_controlled(paths: &[String]) -> Result<String, String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetWindowThreadProcessId, IsWindow};
+    let (_, app) = running_application().ok_or("演示软件未运行。")?;
+    let handle = int(get(&app, "HWND")?)? as usize as windows_sys::Win32::Foundation::HWND;
+    let mut pid = 0;
+    if unsafe { IsWindow(handle) } == 0
+        || unsafe { GetWindowThreadProcessId(handle, &mut pid) } == 0
+        || pid == 0
+    {
+        return Err("无法确认演示进程，未执行远程退出。".into());
+    }
+    let processes = process_names();
+    if !processes.get(&pid).is_some_and(|n| {
+        n.eq_ignore_ascii_case("POWERPNT.EXE") || n.eq_ignore_ascii_case("wpp.exe")
+    }) || processes.iter().any(|(&other, n)| {
+        other != pid
+            && ["POWERPNT.EXE", "wpp.exe", "WPSOffice.exe", "wps.exe"]
+                .iter()
+                .any(|p| n.eq_ignore_ascii_case(p))
+    }) {
+        return Err("存在其他或共享 Office 进程，请在电脑上退出演示软件。".into());
+    }
+    let decks = dispatch(get(&app, "Presentations")?)?;
+    let count = int(get(&decks, "Count")?)?;
+    if count <= 0 {
+        return Err("当前没有可关闭的受控文稿。".into());
+    }
+    for i in 1..=count {
+        let deck = dispatch(call(&decks, "Item", &[VARIANT::from(i)])?)?;
+        let path = string(get(&deck, "FullName")?)?;
+        if path.is_empty()
+            || !paths
+                .iter()
+                .any(|p| crate::remote::id_for_path(p) == crate::remote::id_for_path(&path))
+        {
+            return Err("存在未受控文稿，未执行远程退出。".into());
+        }
+    }
+    let status = std::process::Command::new("taskkill")
+        .args(["/F", "/PID", &pid.to_string()])
+        .status()
+        .map_err(|e| e.to_string())?;
+    if status.success() {
+        Ok("已退出受控演示进程。".into())
+    } else {
+        Err("退出演示进程失败。".into())
+    }
+}
+
+fn force_quit_all() -> Result<String, String> {
+    let status = std::process::Command::new("taskkill")
+        .args(["/F", "/T", "/IM", "POWERPNT.EXE"])
+        .status();
+    let wps = ["WPSOffice.exe", "wpp.exe", "wps.exe"]
+        .iter()
+        .filter_map(|name| {
+            std::process::Command::new("taskkill")
+                .args(["/F", "/T", "/IM", name])
+                .status()
+                .ok()
+        })
+        .any(|status| status.success());
+    if status.is_ok_and(|status| status.success()) || wps {
+        Ok("已请求退出演示软件。未保存内容不会恢复。".to_owned())
+    } else {
+        Ok("未发现正在运行的 PowerPoint 或 WPS 演示进程。".to_owned())
+    }
+}
+
+pub fn matching_rule<'a>(config: &'a AppConfig, presentation_path: &str) -> Option<&'a FileRule> {
+    config
+        .rules
+        .iter()
+        .find(|rule| rule.enabled && same_path(&rule.file_path, presentation_path))
+}
+
+pub fn timer_settings_for(config: &AppConfig, presentation_path: &str) -> (Duration, TimerMode) {
+    matching_rule(config, presentation_path)
+        .map(|rule| {
+            let duration =
+                parse_rule_duration(&rule.duration).unwrap_or_else(|| config.timer.duration());
+            (duration, rule.mode)
+        })
+        .unwrap_or_else(|| (config.timer.duration(), config.timer.mode))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PresentationTimerAction {
+    None,
+    Start(String),
+    Stop { reset: bool },
+    Reset,
+}
+
+#[derive(Default)]
+pub struct PresentationLifecycle {
+    showing: bool,
+    path: String,
+    automation_active: bool,
+}
+
+impl PresentationLifecycle {
+    pub fn observe_sample(
+        &mut self,
+        showing: Option<bool>,
+        path: &str,
+        config: &AppConfig,
+    ) -> PresentationTimerAction {
+        showing.map_or(PresentationTimerAction::None, |showing| {
+            self.observe(showing, path, config)
+        })
+    }
+    pub fn observe(
+        &mut self,
+        showing: bool,
+        path: &str,
+        config: &AppConfig,
+    ) -> PresentationTimerAction {
+        if showing {
+            // An unavailable path is not evidence of a different presentation.
+            // Preserve the last known identity across ambiguous reads, and do
+            // not restart pathless fullscreen timers on every observation.
+            if self.showing && (path.is_empty() || same_path(&self.path, path)) {
+                return PresentationTimerAction::None;
+            }
+            self.showing = true;
+            self.path = path.to_owned();
+            if config.behavior.auto_start_on_fullscreen {
+                self.automation_active = true;
+                PresentationTimerAction::Start(path.to_owned())
+            } else {
+                self.automation_active = false;
+                PresentationTimerAction::None
+            }
+        } else {
+            if !self.showing {
+                return PresentationTimerAction::None;
+            }
+            self.showing = false;
+            self.path.clear();
+            if !std::mem::take(&mut self.automation_active) {
+                return PresentationTimerAction::None;
+            }
+            if config.behavior.stop_when_leaving_fullscreen {
+                PresentationTimerAction::Stop {
+                    reset: config.behavior.reset_when_leaving_fullscreen,
+                }
+            } else if config.behavior.reset_when_leaving_fullscreen {
+                PresentationTimerAction::Reset
+            } else {
+                PresentationTimerAction::None
+            }
+        }
+    }
+}
+
+fn parse_rule_duration(value: &str) -> Option<Duration> {
+    let parts = value
+        .split(':')
+        .map(str::parse::<u64>)
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    (parts.len() == 3 && parts[1] < 60 && parts[2] < 60)
+        .then(|| Duration::from_secs(parts[0] * 3_600 + parts[1] * 60 + parts[2]))
+        .filter(|duration| !duration.is_zero())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn operation_tracks_busy_completion_and_failure() {
+        let (name, message) = PresentationCommand::Open(PathBuf::from("deck.pptx")).operation();
+        let mut operation = PresentationOperation {
+            name: name.into(),
+            message: message.into(),
+            id: "operation-1".into(),
+            started_at: Some("2026-09-03T00:00:00Z".into()),
+            busy: name != "Idle",
+        };
+        assert!(operation.busy);
+        assert_eq!(operation.name, "OpeningPresentation");
+        operation.finish(&Err("打开失败。".into()));
+        assert_eq!(operation.name, "Failed");
+        assert!(!operation.busy);
+        assert_eq!(operation.id, "operation-1");
+        operation.finish(&Ok("已打开演示文稿".into()));
+        assert_eq!(
+            operation,
+            PresentationOperation {
+                message: "已打开演示文稿".into(),
+                ..PresentationOperation::default()
+            }
+        );
+        assert_eq!(
+            PresentationCommand::Next.operation(),
+            ("Idle", "正在执行演示命令")
+        );
+        assert_eq!(
+            PresentationCommand::EndShow.operation().0,
+            "StoppingSlideshow"
+        );
+    }
+
+    #[test]
+    fn enabled_full_path_rule_overrides_global_timer() {
+        let mut config = AppConfig::default();
+        config.rules.push(FileRule {
+            file_path: r"C:\Decks\Talk.pptx".to_owned(),
+            duration: "00:03:30".to_owned(),
+            mode: TimerMode::CountUp,
+            enabled: true,
+            ..FileRule::default()
+        });
+        assert_eq!(
+            timer_settings_for(&config, r"c:\decks\TALK.pptx"),
+            (Duration::from_secs(210), TimerMode::CountUp)
+        );
+        assert_eq!(
+            timer_settings_for(&config, r"C:\Decks\Other.pptx"),
+            (Duration::from_secs(480), TimerMode::Countdown)
+        );
+    }
+
+    #[test]
+    fn disabled_rule_does_not_override_global_timer() {
+        let mut config = AppConfig::default();
+        config.rules.push(FileRule {
+            file_path: r"C:\Talk.pptx".to_owned(),
+            duration: "00:01:00".to_owned(),
+            enabled: false,
+            ..FileRule::default()
+        });
+        assert_eq!(
+            timer_settings_for(&config, r"c:\talk.pptx"),
+            (Duration::from_secs(480), TimerMode::Countdown)
+        );
+    }
+
+    #[test]
+    fn slideshow_transitions_follow_v0302_stop_reset_order() {
+        let config = AppConfig::default();
+        let mut lifecycle = PresentationLifecycle::default();
+        assert_eq!(
+            lifecycle.observe(true, r"C:\Talk.pptx", &config),
+            PresentationTimerAction::Start(r"C:\Talk.pptx".to_owned())
+        );
+        assert_eq!(
+            lifecycle.observe(true, r"c:\TALK.pptx", &config),
+            PresentationTimerAction::None
+        );
+        assert_eq!(
+            lifecycle.observe(false, "", &config),
+            PresentationTimerAction::Stop { reset: true }
+        );
+    }
+
+    #[test]
+    fn atomic_switch_sample_rebinds_timer_without_intermediate_stop_sample() {
+        let config = AppConfig {
+            rules: vec![
+                FileRule {
+                    file_path: r"C:\A.pptx".into(),
+                    duration: "00:03:00".into(),
+                    ..FileRule::default()
+                },
+                FileRule {
+                    file_path: r"C:\B.pptx".into(),
+                    duration: "00:05:00".into(),
+                    mobile_hidden: true,
+                    ..FileRule::default()
+                },
+            ],
+            ..AppConfig::default()
+        };
+        let mut lifecycle = PresentationLifecycle::default();
+        lifecycle.observe(true, r"C:\A.pptx", &config);
+        assert_eq!(
+            lifecycle.observe(true, r"C:\B.pptx", &config),
+            PresentationTimerAction::Start(r"C:\B.pptx".into())
+        );
+        assert_eq!(
+            timer_settings_for(&config, r"C:\B.pptx").0,
+            Duration::from_secs(300)
+        );
+        assert_eq!(
+            lifecycle.observe(true, r"C:\B.pptx", &config),
+            PresentationTimerAction::None
+        );
+    }
+
+    #[test]
+    fn slideshow_without_auto_start_does_not_stop_user_timer_on_exit() {
+        let mut config = AppConfig::default();
+        config.behavior.auto_start_on_fullscreen = false;
+        let mut lifecycle = PresentationLifecycle::default();
+        assert_eq!(
+            lifecycle.observe(true, r"C:\Talk.pptx", &config),
+            PresentationTimerAction::None
+        );
+        assert_eq!(
+            lifecycle.observe(false, "", &config),
+            PresentationTimerAction::None
+        );
+    }
+
+    #[test]
+    fn show_window_selection_prefers_matching_target_path() {
+        let paths = vec![r"C:\Decks\B.pptx".to_owned(), r"C:\Decks\A.pptx".to_owned()];
+        assert_eq!(
+            choose_show_window_index(Some(r"c:\decks\a.pptx"), &paths),
+            Ok(Some(1))
+        );
+    }
+
+    #[test]
+    fn show_window_selection_falls_back_to_the_only_window() {
+        let paths = vec![String::new()];
+        assert_eq!(choose_show_window_index(None, &paths), Ok(Some(0)));
+    }
+
+    #[test]
+    fn show_window_selection_rejects_ambiguous_windows() {
+        let paths = vec![r"C:\Decks\A.pptx".to_owned(), r"C:\Decks\B.pptx".to_owned()];
+        assert!(choose_show_window_index(Some(r"C:\Decks\Missing.pptx"), &paths).is_err());
+    }
+
+    #[test]
+    fn show_window_status_reports_no_running_windows() {
+        assert_eq!(
+            show_window_status(None, &[]),
+            ShowWindowStatus {
+                running: false,
+                index: None,
+                error: None,
+            }
+        );
+    }
+
+    #[test]
+    fn show_window_status_keeps_unique_fallback_running() {
+        assert_eq!(
+            show_window_status(None, &[String::new()]),
+            ShowWindowStatus {
+                running: true,
+                index: Some(0),
+                error: None,
+            }
+        );
+    }
+
+    #[test]
+    fn show_window_status_matches_target_in_any_window_order() {
+        let paths = vec![r"C:\Decks\B.pptx".to_owned(), r"C:\Decks\A.pptx".to_owned()];
+        assert_eq!(
+            show_window_status(Some(r"C:\Decks\A.pptx"), &paths),
+            ShowWindowStatus {
+                running: true,
+                index: Some(1),
+                error: None,
+            }
+        );
+    }
+
+    #[test]
+    fn show_window_status_keeps_ambiguous_running_without_a_target() {
+        let paths = vec![r"C:\Decks\A.pptx".to_owned(), r"C:\Decks\B.pptx".to_owned()];
+        let status = show_window_status(Some(r"C:\Decks\Missing.pptx"), &paths);
+        assert!(status.running);
+        assert_eq!(status.index, None);
+        assert!(status.error.is_some());
+    }
+
+    #[test]
+    #[ignore = "manual Windows COM smoke test"]
+    fn manual_powerpoint_and_wps_com_connection() {
+        let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        for prog_id in ["PowerPoint.Application", "KWPP.Application"] {
+            let clsid = clsid(prog_id).unwrap_or_else(|error| panic!("{prog_id}: {error}"));
+            let app =
+                unsafe { CoCreateInstance::<_, IDispatch>(&clsid, None, CLSCTX_LOCAL_SERVER) }
+                    .unwrap_or_else(|error| panic!("{prog_id}: {error}"));
+            let version =
+                string(get(&app, "Version").expect("Version property")).expect("Version string");
+            assert!(!version.is_empty(), "{prog_id} returned no version");
+            call(&app, "Quit", &[]).unwrap_or_else(|error| panic!("{prog_id} Quit: {error}"));
+            println!("{prog_id} {version}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod direct_fix_regressions {
+    use super::*;
+
+    #[test]
+    fn pathless_fullscreen_starts_once_until_actual_exit() {
+        let config = AppConfig::default();
+        let mut lifecycle = PresentationLifecycle::default();
+        assert_eq!(
+            lifecycle.observe(true, "", &config),
+            PresentationTimerAction::Start(String::new())
+        );
+        for _ in 0..20 {
+            assert_eq!(
+                lifecycle.observe(true, "", &config),
+                PresentationTimerAction::None
+            );
+        }
+        assert_eq!(
+            lifecycle.observe(false, "", &config),
+            PresentationTimerAction::Stop { reset: true }
+        );
+        assert_eq!(
+            lifecycle.observe(true, "", &config),
+            PresentationTimerAction::Start(String::new())
+        );
+    }
+
+    #[test]
+    fn ambiguous_path_preserves_round_and_last_known_identity() {
+        let config = AppConfig::default();
+        let mut lifecycle = PresentationLifecycle::default();
+        let a = r"C:\Decks\A.pptx";
+        let b = r"C:\Decks\B.pptx";
+        assert_eq!(
+            lifecycle.observe(true, a, &config),
+            PresentationTimerAction::Start(a.to_owned())
+        );
+        for path in ["", "", a] {
+            assert_eq!(
+                lifecycle.observe(true, path, &config),
+                PresentationTimerAction::None
+            );
+        }
+        assert_eq!(
+            lifecycle.observe(true, b, &config),
+            PresentationTimerAction::Start(b.to_owned())
+        );
+        assert_eq!(
+            lifecycle.observe(false, "", &config),
+            PresentationTimerAction::Stop { reset: true }
+        );
+    }
+
+    #[test]
+    fn known_target_never_falls_back_to_another_only_window() {
+        let paths = vec![r"C:\Decks\A.pptx".to_owned()];
+        let status = show_window_status(Some(r"C:\Decks\B.pptx"), &paths);
+        assert!(status.running);
+        assert_eq!(status.index, None);
+        assert!(status.error.is_some());
+        assert!(choose_show_window_index(Some(r"C:\Decks\B.pptx"), &paths).is_err());
+    }
+
+    #[test]
+    fn known_target_does_not_match_unreadable_window_identity() {
+        assert!(choose_show_window_index(Some(r"C:\Decks\A.pptx"), &[String::new()]).is_err());
+    }
+
+    #[test]
+    fn known_target_with_no_windows_is_not_running() {
+        assert_eq!(
+            show_window_status(Some(r"C:\Decks\A.pptx"), &[]),
+            ShowWindowStatus {
+                running: false,
+                index: None,
+                error: None,
+            }
+        );
+    }
+}
+
+#[cfg(test)]
+mod feedback_regressions {
+    use super::*;
+    use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn temporary_range_restores_after_each_put_or_run_failure() {
+        for fail_at in 0..=3 {
+            let values = RefCell::new([3, 4, 7]);
+            let writes = Cell::new(0);
+            let marked = Cell::new(false);
+            let result = run_with_restored_range(
+                [3, 4, 7],
+                [2, 5, 9],
+                true,
+                |name, value| {
+                    let index = ["RangeType", "StartingSlide", "EndingSlide"]
+                        .iter()
+                        .position(|p| *p == name)
+                        .unwrap();
+                    values.borrow_mut()[index] = value;
+                    let n = writes.get();
+                    writes.set(n + 1);
+                    if n == fail_at && fail_at < 3 {
+                        Err("injected put failure".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+                || Err("injected Run failure".into()),
+                || {
+                    marked.set(true);
+                    Ok(())
+                },
+            );
+            assert!(result.is_err());
+            assert_eq!(*values.borrow(), [3, 4, 7]);
+            assert!(marked.get());
+            assert_eq!(writes.get(), fail_at.min(2) + 4);
+        }
+    }
+
+    #[test]
+    fn incomplete_restoration_never_marks_saved_and_attempts_every_property() {
+        for failed_restore in 3..6 {
+            let writes = Cell::new(0);
+            let marked = Cell::new(false);
+            let result = run_with_restored_range(
+                [3, 4, 7],
+                [2, 5, 9],
+                true,
+                |_, _| {
+                    let n = writes.get();
+                    writes.set(n + 1);
+                    if n == failed_restore {
+                        Err("restore rejected".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+                || Ok(()),
+                || {
+                    marked.set(true);
+                    Ok(())
+                },
+            );
+            assert!(result.unwrap_err().contains("restore rejected"));
+            assert_eq!(writes.get(), 6);
+            assert!(!marked.get());
+        }
+        run_with_restored_range(
+            [3, 4, 7],
+            [2, 5, 9],
+            false,
+            |_, _| Ok(()),
+            || Ok(()),
+            || panic!("dirty document marked saved"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn blocked_presentation_worker_does_not_block_service_drop() {
+        let (release, wait) = mpsc::channel();
+        let (finished, completion) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let _ = wait.recv();
+            let _ = finished.send(());
+        });
+        let (sender, _receiver) = mpsc::channel();
+        let service = PresentationService {
+            sender,
+            state: Arc::new(Mutex::new(PresentationState::default())),
+            thread: Some(worker),
+        };
+        let (dropped, done) = mpsc::channel();
+        let dropper = thread::spawn(move || {
+            drop(service);
+            let _ = dropped.send(());
+        });
+        let result = done.recv_timeout(Duration::from_secs(1));
+        release.send(()).unwrap();
+        completion.recv_timeout(Duration::from_secs(1)).unwrap();
+        dropper.join().unwrap();
+        assert!(result.is_ok(), "Drop waited on the blocked worker");
+    }
+
+    #[test]
+    fn unknown_com_sample_does_not_end_show_but_confirmed_end_does() {
+        let config = AppConfig::default();
+        let mut lifecycle = PresentationLifecycle::default();
+        lifecycle.observe_sample(Some(true), "temporary.pptx", &config);
+        assert_eq!(
+            lifecycle.observe_sample(None, "", &config),
+            PresentationTimerAction::None
+        );
+        assert!(lifecycle.showing);
+        lifecycle.observe_sample(Some(false), "", &config);
+        assert!(!lifecycle.showing);
+    }
+}
+
+#[cfg(test)]
+mod native_range_test {
+    use super::*;
+
+    #[test]
+    #[ignore = "creates only disposable decks; requires FLYPPT_PRESENTATION_TEST_DIR and idle Office"]
+    fn native_clean_and_dirty_range_restoration() {
+        let directory = PathBuf::from(
+            std::env::var("FLYPPT_PRESENTATION_TEST_DIR").expect("temporary directory required"),
+        );
+        assert!(directory.is_absolute() && directory.is_dir());
+        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+            .ok()
+            .unwrap();
+        assert!(
+            running_application().is_none(),
+            "An Office automation application is already active; refusing test"
+        );
+        for (kind, prog_id) in [
+            (PresentationApp::PowerPoint, "PowerPoint.Application"),
+            (PresentationApp::Wps, "KWPP.Application"),
+        ] {
+            let app: IDispatch =
+                unsafe { CoCreateInstance(&clsid(prog_id).unwrap(), None, CLSCTX_LOCAL_SERVER) }
+                    .unwrap();
+            let presentations = dispatch(get(&app, "Presentations").unwrap()).unwrap();
+            assert_eq!(
+                int(get(&presentations, "Count").unwrap()).unwrap(),
+                0,
+                "Existing documents; refusing test"
+            );
+            let deck =
+                dispatch(call(&presentations, "Add", &[VARIANT::from(-1)]).unwrap()).unwrap();
+            let result = (|| -> Result<(), String> {
+                let slides = dispatch(get(&deck, "Slides")?)?;
+                for index in 1..=3 {
+                    call(&slides, "Add", &[VARIANT::from(index), VARIANT::from(12)])?;
+                }
+                let settings = dispatch(get(&deck, "SlideShowSettings")?)?;
+                put(&settings, "RangeType", VARIANT::from(2))?;
+                put(&settings, "StartingSlide", VARIANT::from(2))?;
+                put(&settings, "EndingSlide", VARIANT::from(3))?;
+                let path = directory.join(format!("disposable-{kind:?}.pptx"));
+                call(
+                    &deck,
+                    "SaveAs",
+                    &[
+                        VARIANT::from(path.to_string_lossy().as_ref()),
+                        VARIANT::from(24),
+                    ],
+                )?;
+                let mut session = Session::default();
+                for clean in [true, false] {
+                    put(&deck, "Saved", VARIANT::from(clean))?;
+                    session.start_show(None, false)?;
+                    for (name, expected) in
+                        [("RangeType", 2), ("StartingSlide", 2), ("EndingSlide", 3)]
+                    {
+                        if int(get(&settings, name)?)? != expected {
+                            return Err(format!("{kind:?} {name} was not restored"));
+                        }
+                    }
+                    if (int(get(&deck, "Saved")?)? != 0) != clean {
+                        return Err(format!("{kind:?} Saved flag changed"));
+                    }
+                    end_show_for(&app, &path.to_string_lossy())?;
+                    println!("{kind:?}: clean={clean}, range and Saved restored");
+                }
+                Ok(())
+            })();
+            // The object is the disposable deck just created above, never an
+            // active/last-opened lookup which could select a user's document.
+            let _ = put(&deck, "Saved", VARIANT::from(true));
+            let _ = call(&deck, "Close", &[]);
+            if int(get(&presentations, "Count").unwrap()).unwrap() == 0 {
+                let _ = call(&app, "Quit", &[]);
+            }
+            result.unwrap();
+        }
+    }
+}
