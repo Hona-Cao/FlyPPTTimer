@@ -1,0 +1,30 @@
+name: Probe GitHub artifact handoff shape
+
+on:
+  push:
+    branches: [release/v1.16.0-docs]
+    paths: [.github/workflows/v1160-artifact-transfer-probe.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: printf 'harmless v1.16 artifact probe\n' > probe.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1160-harmless-transfer-probe
+          path: probe.txt
+          retention-days: 1
+      - name: Remove one-shot probe
+        run: |
+          git rm .github/workflows/v1160-artifact-transfer-probe.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'ci: remove GitHub artifact transfer probe'
+          git push origin HEAD:release/v1.16.0-docs
