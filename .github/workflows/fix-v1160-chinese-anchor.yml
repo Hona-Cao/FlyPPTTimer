@@ -1,0 +1,39 @@
+name: Fix v1.16 Chinese guide download anchor
+
+on:
+  push:
+    branches: [release/v1.16.0-docs]
+    paths: [.github/workflows/fix-v1160-chinese-anchor.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Align Chinese guide target and README anchor
+        shell: python
+        run: |
+          from pathlib import Path
+          readme=Path('README.zh-CN.md')
+          s=readme.read_text(encoding='utf-8')
+          if '<a id="download"></a>' not in s: raise SystemExit('Chinese README download anchor changed')
+          readme.write_text(s.replace('<a id="download"></a>','<a id="下载"></a>',1),encoding='utf-8',newline='\n')
+          guide=Path('docs/USER_GUIDE.zh-CN.md')
+          s=guide.read_text(encoding='utf-8')
+          count=s.count('../README.zh-CN.md#download')
+          if count < 1: raise SystemExit('Chinese guide download links changed')
+          guide.write_text(s.replace('../README.zh-CN.md#download','../README.zh-CN.md#下载'),encoding='utf-8',newline='\n')
+      - name: Commit fix and remove one-shot workflow
+        run: |
+          git rm .github/workflows/fix-v1160-chinese-anchor.yml
+          git add README.zh-CN.md docs/USER_GUIDE.zh-CN.md
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: align Chinese guide download anchor'
+          git push origin HEAD:release/v1.16.0-docs
