@@ -22,6 +22,7 @@
 - Windows 10 / 11 x64；公开发布仅提供便携版 ZIP 与安装版 ZIP。
 - 安装版升级不覆盖已有 `FlyPPTTimer.config.json`；便携更新继续保留个人配置与 `alert-sounds`。
 - v1.15.0 及以前的历史 MIT 权利保持不变；v1.16.0 适用随当前版本提供的 LICENSE。
+- GitHub 自动生成的 `Source code` 压缩包只包含公开发布/用户文档仓库的内容，不包含当前 v1.16.0 开发源码；历史已经公开的源码快照仍按其原许可保留。
 
 ## English
 
@@ -44,3 +45,4 @@
 - Windows 10 / 11 x64. The public release contains exactly the portable ZIP and setup ZIP.
 - Installer upgrades preserve an existing `FlyPPTTimer.config.json`; portable updates preserve personal configuration and `alert-sounds`.
 - Historical MIT rights for v1.15.0 and earlier remain unchanged. v1.16.0 is governed by the LICENSE shipped with this release.
+- GitHub-generated `Source code` archives contain only the public release/user-documentation repository, not the current v1.16.0 development source. Historical source snapshots already published remain available under their original licenses.
