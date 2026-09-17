@@ -1,0 +1,34 @@
+name: Probe Gitee v1.16 source availability
+
+on:
+  push:
+    branches: [release/v1.16.0-docs]
+    paths: [.github/workflows/v1160-gitee-source-probe.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      PRODUCT_SOURCE_SHA: 6adb4a14c3eb4ea8292a76355282050877254297
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check only whether validated commit is already in Gitee release repository
+        shell: bash
+        run: |
+          set +e
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $GITEE_TOKEN" "https://gitee.com/api/v5/repos/hona-cao/fly-ppttimer/commits/$PRODUCT_SOURCE_SHA")
+          if [ "$code" = 200 ]; then echo 'PRODUCT_COMMIT_ON_GITEE=yes'; else echo 'PRODUCT_COMMIT_ON_GITEE=no'; fi
+          exit 0
+      - name: Remove one-shot probe
+        run: |
+          git rm .github/workflows/v1160-gitee-source-probe.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'ci: remove Gitee source availability probe'
+          git push origin HEAD:release/v1.16.0-docs
