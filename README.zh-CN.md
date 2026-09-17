@@ -4,7 +4,7 @@
 
 FlyPPTTimer 是一款面向 Windows 的演示计时工具，支持倒计时、正计时、PPT 页数、逐页秒表、多屏显示以及手机浏览器遥控。
 
-> **本仓库现在仅作为 FlyPPTTimer 的官方发布与使用文档仓库，不再公开当前开发源码。** 历史版本 **v1.15.0 及以前** 曾按 MIT License 发布；已经授予的历史权利不受后续许可或商业模式变化影响。
+> **FlyPPTTimer 是免费开源软件，并将继续保持免费开源。** v1.15.0 及以前版本均按 MIT License 发布；未来正式版本也将继续免费，并以 MIT License 开源，后续版本源码会在本仓库公开。
 
 ## 下载
 
@@ -36,13 +36,13 @@ FlyPPTTimer 是一款面向 Windows 的演示计时工具，支持倒计时、�
 - GitHub / Gitee 更新源与应用内更新
 - 安装版与便携版
 
-## 许可与后续版本
+## 开源许可与后续版本
 
-- **v1.15.0 及以前**：已经公开发布的版本继续按照当时随版本提供的 MIT License 使用。
-- **v1.15.0 之后**：FlyPPTTimer 不承诺持续开源或永久免费。后续版本可以采用免费、试用、Pro、付费、商业授权、企业授权、买断、订阅或其他模式；具体功能、价格、激活方式和使用权以对应版本随附的许可与发布说明为准。
-- 当前和未来的开发源码不在本公开仓库分发。仓库公开并不意味着未另行授权的专有源码、品牌或未来版本获得开放源码许可。
+- FlyPPTTimer 采用 [MIT License](LICENSE) 开源。
+- 后续正式版本将继续 **免费提供并保持开源**，源码将在本仓库发布。
+- 软件许可证不授予对 FlyPPTTimer 名称、图标或品牌进行误导性使用的权利。品牌使用规则见 [TRADEMARKS.md](TRADEMARKS.md)。
 
-详细条款见 [LICENSE](LICENSE)，品牌使用见 [TRADEMARKS.md](TRADEMARKS.md)，第三方组件与致谢见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+第三方组件及致谢见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 反馈问题
 
