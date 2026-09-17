@@ -1,0 +1,39 @@
+name: Probe one-download binary relay
+
+on:
+  push:
+    branches: [release/v1.16.0-docs]
+    paths: [.github/workflows/v1160-fileio-probe.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify one-download relay with harmless bytes and SHA-256
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'FlyPPTTimer v1.16 file.io probe\n' > probe.txt
+          want=$(sha256sum probe.txt | awk '{print $1}')
+          response=$(curl --fail --silent --show-error -F 'file=@probe.txt;type=text/plain' 'https://file.io/?expires=1d')
+          url=$(python -c 'import json,sys; print(json.load(sys.stdin)["link"])' <<< "$response")
+          case "$url" in https://*) ;; *) echo 'FILEIO_TRANSFER=no'; exit 1;; esac
+          curl --fail --silent --show-error --location "$url" -o received.txt
+          got=$(sha256sum received.txt | awk '{print $1}')
+          if [ "$got" != "$want" ]; then echo 'FILEIO_TRANSFER=no'; exit 1; fi
+          echo 'FILEIO_TRANSFER=yes'
+      - name: Remove one-shot probe
+        if: always()
+        run: |
+          git rm .github/workflows/v1160-fileio-probe.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'ci: remove one-download binary relay probe'
+          git push origin HEAD:release/v1.16.0-docs
