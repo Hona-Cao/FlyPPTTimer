@@ -2,7 +2,7 @@
 
 [Home](../README.md) · [简体中文](USER_GUIDE.zh-CN.md)
 
-For **v1.15.0 public release / Windows 10 and 11 x64**. [Download and install](../README.md#download).
+For **v1.16.0 public release / Windows 10 and 11 x64**. [Download and install](../README.md#download).
 
 Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to show slide numbers, use a different duration for each presentation, and control your talk from a phone browser. This guide follows the seven Settings pages, then covers phone controls and everyday maintenance.
 
@@ -11,6 +11,13 @@ Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to
 [v1.14.1 illustrated workflow](#v1141) · [Connection and authorization](#file-access) · [Compact timer](#compact-timer) · [Zero-offset edges](#edge-placement)
 
 [Getting started](#start) · [Saving settings](#save) · [1. Timer](#timer) · [2. Behavior](#behavior) · [3. Appearance & Display](#appearance) · [4. Remote Control](#remote) · [5. Controls](#controls) · [6. Scenarios](#scenarios) · [7. Other](#other) · [Phone controls](#phone) · [Troubleshooting](#faq)
+
+<a id="v1160"></a>
+## v1.16.0 workflow improvements
+
+- **Scenarios:** use **Save mode** in the Settings footer to name and save the currently applied configuration. Rows are newest-first and collapsed by default; select, confirm deletion, or expand them directly. Expanded details keep name, switch hotkey, badge color, and snapshot-update controls. The footer shows the active scenario and switching briefly highlights the timer border with its color.
+- **Presentation opener:** Windows system default remains the default. You can explicitly select a validated Microsoft PowerPoint or WPS Presentation executable; desktop and phone-initiated opens use the same preference.
+- **Phone Remote:** Exit presentation application is available whenever a known PowerPoint/WPS presentation process is running, even with no deck open. Controlled-deck checks and confirmation remain. Remote polling/dispatch intervals are reduced for quicker LAN feedback.
 
 <a id="v1150"></a>
 ## v1.15.0 complete feature guide
@@ -38,11 +45,11 @@ This is useful for open-ended teaching, discussion, or elapsed-time tracking. It
 <a id="scenarios"></a>
 Scenarios sits between Controls and Other. Up to eight snapshots store timer, behavior/alerts, appearance, displays, controls and presentation rules. Language, update source and Remote credentials stay outside snapshots so a business-mode switch does not alter maintenance/security settings.
 
-**Create:** configure and Apply the working state first, then open Scenarios, enter a name and save the current configuration. The first eight receive distinct red/blue/green/orange/purple/cyan/yellow/brown badge colors, which remain editable.
+**Save:** configure and Apply the working state first, then use **Save mode** in the Settings footer. Enter a name and confirm (or press Enter). New scenarios appear newest first and collapsed by default.
 
-**Maintain:** rename a scenario, assign a global switch hotkey, change its badge color, overwrite the saved snapshot from the current configuration, or delete the snapshot. Deleting a scenario never deletes PPT files.
+**Maintain:** expand a row to rename it, assign a global switch hotkey, change its badge color, or overwrite the saved snapshot from the current configuration. Delete from the row itself and confirm; deleting a scenario never deletes PPT files.
 
-**Switch:** apply it on the Scenarios page, press its hotkey, choose it from the tray/timer context menus, or use the scenario selector on the phone Timer page. The active scenario adds its color as a bottom-right dot on the application/tray icon. The phone selector sends the same Remote scenario command to the PC.
+**Switch:** select a scenario from its row, its global hotkey, the tray/timer scenario submenu, or the phone Timer page. The footer shows the active scenario and color; the timer border briefly uses that color after a switch, and the application/tray badge dot is larger. The scenario submenu remains present even when no scenarios are saved.
 
 ![Scenarios settings](media/v1.15.0/settings/en-06-scenarios-part-1.png)
 

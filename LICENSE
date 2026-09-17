@@ -1,21 +1,128 @@
-MIT License
+FlyPPTTimer Proprietary / Source-Available License
+Copyright (c) 2026 Cao Hunan (曹虎男). All rights reserved.
 
-Copyright (c) 2026 Cao Hunan (曹虎男)
+IMPORTANT HISTORICAL NOTICE
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+FlyPPTTimer versions up to and including v1.15.0 were publicly released under
+the MIT License. Rights already granted for those historical releases remain
+governed by the MIT License that accompanied them. Nothing in this license
+revokes or narrows those rights.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Unless a specific file or release expressly states otherwise, this license
+applies to original FlyPPTTimer material first published after the v1.15.0
+historical release and to later official FlyPPTTimer releases. Third-party
+components remain governed by their own licenses.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. Ownership and source availability
+
+FlyPPTTimer is copyrighted software. All rights not expressly granted are
+reserved by the copyright holder.
+
+Source code may be publicly visible in this repository for transparency,
+evaluation, education, issue reporting, and development history. Public
+visibility does not by itself grant an open-source license or permission to use,
+copy, modify, publish, redistribute, sublicense, sell, or create derivative works
+from later proprietary material.
+
+This paragraph does not limit rights you already have under the historical MIT
+releases, third-party licenses, applicable law, or limited rights necessarily
+granted by the repository hosting platform to operate its features.
+
+2. Official binary releases and commercial terms
+
+The right to install or use an official FlyPPTTimer binary release is governed
+by the terms accompanying that specific release or edition.
+
+Future releases may, at the copyright holder's discretion, be offered as free,
+trial, paid, Pro, commercial, enterprise, perpetual-license, subscription, or
+other editions. Releases may use license keys, activation, account or device
+limits, feature tiers, expiration periods, or other licensing mechanisms.
+
+No statement in this repository promises that future versions, updates,
+features, or editions will remain free of charge. Payment for a software license
+grants only the usage rights stated for that license and does not transfer
+copyright, source-code ownership, trademark rights, or other intellectual
+property unless a separate written agreement expressly says so.
+
+3. No unauthorized redistribution or commercial exploitation
+
+Except with prior written permission or under a separate license that expressly
+allows it, you may not:
+
+- redistribute, mirror, re-host, bundle, or republish later proprietary source,
+  binaries, installers, portable packages, or substantial documentation;
+- sell, rent, sublicense, or charge others for unauthorized copies;
+- include later proprietary FlyPPTTimer material in another product, service,
+  software bundle, download service, or commercial distribution;
+- remove or alter copyright, license, attribution, authenticity, activation, or
+  ownership notices.
+
+4. No unauthorized modification or derivative distribution
+
+Except where a separate license or applicable law permits it, you may not use
+later proprietary FlyPPTTimer material to create, publish, or distribute
+modified versions, derivative products, competing repackaged editions, or other
+works based on that proprietary material.
+
+5. License keys, activation, and access controls
+
+You may not forge, generate, share, resell, or misuse license keys or activation
+credentials, or intentionally bypass, disable, tamper with, or circumvent
+license checks, activation systems, feature restrictions, device/account limits,
+or other technical licensing controls, except to the limited extent applicable
+law expressly permits despite this restriction.
+
+6. Reverse engineering
+
+You may not reverse engineer, decompile, disassemble, or otherwise attempt to
+derive protected implementation details from proprietary binary releases,
+except to the limited extent applicable law expressly permits despite this
+restriction.
+
+7. Name, logo, icon, and official identity
+
+This license does not grant trademark or branding rights. The FlyPPTTimer name,
+logo, application icon, and other official identifiers may not be used in a way
+that implies sponsorship, authorship, endorsement, or that an unofficial copy is
+an official FlyPPTTimer release. See TRADEMARKS.md for permitted referential use.
+
+8. Documentation and media
+
+Original documentation, screenshots, diagrams, artwork, icons, and other media
+created for FlyPPTTimer are copyrighted. No right to republish or create
+modified copies is granted except where a specific license, written permission,
+or applicable law provides otherwise.
+
+9. Third-party components
+
+Third-party libraries, runtimes, fonts, tools, and other third-party materials
+are not relicensed by this document. They remain subject to their respective
+licenses and notices. See THIRD_PARTY_NOTICES.md and notices bundled with an
+official release where applicable.
+
+10. Authenticity and unofficial copies
+
+Only packages published through download locations identified by the copyright
+holder should be treated as official releases. The copyright holder is not
+responsible for modified, mirrored, repackaged, cracked, or other unofficial
+copies.
+
+11. No warranty
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, SOFTWARE AND MATERIAL PROVIDED UNDER
+THIS LICENSE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. THE COPYRIGHT HOLDER SHALL NOT
+BE LIABLE FOR CLAIMS, DAMAGES, OR OTHER LIABILITY ARISING FROM UNOFFICIAL USE,
+MODIFICATION, REDISTRIBUTION, OR USE OF THE SOFTWARE EXCEPT WHERE LIABILITY
+CANNOT LAWFULLY BE EXCLUDED.
+
+12. Termination and severability
+
+Rights granted for a particular proprietary release may terminate if you
+materially violate the applicable terms. If a provision is held unenforceable,
+the remaining provisions remain in effect to the extent permitted by law.
+
+For permissions, commercial licensing, redistribution rights, source licensing,
+or other terms not expressly granted above, contact the copyright holder through
+the official FlyPPTTimer project channels.

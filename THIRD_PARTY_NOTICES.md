@@ -1,18 +1,18 @@
 # Third-party notices and acknowledgements
 
 FlyPPTTimer includes or depends on third-party software. Those components remain
-subject to their own licenses; the FlyPPTTimer MIT License does not replace or
-narrow rights granted by those third-party licenses.
+subject to their own licenses; the FlyPPTTimer project license does not replace
+or narrow rights granted by those third-party licenses.
 
 ## Runtime and library dependencies
 
-Official FlyPPTTimer packages may include or depend on third-party Rust
-libraries, Windows components, and Microsoft Visual C++ runtime files. Those
-third-party materials are not owned or relicensed by FlyPPTTimer and remain
-subject to their respective licenses and notices.
+The application uses Rust crates and Windows components listed by the current
+build metadata (`Cargo.toml` / `Cargo.lock`). Official Windows packages may also
+include Microsoft Visual C++ runtime DLLs. Those Microsoft runtime files are
+Microsoft components and are not owned or relicensed by FlyPPTTimer.
 
-Where applicable, preserve third-party notices distributed with an official
-package.
+When redistributing an official package with written permission, preserve all
+third-party notices that accompany that package.
 
 ## Inspiration acknowledgement: old9/ppttimer
 
@@ -22,11 +22,13 @@ independent implementation and does not intentionally reuse old9/ppttimer source
 code, icons, images, sound assets, UI, or its AHK build chain.
 
 The acknowledgement is retained as a courtesy and development-history note.
-The old9/ppttimer project used the MIT License; that fact does not make
-FlyPPTTimer a derivative of that project.
+The old9/ppttimer project used the MIT License; that fact does not make current
+FlyPPTTimer releases derivatives of that project and does not determine the
+license of later FlyPPTTimer releases.
 
-## FlyPPTTimer license
+## Historical FlyPPTTimer releases
 
-FlyPPTTimer is distributed under the MIT License. This applies to the project's
-own source code unless a file or bundled third-party component states otherwise.
-See `LICENSE` for the full terms.
+FlyPPTTimer releases up to and including v1.15.0 were themselves published
+under the MIT License. Their historical license remains applicable to those
+versions. See `LICENSE` for the licensing boundary governing later original
+material and official releases.
