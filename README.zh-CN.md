@@ -6,6 +6,7 @@ FlyPPTTimer 是一款 Windows 演示计时工具，适用于 PowerPoint 和 WPS 
 
 > **v1.15.0 及以前是历史 MIT 开源版本；当前公开正式版 v1.16.0 适用当前 [LICENSE](LICENSE)。** 历史 MIT 版本已经授予的权利保持不变。当前开发源码不通过本公开发布仓库分发。
 
+<a id="下载"></a>
 ## 下载
 
 - [GitHub 最新 Release](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)
