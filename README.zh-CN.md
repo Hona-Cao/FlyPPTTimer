@@ -4,7 +4,7 @@
 
 FlyPPTTimer 是一款面向 Windows 的演示计时工具，支持倒计时、正计时、PPT 页数、逐页秒表、多屏显示以及手机浏览器遥控。
 
-> **FlyPPTTimer 是免费开源软件，并将继续保持免费开源。** v1.15.0 及以前版本均按 MIT License 发布；未来正式版本也将继续免费，并以 MIT License 开源，后续版本源码会在本仓库公开。
+> **FlyPPTTimer 是免费开源软件，并将继续保持免费开源。** 项目采用 MIT License。当前已将 **v1.14.1 及之前的历史源码**重新整理并公开到本仓库，更新版本的源码也会继续在这里发布。
 
 ## 下载
 
@@ -15,6 +15,17 @@ FlyPPTTimer 是一款面向 Windows 的演示计时工具，支持倒计时、�
 当前公开正式版为 **v1.15.0**，支持 Windows 10 / 11 x64。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机端无需安装 App。
 
 建议只从作者标明的官方发布渠道下载。非官方镜像、重新打包版本或修改版不代表 FlyPPTTimer 官方版本。
+
+## 源码
+
+1.14 系列及之前的历史源码现在可以直接在本仓库查看：
+
+- [v1.14.1 可浏览源码快照](source/v1.14.1/)：对应产品提交 [`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a) 的完整源码树。
+- [`source/v1.14.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.1)：保持原始仓库目录结构和真实 Git 提交祖先链的 v1.14.1 源码。
+- [`source/v1.14.0`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.0)：v1.14.0 源码状态。
+- [`source/v1.13.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.13.1)：v1.13.1，以及进入 1.14 系列之前的更早开发历史。
+
+构建说明、源码来源和版本关系见 [source/README.md](source/README.md)。历史源码与当前发布/文档文件分开存放，避免把旧版本源码误认为当前二进制版本的源码。
 
 ## 使用说明
 

@@ -1,0 +1,168 @@
+name: FlyPPTTimer v1.14.1 review
+on:
+  push:
+    branches: [review/v1.14.1]
+    paths: [.github/workflows/review-v1141.yml, .github/v1141-fix.py]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: review-v1141
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      RUSTUP_TOOLCHAIN: 1.92.0
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply focused source changes
+        shell: python
+        run: |
+          from pathlib import Path
+          import base64,lzma,subprocess
+          parts=[Path(f'.github/v1141-{i}.b64') for i in range(2)]
+          if parts[0].exists():
+              patch=lzma.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts)))
+              subprocess.run(['git','apply','--whitespace=nowarn','-'],input=patch,check=True)
+              for p in parts:p.unlink()
+          fix=Path('.github/v1141-fix.py')
+          if fix.exists():subprocess.run(['python',str(fix)],check=True)
+          Path('artifacts/evidence').mkdir(parents=True,exist_ok=True)
+          Path('docs/v1/HANDOFF.md').write_text('''# v1.14.1 review handoff
+
+          User feedback: a successful phone connection should navigate directly to desktop file-browsing authorization; timer text/metadata spacing should be tighter; zero-offset top/bottom anchors should align actual window edges with the full screen edges.
+
+          Implemented on review/v1.14.1, based on main 67f04913e0198900648bdecc6f731546ef29ce53. Existing main and release tags are unchanged. The user did not explicitly request a public Release for this follow-up, so deliver the portable/setup ZIPs for use without publishing a new tag.
+
+          A new authenticated non-loopback state client opens existing Settings at Remote control with a highlighted checkbox and instructions. Connecting alone never enables file access. The user checks the option and clicks Apply; this retains the existing token-scoped global permission. Polling and temporary reconnects do not repeatedly open Settings during the current service session. Draft settings are preserved.
+
+          Timer row gap is reduced from 2 to 0 DIP, metadata separation from 8 to 4, horizontal padding from 16 to 12 total and vertical padding from 12 to 4 total. Fonts, fixed metadata alignment and manual size choices remain unchanged.
+
+          Anchor calculations use actual window size and full monitor bounds, replacing the fixed 140x50 baseline. Top-center at zero has y=monitor.top; bottom-center has y+height=monitor.bottom. Drag capture uses the same inverse mapping. Nonzero saved offsets remain user choices.
+
+          BUILD.txt and CI record the exact product commit and validation. Automated tests and software renders are not physical Office/phone acceptance.
+          '''.replace('\n          ','\n'),encoding='utf-8')
+          Path('docs/v1/CODEX_TASK.md').write_text('''# v1.14.1 follow-up
+
+          Implement only the latest approved connection guidance, compact readout and true zero-offset screen-edge behavior. See HANDOFF.md and RELEASE_NOTES_v1.14.1.md. Preserve previous public releases and main. Do not re-run old RC patches or unrelated publication workflows.
+          ''',encoding='utf-8')
+      - name: Rust and Windows SDK
+        run: |
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust installation failed' }
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter rc.exe -Recurse | Where-Object FullName -Match '\\x64\\rc.exe$' | Sort-Object FullName -Descending | Select-Object -First 1
+          $rc.Directory.FullName | Out-File $env:GITHUB_PATH -Append -Encoding utf8
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1141-windows-1.92-${{ github.run_id }}
+          restore-keys: |
+            v1141-windows-1.92-
+            v1140-windows-1.92-
+      - name: Formatting and lint
+        run: |
+          cargo fmt --all
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object artifacts/evidence/clippy.log
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+      - name: Regression tests and web syntax
+        run: |
+          cargo test --locked 2>&1 | Tee-Object artifacts/evidence/tests.log
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+          node --check src/FlyPPTTimer/Web/app.js
+          if ($LASTEXITCODE -ne 0) { throw 'JavaScript syntax failed' }
+      - name: Build v1.14.1
+        run: |
+          cargo build --locked --release 2>&1 | Tee-Object artifacts/evidence/release.log
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+          $version=(Get-Item target/release/FlyPPTTimer.exe).VersionInfo
+          $version | Select-Object FileVersion,ProductVersion | Format-List | Out-File artifacts/evidence/version.txt
+          if ($version.ProductVersion -ne '1.14.1') { throw 'Wrong product version' }
+      - name: Capture real authorization page and compact timer
+        run: |
+          $env:FLYPPT_CAPTURE_THEME='light'
+          foreach ($mode in @('settings','windows')) {
+            $out=Join-Path $PWD "artifacts/evidence/$mode"
+            New-Item -ItemType Directory -Force $out | Out-Null
+            $p=Start-Process target/release/FlyPPTTimer.exe -ArgumentList @("--capture-$mode",$out) -Wait -PassThru -RedirectStandardOutput "$out/stdout.log" -RedirectStandardError "$out/stderr.log"
+            if ($p.ExitCode -ne 0) { throw "Capture failed: $mode" }
+          }
+          Remove-Item Env:FLYPPT_CAPTURE_THEME
+      - name: Startup and remote permission smoke
+        run: |
+          $stage=Join-Path $env:RUNNER_TEMP 'v1141-startup'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe $stage
+          $configPath=Join-Path $stage 'FlyPPTTimer.config.json'
+          $seed=Get-Content docs/v1141-default-config.json -Raw | ConvertFrom-Json
+          $seed.Language='en'
+          $seed.Update.CheckOnStartup=$false
+          $seed | ConvertTo-Json -Depth 20 | Set-Content $configPath -Encoding utf8
+          $app=Start-Process (Join-Path $stage 'FlyPPTTimer.exe') -WorkingDirectory $stage -PassThru
+          try {
+            $deadline=(Get-Date).AddSeconds(15)
+            do {
+              Start-Sleep -Milliseconds 200
+              if ($app.HasExited) { throw 'Application exited' }
+              $config=Get-Content $configPath -Raw | ConvertFrom-Json
+              if ((Get-Date) -gt $deadline) { throw 'Startup timeout' }
+            } until ($config.RemoteControl.Token)
+            $url="http://127.0.0.1:$($config.RemoteControl.Port)/state?token=$($config.RemoteControl.Token)"
+            $state=Invoke-RestMethod $url -TimeoutSec 8
+            if ($state.version -ne '1.14.1' -or $state.fileBrowsingEnabled) { throw 'Startup state mismatch' }
+            $state | ConvertTo-Json -Depth 20 | Set-Content artifacts/evidence/startup-state.json
+          } finally {
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          }
+      - name: Commit verified product source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.toml Cargo.lock resources src ui scripts docs
+          git add -u .github
+          git diff --cached --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace check failed' }
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 1) {
+            git commit -m 'fix: guide phone file authorization, compact timer and align real screen edges'
+            if ($LASTEXITCODE -ne 0) { throw 'Product commit failed' }
+            git push origin HEAD:refs/heads/review/v1.14.1
+            if ($LASTEXITCODE -ne 0) { throw 'Product push failed' }
+          }
+          git rev-parse HEAD | Set-Content artifacts/evidence/SOURCE.txt
+          git archive --format=zip --output=artifacts/evidence/product-source.zip HEAD
+      - name: Portable and setup packages
+        run: |
+          $env:PRODUCT_SOURCE_SHA=(git rev-parse HEAD).Trim()
+          & scripts/build-release.ps1 -ApplicationDirectory target/release
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlyPPTTimer-v1.14.1-packages
+          path: artifacts/release/v1.14.1/*.zip
+          retention-days: 14
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1141-windows-1.92-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v1141-evidence
+          path: artifacts/evidence/**
+          retention-days: 14

@@ -1,0 +1,36 @@
+name: Publish user documentation
+on:
+  push:
+    branches: [docs/v1.13.1-guide]
+    paths: [.github/workflows/docs-guide-finalize.yml]
+permissions:
+  contents: write
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Organize original development records
+        run: python scripts/organize-development-notes.py
+      - name: Check user-facing documents
+        run: python scripts/check-user-guide.py
+      - name: Commit historical indexes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/development
+          git diff --cached --check
+          if ! git diff --cached --quiet; then
+            git commit -m 'docs: index each development stage and preserve original review reports'
+            git push origin HEAD:refs/heads/docs/v1.13.1-guide
+          fi
+          git archive --format=zip --output=user-guide-source.zip HEAD
+          git rev-parse HEAD > SOURCE.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1131-updated-user-docs
+          path: |
+            user-guide-source.zip
+            SOURCE.txt
+          retention-days: 14

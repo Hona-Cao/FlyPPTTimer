@@ -4,7 +4,7 @@
 
 FlyPPTTimer is a Windows presentation timer with countdown/count-up modes, slide numbers, per-slide timing, multi-display support, and phone-browser remote control.
 
-> **FlyPPTTimer is free and open-source software and will remain so.** Releases up to and including **v1.15.0** were published under the MIT License, and future releases will continue to be free of charge and open source under the MIT License. Source code for upcoming releases will be published in this repository.
+> **FlyPPTTimer is free and open-source software and will remain so.** The project uses the MIT License. Historical source through **v1.14.1** has been restored to this repository, and source for newer releases will also be published here.
 
 ## Download
 
@@ -15,6 +15,17 @@ FlyPPTTimer is a Windows presentation timer with countdown/count-up modes, slide
 The current public release is **v1.15.0**, for Windows 10 / 11 x64. Standalone timing does not require Office. Slide detection and slideshow control require compatible desktop PowerPoint or WPS Presentation. The phone side only needs a browser.
 
 Use download locations identified by the author as official. Mirrors, repackaged copies, and modified builds are not official FlyPPTTimer releases.
+
+## Source code
+
+Historical source through the 1.14 series is now available directly in this repository:
+
+- [Browsable v1.14.1 source snapshot](source/v1.14.1/) — exact tree from product commit [`6e8bd3a`](https://github.com/Hona-Cao/FlyPPTTimer/commit/6e8bd3aeaec7ae8c247e09b535157db7f490047a).
+- [`source/v1.14.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.1) — v1.14.1 in its original repository layout with real commit ancestry preserved.
+- [`source/v1.14.0`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.14.0) — v1.14.0 source state.
+- [`source/v1.13.1`](https://github.com/Hona-Cao/FlyPPTTimer/tree/source/v1.13.1) — v1.13.1 and earlier development ancestry leading into the 1.14 series.
+
+For build notes and source provenance, see [source/README.md](source/README.md). The archive is separated from the current release/documentation files so historical source remains easy to inspect without confusing it with the current binary release.
 
 ## User guides
 
