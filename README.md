@@ -4,7 +4,7 @@
 
 FlyPPTTimer is a Windows presentation timer with countdown/count-up modes, slide numbers, per-slide timing, multi-display support, and phone-browser remote control.
 
-> **This repository is now maintained only for official FlyPPTTimer releases and user documentation. Current development source code is no longer published here.** Historical releases up to and including **v1.15.0** were published under the MIT License; rights already granted for those historical releases are not affected by later licensing or business-model changes.
+> **FlyPPTTimer is free and open-source software and will remain so.** Releases up to and including **v1.15.0** were published under the MIT License, and future releases will continue to be free of charge and open source under the MIT License. Source code for upcoming releases will be published in this repository.
 
 ## Download
 
@@ -36,13 +36,13 @@ The guides cover installation and updates, timing modes, PowerPoint / WPS integr
 - GitHub / Gitee update sources and in-app updating
 - Portable and installer editions
 
-## Licensing and future releases
+## Open-source license and future releases
 
-- **v1.15.0 and earlier** — already published releases remain governed by the MIT License supplied with those versions.
-- **After v1.15.0** — FlyPPTTimer does not promise that future versions will remain open source or free of charge. Later releases may be free, trial, Pro, paid, commercial, enterprise, perpetual-license, subscription, or other editions. Features, pricing, activation, and usage rights are governed by the terms supplied with each release.
-- Current and future development source code is not distributed through this public repository. Public visibility of this repository does not grant an open-source license to proprietary source, branding, or future software that has not been separately licensed.
+- FlyPPTTimer is released under the [MIT License](LICENSE).
+- Future official releases will continue to be **free of charge and open source** under the MIT License, with source code published in this repository.
+- The software license does not grant rights to use FlyPPTTimer trademarks or branding in a way that implies an unofficial build is official. See [TRADEMARKS.md](TRADEMARKS.md).
 
-See [LICENSE](LICENSE) for software terms, [TRADEMARKS.md](TRADEMARKS.md) for brand use, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party components and acknowledgements.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party components and acknowledgements.
 
 ## Feedback
 
