@@ -6,6 +6,7 @@ FlyPPTTimer is a Windows presentation timer for PowerPoint and WPS Presentation 
 
 > **v1.15.0 and earlier are historical MIT-licensed releases. v1.16.0 is the current public release and is governed by the current [LICENSE](LICENSE).** Rights already granted for historical MIT releases remain unchanged. Current development source code is not distributed through this public release repository.
 
+<a id="download"></a>
 ## Download
 
 - [Latest GitHub Release](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)
