@@ -1,4 +1,4 @@
-name: Publish verified FlyPPTTimer v1.16.0
+name: Finish FlyPPTTimer v1.16.0 Gitee publication
 
 on:
   push:
@@ -17,15 +17,17 @@ env:
   PUBLIC_MAIN_SHA: 'dbbeef7c8224040aae62b85fd2bfd856027ed430'
   PRODUCT_SOURCE_SHA: '6adb4a14c3eb4ea8292a76355282050877254297'
   PUBLIC_DOCS_SHA: '3578d63c4e866cabd99e403e7ffcb29eae7ceb85'
-  TRANSFER_SHA256: '0ac08ea80498709b611da394f60f7ebaf001709390003b1eaa01fe1bf3075cf3'
-  TRANSFER_URL: 'https://sdmntprindiasocentral.oaiusercontent.com/files/00000000-85a4-8211-9435-838d7f65385a/raw?se=2026-09-17T16%3A00%3A01Z&sp=r&sv=2026-02-06&sr=b&scid=d8cc8732-8905-524c-ac45-afaa5265503e&skoid=45d5558d-260a-4eed-aec4-6bc512bdfda4&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-09-17T02%3A01%3A13Z&ske=2026-09-18T02%3A01%3A13Z&sks=b&skv=2026-02-06&sig=DXYkMU2qJmpHwnHDqZT%2BzX53TtdlSKG%2B4yKH572un/4%3D'
+  PORTABLE_SHA256: 'ae4f7d4e0b227a807b4da549c91831730eea99d5b286848cd514baf28d9c4d39'
+  PORTABLE_SIZE: '19425051'
+  SETUP_SHA256: 'ac1ed057510df867f0b36ac2ba4a55f48a254b035bb20759ec735799bfad3106'
+  SETUP_SIZE: '16286516'
   GITEE_OWNER: 'hona-cao'
   GITEE_REPO: 'fly-ppttimer'
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
       GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
@@ -34,104 +36,49 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Guard final public state
+      - name: Guard GitHub v1.16.0 as the verified source of public package bytes
         shell: bash
         run: |
           set -euo pipefail
           actual=$(gh api repos/Hona-Cao/FlyPPTTimer/commits/main --jq .sha)
           [ "$actual" = "$PUBLIC_MAIN_SHA" ] || { echo "Unexpected public main: $actual" >&2; exit 1; }
           test -n "$GITEE_TOKEN" || { echo 'GITEE_TOKEN is unavailable' >&2; exit 1; }
-          gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 && { echo "v$VERSION already exists" >&2; exit 1; } || true
-          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
-            echo "v$VERSION tag already exists unexpectedly" >&2
-            exit 1
-          fi
-
-      - name: Download short-lived verified package Artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location "$TRANSFER_URL" -o transfer.zip
-          echo "$TRANSFER_SHA256  transfer.zip" | sha256sum --check
-          mkdir transfer release-assets
-          unzip -q transfer.zip -d transfer
-          find transfer -maxdepth 4 -type f -print
-
-      - name: Verify package identity and exact asset bytes
-        shell: python
-        run: |
-          from pathlib import Path
-          import hashlib,json,os,shutil,zipfile
-          root=Path('transfer')
-          identities=list(root.rglob('package-identity.json'))
-          if len(identities)!=1: raise SystemExit(f'Expected one package identity, got {len(identities)}')
-          identity=json.loads(identities[0].read_text(encoding='utf-8'))
-          if identity.get('version')!=os.environ['VERSION']: raise SystemExit('Version identity mismatch')
-          if identity.get('product_source')!=os.environ['PRODUCT_SOURCE_SHA']: raise SystemExit('Product source mismatch')
-          if identity.get('public_docs')!=os.environ['PUBLIC_DOCS_SHA']: raise SystemExit('Public docs identity mismatch')
-          expected={
-              f"FlyPPTTimer-v{os.environ['VERSION']}-portable-win-x64.zip",
-              f"FlyPPTTimer-v{os.environ['VERSION']}-setup-win-x64.zip",
-          }
-          found={p.name:p for p in root.rglob('*.zip')}
-          if set(found)!=expected: raise SystemExit(f'Unexpected release assets: {sorted(found)}')
-          for name,path in found.items():
-              if not zipfile.is_zipfile(path): raise SystemExit(f'Invalid ZIP: {name}')
-              record=identity['assets'][name]
-              digest=hashlib.sha256(path.read_bytes()).hexdigest()
-              if digest!=record['sha256'] or path.stat().st_size!=record['size']:
-                  raise SystemExit(f'Identity mismatch: {name}')
-              shutil.copy2(path,Path('release-assets')/name)
-          shutil.copy2(identities[0],Path('release-assets/package-identity.json'))
-          print(json.dumps(identity,indent=2))
-
-      - name: Publish GitHub Release with exactly two ZIP assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t files < <(find release-assets -maxdepth 1 -name '*.zip' -type f | sort)
-          [ "${#files[@]}" -eq 2 ] || { echo 'Expected exactly two ZIP assets' >&2; exit 1; }
-          gh release create "v$VERSION" "${files[@]}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$PUBLIC_MAIN_SHA" \
-            --title "FlyPPTTimer v$VERSION" \
-            --notes-file docs/RELEASE_NOTES_v1.16.0.md \
-            --latest
-          release=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,url,assets)
-          echo "$release" > github-release.json
+          gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,assets > github-release.json
           python - <<'PY'
           import json,os
           r=json.load(open('github-release.json',encoding='utf-8'))
           expected={f"FlyPPTTimer-v{os.environ['VERSION']}-portable-win-x64.zip",f"FlyPPTTimer-v{os.environ['VERSION']}-setup-win-x64.zip"}
-          names={x['name'] for x in r['assets']}
-          if r['isDraft'] or r['isPrerelease'] or r['tagName']!='v'+os.environ['VERSION'] or names!=expected:
-              raise SystemExit(f'GitHub release verification failed: {r}')
-          print(r['url'])
+          names={a['name'] for a in r['assets']}
+          if r['tagName']!='v'+os.environ['VERSION'] or r['isDraft'] or r['isPrerelease'] or names!=expected:
+              raise SystemExit(f'Unexpected GitHub release state: {r}')
           PY
 
-      - name: Re-download GitHub Release assets and verify hashes
+      - name: Download GitHub Release assets and verify the accepted hashes
         shell: bash
         run: |
           set -euo pipefail
-          mkdir github-verify
-          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --dir github-verify --pattern '*.zip'
+          mkdir release-assets
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --dir release-assets --pattern '*.zip'
           python - <<'PY'
           from pathlib import Path
-          import hashlib,json
-          identity=json.loads(Path('release-assets/package-identity.json').read_text(encoding='utf-8'))
-          found={p.name:p for p in Path('github-verify').glob('*.zip')}
-          if set(found)!=set(identity['assets']): raise SystemExit('GitHub re-download asset set mismatch')
+          import hashlib,os,zipfile
+          expected={
+              f"FlyPPTTimer-v{os.environ['VERSION']}-portable-win-x64.zip":(os.environ['PORTABLE_SHA256'],int(os.environ['PORTABLE_SIZE'])),
+              f"FlyPPTTimer-v{os.environ['VERSION']}-setup-win-x64.zip":(os.environ['SETUP_SHA256'],int(os.environ['SETUP_SIZE'])),
+          }
+          found={p.name:p for p in Path('release-assets').glob('*.zip')}
+          if set(found)!=set(expected): raise SystemExit(f'Unexpected GitHub asset set: {sorted(found)}')
           for name,p in found.items():
-              rec=identity['assets'][name]
-              if p.stat().st_size!=rec['size'] or hashlib.sha256(p.read_bytes()).hexdigest()!=rec['sha256']:
-                  raise SystemExit(f'GitHub re-download hash mismatch: {name}')
-          print('GitHub Release asset hashes verified.')
+              digest=hashlib.sha256(p.read_bytes()).hexdigest(); size=p.stat().st_size
+              if not zipfile.is_zipfile(p) or (digest,size)!=expected[name]:
+                  raise SystemExit(f'GitHub asset identity mismatch: {name}')
+          print('GitHub Release bytes re-verified before Gitee retry.')
           PY
 
-      - name: Install Gitee synchronization dependency
+      - name: Install Gitee verification dependency
         run: python -m pip install 'requests>=2.32,<3'
 
-      - name: Push release tag and publish identical assets to Gitee
+      - name: Publish and publicly verify identical assets on Gitee
         shell: python
         run: |
           from pathlib import Path
@@ -141,92 +88,127 @@ jobs:
           version=os.environ['VERSION']; tag='v'+version
           owner=os.environ['GITEE_OWNER']; repo=os.environ['GITEE_REPO']; token=os.environ['GITEE_TOKEN']
           main_sha=os.environ['PUBLIC_MAIN_SHA']
-          identity=json.loads(Path('release-assets/package-identity.json').read_text(encoding='utf-8'))
-          files={p.name:p for p in Path('release-assets').glob('*.zip')}
-          expected=set(identity['assets'])
-          if set(files)!=expected or len(files)!=2: raise SystemExit('Local Gitee asset set mismatch')
+          api=f'https://gitee.com/api/v5/repos/{owner}/{repo}'
+          files={
+              f'FlyPPTTimer-v{version}-portable-win-x64.zip': Path('release-assets')/f'FlyPPTTimer-v{version}-portable-win-x64.zip',
+              f'FlyPPTTimer-v{version}-setup-win-x64.zip': Path('release-assets')/f'FlyPPTTimer-v{version}-setup-win-x64.zip',
+          }
+          records={
+              f'FlyPPTTimer-v{version}-portable-win-x64.zip': {'sha256':os.environ['PORTABLE_SHA256'],'size':int(os.environ['PORTABLE_SIZE'])},
+              f'FlyPPTTimer-v{version}-setup-win-x64.zip': {'sha256':os.environ['SETUP_SHA256'],'size':int(os.environ['SETUP_SIZE'])},
+          }
 
-          # Push the exact public GitHub release commit as the Gitee tag; never force a differing tag.
+          session=requests.Session()
+          session.headers.update({'Authorization':f'Bearer {token}','User-Agent':'FlyPPTTimer-v116-gitee-retry'})
+          def req(method,suffix,missing_ok=False,**kwargs):
+              last=None
+              for attempt in range(1,4):
+                  try:
+                      r=session.request(method,api+suffix,timeout=(20,180),**kwargs)
+                      if missing_ok and r.status_code==404: return None
+                      r.raise_for_status()
+                      return r.json() if r.content else None
+                  except requests.RequestException as exc:
+                      last=exc
+                      if attempt<3: time.sleep(3*attempt)
+              raise last
+
+          # Ensure the Gitee tag exists and is never force-moved.
           with tempfile.TemporaryDirectory() as td:
               askpass=Path(td)/'askpass.py'
               askpass.write_text('#!/usr/bin/env python3\nimport os,sys\nprint(os.environ["GITEE_OWNER"] if "username" in sys.argv[1].lower() else os.environ["GITEE_TOKEN"])\n',encoding='utf-8')
               askpass.chmod(0o700)
               env=dict(os.environ,GIT_ASKPASS=str(askpass),GIT_TERMINAL_PROMPT='0')
-              pushed=subprocess.run(['git','-c','credential.helper=','push',f'https://gitee.com/{owner}/{repo}.git',f'{main_sha}:refs/tags/{tag}'],env=env,capture_output=True,text=True,timeout=120)
+              pushed=subprocess.run(['git','-c','credential.helper=','push',f'https://gitee.com/{owner}/{repo}.git',f'{main_sha}:refs/tags/{tag}'],env=env,capture_output=True,text=True,timeout=180)
               if pushed.returncode:
-                  # Accept only an already-existing tag that resolves to the same SHA through the API below.
-                  print(pushed.stderr[-500:])
-
-          api=f'https://gitee.com/api/v5/repos/{owner}/{repo}'
-          s=requests.Session(); s.headers.update({'Authorization':f'Bearer {token}','User-Agent':'FlyPPTTimer-v116-release'})
-          def req(method,suffix,missing_ok=False,**kw):
-              r=s.request(method,api+suffix,timeout=(15,180),**kw)
-              if missing_ok and r.status_code==404: return None
-              r.raise_for_status(); return r.json() if r.content else None
-
+                  print(pushed.stderr[-500:],flush=True)
           commit=req('GET',f'/commits/{tag}',missing_ok=True)
           if commit is not None:
               got=commit.get('sha') or commit.get('id')
-              if got and got!=main_sha: raise SystemExit(f'Gitee tag points to unexpected commit: {got}')
+              if got and got!=main_sha: raise SystemExit(f'Gitee tag mismatch: {got}')
 
           notes=Path('docs/RELEASE_NOTES_v1.16.0.md').read_text(encoding='utf-8')
           payload={'tag_name':tag,'name':f'FlyPPTTimer {tag}','body':notes,'target_commitish':main_sha,'prerelease':False}
           release=req('GET',f'/releases/tags/{tag}',missing_ok=True)
-          if release:
-              release=req('PATCH',f"/releases/{release['id']}",json=payload)
-          else:
-              release=req('POST','/releases',json=payload)
+          release=req('PATCH',f"/releases/{release['id']}",json=payload) if release else req('POST','/releases',json=payload)
           rid=release['id']; endpoint=f'/releases/{rid}/attach_files'
 
-          for item in req('GET',endpoint) or []:
-              if item.get('id'): req('DELETE',f"{endpoint}/{item['id']}")
-          for name,path in sorted(files.items()):
-              print(f'Uploading {name} to Gitee...',flush=True)
-              with path.open('rb') as f:
-                  r=s.post(api+endpoint,files={'file':(name,f,'application/zip')},timeout=(300,300))
-              r.raise_for_status()
-
-          attached=req('GET',endpoint) or []
-          by_name={x.get('name'):x for x in attached}
-          if set(by_name)!=expected: raise SystemExit(f'Gitee asset set mismatch: {sorted(by_name)}')
-          evidence={'tag':tag,'github_main':main_sha,'product_source':os.environ['PRODUCT_SOURCE_SHA'],'public_docs':os.environ['PUBLIC_DOCS_SHA'],'assets':{}}
-          for name,path in sorted(files.items()):
-              rec=identity['assets'][name]
-              item=by_name[name]
-              size=item.get('size') or item.get('file_size')
-              if size is not None and int(size)!=rec['size']: raise SystemExit(f'Gitee size mismatch: {name}')
+          def attachments():
+              value=req('GET',endpoint)
+              if not isinstance(value,list): raise RuntimeError('Unexpected Gitee attachment response')
+              return value
+          def find(name): return next((x for x in attachments() if x.get('name')==name),None)
+          def item_url(item):
               url=item.get('browser_download_url') or item.get('download_url')
               if url and url.startswith('/'): url='https://gitee.com'+url
-              if not url: raise SystemExit(f'Gitee public URL missing: {name}')
-              got=None
-              for attempt in range(4):
-                  try:
-                      rr=requests.get(url,timeout=(15,240)); rr.raise_for_status()
-                      got=hashlib.sha256(rr.content).hexdigest()
-                      if got==rec['sha256']: break
-                  except requests.RequestException as exc:
-                      print(f'Public verify retry {attempt+1} for {name}: {exc}',flush=True)
-                  time.sleep(5*(attempt+1))
-              if got!=rec['sha256']: raise SystemExit(f'Gitee public digest mismatch: {name}')
-              evidence['assets'][name]={'sha256':rec['sha256'],'size':rec['size'],'url':url}
-          Path('gitee-publication.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print('Gitee Release asset hashes verified.')
+              return url
+          def public_digest(item,name):
+              url=item_url(item)
+              if not url: return None
+              with tempfile.NamedTemporaryFile(delete=False) as f: out=Path(f.name)
+              try:
+                  command=['curl','--http1.1','--location','--fail','--silent','--show-error','--connect-timeout','30','--max-time','600','--speed-time','120','--speed-limit','1024','--output',str(out),url]
+                  done=subprocess.run(command,capture_output=True,text=True)
+                  if done.returncode: return None
+                  if out.stat().st_size!=records[name]['size']: return None
+                  return hashlib.sha256(out.read_bytes()).hexdigest()
+              finally:
+                  out.unlink(missing_ok=True)
+          def delete(item):
+              if item and item.get('id'): req('DELETE',f"{endpoint}/{item['id']}")
 
-      - name: Record publication evidence
-        shell: python
-        run: |
-          from pathlib import Path
-          import json
-          github=json.loads(Path('github-release.json').read_text(encoding='utf-8'))
-          gitee=json.loads(Path('gitee-publication.json').read_text(encoding='utf-8'))
-          identity=json.loads(Path('release-assets/package-identity.json').read_text(encoding='utf-8'))
-          out={'github':github,'gitee':gitee,'identity':identity}
-          Path('publication-evidence.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          # Remove any unexpected/partial attachment left by the timed-out first attempt.
+          for item in attachments():
+              name=item.get('name')
+              if name not in files:
+                  delete(item)
+
+          evidence={'tag':tag,'github_main':main_sha,'product_source':os.environ['PRODUCT_SOURCE_SHA'],'public_docs':os.environ['PUBLIC_DOCS_SHA'],'assets':{}}
+          for name,path in files.items():
+              existing=find(name)
+              if existing and public_digest(existing,name)==records[name]['sha256']:
+                  print(f'Already synchronized and verified: {name}',flush=True)
+              else:
+                  delete(existing)
+                  success=False
+                  for attempt in range(1,4):
+                      print(f'Streaming {name} to Gitee (attempt {attempt}/3)...',flush=True)
+                      command=[
+                          'curl','--http1.1','--fail','--silent','--show-error',
+                          '--connect-timeout','30','--max-time','1200','--speed-time','180','--speed-limit','512',
+                          '-H',f'Authorization: Bearer {token}',
+                          '-F',f'file=@{path};type=application/zip',
+                          api+endpoint,
+                      ]
+                      upload=subprocess.run(command,capture_output=True,text=True)
+                      if upload.returncode:
+                          print(f'Upload command result {upload.returncode}: {upload.stderr[-300:]}',flush=True)
+                      # A server can finish storing the multipart body even if the client loses the final response.
+                      item=None
+                      for poll in range(18):
+                          item=find(name)
+                          if item: break
+                          time.sleep(5)
+                      if item and public_digest(item,name)==records[name]['sha256']:
+                          success=True
+                          break
+                      delete(item)
+                      if attempt<3: time.sleep(10*attempt)
+                  if not success: raise SystemExit(f'Unable to publish verified Gitee asset: {name}')
+              item=find(name)
+              digest=public_digest(item,name)
+              if digest!=records[name]['sha256']: raise SystemExit(f'Final Gitee hash mismatch: {name}')
+              evidence['assets'][name]={'sha256':digest,'size':records[name]['size'],'url':item_url(item)}
+
+          final={x.get('name'):x for x in attachments()}
+          if set(final)!=set(files): raise SystemExit(f'Final Gitee asset set mismatch: {sorted(final)}')
+          Path('gitee-publication.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print('Gitee v1.16.0 has exactly two publicly hash-verified ZIP assets.')
 
       - uses: actions/upload-artifact@v4
         with:
-          name: v1160-publication-evidence
-          path: publication-evidence.json
+          name: v1160-gitee-publication-evidence
+          path: gitee-publication.json
           retention-days: 30
 
       - name: Remove one-shot publication workflow
