@@ -1,0 +1,93 @@
+name: Second feedback direct fixes
+
+on:
+  push:
+    branches: [codex/v1-06-manual-test]
+    paths:
+      - scripts/apply-second-feedback.py
+      - .github/workflows/apply-user-feedback.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: second-feedback-fixes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply reviewed direct fixes
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python scripts/apply-second-feedback.py
+          if ($LASTEXITCODE -ne 0) { throw 'Direct patch failed' }
+          node --check src/FlyPPTTimer/Web/app.js
+          if ($LASTEXITCODE -ne 0) { throw 'Remote JavaScript syntax check failed' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Patch whitespace check failed' }
+          git diff --stat
+
+      - name: Project toolchain
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Toolchain unavailable' }
+          $rc = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\rc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $rc) { throw 'Windows SDK unavailable' }
+          "RC=$($rc.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Compile and validate
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo fmt --all
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Format check failed' }
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+          cargo test --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+          cargo build --locked --release
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+
+      - name: Commit only verified product changes
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $allowed = @(
+            'src/app.rs',
+            'src/window.rs',
+            'src/audio.rs',
+            'src/settings.rs',
+            'src/FlyPPTTimer/Web/app.js',
+            'ui/app-window.slint'
+          )
+          foreach ($path in @(git diff --name-only)) {
+            if ($path -notin $allowed) { throw "Unexpected modification: $path" }
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- src/app.rs src/window.rs src/audio.rs src/settings.rs src/FlyPPTTimer/Web/app.js ui/app-window.slint
+          git rm -- scripts/apply-second-feedback.py
+          git commit -m 'fix: streamline blackout audio and remote resilience'
+          if ($LASTEXITCODE -ne 0) { throw 'Commit failed' }
+
+          git fetch origin codex/v1-06-manual-test
+          if ($LASTEXITCODE -ne 0) { throw 'Fetch failed' }
+          foreach ($path in @(git diff --name-only $env:GITHUB_SHA origin/codex/v1-06-manual-test)) {
+            if (-not $path.StartsWith('docs/v1/')) { throw "Concurrent non-document change: $path" }
+          }
+          git rebase origin/codex/v1-06-manual-test
+          if ($LASTEXITCODE -ne 0) { throw 'Concurrent change: stop without force push' }
+          git push origin HEAD:codex/v1-06-manual-test
+          if ($LASTEXITCODE -ne 0) { throw 'Push rejected: stop without overwriting' }
+          git show --stat --oneline HEAD

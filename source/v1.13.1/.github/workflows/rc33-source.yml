@@ -1,0 +1,22 @@
+name: RC33 source snapshot
+on:
+  push:
+    branches: [chatgpt/rc33-feedback]
+    paths: [.github/workflows/rc33-source.yml]
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 359a09364fa8c36310084236ec8d3fa3a0382160
+          persist-credentials: false
+      - run: git archive --format=zip HEAD -o "$RUNNER_TEMP/rc33-source.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc33-pinned-source
+          path: ${{ runner.temp }}/rc33-source.zip
+          retention-days: 7
+          if-no-files-found: error

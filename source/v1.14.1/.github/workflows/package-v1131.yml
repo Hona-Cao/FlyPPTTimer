@@ -1,0 +1,155 @@
+name: FlyPPTTimer v1.13.1
+on:
+  push:
+    branches: [chatgpt/v1.13.1]
+    paths: [.github/workflows/package-v1131.yml, .github/v1131-input.py]
+permissions:
+  contents: write
+concurrency:
+  group: package-v1131
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      RUSTUP_TOOLCHAIN: 1.92.0
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Percentage input refinement
+        run: |
+          if (-not (Select-String -Path ui/app-window.slint -SimpleMatch 'percent-input.clear-focus()' -Quiet)) {
+            python .github/v1131-input.py
+            if ($LASTEXITCODE -ne 0) { throw 'Input refinement failed' }
+          }
+          New-Item -ItemType Directory -Force artifacts/evidence | Out-Null
+      - name: Windows SDK and Rust
+        run: |
+          $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\bin'
+          $rc = Get-ChildItem -LiteralPath $kits -Filter rc.exe -File -Recurse | Where-Object { $_.FullName -match '\\x64\\rc\.exe$' } | Sort-Object FullName -Descending | Select-Object -First 1
+          $rc.Directory.FullName | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+          rustup toolchain install 1.92.0 --profile minimal --component rustfmt,clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust setup failed' }
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1131-windows-1.92-${{ github.run_id }}
+          restore-keys: v1131-windows-1.92-
+      - name: Format and lint
+        run: |
+          cargo fmt --all
+          if ($LASTEXITCODE -ne 0) { throw 'Format failed' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'Whitespace error' }
+          cargo clippy --locked --all-targets --all-features -- -D warnings 2>&1 | Tee-Object artifacts/evidence/clippy.log
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+      - name: Regression tests
+        run: |
+          cargo test --locked 2>&1 | Tee-Object artifacts/evidence/tests.log
+          if ($LASTEXITCODE -ne 0) { throw 'Regression tests failed' }
+          node --check src/FlyPPTTimer/Web/app.js
+          if ($LASTEXITCODE -ne 0) { throw 'JavaScript syntax failed' }
+      - name: Release executable and version metadata
+        run: |
+          cargo build --locked --release 2>&1 | Tee-Object artifacts/evidence/release.log
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+          $version = (Get-Item target/release/FlyPPTTimer.exe).VersionInfo
+          $version | Select-Object FileVersion,ProductVersion | Format-List | Out-File artifacts/evidence/version.txt
+          if ($version.FileVersion -ne '1.13.1' -or $version.ProductVersion -ne '1.13.1') { throw 'Executable version mismatch' }
+      - uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1131-windows-1.92-${{ github.run_id }}
+      - name: Light and dark UI captures
+        run: |
+          foreach ($theme in @('light','dark')) {
+            $env:FLYPPT_CAPTURE_THEME = $theme
+            foreach ($mode in @('settings','windows')) {
+              $out = Join-Path $PWD "artifacts/evidence/$theme/$mode"
+              New-Item -ItemType Directory -Force $out | Out-Null
+              $p = Start-Process target/release/FlyPPTTimer.exe -ArgumentList @("--capture-$mode", $out) -Wait -PassThru -RedirectStandardOutput "$out/stdout.log" -RedirectStandardError "$out/stderr.log"
+              if ($p.ExitCode -ne 0) { throw "Capture failed: $theme/$mode" }
+            }
+          }
+          Remove-Item Env:FLYPPT_CAPTURE_THEME
+      - name: Startup visibility and Remote
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'v1131-startup'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe $stage
+          $configPath = Join-Path $stage 'FlyPPTTimer.config.json'
+          $seed = Get-Content docs/v1131-default-config.json -Raw | ConvertFrom-Json
+          $seed.Placement.Visible = $false
+          $seed.Update.CheckOnStartup = $false
+          $seed | ConvertTo-Json -Depth 20 | Set-Content $configPath -Encoding utf8
+          $process = Start-Process (Join-Path $stage 'FlyPPTTimer.exe') -WorkingDirectory $stage -ArgumentList '--show-settings' -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(15)
+            do {
+              Start-Sleep -Milliseconds 150
+              $config = Get-Content $configPath -Raw | ConvertFrom-Json
+              if ((Get-Date) -gt $deadline) { throw 'Startup visibility was not restored' }
+            } until ($config.Placement.Visible -and $config.RemoteControl.Token)
+            $url = "http://127.0.0.1:$($config.RemoteControl.Port)/?token=$($config.RemoteControl.Token)"
+            $response = Invoke-WebRequest $url -TimeoutSec 8
+            if ($response.StatusCode -ne 200) { throw 'Remote startup failed' }
+            @('Seed: Visible=false','Startup: Visible=true','Remote HTTP: 200','Startup argument: --show-settings') | Set-Content artifacts/evidence/startup.txt
+          } finally {
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+      - name: Commit product source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ui/app-window.slint
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 1) {
+            git commit -m 'fix: synchronize percentage entry wheel and drag in v1.13.1'
+            if ($LASTEXITCODE -ne 0) { throw 'Product commit failed' }
+            git push origin HEAD:refs/heads/chatgpt/v1.13.1
+            if ($LASTEXITCODE -ne 0) { throw 'Product push failed' }
+          }
+          $sha = (git rev-parse HEAD).Trim()
+          "PRODUCT_SHA=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          git archive --format=zip --output=artifacts/evidence/product-source.zip HEAD
+      - name: Package portable
+        run: |
+          $name = 'FlyPPTTimer-v1.13.1-portable-win-x64'
+          $stage = Join-Path $env:RUNNER_TEMP $name
+          $out = Join-Path $PWD 'artifacts/package'
+          New-Item -ItemType Directory -Force $stage,$out | Out-Null
+          Copy-Item target/release/FlyPPTTimer.exe $stage
+          Copy-Item docs/v1131-default-config.json (Join-Path $stage 'FlyPPTTimer.config.json')
+          Copy-Item LICENSE $stage
+          Copy-Item docs/v1/V1131_USAGE.zh-CN.md (Join-Path $stage 'README.zh-CN.md')
+          Copy-Item docs/v1/V1131_DELIVERY.md (Join-Path $stage 'CHANGES.md')
+          foreach ($dll in @('vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll')) { Copy-Item (Join-Path $env:WINDIR "System32\$dll") $stage }
+          $hash = (Get-FileHash (Join-Path $stage 'FlyPPTTimer.exe') -Algorithm SHA256).Hash
+          @('FlyPPTTimer v1.13.1','Version: 1.13.1',"Product source SHA: $env:PRODUCT_SHA","Workflow run: $env:GITHUB_RUN_ID","EXE SHA256: $hash",'Validation: fmt; clippy; cargo test; JS syntax; release; Windows version metadata; light/dark captures; startup visibility and HTTP.','Main unchanged. No public Release or tag created.') | Set-Content (Join-Path $stage 'BUILD.txt') -Encoding utf8
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath (Join-Path $out "$name.zip") -CompressionLevel Optimal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FlyPPTTimer-v1.13.1-portable-win-x64
+          path: artifacts/package/*.zip
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v1.13.1-evidence
+          path: artifacts/evidence/**
+          if-no-files-found: warn
+          retention-days: 14

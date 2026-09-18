@@ -4,7 +4,7 @@
 
 FlyPPTTimer 是一款 Windows 演示计时工具，适用于 PowerPoint 和 WPS 演示，支持倒计时、正计时、PPT 页数、逐页秒表、多屏显示以及手机浏览器遥控。
 
-> **FlyPPTTimer 为专有软件。** GitHub 与 Gitee 的公开仓库仅作为产品发布与用户文档渠道。当前及今后的 FlyPPTTimer 产品源码均不在公开仓库发布或分发。
+> **v1.15.0 及以前是历史 MIT 开源版本；当前公开正式版 v1.16.0 适用当前 [LICENSE](LICENSE)。** 历史 MIT 版本已经授予的权利保持不变。当前开发源码不通过本公开发布仓库分发。
 
 <a id="下载"></a>
 ## 下载
@@ -15,16 +15,17 @@ FlyPPTTimer 是一款 Windows 演示计时工具，适用于 PowerPoint 和 WPS 
 
 当前正式版为 **v1.16.0**，支持 Windows 10 / 11 x64。独立计时不需要 Office；页数识别和放映控制需要桌面版 PowerPoint 或 WPS 演示。手机端无需安装 App。
 
-v1.16.0 官方发布包含便携版 ZIP 与安装版 ZIP。建议只从作者标明的官方渠道下载；非官方镜像、重新打包版本或修改版不代表 FlyPPTTimer 官方版本。
+v1.16.0 公开发布仅提供便携版 ZIP 与安装版 ZIP。建议只从作者标明的官方渠道下载；非官方镜像、重新打包版本或修改版不代表 FlyPPTTimer 官方版本。
 
-## 发布策略
+## 历史源码
 
-本仓库只作为公开产品发布与最终用户文档渠道维护。
+此前已经按对应许可公开的历史源码快照和分支继续保留，例如：
 
-- 正式发布只分发已编译的应用程序包和面向用户的材料。
-- 产品源码、构建脚本、测试代码和私有开发记录不通过 GitHub 或 Gitee 公开仓库发布。
-- GitHub / Gitee 等代码托管平台可能自动提供名为 **Source code** 的仓库归档；该归档只是公开发布/文档仓库的快照，不是 FlyPPTTimer 产品源码包。
-- 更早版本继续适用各自发布时随版本提供的条款。
+- [v1.14.1](source/v1.14.1/)
+- [v1.14.0](source/v1.14.0/)
+- [v1.13.1](source/v1.13.1/)
+
+这些历史版本已经获得的 MIT 权利不会因为 v1.16.0 的许可边界而改变。当前 v1.16.0 开发源码不在此公开仓库发布。
 
 ## 主要功能
 
@@ -47,11 +48,11 @@ v1.16.0 官方发布包含便携版 ZIP 与安装版 ZIP。建议只从作者标
 
 教程包含安装与升级、计时模式、PowerPoint / WPS 联动、手机遥控、情景模式、多显示器、文件规则和故障排查等内容。
 
-## 许可
+## 许可证
 
-当前及今后的 FlyPPTTimer 版本均按专有软件方式发布，除非某个具体版本另有明确书面说明。详见 [LICENSE](LICENSE)。
+FlyPPTTimer v1.15.0 及以前的历史正式版继续适用各版本当时附带的 MIT License。v1.16.0 以及其后的原创内容，除非具体文件或版本另有明确说明，适用当前 [LICENSE](LICENSE)。
 
-第三方组件继续适用其各自的许可与声明，见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；FlyPPTTimer 名称和官方品牌标识的使用规则见 [TRADEMARKS.md](TRADEMARKS.md)。
+第三方组件和致谢见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；FlyPPTTimer 名称和官方品牌标识的使用规则见 [TRADEMARKS.md](TRADEMARKS.md)。
 
 ## 反馈问题
 

@@ -1,0 +1,1478 @@
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    io::{Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering},
+        mpsc,
+    },
+    thread,
+    time::{Duration, Instant},
+};
+
+use serde::{Deserialize, Serialize};
+use slint::{Image, Rgba8Pixel, SharedPixelBuffer};
+
+use crate::{
+    config::AppConfig,
+    presentation::{PresentationApp, PresentationState},
+    timer::{TimerMode, TimerSnapshot, TimerState},
+};
+
+#[cfg(test)]
+use crate::config::FileRule;
+
+const INDEX_HTML: &str = include_str!("FlyPPTTimer/Web/index.html");
+const APP_CSS: &str = include_str!("FlyPPTTimer/Web/app.css");
+const APP_JS: &str = include_str!("FlyPPTTimer/Web/app.js");
+const MAX_HEADER_BYTES: usize = 16 * 1024;
+const MAX_BODY_BYTES: usize = 64 * 1024;
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimerRemoteState {
+    pub mode: String,
+    pub state: String,
+    pub running: bool,
+    pub duration_ms: i64,
+    pub elapsed_ms: i64,
+    pub remaining_ms: i64,
+    pub display_text: String,
+    pub is_overtime: bool,
+    pub continue_overtime: bool,
+    pub window_visible: bool,
+    pub muted: bool,
+    pub time_up_blackout_active: bool,
+    pub rule_count: usize,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentationOption {
+    pub is_rule: bool,
+    pub mobile_hidden: bool,
+    pub id: String,
+    pub name: String,
+    pub directory: String,
+    pub is_open: bool,
+    pub is_active: bool,
+    pub is_slide_show_running: bool,
+    pub is_managed: bool,
+    pub file_size: Option<u64>,
+    pub modified_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PresentationRemoteState {
+    pub power_point_installed: bool,
+    pub power_point_running: bool,
+    pub has_presentation: bool,
+    pub is_slide_show_running: bool,
+    pub presentation_name: String,
+    pub presentation_path: String,
+    pub current_slide: i32,
+    pub total_slides: i32,
+    pub screen_mode: String,
+    pub updated_at: String,
+    pub error: String,
+    pub presentations: Vec<PresentationOption>,
+    pub operation: String,
+    pub operation_message: String,
+    pub operation_started_at: Option<String>,
+    pub operation_id: String,
+    pub is_operation_busy: bool,
+    pub is_current_presentation_managed: bool,
+    pub open_presentation_count: usize,
+    pub wps_detected: bool,
+    pub available_presentations: Vec<PresentationOption>,
+    pub current_controllable: bool,
+    pub can_close_last: bool,
+    pub can_quit_all: bool,
+    pub list_sort: String,
+    pub list_sort_descending: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteState {
+    pub ok: bool,
+    pub message: String,
+    pub timer_state: TimerRemoteState,
+    pub presentation_state: PresentationRemoteState,
+    // v0.10 compatible flat timer fields.
+    pub mode: String,
+    pub state: String,
+    pub running: bool,
+    pub duration_ms: i64,
+    pub elapsed_ms: i64,
+    pub remaining_ms: i64,
+    pub display_text: String,
+    pub is_overtime: bool,
+    pub window_visible: bool,
+    pub muted: bool,
+    pub time_up_blackout_active: bool,
+    pub rule_count: usize,
+    pub connected_clients: usize,
+    pub version: String,
+    pub revision: i64,
+    pub server_instance: String,
+    pub ui_theme: String,
+    pub file_browsing_enabled: bool,
+    pub slide_timing: crate::slide_timer::SlideTiming,
+}
+
+impl Default for RemoteState {
+    fn default() -> Self {
+        Self {
+            ok: true,
+            message: String::new(),
+            timer_state: TimerRemoteState::default(),
+            presentation_state: PresentationRemoteState::default(),
+            mode: String::new(),
+            state: String::new(),
+            running: false,
+            duration_ms: 0,
+            elapsed_ms: 0,
+            remaining_ms: 0,
+            display_text: String::new(),
+            is_overtime: false,
+            window_visible: false,
+            muted: false,
+            time_up_blackout_active: false,
+            rule_count: 0,
+            connected_clients: 0,
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            revision: 0,
+            server_instance: String::new(),
+            ui_theme: "system".into(),
+            file_browsing_enabled: false,
+            slide_timing: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RemoteCommand {
+    pub command: String,
+    pub duration: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub mode: Option<String>,
+    pub slide_number: Option<i32>,
+    pub presentation_id: Option<String>,
+    pub confirmed: Option<bool>,
+    pub sync_all_rules: Option<bool>,
+    pub operation_id: Option<String>,
+    pub sort_by: Option<String>,
+    pub descending: Option<bool>,
+    pub before_presentation_id: Option<String>,
+    pub expected_order: Option<Vec<String>>,
+    pub include_hidden: Option<bool>,
+}
+
+pub struct RemoteRequest {
+    pub command: RemoteCommand,
+    pub reply: mpsc::SyncSender<Result<(RemoteState, String), String>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RemoteInfo {
+    pub running: bool,
+    pub status: String,
+    pub current_port: u16,
+    pub replaced_port: u16,
+    pub connected_clients: usize,
+    pub error: String,
+}
+
+struct ServerInstance {
+    stop: Arc<AtomicBool>,
+    thread: thread::JoinHandle<()>,
+}
+
+pub struct RemoteServer {
+    instance: RefCell<Option<ServerInstance>>,
+    shared_state: Arc<Mutex<RemoteState>>,
+    slide_timing: RefCell<crate::slide_timer::SlideTiming>,
+    info: Arc<Mutex<RemoteInfo>>,
+    token: Arc<Mutex<String>>,
+    clients: Arc<Mutex<HashMap<IpAddr, Instant>>>,
+    announced_clients: RefCell<HashSet<IpAddr>>,
+    revision: Arc<AtomicI64>,
+    server_instance: String,
+    sender: mpsc::Sender<RemoteRequest>,
+}
+
+impl RemoteServer {
+    pub fn new(sender: mpsc::Sender<RemoteRequest>) -> Self {
+        Self {
+            instance: RefCell::new(None),
+            shared_state: Arc::new(Mutex::new(RemoteState::default())),
+            slide_timing: RefCell::new(Default::default()),
+            info: Arc::new(Mutex::new(RemoteInfo::default())),
+            token: Arc::new(Mutex::new(String::new())),
+            clients: Arc::new(Mutex::new(HashMap::new())),
+            announced_clients: RefCell::new(HashSet::new()),
+            revision: Arc::new(AtomicI64::new(0)),
+            server_instance: generate_token(),
+            sender,
+        }
+    }
+
+    pub fn start(&self, config: &mut AppConfig) -> Result<u16, String> {
+        self.stop();
+        ensure_token(config);
+        *self.token.lock().unwrap() = config.remote_control.token.clone();
+        // The legacy field remains readable for config compatibility, but the
+        // service always operates on one saved fixed port.
+        config.remote_control.use_random_port = false;
+        if !config.remote_control.enabled {
+            self.info.lock().unwrap().status = "未启动".to_owned();
+            return Ok(0);
+        }
+        let requested = if config.remote_control.port == 0 {
+            4080
+        } else {
+            config.remote_control.port
+        };
+        // Bind directly so the availability check cannot race with another process.
+        let listener = match TcpListener::bind((Ipv4Addr::UNSPECIFIED, requested)) {
+            Ok(listener) => Ok(listener),
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::AddrInUse | std::io::ErrorKind::PermissionDenied
+                ) =>
+            {
+                TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0))
+            }
+            Err(error) => Err(error),
+        }
+        .map_err(|error| {
+            let mut info = self.info.lock().unwrap();
+            info.running = false;
+            info.status = "启动失败".to_owned();
+            info.error = error.to_string();
+            format!("远程服务启动失败：{error}")
+        })?;
+        listener
+            .set_nonblocking(true)
+            .map_err(|error| error.to_string())?;
+        let port = listener
+            .local_addr()
+            .map_err(|error| error.to_string())?
+            .port();
+        config.remote_control.port = port;
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_thread = Arc::clone(&stop);
+        let state = Arc::clone(&self.shared_state);
+        let info = Arc::clone(&self.info);
+        let token = Arc::clone(&self.token);
+        let clients = Arc::clone(&self.clients);
+        let sender = self.sender.clone();
+        let active = Arc::new(AtomicUsize::new(0));
+        let active_thread = Arc::clone(&active);
+        {
+            let mut current = self.info.lock().unwrap();
+            *current = RemoteInfo {
+                running: true,
+                status: "已启动".to_owned(),
+                current_port: port,
+                replaced_port: if port != requested { requested } else { 0 },
+                connected_clients: 0,
+                error: String::new(),
+            };
+        }
+        self.revision.fetch_add(1, Ordering::Relaxed);
+        let worker = thread::Builder::new()
+            .name("flyppttimer-remote".to_owned())
+            .spawn(move || {
+                while !stop_thread.load(Ordering::Relaxed) {
+                    match listener.accept() {
+                        Ok((stream, address)) => {
+                            if active_thread.fetch_add(1, Ordering::Relaxed) >= 16 {
+                                active_thread.fetch_sub(1, Ordering::Relaxed);
+                                continue;
+                            }
+                            let context = ConnectionContext {
+                                state: Arc::clone(&state),
+                                token: Arc::clone(&token),
+                                clients: Arc::clone(&clients),
+                                sender: sender.clone(),
+                            };
+                            let active = Arc::clone(&active_thread);
+                            let _ = thread::Builder::new()
+                                .name("flyppttimer-remote-client".to_owned())
+                                .spawn(move || {
+                                    handle_connection(stream, address, context);
+                                    active.fetch_sub(1, Ordering::Relaxed);
+                                });
+                        }
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                            thread::sleep(Duration::from_millis(25))
+                        }
+                        Err(error) => {
+                            let mut current = info.lock().unwrap();
+                            current.error = error.to_string();
+                            break;
+                        }
+                    }
+                }
+            })
+            .map_err(|error| error.to_string())?;
+        *self.instance.borrow_mut() = Some(ServerInstance {
+            stop,
+            thread: worker,
+        });
+        Ok(port)
+    }
+
+    pub fn take_port_change(&self) -> Option<(u16, u16)> {
+        let mut info = self.info.lock().unwrap();
+        let old = std::mem::take(&mut info.replaced_port);
+        (old != 0).then_some((old, info.current_port))
+    }
+
+    pub fn stop(&self) {
+        if let Some(instance) = self.instance.borrow_mut().take() {
+            instance.stop.store(true, Ordering::Relaxed);
+            let _ = instance.thread.join();
+        }
+        self.clients.lock().unwrap().clear();
+        self.announced_clients.borrow_mut().clear();
+        let mut info = self.info.lock().unwrap();
+        info.running = false;
+        info.status = "未启动".to_owned();
+        info.connected_clients = 0;
+        self.revision.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn apply_enabled(&self, config: &mut AppConfig) -> Result<(), String> {
+        ensure_token(config);
+        *self.token.lock().unwrap() = config.remote_control.token.clone();
+        let running = self.info().running;
+        if config.remote_control.enabled && !running {
+            self.start(config)?;
+        }
+        if !config.remote_control.enabled && running {
+            self.stop();
+        }
+        Ok(())
+    }
+
+    pub fn update_slide_timing(&self, timing: crate::slide_timer::SlideTiming) {
+        *self.slide_timing.borrow_mut() = timing;
+    }
+
+    pub fn update_state(&self, state: RemoteState) {
+        self.publish_state(state);
+    }
+
+    /// Called only by the UI producer, for both commands and periodic samples.
+    /// A revision belongs to the snapshot stored with it, never to a GET request.
+    pub fn publish_state(&self, mut state: RemoteState) -> RemoteState {
+        prune_clients(&self.clients);
+        let count = self.clients.lock().unwrap().len();
+        state.connected_clients = count;
+        state.server_instance = self.server_instance.clone();
+        let mut current = self.shared_state.lock().unwrap();
+        state.slide_timing = self.slide_timing.borrow().clone();
+        state.revision = self.revision.fetch_add(1, Ordering::Relaxed) + 1;
+        *current = state.clone();
+        drop(current);
+        self.info.lock().unwrap().connected_clients = count;
+        state
+    }
+
+    /// A device is connected only after a token-authenticated state request.
+    /// Polling, page refreshes and temporary disconnects must not steal focus again.
+    pub fn take_new_client(&self) -> Option<IpAddr> {
+        let clients = self.clients.lock().unwrap();
+        let mut announced = self.announced_clients.borrow_mut();
+        let next = clients
+            .keys()
+            .copied()
+            .filter(|ip| !ip.is_loopback() && !announced.contains(ip))
+            .min();
+        if let Some(ip) = next {
+            announced.insert(ip);
+        }
+        next
+    }
+
+    pub fn info(&self) -> RemoteInfo {
+        self.info.lock().unwrap().clone()
+    }
+
+    pub fn regenerate_token(&self) -> String {
+        let token = generate_token();
+        *self.token.lock().unwrap() = token.clone();
+        self.clients.lock().unwrap().clear();
+        self.announced_clients.borrow_mut().clear();
+        self.revision.fetch_add(1, Ordering::Relaxed);
+        token
+    }
+
+    pub fn disconnect_all(&self) -> String {
+        self.regenerate_token()
+    }
+}
+
+impl Drop for RemoteServer {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+struct ConnectionContext {
+    state: Arc<Mutex<RemoteState>>,
+    token: Arc<Mutex<String>>,
+    clients: Arc<Mutex<HashMap<IpAddr, Instant>>>,
+    sender: mpsc::Sender<RemoteRequest>,
+}
+
+fn configure_client_stream(stream: &TcpStream) -> Result<(), String> {
+    // The listening socket is non-blocking so the server thread can observe stop requests.
+    // Winsock may propagate that mode to an accepted socket. HTTP parsing is intentionally
+    // blocking with bounded timeouts; otherwise the first read can race the request bytes and
+    // surface WSAEWOULDBLOCK (10035) to a freshly scanned phone.
+    stream
+        .set_nonblocking(false)
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(8)))
+        .map_err(|error| error.to_string())?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(8)))
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn handle_connection(mut stream: TcpStream, address: SocketAddr, context: ConnectionContext) {
+    let result = configure_client_stream(&stream)
+        .and_then(|()| read_request(&mut stream))
+        .and_then(|request| route(request, address, &context));
+    let response = result.unwrap_or_else(|error| {
+        HttpResponse::json(400, &serde_json::json!({"ok":false,"error":error}))
+    });
+    let _ = write_response(&mut stream, response);
+}
+
+struct HttpRequest {
+    method: String,
+    raw_url: String,
+    body: Vec<u8>,
+}
+struct HttpResponse {
+    status: u16,
+    content_type: &'static str,
+    body: Vec<u8>,
+}
+impl HttpResponse {
+    fn text(status: u16, content_type: &'static str, value: String) -> Self {
+        Self {
+            status,
+            content_type,
+            body: value.into_bytes(),
+        }
+    }
+    fn json<T: Serialize>(status: u16, value: &T) -> Self {
+        Self::text(
+            status,
+            "application/json; charset=utf-8",
+            serde_json::to_string(value).unwrap_or_else(|_| "{}".to_owned()),
+        )
+    }
+}
+
+fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
+    let mut data = Vec::new();
+    let mut buffer = [0u8; 4096];
+    let header_end;
+    loop {
+        let count = stream
+            .read(&mut buffer)
+            .map_err(|error| error.to_string())?;
+        if count == 0 {
+            return Err("请求不完整".to_owned());
+        }
+        data.extend_from_slice(&buffer[..count]);
+        if let Some(position) = find_bytes(&data, b"\r\n\r\n") {
+            header_end = position + 4;
+            break;
+        }
+        if data.len() > MAX_HEADER_BYTES {
+            return Err("请求头过大".to_owned());
+        }
+    }
+    let header =
+        std::str::from_utf8(&data[..header_end]).map_err(|_| "请求头编码无效".to_owned())?;
+    let mut lines = header.lines();
+    let mut request_line = lines.next().unwrap_or_default().split_whitespace();
+    let method = request_line.next().unwrap_or_default().to_owned();
+    let raw_url = request_line.next().unwrap_or_default().to_owned();
+    let length = lines
+        .find_map(|line| {
+            line.split_once(':')
+                .filter(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+                .and_then(|(_, value)| value.trim().parse::<usize>().ok())
+        })
+        .unwrap_or(0);
+    if length > MAX_BODY_BYTES {
+        return Err("请求体过大".to_owned());
+    }
+    while data.len() < header_end + length {
+        let count = stream
+            .read(&mut buffer)
+            .map_err(|error| error.to_string())?;
+        if count == 0 {
+            break;
+        }
+        data.extend_from_slice(&buffer[..count]);
+    }
+    Ok(HttpRequest {
+        method,
+        raw_url,
+        body: data[header_end..data.len().min(header_end + length)].to_vec(),
+    })
+}
+
+fn route(
+    request: HttpRequest,
+    address: SocketAddr,
+    context: &ConnectionContext,
+) -> Result<HttpResponse, String> {
+    let (path, supplied) = split_url(&request.raw_url);
+    if !fixed_time_token_equals(&supplied, &context.token.lock().unwrap()) {
+        return Ok(HttpResponse::json(
+            403,
+            &serde_json::json!({"ok":false,"error":"令牌无效或远程控制已关闭"}),
+        ));
+    }
+    if request.method == "GET" && path == "/state" {
+        context
+            .clients
+            .lock()
+            .unwrap()
+            .insert(address.ip(), Instant::now());
+    }
+    prune_clients(&context.clients);
+    match (request.method.as_str(), path.as_str()) {
+        ("GET", "/") | ("GET", "/index.html") => {
+            let token = context
+                .token
+                .lock()
+                .unwrap()
+                .replace('\\', "\\\\")
+                .replace('\'', "\\'")
+                .replace(['\r', '\n'], "");
+            Ok(HttpResponse::text(
+                200,
+                "text/html; charset=utf-8",
+                INDEX_HTML.replace("__FLYPPT_TOKEN__", &token),
+            ))
+        }
+        ("GET", "/assets/app.css") => Ok(HttpResponse::text(
+            200,
+            "text/css; charset=utf-8",
+            APP_CSS.to_owned(),
+        )),
+        ("GET", "/assets/app.js") => Ok(HttpResponse::text(
+            200,
+            "application/javascript; charset=utf-8",
+            APP_JS.to_owned(),
+        )),
+        ("GET", "/state") => {
+            let mut state = context.state.lock().unwrap().clone();
+            state.connected_clients = context.clients.lock().unwrap().len();
+            Ok(HttpResponse::json(200, &state))
+        }
+        ("POST", "/browse") => {
+            if !context.state.lock().unwrap().file_browsing_enabled {
+                return Ok(HttpResponse::json(
+                    403,
+                    &serde_json::json!({"ok":false,"message":"Computer file browsing is disabled in desktop Remote settings."}),
+                ));
+            }
+            let input: crate::file_browser::BrowseRequest =
+                serde_json::from_slice(&request.body).map_err(|e| e.to_string())?;
+            match crate::file_browser::browse(&input.path) {
+                Ok(listing) => Ok(HttpResponse::json(200, &listing)),
+                Err(error) => Ok(HttpResponse::json(
+                    400,
+                    &serde_json::json!({"ok":false,"message":error}),
+                )),
+            }
+        }
+        ("POST", "/command") => {
+            let command: RemoteCommand =
+                serde_json::from_slice(&request.body).map_err(|error| error.to_string())?;
+            let (reply, receiver) = mpsc::sync_channel(1);
+            context
+                .sender
+                .send(RemoteRequest { command, reply })
+                .map_err(|_| "远程命令服务已关闭".to_owned())?;
+            match receiver.recv_timeout(Duration::from_secs(20)) {
+                Ok(Ok((mut state, message))) => {
+                    state.ok = true;
+                    state.message = message;
+                    state.connected_clients = context.clients.lock().unwrap().len();
+                    Ok(HttpResponse::json(200, &state))
+                }
+                Ok(Err(error)) => {
+                    let mut state = context.state.lock().unwrap().clone();
+                    state.ok = false;
+                    state.message = error;
+                    Ok(HttpResponse::json(400, &state))
+                }
+                Err(_) => Ok(HttpResponse::json(
+                    503,
+                    &serde_json::json!({"ok":false,"message":"命令响应超时"}),
+                )),
+            }
+        }
+        _ => Ok(HttpResponse::json(
+            404,
+            &serde_json::json!({"ok":false,"error":"未找到"}),
+        )),
+    }
+}
+
+fn write_response(stream: &mut TcpStream, response: HttpResponse) -> std::io::Result<()> {
+    let reason = if response.status == 200 {
+        "OK"
+    } else {
+        "ERROR"
+    };
+    write!(
+        stream,
+        "HTTP/1.1 {} {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nContent-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
+        response.status,
+        reason,
+        response.content_type,
+        response.body.len()
+    )?;
+    stream.write_all(&response.body)
+}
+
+fn split_url(raw: &str) -> (String, String) {
+    let (path, query) = raw.split_once('?').unwrap_or((raw, ""));
+    let token = query
+        .split('&')
+        .find_map(|pair| {
+            pair.split_once('=')
+                .filter(|(key, _)| *key == "token")
+                .map(|(_, value)| percent_decode(value))
+        })
+        .unwrap_or_default();
+    (path.to_owned(), token)
+}
+
+fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut result = Vec::new();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && let Ok(byte) = u8::from_str_radix(&value[index + 1..index + 3], 16)
+        {
+            result.push(byte);
+            index += 3;
+        } else {
+            result.push(if bytes[index] == b'+' {
+                b' '
+            } else {
+                bytes[index]
+            });
+            index += 1;
+        }
+    }
+    String::from_utf8_lossy(&result).into_owned()
+}
+
+fn find_bytes(data: &[u8], needle: &[u8]) -> Option<usize> {
+    data.windows(needle.len())
+        .position(|window| window == needle)
+}
+fn fixed_time_token_equals(left: &str, right: &str) -> bool {
+    if left.is_empty() || right.is_empty() {
+        return false;
+    }
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    let mut difference = left.len() ^ right.len();
+    for index in 0..left.len().max(right.len()) {
+        difference |= usize::from(*left.get(index).unwrap_or(&0) ^ *right.get(index).unwrap_or(&0));
+    }
+    difference == 0
+}
+
+/// Keep the persisted and in-memory Remote token non-empty at every service
+/// boundary.  Empty tokens are never valid credentials, even during startup.
+pub(crate) fn ensure_token(config: &mut AppConfig) {
+    if config.remote_control.token.trim().is_empty() {
+        config.remote_control.token = generate_token();
+    }
+}
+fn prune_clients(clients: &Arc<Mutex<HashMap<IpAddr, Instant>>>) {
+    clients
+        .lock()
+        .unwrap()
+        .retain(|_, seen| seen.elapsed() <= Duration::from_secs(30));
+}
+
+pub fn generate_token() -> String {
+    let mut bytes = [0u8; 24];
+    let status = unsafe {
+        windows_sys::Win32::Security::Cryptography::BCryptGenRandom(
+            std::ptr::null_mut(),
+            bytes.as_mut_ptr(),
+            bytes.len() as u32,
+            2,
+        )
+    };
+    assert_eq!(status, 0, "Windows random token generation failed");
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+pub fn lan_addresses() -> Vec<String> {
+    use windows_sys::Win32::{
+        Foundation::{ERROR_BUFFER_OVERFLOW, NO_ERROR},
+        NetworkManagement::{
+            IpHelper::{
+                GAA_FLAG_INCLUDE_GATEWAYS, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_DNS_SERVER,
+                GAA_FLAG_SKIP_MULTICAST, GetAdaptersAddresses, IP_ADAPTER_ADDRESSES_LH,
+            },
+            Ndis::IfOperStatusUp,
+        },
+        Networking::WinSock::{AF_INET, SOCKADDR_IN},
+    };
+    // An aligned buffer owns all records until traversal is complete.
+    let mut bytes = 15_000u32;
+    for _ in 0..3 {
+        let mut buffer = vec![0u64; (bytes as usize).div_ceil(8)];
+        let head = buffer.as_mut_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>();
+        let result = unsafe {
+            GetAdaptersAddresses(
+                u32::from(AF_INET),
+                GAA_FLAG_INCLUDE_GATEWAYS
+                    | GAA_FLAG_SKIP_ANYCAST
+                    | GAA_FLAG_SKIP_MULTICAST
+                    | GAA_FLAG_SKIP_DNS_SERVER,
+                std::ptr::null(),
+                head,
+                &mut bytes,
+            )
+        };
+        if result == ERROR_BUFFER_OVERFLOW {
+            if bytes > 1_048_576 {
+                return Vec::new();
+            }
+            continue;
+        }
+        if result != NO_ERROR {
+            return Vec::new();
+        }
+        let mut candidates = Vec::new();
+        let mut adapter_ptr = head;
+        while let Some(adapter) = unsafe { adapter_ptr.as_ref() } {
+            if adapter.OperStatus == IfOperStatusUp && matches!(adapter.IfType, 6 | 71) {
+                let mut address_ptr = adapter.FirstUnicastAddress;
+                while let Some(address) = unsafe { address_ptr.as_ref() } {
+                    let socket = address.Address;
+                    if !socket.lpSockaddr.is_null()
+                        && socket.iSockaddrLength >= std::mem::size_of::<SOCKADDR_IN>() as i32
+                        && unsafe { (*socket.lpSockaddr).sa_family } == AF_INET
+                    {
+                        let socket = unsafe { &*socket.lpSockaddr.cast::<SOCKADDR_IN>() };
+                        let ip =
+                            Ipv4Addr::from(unsafe { socket.sin_addr.S_un.S_addr }.to_ne_bytes());
+                        if is_lan(ip) {
+                            candidates.push((
+                                !adapter.FirstGatewayAddress.is_null(),
+                                adapter.IfType == 71,
+                                adapter.Ipv4Metric,
+                                ip,
+                            ));
+                        }
+                    }
+                    address_ptr = address.Next;
+                }
+            }
+            adapter_ptr = adapter.Next;
+        }
+        return preferred_lan_address(candidates);
+    }
+    Vec::new()
+}
+
+// One connection address and QR: only assigned unicast IPs are candidates,
+// never DNS servers, subnet masks, DHCP servers or default gateways.
+fn preferred_lan_address(mut candidates: Vec<(bool, bool, u32, Ipv4Addr)>) -> Vec<String> {
+    candidates.sort_by_key(|(gateway, wifi, metric, ip)| (!*gateway, !*wifi, *metric, *ip));
+    candidates
+        .into_iter()
+        .find(|(_, _, _, ip)| is_lan(*ip))
+        .map(|(_, _, _, ip)| vec![ip.to_string()])
+        .unwrap_or_default()
+}
+
+pub fn mask_token(url: &str) -> String {
+    let lower = url.to_ascii_lowercase();
+    let Some(index) = lower.find("token=") else {
+        return url.to_owned();
+    };
+    format!("{}••••••", &url[..index + "token=".len()])
+}
+fn is_lan(ip: Ipv4Addr) -> bool {
+    let octets = ip.octets();
+    octets[0] == 10
+        || (octets[0] == 172 && (16..=31).contains(&octets[1]))
+        || (octets[0] == 192 && octets[1] == 168)
+}
+
+pub fn qr_image(value: &str) -> Image {
+    use qrcode::{Color as QrColor, QrCode};
+    let Ok(code) = QrCode::new(value.as_bytes()) else {
+        return Image::default();
+    };
+    let quiet = 4usize;
+    let modules = code.width() + quiet * 2;
+    let scale = (192usize / modules).max(2);
+    let size = (modules * scale) as u32;
+    let mut buffer = SharedPixelBuffer::<Rgba8Pixel>::new(size, size);
+    for y in 0..size as usize {
+        for x in 0..size as usize {
+            let module_x = x / scale;
+            let module_y = y / scale;
+            let dark = module_x >= quiet
+                && module_y >= quiet
+                && module_x < modules - quiet
+                && module_y < modules - quiet
+                && code[(module_x - quiet, module_y - quiet)] == QrColor::Dark;
+            buffer.make_mut_slice()[y * size as usize + x] = if dark {
+                Rgba8Pixel {
+                    r: 15,
+                    g: 23,
+                    b: 42,
+                    a: 255,
+                }
+            } else {
+                Rgba8Pixel {
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                    a: 255,
+                }
+            };
+        }
+    }
+    Image::from_rgba8(buffer)
+}
+
+pub fn copy_text(value: &str) -> Result<(), String> {
+    use clipboard_win::{Clipboard, Setter, formats::Unicode};
+    let _clipboard = Clipboard::new_attempts(10).map_err(|error| error.to_string())?;
+    Unicode
+        .write_clipboard(&value)
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+pub fn open_url(value: &str) -> Result<(), String> {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let operation: Vec<u16> = "open".encode_utf16().chain(Some(0)).collect();
+    let target: Vec<u16> = value.encode_utf16().chain(Some(0)).collect();
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            operation.as_ptr(),
+            target.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if result as usize <= 32 {
+        Err(format!("打开控制页失败（{result:?}）"))
+    } else {
+        Ok(())
+    }
+}
+
+pub fn firewall_command(port: u16) -> String {
+    let executable = std::env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_default();
+    format!(
+        "netsh advfirewall firewall add rule name=\"FlyPPTTimer Remote {port}\" dir=in action=allow program=\"{executable}\" protocol=TCP localport={port}"
+    )
+}
+
+pub fn remote_state(
+    snapshot: &TimerSnapshot,
+    config: &AppConfig,
+    presentation: &PresentationState,
+    display_text: String,
+    muted: bool,
+    time_up: bool,
+) -> RemoteState {
+    let mode = if snapshot.mode == TimerMode::Countdown {
+        "倒计时"
+    } else {
+        "正计时"
+    }
+    .to_owned();
+    let state_text = match snapshot.state {
+        TimerState::Running => "运行中",
+        TimerState::Paused => "暂停",
+        TimerState::Finished => "已结束",
+        TimerState::Stopped => "停止",
+    }
+    .to_owned();
+    let timer_state = TimerRemoteState {
+        mode: mode.clone(),
+        state: state_text.clone(),
+        running: snapshot.state == TimerState::Running,
+        duration_ms: snapshot.duration.as_millis() as i64,
+        elapsed_ms: snapshot.elapsed.as_millis() as i64,
+        remaining_ms: snapshot.remaining.as_millis() as i64,
+        display_text: display_text.clone(),
+        is_overtime: snapshot.is_overtime,
+        continue_overtime: config.timer.continue_overtime,
+        window_visible: config.placement.visible,
+        muted,
+        time_up_blackout_active: time_up,
+        rule_count: config.rules.len(),
+    };
+    let presentation_state = presentation_remote_state_with_config(presentation, config);
+    RemoteState {
+        ok: true,
+        message: String::new(),
+        timer_state: timer_state.clone(),
+        presentation_state,
+        mode,
+        state: state_text,
+        running: timer_state.running,
+        duration_ms: timer_state.duration_ms,
+        elapsed_ms: timer_state.elapsed_ms,
+        remaining_ms: timer_state.remaining_ms,
+        display_text,
+        is_overtime: timer_state.is_overtime,
+        window_visible: timer_state.window_visible,
+        muted,
+        time_up_blackout_active: time_up,
+        rule_count: config.rules.len(),
+        connected_clients: 0,
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        revision: 0,
+        server_instance: String::new(),
+        ui_theme: config.ui_theme.clone(),
+        file_browsing_enabled: config.remote_control.allow_file_browsing,
+        slide_timing: Default::default(),
+    }
+}
+
+#[cfg(test)]
+fn presentation_remote_state(
+    state: &PresentationState,
+    rules: &[FileRule],
+) -> PresentationRemoteState {
+    let config = AppConfig {
+        rules: rules.to_vec(),
+        ..AppConfig::default()
+    };
+    presentation_remote_state_with_config(state, &config)
+}
+
+fn presentation_remote_state_with_config(
+    state: &PresentationState,
+    config: &AppConfig,
+) -> PresentationRemoteState {
+    let rules = &config.rules;
+    let ordered = crate::mobile_rules::ordered_indices(config);
+    let mut options = Vec::new();
+    for index in ordered {
+        let rule = &rules[index];
+        let metadata = crate::mobile_rules::file_metadata(&rule.file_path);
+        let open = state
+            .presentations
+            .iter()
+            .find(|item| id_for_path(&item.path) == id_for_path(&rule.file_path));
+        options.push(PresentationOption {
+            id: id_for_path(&rule.file_path),
+            name: if rule.file_name.is_empty() {
+                std::path::Path::new(&rule.file_path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned()
+            } else {
+                rule.file_name.clone()
+            },
+            directory: std::path::Path::new(&rule.file_path)
+                .parent()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
+            file_size: metadata.0,
+            modified_ms: metadata.1,
+            is_rule: true,
+            mobile_hidden: rule.mobile_hidden,
+            is_open: open.is_some(),
+            is_active: open.is_some_and(|item| item.active),
+            is_slide_show_running: open.is_some_and(|item| item.slide_show_running),
+            is_managed: open.is_some_and(|item| item.managed),
+        });
+    }
+    let mut unmanaged = state
+        .presentations
+        .iter()
+        .filter(|item| {
+            !rules
+                .iter()
+                .any(|rule| id_for_path(&rule.file_path) == id_for_path(&item.path))
+        })
+        .collect::<Vec<_>>();
+    unmanaged.sort_by_key(|item| id_for_path(&item.path));
+    let mut available = Vec::new();
+    for item in unmanaged {
+        if !crate::settings::is_supported_presentation_path(std::path::Path::new(&item.path)) {
+            continue;
+        }
+        available.push(PresentationOption {
+            id: id_for_path(&item.path),
+            name: item.name.clone(),
+            directory: std::path::Path::new(&item.path)
+                .parent()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
+            is_open: true,
+            is_active: item.active,
+            is_slide_show_running: item.slide_show_running,
+            is_managed: item.managed,
+            ..PresentationOption::default()
+        });
+    }
+    PresentationRemoteState {
+        power_point_installed: state.powerpoint_installed,
+        power_point_running: state.running,
+        has_presentation: state.has_presentation,
+        is_slide_show_running: state.slide_show_running,
+        presentation_name: state.presentation_name.clone(),
+        presentation_path: state.presentation_path.clone(),
+        current_slide: state.current_slide,
+        total_slides: state.total_slides,
+        screen_mode: match state.screen_state {
+            3 => "黑屏",
+            4 => "白屏",
+            _ => "正常",
+        }
+        .to_owned(),
+        updated_at: utc_timestamp(),
+        error: state.error.clone(),
+        current_controllable: crate::mobile_rules::is_controlled(config, &state.presentation_path),
+        can_close_last: options.iter().any(|item| item.is_open && item.is_managed),
+        can_quit_all: !state.state_unavailable
+            && !state.presentations.is_empty()
+            && available.is_empty(),
+        available_presentations: available,
+        list_sort: config.remote_control.list_sort.clone(),
+        list_sort_descending: config.remote_control.list_sort_descending,
+        presentations: options,
+        operation: state.operation.name.clone(),
+        operation_message: state.operation.message.clone(),
+        operation_started_at: state.operation.started_at.clone(),
+        operation_id: state.operation.id.clone(),
+        is_operation_busy: state.operation.busy,
+        is_current_presentation_managed: state.managed,
+        open_presentation_count: state.presentations.len(),
+        wps_detected: state.application == Some(PresentationApp::Wps),
+    }
+}
+
+pub(crate) fn utc_timestamp() -> String {
+    use windows_sys::Win32::{Foundation::SYSTEMTIME, System::SystemInformation::GetSystemTime};
+    let mut time = unsafe { std::mem::zeroed::<SYSTEMTIME>() };
+    unsafe { GetSystemTime(&mut time) };
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        time.wYear,
+        time.wMonth,
+        time.wDay,
+        time.wHour,
+        time.wMinute,
+        time.wSecond,
+        time.wMilliseconds
+    )
+}
+
+// Stable, case-insensitive path identity used consistently by state and commands.
+pub fn id_for_path(path: &str) -> String {
+    // Office may return the verbatim prefix introduced by canonicalize().
+    // It identifies the same saved rule, not a second unmanaged document.
+    let path = if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else {
+        path.strip_prefix(r"\\?\").unwrap_or(path).to_owned()
+    };
+    let normalized = std::path::absolute(&path).unwrap_or_else(|_| std::path::PathBuf::from(&path));
+    normalized
+        .to_string_lossy()
+        .trim_end_matches(['\\', '/'])
+        .to_uppercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn successful_phone_connection_announces_once_but_never_grants_file_access() {
+        let (sender, _receiver) = mpsc::channel();
+        let server = RemoteServer::new(sender);
+        *server.token.lock().unwrap() = "test".into();
+        let context = ConnectionContext {
+            state: server.shared_state.clone(),
+            token: server.token.clone(),
+            clients: server.clients.clone(),
+            sender: server.sender.clone(),
+        };
+        let ip = IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10));
+        let request = |token: &str, path: &str| HttpRequest {
+            method: "GET".into(),
+            raw_url: format!("{path}?token={token}"),
+            body: vec![],
+        };
+        route(
+            request("bad", "/state"),
+            SocketAddr::new(ip, 4000),
+            &context,
+        )
+        .unwrap();
+        route(request("test", "/"), SocketAddr::new(ip, 4000), &context).unwrap();
+        assert!(server.take_new_client().is_none());
+        route(
+            request("test", "/state"),
+            SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 4000),
+            &context,
+        )
+        .unwrap();
+        assert!(server.take_new_client().is_none());
+        for port in [4000, 4001, 4002] {
+            route(
+                request("test", "/state"),
+                SocketAddr::new(ip, port),
+                &context,
+            )
+            .unwrap();
+            assert_eq!(
+                server.take_new_client(),
+                if port == 4000 { Some(ip) } else { None }
+            );
+        }
+        assert!(!server.shared_state.lock().unwrap().file_browsing_enabled);
+        server.clients.lock().unwrap().clear();
+        route(
+            request("test", "/state"),
+            SocketAddr::new(ip, 5000),
+            &context,
+        )
+        .unwrap();
+        assert!(server.take_new_client().is_none());
+        let token = server.regenerate_token();
+        route(
+            request(&token, "/state"),
+            SocketAddr::new(ip, 5000),
+            &context,
+        )
+        .unwrap();
+        assert_eq!(server.take_new_client(), Some(ip));
+    }
+
+    #[test]
+    fn file_browser_requires_token_and_desktop_opt_in_and_exposes_no_download() {
+        let (sender, _receiver) = mpsc::channel();
+        let state = Arc::new(Mutex::new(RemoteState::default()));
+        let context = ConnectionContext {
+            state: state.clone(),
+            token: Arc::new(Mutex::new("test".into())),
+            clients: Arc::new(Mutex::new(HashMap::new())),
+            sender,
+        };
+        let address = SocketAddr::from((Ipv4Addr::LOCALHOST, 1000));
+        let request = |token: &str, method: &str, path: &str| HttpRequest {
+            method: method.into(),
+            raw_url: format!("{path}?token={token}"),
+            body: b"{}".to_vec(),
+        };
+        assert_eq!(
+            route(request("wrong", "POST", "/browse"), address, &context)
+                .unwrap()
+                .status,
+            403
+        );
+        assert_eq!(
+            route(request("test", "POST", "/browse"), address, &context)
+                .unwrap()
+                .status,
+            403
+        );
+        state.lock().unwrap().file_browsing_enabled = true;
+        assert_eq!(
+            route(request("test", "POST", "/browse"), address, &context)
+                .unwrap()
+                .status,
+            200
+        );
+        assert_eq!(
+            route(request("test", "GET", "/download"), address, &context)
+                .unwrap()
+                .status,
+            404
+        );
+    }
+
+    #[test]
+    fn client_stream_is_restored_to_blocking_before_http_read() {
+        use std::io::Write as _;
+
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let writer = thread::spawn(move || {
+            let mut stream = TcpStream::connect(address).unwrap();
+            thread::sleep(Duration::from_millis(40));
+            stream
+                .write_all(b"GET /state?token=test HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                .unwrap();
+        });
+        let (mut stream, _) = listener.accept().unwrap();
+        // Make the regression deterministic even where accept does not inherit nonblocking mode.
+        stream.set_nonblocking(true).unwrap();
+        configure_client_stream(&stream).unwrap();
+        let request = read_request(&mut stream).unwrap();
+        assert_eq!(request.method, "GET");
+        assert_eq!(request.raw_url, "/state?token=test");
+        writer.join().unwrap();
+    }
+    #[test]
+    fn command_snapshot_is_published_before_followup_get_and_keeps_its_revision() {
+        let (sender, _receiver) = mpsc::channel();
+        let server = RemoteServer::new(sender);
+        *server.token.lock().unwrap() = "test-token".into();
+        let old = server.publish_state(RemoteState::default());
+        let mut next = old.clone();
+        next.presentation_state.list_sort = "name".into();
+        next.presentation_state.presentations = vec![
+            PresentationOption {
+                id: "B".into(),
+                ..PresentationOption::default()
+            },
+            PresentationOption {
+                id: "A".into(),
+                ..PresentationOption::default()
+            },
+        ];
+        let acknowledged = server.publish_state(next);
+        assert!(acknowledged.revision > old.revision);
+        assert!(!acknowledged.server_instance.is_empty());
+        assert_eq!(old.server_instance, acknowledged.server_instance);
+        let context = ConnectionContext {
+            state: Arc::clone(&server.shared_state),
+            token: Arc::clone(&server.token),
+            clients: Arc::clone(&server.clients),
+            sender: server.sender.clone(),
+        };
+        // An independent token/client revision must not relabel old data as new.
+        server.revision.fetch_add(1, Ordering::Relaxed);
+        let response = route(
+            HttpRequest {
+                method: "GET".into(),
+                raw_url: "/state?token=test-token".into(),
+                body: vec![],
+            },
+            SocketAddr::from(([127, 0, 0, 1], 4080)),
+            &context,
+        )
+        .unwrap();
+        let actual: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(actual["revision"], acknowledged.revision);
+        assert_eq!(actual["presentationState"]["listSort"], "name");
+        assert_eq!(actual["presentationState"]["presentations"][0]["id"], "B");
+    }
+
+    #[test]
+    fn office_verbatim_paths_keep_the_saved_rule_identity() {
+        assert_eq!(
+            id_for_path(r"C:\Decks\A.pptx"),
+            id_for_path(r"\\?\C:\Decks\A.pptx")
+        );
+        assert_eq!(
+            id_for_path(r"\\server\share\A.pptx"),
+            id_for_path(r"\\?\UNC\server\share\A.pptx")
+        );
+    }
+
+    #[test]
+    fn mobile_projection_keeps_order_hidden_and_disabled_rules() {
+        let mut state = PresentationState::default();
+        let rules = vec![
+            FileRule {
+                file_path: "B.pptx".into(),
+                mobile_order: 1,
+                mobile_hidden: true,
+                ..FileRule::default()
+            },
+            FileRule {
+                file_path: "A.pptx".into(),
+                enabled: false,
+                ..FileRule::default()
+            },
+        ];
+        state
+            .presentations
+            .push(crate::presentation::OpenPresentation {
+                path: "B.pptx".into(),
+                name: "B".into(),
+                active: true,
+                slide_show_running: true,
+                managed: false,
+            });
+        let options = presentation_remote_state(&state, &rules).presentations;
+        assert_eq!(options.len(), 2);
+        assert_eq!(options[0].id, id_for_path("A.pptx"));
+        assert!(options[1].mobile_hidden && options[1].is_active && options[1].is_rule);
+    }
+
+    #[test]
+    fn token_comparison_rejects_wrong_values() {
+        assert!(fixed_time_token_equals("abc", "abc"));
+        assert!(!fixed_time_token_equals("abc", "abd"));
+        assert!(!fixed_time_token_equals("abc", "abc0"));
+        assert!(!fixed_time_token_equals("", ""));
+        assert!(!fixed_time_token_equals("abc", ""));
+    }
+
+    #[test]
+    fn empty_token_is_replaced_and_requests_require_it() {
+        let (sender, _receiver) = mpsc::channel();
+        let server = RemoteServer::new(sender);
+        let mut config = AppConfig::default();
+        let port = server.start(&mut config).unwrap();
+        assert!(!config.remote_control.token.is_empty());
+        config.remote_control.token.clear();
+        server.apply_enabled(&mut config).unwrap();
+        assert!(!config.remote_control.token.is_empty());
+
+        let context = ConnectionContext {
+            state: Arc::clone(&server.shared_state),
+            token: Arc::clone(&server.token),
+            clients: Arc::clone(&server.clients),
+            sender: server.sender.clone(),
+        };
+        let address = SocketAddr::from(([127, 0, 0, 1], port));
+        let unauthorized = route(
+            HttpRequest {
+                method: "GET".into(),
+                raw_url: "/state?token=".into(),
+                body: Vec::new(),
+            },
+            address,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(unauthorized.status, 403);
+        let authorized = route(
+            HttpRequest {
+                method: "GET".into(),
+                raw_url: format!("/state?token={}", config.remote_control.token),
+                body: Vec::new(),
+            },
+            address,
+            &context,
+        )
+        .unwrap();
+        assert_eq!(authorized.status, 200);
+        server.stop();
+    }
+    #[test]
+    fn parses_duration_and_mode_command() {
+        let command: RemoteCommand = serde_json::from_str(
+            r#"{"command":"timer.setDuration","durationMs":300000,"mode":"countup"}"#,
+        )
+        .unwrap();
+        assert_eq!(command.duration_ms, Some(300000));
+        assert_eq!(command.mode.as_deref(), Some("countup"));
+    }
+    #[test]
+    fn path_identity_ignores_case() {
+        assert_eq!(
+            id_for_path(r"C:\Demo\Talk.pptx"),
+            id_for_path(r"c:\demo\talk.PPTX")
+        );
+        assert_eq!(id_for_path(r"C:\Demo\Talk.pptx"), r"C:\DEMO\TALK.PPTX");
+    }
+    #[test]
+    fn generated_token_matches_v0302_shape() {
+        let token = generate_token();
+        assert_eq!(token.len(), 48);
+        assert!(
+            token
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        );
+    }
+    #[test]
+    fn qr_is_generated_for_remote_url() {
+        let image = qr_image("http://192.168.1.2:4080/?token=abc");
+        assert!(image.size().width > 0);
+    }
+    #[test]
+    fn occupied_fixed_port_is_replaced_and_reused() {
+        let (sender, _receiver) = mpsc::channel();
+        let server = RemoteServer::new(sender);
+        let mut config = AppConfig::default();
+        config.remote_control.token = generate_token();
+        let occupied = TcpListener::bind((Ipv4Addr::UNSPECIFIED, 0)).unwrap();
+        config.remote_control.port = occupied.local_addr().unwrap().port();
+        let old = config.remote_control.port;
+        config.remote_control.use_random_port = true; // legacy configuration is ignored
+        let port = server.start(&mut config).unwrap();
+        assert!(port > 0);
+        assert_eq!(config.remote_control.port, port);
+        assert_ne!(old, port);
+        assert!(!config.remote_control.use_random_port);
+        assert_eq!(server.take_port_change(), Some((old, port)));
+        assert_eq!(server.start(&mut config).unwrap(), port);
+        assert_eq!(server.take_port_change(), None);
+        server.stop();
+    }
+}
+
+#[cfg(test)]
+mod feedback_address_tests {
+    use super::*;
+    #[test]
+    fn phone_hotspot_wifi_is_one_address_not_the_gateway() {
+        assert_eq!(
+            preferred_lan_address(vec![
+                (true, false, 10, Ipv4Addr::new(192, 168, 1, 25)),
+                (true, true, 30, Ipv4Addr::new(172, 20, 10, 4)),
+            ]),
+            vec!["172.20.10.4"]
+        );
+    }
+    #[test]
+    fn disconnected_or_non_lan_candidates_do_not_create_a_phone_url() {
+        assert!(preferred_lan_address(Vec::new()).is_empty());
+        assert!(preferred_lan_address(vec![(true, true, 1, Ipv4Addr::LOCALHOST)]).is_empty());
+        assert_eq!(
+            preferred_lan_address(vec![(true, true, 10, Ipv4Addr::new(192, 168, 43, 20))]),
+            vec!["192.168.43.20"]
+        );
+    }
+}

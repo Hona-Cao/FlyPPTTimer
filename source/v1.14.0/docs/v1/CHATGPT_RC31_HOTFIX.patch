@@ -1,0 +1,128 @@
+diff --git a/src/window.rs b/src/window.rs
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -327,7 +327,11 @@ pub fn is_minimized(window: &slint::Window) -> bool {
+ 
+ pub fn escape_key_down() -> bool {
+     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE};
+-    unsafe { (GetAsyncKeyState(VK_ESCAPE as i32) as u16 & 0x8000) != 0 }
++    let state = unsafe { GetAsyncKeyState(VK_ESCAPE as i32) as u16 };
++    // The high bit reports the current state; the low bit records a press
++    // since the previous query. Reading both prevents an ordinary short tap
++    // from disappearing between the app's 100 ms refresh samples.
++    state & 0x8001 != 0
+ }
+ 
+ pub fn show_time_up_window(window: &slint::Window, bounds: crate::display::DisplayRect) {
+diff --git a/src/config.rs b/src/config.rs
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -546,7 +546,10 @@ impl Default for FileRule {
+     fn default() -> Self {
+         Self {
+             mobile_hidden: false,
+-            mobile_order: 0,
++            // Missing metadata in legacy configs and rules added from desktop
++            // editors should naturally append after explicitly ordered mobile
++            // rules instead of jumping to the front as another order-0 item.
++            mobile_order: i32::MAX,
+             file_name: String::new(),
+             file_path: String::new(),
+             duration: "00:08:00".to_owned(),
+@@ -618,7 +621,7 @@ mod tests {
+                 .unwrap();
+         assert!(c.appearance.show_slide_numbers);
+         assert!(!c.rules[0].mobile_hidden);
+-        assert_eq!(c.rules[0].mobile_order, 0);
++        assert_eq!(c.rules[0].mobile_order, i32::MAX);
+     }
+ 
+     #[test]
+diff --git a/src/presentation.rs b/src/presentation.rs
+--- a/src/presentation.rs
++++ b/src/presentation.rs
+@@ -342,9 +342,7 @@ impl Session {
+             }
+         };
+         end_other_shows(&app, &path)?;
+-        if !matching_show_views(&app, &path, true)?.is_empty() {
+-            return Ok("目标文稿已在放映".into());
+-        }
++        let already_showing = !matching_show_views(&app, &path, true)?.is_empty();
+         let presentations = dispatch(get(&app, "Presentations")?)?;
+         let presentation = if let Some(presentation) = find_presentation(&presentations, &path)? {
+             presentation
+@@ -377,13 +375,17 @@ impl Session {
+             let _ = call(&window, "Activate", &[]);
+         }
+         let _ = put(&app, "Visible", VARIANT::from(true));
+-        Ok(format!(
+-            "已打开 {}",
+-            Path::new(&path)
+-                .file_name()
+-                .unwrap_or_default()
+-                .to_string_lossy()
+-        ))
++        if already_showing {
++            Ok("目标文稿已在放映".into())
++        } else {
++            Ok(format!(
++                "已打开 {}",
++                Path::new(&path)
++                    .file_name()
++                    .unwrap_or_default()
++                    .to_string_lossy()
++            ))
++        }
+     }
+@@ -443,10 +445,7 @@ impl Session {
+         let presentation = dispatch(get(&app, "ActivePresentation")?)?;
+         let path = string(get(&presentation, "FullName")?)?;
+         end_show_for(&app, &path)?;
+-        if self.managed_paths.contains(&normalize_path(&path)) {
+-            let _ = put(&presentation, "Saved", VARIANT::from(true));
+-        }
+-        call(&presentation, "Close", &[])?;
++        close_without_saving(&presentation)?;
+         self.remove_managed(&path);
+         Ok(format!("已关闭当前文稿：{}。", file_name(&path)))
+     }
+@@ -459,8 +458,7 @@ impl Session {
+             let presentations = dispatch(get(&app, "Presentations")?)?;
+             if let Some(presentation) = find_presentation(&presentations, &path)? {
+                 end_show_for(&app, &path)?;
+-                let _ = put(&presentation, "Saved", VARIANT::from(true));
+-                call(&presentation, "Close", &[])?;
++                close_without_saving(&presentation)?;
+                 self.managed_paths.remove(&path);
+                 return Ok(format!("已关闭最后打开的文稿：{}。", file_name(&path)));
+             }
+@@ -828,6 +826,27 @@ fn end_show_for(app: &IDispatch, path: &str) -> Result<(), String> {
+     Ok(())
+ }
+ 
++fn close_without_saving(presentation: &IDispatch) -> Result<(), String> {
++    // Remote close is an explicitly confirmed "discard changes" action.
++    // Mark Saved before Close so Office cannot block the single STA worker on
++    // a save-confirmation dialog. If Close itself fails, restore the dirty bit
++    // so an open document is never silently left looking saved.
++    let was_saved = int(get(presentation, "Saved")?)? != 0;
++    put(presentation, "Saved", VARIANT::from(true))?;
++    match call(presentation, "Close", &[]).map(|_| ()) {
++        Ok(()) => Ok(()),
++        Err(close_error) => {
++            if !was_saved
++                && let Err(restore_error) = put(presentation, "Saved", VARIANT::from(false))
++            {
++                return Err(format!(
++                    "{close_error}; 关闭失败后无法恢复未保存状态：{restore_error}"
++                ));
++            }
++            Err(close_error)
++        }
++    }
++}
++
+ fn get(object: &IDispatch, name: &str) -> Result<VARIANT, String> {
+     invoke(object, name, DISPATCH_PROPERTYGET, &[], None)
+ }
