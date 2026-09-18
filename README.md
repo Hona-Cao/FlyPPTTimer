@@ -4,7 +4,7 @@
 
 FlyPPTTimer is a Windows presentation timer for PowerPoint and WPS Presentation with countdown/count-up modes, slide numbers, per-slide timing, multi-display layouts, and phone-browser remote control.
 
-> **v1.15.0 and earlier are historical MIT-licensed releases. v1.16.0 is the current public release and is governed by the current [LICENSE](LICENSE).** Rights already granted for historical MIT releases remain unchanged. Current development source code is not distributed through this public release repository.
+> **FlyPPTTimer is proprietary software.** The public GitHub and Gitee repositories are product-distribution channels. FlyPPTTimer product source code is not published or distributed for current or future releases.
 
 <a id="download"></a>
 ## Download
@@ -15,17 +15,16 @@ FlyPPTTimer is a Windows presentation timer for PowerPoint and WPS Presentation 
 
 The current release is **v1.16.0** for Windows 10 / 11 x64. Standalone timing does not require Office. Slide detection and slideshow control require compatible desktop PowerPoint or WPS Presentation. The phone side only needs a browser.
 
-The public v1.16.0 release contains the portable ZIP and setup ZIP. Use download locations identified by the author as official; mirrors, repackaged copies, and modified builds are not official FlyPPTTimer releases.
+The official v1.16.0 release contains the portable ZIP and setup ZIP. Use download locations identified by the author as official; mirrors, repackaged copies, and modified builds are not official FlyPPTTimer releases.
 
-## Historical source code
+## Distribution policy
 
-Historical source snapshots and branches published under their original licenses remain available for the versions already released that way, including:
+This repository is maintained as a public product release and end-user documentation channel.
 
-- [v1.14.1](source/v1.14.1/)
-- [v1.14.0](source/v1.14.0/)
-- [v1.13.1](source/v1.13.1/)
-
-Corresponding historical source branches remain available as well. Their existing MIT rights are not changed by the v1.16.0 license boundary. Current v1.16.0 development source is not published here.
+- Official releases distribute compiled application packages and end-user materials.
+- Product source code, build scripts, tests, and private development records are not published through the public GitHub or Gitee repositories.
+- Repository-hosting platforms may automatically provide archives labelled **Source code**. Those archives are snapshots of the public release/documentation repository and are not FlyPPTTimer product source distributions.
+- Earlier FlyPPTTimer versions remain subject to the terms that accompanied those specific versions.
 
 ## Features
 
@@ -50,9 +49,9 @@ The guides cover installation and updates, timing modes, PowerPoint / WPS integr
 
 ## License
 
-Historical FlyPPTTimer releases through v1.15.0 remain governed by the MIT License supplied with those releases. v1.16.0 and later original material are governed by the current [LICENSE](LICENSE) unless a specific file or release states otherwise.
+Current and future FlyPPTTimer releases are proprietary software unless a specific release expressly states otherwise. See [LICENSE](LICENSE).
 
-Third-party components and acknowledgements are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The FlyPPTTimer name and official branding are covered separately by [TRADEMARKS.md](TRADEMARKS.md).
+Third-party components retain their own license terms and notices; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The FlyPPTTimer name and official branding are covered separately by [TRADEMARKS.md](TRADEMARKS.md).
 
 ## Feedback
 

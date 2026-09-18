@@ -19,10 +19,11 @@
 - 缩短 Remote 命令分发、服务器接收轮询、演示状态刷新和已连接手机轮询间隔，改善局域网控制反馈。
 
 ### 下载、升级与许可
-- Windows 10 / 11 x64；公开发布仅提供便携版 ZIP 与安装版 ZIP。
+- Windows 10 / 11 x64；正式发布提供便携版 ZIP 与安装版 ZIP。
 - 安装版升级不覆盖已有 `FlyPPTTimer.config.json`；便携更新继续保留个人配置与 `alert-sounds`。
-- v1.15.0 及以前的历史 MIT 权利保持不变；v1.16.0 适用随当前版本提供的 LICENSE。
-- GitHub 自动生成的 `Source code` 压缩包只包含公开发布/用户文档仓库的内容，不包含当前 v1.16.0 开发源码；历史已经公开的源码快照仍按其原许可保留。
+- v1.16.0 按当前 FlyPPTTimer 专有软件许可发布。
+- GitHub 与 Gitee 公共仓库只作为产品发布与用户文档渠道，不发布 FlyPPTTimer 产品源码。
+- 代码托管平台自动生成的 **Source code** 归档只是公开仓库内容快照，不是 FlyPPTTimer 产品源码包。
 
 ## English
 
@@ -42,7 +43,8 @@
 - Remote dispatch, server accept polling, presentation-state refresh, and connected-phone polling intervals are reduced for faster LAN feedback.
 
 ### Downloads, upgrading, and license
-- Windows 10 / 11 x64. The public release contains exactly the portable ZIP and setup ZIP.
+- Windows 10 / 11 x64. The official release contains the portable ZIP and setup ZIP.
 - Installer upgrades preserve an existing `FlyPPTTimer.config.json`; portable updates preserve personal configuration and `alert-sounds`.
-- Historical MIT rights for v1.15.0 and earlier remain unchanged. v1.16.0 is governed by the LICENSE shipped with this release.
-- GitHub-generated `Source code` archives contain only the public release/user-documentation repository, not the current v1.16.0 development source. Historical source snapshots already published remain available under their original licenses.
+- v1.16.0 is distributed under the current FlyPPTTimer proprietary software license.
+- The public GitHub and Gitee repositories are product-release and end-user documentation channels; FlyPPTTimer product source code is not published there.
+- Repository-hosting platforms may automatically provide archives labelled **Source code**. Those archives are snapshots of the public repository content, not FlyPPTTimer product source distributions.
