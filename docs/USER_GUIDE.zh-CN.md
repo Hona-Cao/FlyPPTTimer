@@ -4,7 +4,7 @@
 
 适用于 **FlyPPTTimer v1.17.0 · Windows 10 / 11 x64**。
 
-这份指南只说明当前版本的实际使用方式，不再按 v1.14、v1.15、v1.16 逐版本叠加说明。历史变化请查看 [GitHub Releases](https://github.com/Hona-Cao/FlyPPTTimer/releases)。
+这份指南只说明当前版本的实际使用方式。历史版本变化请查看 [GitHub Releases](https://github.com/Hona-Cao/FlyPPTTimer/releases)。
 
 FlyPPTTimer 可以独立作为演讲计时器，也可以配合桌面版 Microsoft PowerPoint / WPS 演示显示页码、记录逐页用时、按文稿切换计时规则，并通过手机浏览器控制计时和演示。
 
