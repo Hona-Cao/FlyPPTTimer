@@ -4,7 +4,7 @@
 
 Applies to **FlyPPTTimer v1.17.0 · Windows 10 / 11 x64**.
 
-This guide documents the current product workflow only. It no longer stacks v1.14, v1.15, and v1.16 change notes into the main manual. For historical changes, see [GitHub Releases](https://github.com/Hona-Cao/FlyPPTTimer/releases).
+This guide documents the current product workflow only. For historical changes, see [GitHub Releases](https://github.com/Hona-Cao/FlyPPTTimer/releases).
 
 FlyPPTTimer works as a standalone speaking timer and can also integrate with desktop Microsoft PowerPoint / WPS Presentation to show slide numbers, track per-slide time, apply presentation-specific timing rules, and control timing or presentations from a phone browser.
 
