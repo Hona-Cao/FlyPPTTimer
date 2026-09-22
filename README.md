@@ -23,13 +23,18 @@ FlyPPTTimer is built for presentations where **time actually matters**: thesis d
 
 Instead of juggling a generic timer, PowerPoint, a second display, and a phone, FlyPPTTimer brings the presentation workflow together: **countdown/count-up timing, slide awareness, per-slide timing, reminders, multi-display output, presentation-specific rules, reusable scenarios, and browser-based remote control**.
 
-<p align="center">
-  <img src="docs/media/readme/timer-overlay.png" alt="FlyPPTTimer floating timer showing time, slide stopwatch and slide number" width="500">
-</p>
+<table>
+<tr>
+<td width="62%"><img src="docs/media/readme/settings-scenarios-en.png" alt="FlyPPTTimer desktop settings"></td>
+<td width="38%" align="center"><img src="docs/media/readme/mobile-timer-en.png" alt="FlyPPTTimer browser remote timer" width="310"></td>
+</tr>
+<tr>
+<td align="center"><strong>Desktop workflow</strong></td>
+<td align="center"><strong>Phone browser remote</strong></td>
+</tr>
+</table>
 
-<div align="center">
-<strong>One glance: total time, current-slide time, and where you are in the deck.</strong>
-</div>
+<div align="center"><strong>Timing, presentation context, displays and remote control in one workflow.</strong></div>
 
 ## Why FlyPPTTimer?
 
@@ -50,10 +55,6 @@ A normal timer tells you the time. FlyPPTTimer is designed around the **presenta
 
 FlyPPTTimer can stay compact and out of the way while keeping the essential information visible.
 
-<p align="center">
-  <img src="docs/media/readme/timer-overlay.png" alt="Compact FlyPPTTimer presentation timer" width="520">
-</p>
-
 The main timer can run as a **countdown**, **count up**, or an **unlimited elapsed timer**. During a PowerPoint/WPS slideshow, the lower row can show the current slide's dwell time and slide position, so you can answer two questions instantly:
 
 > How much time do I have left?  
@@ -67,12 +68,12 @@ When a compatible slideshow is active, FlyPPTTimer can show slide information an
 
 <table>
 <tr>
-<td width="52%"><img src="docs/media/readme/remote-presentations.png" alt="Desktop presentation management"></td>
-<td width="48%"><img src="docs/media/readme/mobile-slide-times-en.png" alt="Per-slide timing on the phone remote"></td>
+<td width="50%" align="center"><img src="docs/media/readme/mobile-presentation-en.png" alt="Presentation controls in the phone browser" width="330"></td>
+<td width="50%" align="center"><img src="docs/media/readme/mobile-slide-times-en.png" alt="Per-slide timing in the phone browser" width="330"></td>
 </tr>
 <tr>
-<td align="center"><strong>Presentation management on the PC</strong></td>
-<td align="center"><strong>Per-slide timing from the browser</strong></td>
+<td align="center"><strong>Presentation controls</strong></td>
+<td align="center"><strong>Per-slide timing</strong></td>
 </tr>
 </table>
 
@@ -103,7 +104,7 @@ Depending on the enabled workflow, the browser remote can help you:
 - browse and add local PPT files when file browsing is explicitly enabled on the PC.
 
 <p align="center">
-  <img src="docs/media/readme/remote-connection.png" alt="FlyPPTTimer desktop remote connection window" width="720">
+  <img src="docs/media/readme/settings-remote-en.png" alt="FlyPPTTimer Remote settings" width="820">
 </p>
 
 The Remote interface is intended for trusted local networks. Keep live QR codes and remote-control URLs private.
@@ -114,15 +115,7 @@ A presentation setup rarely has only one screen.
 
 FlyPPTTimer supports compact floating timers as well as a dedicated large-screen timer. This lets you keep a discreet timer near the speaker while using a much larger readout for a stage display, confidence monitor, event staff, or another screen.
 
-<p align="center">
-  <img src="docs/media/readme/big-screen-timer.png" alt="FlyPPTTimer big-screen timer" width="820">
-</p>
-
-The display setup includes controls for timer appearance, opacity, placement, screen selection, and whether slide metadata appears on the big-screen timer.
-
-<p align="center">
-  <img src="docs/media/readme/settings-appearance-en.png" alt="FlyPPTTimer appearance and display settings" width="820">
-</p>
+The display setup includes controls for timer appearance, opacity, placement, screen selection, and whether slide metadata appears on the big-screen timer. The dedicated large-screen view is intentionally separate from the compact overlay, so the speaker and the room do not have to use the same layout.
 
 ## Different deck, different timing
 
