@@ -23,13 +23,18 @@ FlyPPTTimer 面向那些**时间真的很重要**的现场：论文答辩、演�
 
 你不再需要在普通计时器、PowerPoint、第二块屏幕和手机之间来回切换。FlyPPTTimer 把 **倒计时/正计时、PPT 页码、逐页用时、提醒、多屏显示、文稿独立规则、情景模式和手机浏览器遥控** 放进同一套演示工作流。
 
-<p align="center">
-  <img src="docs/media/readme/timer-overlay.png" alt="FlyPPTTimer 悬浮计时器，显示主时间、逐页秒表和页码" width="500">
-</p>
+<table>
+<tr>
+<td width="62%"><img src="docs/media/readme/settings-scenarios-zh.png" alt="FlyPPTTimer 桌面设置界面"></td>
+<td width="38%" align="center"><img src="docs/media/readme/mobile-timer-zh.png" alt="FlyPPTTimer 手机浏览器计时控制" width="310"></td>
+</tr>
+<tr>
+<td align="center"><strong>桌面端完整工作流</strong></td>
+<td align="center"><strong>手机浏览器遥控</strong></td>
+</tr>
+</table>
 
-<div align="center">
-<strong>一眼看到：整场还剩多久、这一页讲了多久、现在讲到第几页。</strong>
-</div>
+<div align="center"><strong>计时、演示状态、多屏显示和远程控制，放进同一套工作流。</strong></div>
 
 ## 为什么是 FlyPPTTimer？
 
@@ -50,10 +55,6 @@ FlyPPTTimer 面向那些**时间真的很重要**的现场：论文答辩、演�
 
 FlyPPTTimer 可以保持紧凑，不遮挡演示，同时把真正需要的信息放在眼前。
 
-<p align="center">
-  <img src="docs/media/readme/timer-overlay.png" alt="紧凑的 FlyPPTTimer 演示计时浮窗" width="520">
-</p>
-
 主计时支持 **倒计时**、**正计时** 和 **无限正计时**。PowerPoint / WPS 放映时，下方还可以同时显示当前页停留秒数和 PPT 页码，让你随时回答两个问题：
 
 > 我整场还剩多少时间？  
@@ -67,12 +68,12 @@ FlyPPTTimer 可以独立计时，但真正体现价值的是它与演示文稿�
 
 <table>
 <tr>
-<td width="52%"><img src="docs/media/readme/remote-presentations.png" alt="电脑端演示文稿管理"></td>
-<td width="48%"><img src="docs/media/readme/mobile-slide-times-zh.png" alt="手机端逐页用时"></td>
+<td width="50%" align="center"><img src="docs/media/readme/mobile-presentation-zh.png" alt="手机浏览器中的演示控制" width="330"></td>
+<td width="50%" align="center"><img src="docs/media/readme/mobile-slide-times-zh.png" alt="手机浏览器中的逐页用时" width="330"></td>
 </tr>
 <tr>
-<td align="center"><strong>电脑端管理演示文稿</strong></td>
-<td align="center"><strong>手机端查看逐页用时</strong></td>
+<td align="center"><strong>演示控制</strong></td>
+<td align="center"><strong>逐页用时</strong></td>
 </tr>
 </table>
 
@@ -103,7 +104,7 @@ FlyPPTTimer 可以独立计时，但真正体现价值的是它与演示文稿�
 - 在电脑明确授权后，浏览并加入本机 PPT 文件。
 
 <p align="center">
-  <img src="docs/media/readme/remote-connection.png" alt="FlyPPTTimer 电脑端远程连接窗口" width="720">
+  <img src="docs/media/readme/settings-remote-zh.png" alt="FlyPPTTimer 远程控制设置" width="820">
 </p>
 
 Remote 面向可信的本地网络使用。不要公开真实二维码和完整远程控制地址。
@@ -114,15 +115,7 @@ Remote 面向可信的本地网络使用。不要公开真实二维码和完整�
 
 FlyPPTTimer 既可以使用紧凑悬浮计时器，也可以开启专用大屏计时。你可以在演讲者附近保留低干扰的小浮窗，同时把醒目的大时间放到扩展屏、返看屏、舞台屏幕或工作人员显示器上。
 
-<p align="center">
-  <img src="docs/media/readme/big-screen-timer.png" alt="FlyPPTTimer 大屏计时器" width="820">
-</p>
-
-显示设置可以控制计时器外观、透明度、位置、目标显示器，以及大屏是否同时显示页码和逐页时间等信息。
-
-<p align="center">
-  <img src="docs/media/readme/settings-appearance-zh.png" alt="FlyPPTTimer 外观与显示设置" width="820">
-</p>
+显示设置可以控制计时器外观、透明度、位置、目标显示器，以及大屏是否同时显示页码和逐页时间等信息。专用大屏视图与紧凑悬浮窗相互独立，因此演讲者看到的布局不必与现场大屏完全相同。
 
 ## 不同 PPT，用不同时间
 
