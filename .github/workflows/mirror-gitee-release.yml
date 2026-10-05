@@ -1,0 +1,248 @@
+name: Mirror GitHub Release to Gitee
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag, for example v1.17.2
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitee-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GITEE_OWNER: hona-cao
+      GITEE_REPO: fly-ppttimer
+    steps:
+      - name: Validate and mirror the published release
+        shell: python
+        run: |
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+          import time
+          from urllib.parse import quote
+          import urllib.error
+          import urllib.request
+
+          tag = ${{ toJSON(inputs.tag) }}
+          if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+              raise SystemExit("Tag must be a stable version such as v1.17.2")
+
+          token = os.environ.get("GITEE_TOKEN", "")
+          if not token:
+              raise SystemExit("GITEE_TOKEN repository secret is missing")
+
+          owner = os.environ["GITEE_OWNER"]
+          repo = os.environ["GITEE_REPO"]
+          github_repo = os.environ["GITHUB_REPOSITORY"]
+          api = f"https://gitee.com/api/v5/repos/{owner}/{repo}"
+          expected = {
+              f"FlyPPTTimer-{tag}-portable-win-x64.zip",
+              f"FlyPPTTimer-{tag}-setup-win-x64.zip",
+          }
+
+          def gh_json(*args):
+              return json.loads(subprocess.check_output(["gh", *args], text=True))
+
+          def request(method, suffix, *, data=None, missing_ok=False, attempts=3):
+              body = None
+              headers = {
+                  "Authorization": f"Bearer {token}",
+                  "User-Agent": "FlyPPTTimer-release-mirror",
+                  "Accept": "application/json",
+              }
+              if data is not None:
+                  body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+                  headers["Content-Type"] = "application/json"
+              last = None
+              for attempt in range(1, attempts + 1):
+                  req = urllib.request.Request(api + suffix, data=body, headers=headers, method=method)
+                  try:
+                      with urllib.request.urlopen(req, timeout=180) as response:
+                          raw = response.read()
+                          if not raw:
+                              return None
+                          return json.loads(raw.decode("utf-8"))
+                  except urllib.error.HTTPError as error:
+                      if missing_ok and error.code == 404:
+                          return None
+                      detail = error.read().decode("utf-8", errors="replace")[:500]
+                      if token:
+                          detail = detail.replace(token, "[REDACTED]")
+                      last = RuntimeError(f"Gitee {method} {suffix}: HTTP {error.code}; {detail}")
+                      if error.code in {400, 401, 403, 404, 409, 422}:
+                          raise last
+                  except Exception as error:
+                      last = error
+                  if attempt < attempts:
+                      time.sleep(3 * attempt)
+              raise last or RuntimeError(f"Gitee {method} {suffix} failed")
+
+          release = gh_json(
+              "release", "view", tag, "--repo", github_repo,
+              "--json", "name,body,isDraft,isPrerelease,assets,url,targetCommitish"
+          )
+          if release["isDraft"] or release["isPrerelease"]:
+              raise SystemExit("Only a published stable GitHub Release can be mirrored")
+          names = {asset["name"] for asset in release["assets"]}
+          if names != expected:
+              raise SystemExit("GitHub Release must contain exactly the portable and setup ZIPs")
+
+          target = release.get("targetCommitish", "")
+          tags = request("GET", "/tags?per_page=100")
+          gitee_tag = next((item for item in tags or [] if item.get("name") == tag), None)
+          if not gitee_tag:
+              raise SystemExit(f"Gitee tag {tag} is missing; repository mirror must sync the public tag first")
+          gitee_sha = ((gitee_tag.get("commit") or {}).get("sha") or "").strip()
+          if re.fullmatch(r"[0-9a-fA-F]{40}", target) and gitee_sha.lower() != target.lower():
+              raise SystemExit(
+                  f"Gitee tag commit {gitee_sha} differs from GitHub release target {target}; refusing to publish"
+              )
+
+          assets_dir = Path("release-assets")
+          assets_dir.mkdir(exist_ok=True)
+          subprocess.run(
+              ["gh", "release", "download", tag, "--repo", github_repo,
+               "--dir", str(assets_dir), "--pattern", "*.zip", "--clobber"],
+              check=True,
+          )
+          local = {}
+          for name in expected:
+              path = assets_dir / name
+              if not path.is_file():
+                  raise SystemExit(f"Missing downloaded GitHub asset: {name}")
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              local[name] = {"path": path, "sha256": digest, "size": path.stat().st_size}
+
+          payload = {
+              "tag_name": tag,
+              "name": release["name"],
+              "body": release["body"],
+              "target_commitish": gitee_sha,
+              "prerelease": False,
+          }
+          mirror = request("GET", "/releases/tags/" + quote(tag, safe=""), missing_ok=True)
+          if isinstance(mirror, dict) and mirror.get("id"):
+              mirror = request("PATCH", f"/releases/{mirror['id']}", data=payload)
+          else:
+              mirror = request("POST", "/releases", data=payload)
+          if not isinstance(mirror, dict) or not mirror.get("id"):
+              raise SystemExit("Gitee did not return a valid Release id")
+          release_id = mirror["id"]
+          endpoint = f"/releases/{release_id}/attach_files"
+
+          def attachments():
+              value = request("GET", endpoint)
+              if not isinstance(value, list):
+                  raise SystemExit("Unexpected Gitee attachment listing")
+              return value
+
+          def link(item):
+              value = item.get("browser_download_url") or item.get("download_url")
+              if value and value.startswith("/"):
+                  return "https://gitee.com" + value
+              return value
+
+          def public_digest(item):
+              url = link(item)
+              if not url:
+                  return None
+              for attempt in range(1, 7):
+                  try:
+                      req = urllib.request.Request(url, headers={"User-Agent": "FlyPPTTimer-release-verify"})
+                      with urllib.request.urlopen(req, timeout=180) as response:
+                          return hashlib.sha256(response.read()).hexdigest()
+                  except Exception:
+                      if attempt < 6:
+                          time.sleep(5 * attempt)
+              return None
+
+          def delete_attachment(item):
+              attach_id = item.get("id")
+              if not attach_id:
+                  raise SystemExit("Attachment cannot be replaced because its id is missing")
+              request("DELETE", f"{endpoint}/{attach_id}")
+
+          def upload(path):
+              auth = (
+                  f'header = "Authorization: Bearer {token}"\n'
+                  f'form-string = "access_token={token}"\n'
+              )
+              result = subprocess.run(
+                  [
+                      "curl", "--config", "-", "--fail-with-body", "--silent", "--show-error",
+                      "--connect-timeout", "30", "--max-time", "900", "--header", "Expect:",
+                      "--form-string", f"owner={owner}",
+                      "--form-string", f"repo={repo}",
+                      "--form-string", f"release_id={release_id}",
+                      "--form", f"file=@{path};type=application/zip",
+                      api + endpoint,
+                  ],
+                  input=auth, text=True, capture_output=True,
+              )
+              if result.returncode:
+                  detail = (result.stderr[-600:] + result.stdout[-400:]).replace(token, "[REDACTED]")
+                  raise SystemExit(f"Gitee upload failed for {path.name}: {detail}")
+
+          for name in sorted(expected):
+              wanted = local[name]["sha256"]
+              item = next((entry for entry in attachments() if entry.get("name") == name), None)
+              if item and public_digest(item) == wanted:
+                  print(f"Already synchronized and verified: {name}")
+                  continue
+              if item:
+                  delete_attachment(item)
+              for attempt in range(1, 4):
+                  upload(local[name]["path"])
+                  item = next((entry for entry in attachments() if entry.get("name") == name), None)
+                  if item and public_digest(item) == wanted:
+                      print(f"Uploaded and verified: {name}")
+                      break
+                  if item:
+                      delete_attachment(item)
+                  if attempt == 3:
+                      raise SystemExit(f"Gitee public download did not verify: {name}")
+                  time.sleep(5 * attempt)
+
+          final = attachments()
+          final_names = {item.get("name") for item in final}
+          if final_names != expected:
+              raise SystemExit(
+                  "Gitee Release must contain exactly the two ZIPs; found: "
+                  + ", ".join(sorted(name for name in final_names if name))
+              )
+
+          result = {
+              "tag": tag,
+              "release_id": release_id,
+              "gitee_url": f"https://gitee.com/{owner}/{repo}/releases/tag/{tag}",
+              "github_url": release["url"],
+              "target_sha": gitee_sha,
+              "assets": [
+                  {"name": name, "size": local[name]["size"], "sha256": local[name]["sha256"]}
+                  for name in sorted(expected)
+              ],
+              "public_downloads_match": True,
+          }
+          print(json.dumps(result, ensure_ascii=False, indent=2))
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(f"## Gitee mirror: {tag}\n\n")
+              summary.write(f"- Release: {result['gitee_url']}\n")
+              summary.write(f"- Tag commit: `{gitee_sha}`\n")
+              summary.write("- Public downloads verified byte-for-byte against GitHub assets.\n")
