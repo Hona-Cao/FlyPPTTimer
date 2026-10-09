@@ -17,6 +17,16 @@ A Windows presentation timer and control companion for **Microsoft PowerPoint** 
 
 </div>
 
+## What's new in v1.18.0
+
+Upgrading from **v1.17.2**? This release also includes the improvements from v1.17.3, which had no separate public release.
+
+- **More flexible reminders:** independent Simple / Custom profiles, reminders after time is up, and confirmation before starting a new round in any scenario mode.
+- **Optional Free rehearsal controls:** a hover menu for Reset, Restart, Pause, and Resume; disabled by default.
+- **Recovery and Pro improvements:** Diagnostics Center with safe allowlist-based export, Remote recovery, Browser Display reconnection, Pro Remote +30 / +60 seconds, and clearer Pace / Review timing.
+
+**[Upgrade notes](docs/RELEASE_NOTES_v1.18.0.md)** · **[GitHub downloads](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)** · **[Gitee downloads](https://gitee.com/hona-cao/fly-ppttimer/releases)**
+
 ---
 
 FlyPPTTimer is built for presentations where **time actually matters**: thesis defenses, speech contests, pitches, training sessions, classes, meetings, live events, and any talk that has to land on time.
@@ -192,6 +202,16 @@ For detailed setup, screenshots, controls, presentation rules, display placement
 | Advance prompts | Per-slide stopwatch | Appearance & opacity | Presentation controls |
 | Time-up / overtime display | Per-presentation rules | Position & screen selection | Scenario switching |
 | Reusable scenarios | Current-session slide timing | Compact automatic sizing | Config import/export |
+
+**New since v1.17.2:**
+
+- **Reminders and new rounds:** Simple and Custom keep independent profiles, including reminders after time is up. Existing configurations remain Custom; new users start with Simple. Starting a new round asks for confirmation in every scenario mode.
+- **Free rehearsal menu:** opt in to show Reset / Restart / Pause / Resume on hover; it retracts about 700 ms after the pointer leaves. The rounded rectangular menu follows the timer's appearance, colors, and custom size, stays 2 DIP from the timer, and does not shift its position. With mouse click-through enabled, the menu is fully hidden and cannot be clicked. RoundedSmall is the default timer shape only for new users; existing shape settings are preserved.
+- **Pro timing tools:** Remote can add +30 / +60 seconds to the current running or paused round without changing the default duration in scenario rules. Pace adds a baseline; Review makes the final target and effective elapsed time clearer.
+- **Diagnostics and connectivity:** Diagnostics Center provides safe allowlist-based export; Remote gains fault recovery and Browser Display gains reconnection after a disconnect. These include the previously unpublished v1.17.3 improvements.
+- **Client fixes:** license, time, and recovery fixes are included. Server-side fixes have not been deployed; automatic offline-trial recovery across restarts is not guaranteed.
+
+**Free retains complete basic timing**, including the optional rehearsal menu; Pro provides the other advanced features. See the [v1.18.0 upgrade notes](docs/RELEASE_NOTES_v1.18.0.md) for details.
 
 ## Compatibility
 
