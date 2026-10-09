@@ -17,225 +17,293 @@ A Windows presentation timer and control companion for **Microsoft PowerPoint** 
 
 </div>
 
-## What's new in v1.18.0
+Current version: **v1.18.0** · [Release notes and upgrade guidance](docs/RELEASE_NOTES_v1.18.0.md)
 
-Upgrading from **v1.17.2**? This release also includes the improvements from v1.17.3, which had no separate public release.
+<a id="download"></a>
 
-- **More flexible reminders:** independent Simple / Custom profiles, reminders after time is up, and confirmation before starting a new round in any scenario mode.
-- **Optional Free rehearsal controls:** a hover menu for Reset, Restart, Pause, and Resume; disabled by default.
-- **Recovery and Pro improvements:** Diagnostics Center with safe allowlist-based export, Remote recovery, Browser Display reconnection, Pro Remote +30 / +60 seconds, and clearer Pace / Review timing.
+## Download FlyPPTTimer
 
-**[Upgrade notes](docs/RELEASE_NOTES_v1.18.0.md)** · **[GitHub downloads](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)** · **[Gitee downloads](https://gitee.com/hona-cao/fly-ppttimer/releases)**
+**[Download from GitHub](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)** · [Gitee mirror](https://gitee.com/hona-cao/fly-ppttimer/releases)
 
----
+Choose the **Windows x64** package that suits your setup:
 
-FlyPPTTimer is built for presentations where **time actually matters**: thesis defenses, speech contests, pitches, training sessions, classes, meetings, live events, and any talk that has to land on time.
+| Package | Best for | Getting started |
+|---|---|---|
+| **Portable** | Keeping the app in a folder you choose | Extract the ZIP to a writable folder and launch FlyPPTTimer. |
+| **Setup** | A regular installation on your presentation PC | Extract the Setup package and run the included installer. |
 
-Instead of juggling a generic timer, PowerPoint, a second display, and a phone, FlyPPTTimer brings the presentation workflow together: **countdown/count-up timing, slide awareness, per-slide timing, reminders, multi-display output, presentation-specific rules, reusable scenarios, and browser-based remote control**.
+Both editions provide the same timer features. **Free covers everyday local presentation timing**; optional Pro features and the explicitly started seven-day trial are explained [below](#free-and-pro).
 
-<table>
-<tr>
-<td width="62%"><img src="docs/media/readme/settings-scenarios-en.png" alt="FlyPPTTimer desktop settings"></td>
-<td width="38%" align="center"><img src="docs/media/readme/mobile-timer-en.png" alt="FlyPPTTimer browser remote timer" width="310"></td>
-</tr>
-<tr>
-<td align="center"><strong>Desktop workflow</strong></td>
-<td align="center"><strong>Phone browser remote</strong></td>
-</tr>
-</table>
-
-<div align="center"><strong>Timing, presentation context, displays and remote control in one workflow.</strong></div>
+Upgrading? Back up your configuration and custom alert sounds first. Follow the [user guide](docs/USER_GUIDE.en.md) to keep your settings, and use the [v1.18.0 SHA256 checksums](docs/SHA256SUMS_v1.18.0.txt) to verify the matching downloaded package.
 
 ## Why FlyPPTTimer?
 
-A normal timer tells you the time. FlyPPTTimer is designed around the **presentation itself**.
+A thesis defense, a five-minute pitch, a classroom session: each needs a different pace. FlyPPTTimer keeps the timing close to the presentation, with controls you can prepare before you step on stage.
 
-| | What it means in a live presentation |
-|---|---|
-| **Stay on time** | Countdown, count up, unlimited elapsed timing, advance reminders, time-up actions, and overtime display. |
-| **Know your slide** | Show the current slide / total slides and track how long you have spent on the current slide. |
-| **Work with PowerPoint & WPS** | Detect and control compatible desktop presentations instead of running as an isolated stopwatch. |
-| **Use every display well** | Keep a compact overlay where the speaker needs it, or put a dedicated large timer on another screen. |
-| **Control from your phone** | Use a browser on the same local network for timing and presentation controls—no phone app installation required. |
-| **Reuse your workflow** | Give different decks their own timing rules and save complete setups as scenarios. |
+- **Keep your attention on the talk.** A compact desktop overlay puts remaining or elapsed time within view, with slide numbers and current-slide seconds when a compatible slideshow is active.
+- **Prepare once, present with confidence.** Set reminders, choose a monitor and save a scenario for the next defense, competition or meeting.
+- **Make the next rehearsal better.** Review recorded slide time, find the slides that took longest and see how the talk compares with its target.
 
-## Built for real presentations
+## From rehearsal to the live presentation
 
-### Keep the speaker focused
+### 1. Keep time and slide progress in view
 
-FlyPPTTimer can stay compact and out of the way while keeping the essential information visible.
+Choose **countdown**, **count up** or **unlimited elapsed timing**. The floating timer can stay on top of your desktop; adjust its font, colors, opacity and position to suit your slides and viewing distance.
 
-The main timer can run as a **countdown**, **count up**, or an **unlimited elapsed timer**. During a PowerPoint/WPS slideshow, the lower row can show the current slide's dwell time and slide position, so you can answer two questions instantly:
+With compatible desktop **Microsoft PowerPoint** or **WPS Presentation**, the overlay can also show **current slide / total slides** and the **seconds spent on the current visit to a slide**. Returning to a slide starts a new visit counter; accumulated slide time remains useful for later review.
 
-> How much time do I have left?  
-> How long have I been on this slide?
+Presentation integration also supports per-deck timing rules and configurable automatic start, stop and reset around fullscreen presentations. You can still run the timer independently when you do not need slideshow integration.
 
-### PowerPoint & WPS are part of the workflow
+For a five-minute introduction followed by a fifteen-minute keynote, assign each deck its own duration instead of changing the default between speakers.
 
-FlyPPTTimer can work as a standalone timer, but its presentation integration is where it becomes much more useful.
+<p align="center">
+  <a href="docs/media/readme/v1.18.0/presentation-timer-zh-CN.png"><img src="docs/media/readme/v1.18.0/presentation-timer-zh-CN.png" alt="Actual PPT slideshow with the timer at the top center. This is the placement used for this presentation; customize the monitor, anchor and offsets for your setup. The Chinese slide is shared with the Chinese documentation." width="820"></a>
+  <br>
+  <em>Actual PPT slideshow with the timer at the top center. This is the placement used for this presentation; customize the monitor, anchor and offsets for your setup. The Chinese slide is shared with the Chinese documentation.</em>
+</p>
 
-When a compatible slideshow is active, FlyPPTTimer can show slide information and provide presentation controls. Per-slide timing tracks the current visit while the browser interface can show accumulated timing for slides during the current presentation session.
+**Local timing, slide information and presentation rules are available in Free.**
+
+### 2. Rehearse with controls beside the timer
+
+During practice, a quick pause or restart should be easy to reach. Enable **Settings → Controls → Show rehearsal controls** to reveal a compact menu when you hover near the timer.
+
+<p align="center">
+  <img src="docs/media/readme/v1.18.0/controls-settings-en.png" alt="Controls settings with Show rehearsal controls enabled and click-through disabled" width="820">
+  <br>
+  <em>Opt in to rehearsal controls here; the setting is off by default.</em>
+</p>
 
 <table>
-<tr>
-<td width="50%" align="center"><img src="docs/media/readme/mobile-presentation-en.png" alt="Presentation controls in the phone browser" width="330"></td>
-<td width="50%" align="center"><img src="docs/media/readme/mobile-slide-times-en.png" alt="Per-slide timing in the phone browser" width="330"></td>
-</tr>
-<tr>
-<td align="center"><strong>Presentation controls</strong></td>
-<td align="center"><strong>Per-slide timing</strong></td>
-</tr>
+  <tr>
+    <td width="50%" align="center"><a href="docs/media/readme/v1.18.0/presentation-timer-zh-CN.png"><img src="docs/media/readme/v1.18.0/presentation-timer-closeup-zh-CN.png" alt="Menu retracted: main time, current-slide seconds and slide number" width="450"></a></td>
+    <td width="50%" align="center"><a href="docs/media/readme/v1.18.0/presentation-rehearsal-expanded-zh-CN.png"><img src="docs/media/readme/v1.18.0/presentation-rehearsal-closeup-zh-CN.png" alt="Menu expanded: Reset, Restart, Pause and Resume" width="450"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Menu retracted: main time, current-slide seconds and slide number</strong></td>
+    <td align="center"><strong>Menu expanded: Reset, Restart, Pause and Resume</strong></td>
+  </tr>
 </table>
 
-## Your phone becomes the presentation remote
+<em>Top-area crops of actual screenshots, captured at different timer moments. Click either crop to view its complete slideshow screenshot.</em>
 
-Open FlyPPTTimer Remote on the computer, connect from a phone on the same trusted local network, and control the presentation from a browser.
+| Control | What it does |
+|---|---|
+| **Reset** | Clears elapsed time and stops the round. |
+| **Restart** | Clears elapsed time and starts a new round. |
+| **Pause / Resume** | Pauses a running round or continues a paused round. |
 
-No dedicated mobile app is required.
+The menu retracts about **700 ms** after you leave both the timer and menu. A **2 DIP** gap keeps it visually separate, and showing it does not move or shrink the timer body. It follows the timer's appearance and fits beside it, including on the left near a screen's right edge.
+
+This is a **Free** feature. With **mouse click-through enabled**, the menu stays hidden and cannot be clicked. Global shortcuts remain useful for hands-off operation.
+
+### 3. Get reminders that fit your talk
+
+Use **Simple** for a straightforward reminder before the endpoint, at time up and after overtime begins. Shared sound, background flash and speech options keep setup short.
+
+Use **Custom** when you want to edit reminder points and their effects in detail. The two profiles save independently: switching modes does not overwrite the other profile.
 
 <table>
-<tr>
-<td width="50%" align="center"><img src="docs/media/readme/mobile-timer-en.png" alt="FlyPPTTimer mobile timer controls" width="330"></td>
-<td width="50%" align="center"><img src="docs/media/readme/mobile-presentation-en.png" alt="FlyPPTTimer mobile presentation controls" width="330"></td>
-</tr>
-<tr>
-<td align="center"><strong>Timer controls</strong></td>
-<td align="center"><strong>Presentation controls</strong></td>
-</tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/media/readme/v1.18.0/reminders-simple-en.png" alt="Behavior settings showing the Simple reminder profile and pre-end offset" width="410">
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/media/readme/v1.18.0/reminders-custom-en.png" alt="Behavior settings showing the Custom reminder profile, reminder point and time-up controls" width="410">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Simple: quick setup</strong></td>
+    <td align="center"><strong>Custom: detailed control</strong></td>
+  </tr>
 </table>
 
-Depending on the enabled workflow, the browser remote can help you:
+Fresh installations start with **Simple**. Existing configurations keep **Custom** so their detailed reminders are retained.
 
-- start, pause, stop, and reset timing;
-- move through presentation controls without returning to the keyboard;
-- manage the controlled presentation list;
-- review slide timing for the current show;
-- switch saved scenarios;
-- browse and add local PPT files when file browsing is explicitly enabled on the PC.
+Need a cue after the talk runs over? Configure a post-overtime reminder, allow timing to **continue into overtime** and choose **Alert only** as the time-up action. It fires only after the endpoint has actually passed while the timer is running.
 
 <p align="center">
-  <img src="docs/media/readme/settings-remote-en.png" alt="FlyPPTTimer Remote settings" width="820">
+  <img src="docs/media/readme/v1.18.0/reminders-overtime-en.png" alt="Custom post-overtime reminder editor with after-end offset and reminder effects" width="820">
+  <br>
+  <em>Set the after-end offset and effects for an overtime reminder.</em>
 </p>
 
-The Remote interface is intended for trusted local networks. Keep live QR codes and remote-control URLs private.
+Free runs the enabled Custom reminder **nearest the endpoint on each side**, plus the time-up reminder. Pro runs multiple enabled Custom points. Extra saved points are retained when Pro is unavailable.
 
-## Designed for multiple displays
+While running or paused, switching reminder profiles or applying **any scenario**, including the current one, asks you to confirm a fresh round. Cancel keeps the current round; confirm clears elapsed time and reminder/slide feedback, then keeps the running or paused state.
 
-A presentation setup rarely has only one screen.
+### 4. Control the presentation from your phone (Pro)
 
-FlyPPTTimer supports compact floating timers as well as a dedicated large-screen timer. This lets you keep a discreet timer near the speaker while using a much larger readout for a stage display, confidence monitor, event staff, or another screen.
+Open **Remote Control** on the PC, then connect a phone browser on the same trusted local network. **No phone app is required.** The connection screen prioritizes setup guidance and service status; technical options sit under **Advanced details**.
 
-The display setup includes controls for timer appearance, opacity, placement, screen selection, and whether slide metadata appears on the big-screen timer. The dedicated large-screen view is intentionally separate from the compact overlay, so the speaker and the room do not have to use the same layout.
+**Pro browser Remote** provides timer commands and presentation controls, including previous/next slide, starting or ending a slideshow, jumping to a page and black/white screen controls. You can also manage the controlled presentation list and inspect slide timing.
 
-## Different deck, different timing
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Slide navigation · sample decks</strong></td>
+    <td width="50%" align="center"><strong>Temporary timer extension · sample data</strong></td>
+  </tr>
+  <tr>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/media/readme/mobile-presentation-en.png" alt="Browser presentation page with sample deck, slide navigation and controlled presentation list" width="300">
+    </td>
+    <td width="50%" align="center" valign="top">
+      <img src="docs/media/readme/v1.18.0/remote-phone-extension-en.png" alt="Browser timer page with +30 seconds and +1 minute buttons, original plan and temporary round extension using sample data" width="300">
+    </td>
+  </tr>
+</table>
 
-A five-minute opening, a fifteen-minute keynote, and an eight-minute defense should not require rebuilding the timer every time.
+*Static browser UI examples: the retained presentation page shows navigation; the v1.18.0 isolated timer example shows temporary extension.*
 
-FlyPPTTimer supports **presentation-specific rules**. Conceptually, your setup can look like this:
+Browsing local PPT files from the phone requires **separate permission on the PC**. Connect only trusted devices and keep the connection QR code and full Remote URL private.
 
-| Presentation | Timing |
-|---|---:|
-| `Opening.pptx` | 05:00 countdown |
-| `Product Demo.pptx` | 15:00 countdown |
-| `Defense.pptx` | 08:00 countdown |
-| Open discussion | Unlimited count up |
+**Pro Remote** can add **+30 seconds / +1 minute (+60 seconds)** to a running or paused finite round. Additions accumulate; a paused round stays paused. These commands leave the saved duration, scenarios and per-deck rules unchanged. Reset or restart clears added time; stopped, finished and unlimited rounds cannot be extended.
 
-This is especially useful for competitions, defenses, multi-speaker meetings, event schedules, and repeated presentation workflows.
+For a separate browser-based timer screen, **Browser Display (Pro)** supplies a view without presentation-control buttons. If the connection drops, it keeps the last valid display and retries automatically.
 
-## Save an entire setup as a scenario
+See the [Free / Pro comparison](#free-and-pro) and [connection guide](docs/USER_GUIDE.en.md) before choosing this workflow.
 
-A scenario is more than a duration preset. It can preserve a complete working setup so you can switch presentation styles without rebuilding your configuration.
+### 5. Put the right timer on each screen
 
-For example:
+Use a compact overlay for the speaker and a **dedicated fullscreen timer** for a moderator or confidence monitor. Select the target **monitor**, choose one of **nine anchor positions** and fine-tune offsets, size and opacity.
 
-| Scenario | Example setup |
+The dedicated big-screen view can show time alone or include slide metadata. Choose its screen deliberately so it fits your presentation setup.
+
+**Scenarios** save a working setup: timing, reminders, appearance, displays, controls and presentation rules. Keep a defense setup ready, then switch to a competition or classroom setup without rebuilding each setting.
+
+<p align="center">
+  <img src="docs/media/readme/settings-scenarios-en.png" alt="Scenario settings showing saved Scenario 1 and scenario management controls" width="820">
+  <br>
+  <em>Saved scenarios for repeat use; this retained screenshot shows the scenario settings.</em>
+</p>
+
+| Example scenario | A setup you might save |
 |---|---|
-| **Defense** | 8-minute countdown · advance reminder · compact speaker overlay |
-| **Competition** | 5-minute countdown · large-screen timer · prominent overtime state |
-| **Classroom** | unlimited count up · multi-display · slide timing visible |
+| **Defense** | Eight-minute countdown, advance reminder, compact speaker overlay |
+| **Competition** | Five-minute countdown, overtime reminder, fullscreen moderator timer |
+| **Classroom** | Unlimited count up, slide information, selected display placement |
+
+Free includes one available scenario and local multi-display output. Pro enables additional scenarios. Applying a scenario during a running or paused round requires fresh-round confirmation on the desktop, including requests made from the phone.
+
+### 6. Learn from the completed presentation
+
+Open **Presentation Review** after a slideshow to see **effective time used**: the sum of valid recorded slide time. Revisited slides accumulate. This measure comes from slide records rather than the wall-clock span between starting and finishing.
+
+The summary compares effective time with the **final target**, highlights the longest accumulated slide and retains detailed slide statistics and history. With a temporary extension, it shows **original plan + added time + final target**. Unlimited rounds omit target comparison.
 
 <p align="center">
-  <img src="docs/media/readme/settings-scenarios-en.png" alt="FlyPPTTimer scenario settings" width="820">
+  <img src="docs/media/readme/v1.18.0/review-extension-en.png" alt="Presentation Review summary showing effective time, original plan, added time and final target" width="390">
+  <br>
+  <em>See how the completed talk compares with its final time allowance.</em>
 </p>
 
-Scenarios can be switched from the settings UI and other supported control surfaces, making repeat events much faster to prepare.
-
-## Alerts that happen before it is too late
-
-Presentation timing is most useful **before** the clock reaches zero.
-
-FlyPPTTimer supports configurable prompt points, end-of-timer behavior, visual feedback, and overtime presentation. The goal is to give the speaker useful cues without forcing them to constantly watch the clock.
+**Base Review is Free.** For repeated practice, Pro lets you explicitly select a review of the **same presentation** as a rehearsal baseline. Its comparison uses the effective time of both runs; it is separate from the final-target comparison.
 
 <p align="center">
-  <img src="docs/media/readme/settings-behavior-en.png" alt="FlyPPTTimer behavior and alert settings" width="820">
+  <img src="docs/media/readme/v1.18.0/review-baseline-en.png" alt="Presentation Review summary with comparison against an explicitly selected rehearsal baseline" width="390">
+  <br>
+  <em>Compare a later run with a selected rehearsal baseline.</em>
 </p>
 
-## Where it fits
+A baseline is never chosen automatically. Standalone timer practice does not create a slideshow Review record.
 
-FlyPPTTimer is designed for situations such as:
+### 7. Troubleshoot with a safe diagnostic report
 
-- **Thesis defenses and academic presentations** — keep strict presentation and Q&A timing visible.
-- **Speech contests and timed competitions** — combine clear countdowns with reminders and big-screen output.
-- **Pitches and demos** — stay aware of total time and slide pacing while presenting.
-- **Training and teaching** — use count-up or unlimited timing for open-ended sessions.
-- **Meetings and multi-speaker events** — prepare presentation-specific durations and reusable setups.
-- **Live event operation** — control timing and presentations from another position using the browser remote.
+Open **Settings → Other → Diagnostics Center**, or use its tray entry, to check app, presentation observer, display, Remote, Browser Display, license-summary and updater status.
+
+<p align="center">
+  <img src="docs/media/readme/v1.18.0/diagnostics-en.png" alt="Diagnostics Center with status groups and safe summary and export actions" width="820">
+  <br>
+  <em>Inspect status, copy a safe summary or export a diagnostic report.</em>
+</p>
+
+**Copy safe summary** and **Export diagnostic report** include only allowed status fields. They omit Remote tokens, activation data, presentation paths/content, raw configuration and logs. Refreshing Diagnostics does not start a trial or contact licensing/update services.
+
+Use the report when asking for help with detection or connectivity. Review any additional screenshots before sharing them.
+
+<a id="free-and-pro"></a>
+
+## Free vs Pro
+
+Start with Free for everyday local timing. Choose Pro when your workflow needs phone operation, more saved setups or rehearsal comparisons.
+
+| Feature | Free | Pro |
+|---|---|---|
+| Countdown, count up, unlimited timing and overtime | Included | Included |
+| Slide numbers, current-slide seconds and per-deck rules | Included | Included |
+| Local overlays, monitor placement and fullscreen timer | Included | Included |
+| Optional hover rehearsal menu | Included | Included |
+| Simple / Custom reminders | Simple; nearest enabled Custom pre-end and post-overtime point, plus time up | Multiple enabled Custom points |
+| Saved scenarios | One available scenario | Additional scenarios, up to eight |
+| Base Presentation Review and Diagnostics Center | Included | Included |
+| Phone Remote and Browser Display | Requires Pro | Included |
+| Remote +30 / +60 seconds for the current finite round | Requires Pro | Included |
+| Selected rehearsal baseline and pace comparison | Requires Pro | Included |
+
+Extra stored Pro reminder points and scenarios remain saved when Pro is unavailable; they become available again with Pro.
+
+The **seven-day trial starts only after explicit confirmation**. See **Settings → Other → Pro License** for the current activation and purchase options.
 
 ## Quick start
 
-1. **[Download the latest release](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)** and extract the portable package or use the installer package.
-2. Launch **FlyPPTTimer**. The timer overlay appears immediately.
-3. Open **Settings**, choose a duration and timing mode, then apply it.
-4. Use **F3** to start/pause and **F4** to stop/reset with the default shortcuts.
-5. Start a compatible PowerPoint or WPS slideshow to use slide-aware features.
-6. For phone control, open **Remote Control** on the PC and connect from a browser on the same local network.
+1. **Download** a Windows x64 package [above](#download), then extract Portable or run the Setup installer.
+2. **Launch FlyPPTTimer** and open Settings. Choose a duration, timing mode and your preferred reminder profile.
+3. **Place the timer** on the monitor you will use; adjust its appearance and enable rehearsal controls if useful.
+4. **Start a practice round.** Default shortcuts: **F3** starts, pauses or resumes; **F4** stops and resets. Start a compatible PowerPoint/WPS slideshow for slide-aware timing.
+5. **Prepare the live setup.** Save a scenario, check your display placement and reminders, and connect Remote if you use Pro phone control.
 
-For detailed setup, screenshots, controls, presentation rules, display placement, remote access, and troubleshooting, see the **[complete user guide](docs/USER_GUIDE.en.md)**.
+The [complete English guide](docs/USER_GUIDE.en.md) walks through presentation rules, display placement, controls, Remote and troubleshooting.
 
-## Feature overview
+## Frequently asked questions
 
-| Timing | Presentation | Display | Control |
-|---|---|---|---|
-| Countdown | PowerPoint integration | Floating timer | Global hotkeys |
-| Count up | WPS Presentation integration | Multi-monitor output | Tray / timer menus |
-| Unlimited elapsed time | Slide number display | Dedicated big-screen timer | Phone browser remote |
-| Advance prompts | Per-slide stopwatch | Appearance & opacity | Presentation controls |
-| Time-up / overtime display | Per-presentation rules | Position & screen selection | Scenario switching |
-| Reusable scenarios | Current-session slide timing | Compact automatic sizing | Config import/export |
+**Does it work without Office?**
 
-**New since v1.17.2:**
+Yes, standalone timing works without Office. Slide information and presentation control require a compatible desktop PowerPoint or WPS Presentation installation on Windows 10/11 x64.
 
-- **Reminders and new rounds:** Simple and Custom keep independent profiles, including reminders after time is up. Existing configurations remain Custom; new users start with Simple. Starting a new round asks for confirmation in every scenario mode.
-- **Free rehearsal menu:** opt in to show Reset / Restart / Pause / Resume on hover; it retracts about 700 ms after the pointer leaves. The rounded rectangular menu follows the timer's appearance, colors, and custom size, stays 2 DIP from the timer, and does not shift its position. With mouse click-through enabled, the menu is fully hidden and cannot be clicked. RoundedSmall is the default timer shape only for new users; existing shape settings are preserved.
-- **Pro timing tools:** Remote can add +30 / +60 seconds to the current running or paused round without changing the default duration in scenario rules. Pace adds a baseline; Review makes the final target and effective elapsed time clearer.
-- **Diagnostics and connectivity:** Diagnostics Center provides safe allowlist-based export; Remote gains fault recovery and Browser Display gains reconnection after a disconnect. These include the previously unpublished v1.17.3 improvements.
-- **Client fixes:** license, time, and recovery fixes are included. Server-side fixes have not been deployed; automatic offline-trial recovery across restarts is not guaranteed.
+**Portable or Setup—and will an update keep my settings?**
 
-**Free retains complete basic timing**, including the optional rehearsal menu; Pro provides the other advanced features. See the [v1.18.0 upgrade notes](docs/RELEASE_NOTES_v1.18.0.md) for details.
+Use Portable for a folder-based installation or Setup for an installed copy. Back up your configuration and alert sounds before upgrading. For Portable, follow the guide when transferring them; avoid replacing personal settings with the new package's defaults. Existing configurations retain Custom reminders and saved shape choices.
+
+**Why will my phone not connect, and is Remote safe to share?**
+
+Phone and PC must be on a reachable, trusted local network; check firewall access and network isolation. Keep QR codes and authenticated connection URLs private. Local file browsing needs separate PC permission. Do not expose the service to the public internet.
+
+**Why is the hover menu missing?**
+
+It is off by default. Enable Show rehearsal controls and apply the setting. Mouse click-through hides the menu completely; use configured hotkeys or disable click-through to interact with it.
+
+**Can an unexpired trial resume offline after restarting the app?**
+
+Restarting still requires **online reconfirmation**. The original seven-day period does not reset. Do not rely on offline trial recovery after a restart.
 
 ## Compatibility
 
-- **OS:** Windows 10 / Windows 11
-- **Architecture:** x64
-- **Standalone timing:** works without Microsoft Office
-- **Presentation integration:** requires a compatible desktop Microsoft PowerPoint or WPS Presentation installation
-- **Phone remote:** modern browser on a device connected to the same reachable local network
-- **Packages:** portable and installer editions are available from Releases
+- **Windows 10 / Windows 11, x64.**
+- Standalone timing needs no presentation software.
+- Slideshow integration requires compatible desktop **Microsoft PowerPoint** or **WPS Presentation**.
+- Remote uses a modern browser on a device with local-network access to the PC.
+
+Check the presentation software, displays and network you plan to use during rehearsal.
 
 ## Technology
 
-FlyPPTTimer's current desktop application is built with **Rust** and **Slint**, with native Windows integration for the presentation and desktop workflow. The phone remote is delivered as a local browser interface.
+The desktop app is built with **Rust + Slint** and native Windows integration. Remote and Browser Display are browser interfaces served by the PC.
 
-The technology badges above describe the current application; GitHub's repository-language sidebar reflects files present in this public release/documentation repository and may not represent the application's complete implementation.
+The top badges describe the current application. This public repository also contains release material and documentation.
 
-## Download & documentation
+## Documentation and support
 
-- **Latest version:** [GitHub Releases](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)
-- **All releases:** [Release history](https://github.com/Hona-Cao/FlyPPTTimer/releases)
-- **Mainland China mirror:** [Gitee Releases](https://gitee.com/hona-cao/fly-ppttimer/releases)
-- **Complete English guide:** [docs/USER_GUIDE.en.md](docs/USER_GUIDE.en.md)
-- **完整中文教程:** [docs/USER_GUIDE.zh-CN.md](docs/USER_GUIDE.zh-CN.md)
-- **Bug reports & feature requests:** [GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues)
+| Resource | Link |
+|---|---|
+| User guides | [English](docs/USER_GUIDE.en.md) · [简体中文](docs/USER_GUIDE.zh-CN.md) |
+| v1.18.0 release notes | [English](docs/RELEASE_NOTES_v1.18.0.md) · [简体中文](docs/RELEASE_NOTES_v1.18.0.zh-CN.md) |
+| Download verification | [v1.18.0 SHA256 checksums](docs/SHA256SUMS_v1.18.0.txt) |
+| Bugs and feature requests | [GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues) |
+| Legal information | [License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md) · [Brand policy](TRADEMARKS.md) |
+
+For feedback, include the app, Windows and PowerPoint/WPS versions, reproduction steps and a safe Diagnostics summary if relevant. Remove private content, live QR codes and Remote URLs from screenshots.
+
+For privacy, distinguish a safe diagnostic report from other material you choose to share. Enabling phone file browsing exposes folder and PPT names to devices with a valid Remote connection; grant that access only when needed.
 
 ## Star History
 
@@ -248,7 +316,3 @@ If FlyPPTTimer is useful in your presentation workflow, starring the repository 
     <img alt="FlyPPTTimer Star History Chart" src="https://api.star-history.com/chart?repos=Hona-Cao/FlyPPTTimer&type=date&legend=top-left">
   </picture>
 </a>
-
-## Feedback
-
-For bugs or feature requests, open a [GitHub Issue](https://github.com/Hona-Cao/FlyPPTTimer/issues). Include the FlyPPTTimer version, Windows version, PowerPoint/WPS version, reproduction steps, and relevant screenshots. Remove live QR codes, remote-access URLs, private paths, and sensitive presentation content before posting.

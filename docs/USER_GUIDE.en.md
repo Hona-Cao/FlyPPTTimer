@@ -1,752 +1,561 @@
-# FlyPPTTimer User Guide
+# FlyPPTTimer v1.18.0 User Guide
 
-[Home](../README.md) · [简体中文](USER_GUIDE.zh-CN.md)
+[Home](../README.md) · [简体中文](USER_GUIDE.zh-CN.md) · [Release notes](RELEASE_NOTES_v1.18.0.md)
 
-For **v1.18.0 / Windows 10 and 11 x64**. [Download and install](../README.md#download).
-
-Use FlyPPTTimer as a standalone speaking timer or with desktop PowerPoint/WPS to show slide numbers, use a different duration for each presentation, and control your talk from a phone browser. This guide follows the seven Settings pages, then covers phone controls and everyday maintenance.
+This manual covers the current **v1.18.0 for Windows 10 / 11 x64**. You can use the local timer on its own, or connect it to desktop Microsoft PowerPoint / WPS Presentation. Features marked **Pro** require an active Pro license or explicitly confirmed trial.
 
 ## Contents
 
-[v1.18.0 workflow](#v1180) · [v1.17.0 Free and Pro](#v1170) · [v1.16.0 improvements](#v1160) · [v1.14.1 illustrated workflow](#v1141) · [Connection and authorization](#file-access) · [Compact timer](#compact-timer) · [Zero-offset edges](#edge-placement)
+1. [Requirements and installation](#install)
+2. [Quick start: an eight-minute talk](#quick-start)
+3. [The three desktop windows and your first timer](#windows)
+4. [PowerPoint / WPS, timing modes and file rules](#presentation)
+5. [Simple / Custom reminders and overtime](#reminders)
+6. [Optional rehearsal hover controls — Free](#hover-controls)
+7. [Phone / browser Remote and file-browsing permission — Pro](#remote)
+8. [Displays, appearance, positioning and shortcuts](#appearance)
+9. [Scenarios](#scenarios)
+10. [Presentation Review and rehearsal baselines](#review)
+11. [Diagnostics and connection recovery](#diagnostics)
+12. [Free, Pro, licenses and the seven-day trial](#pro)
+13. [Settings, upgrades, migration and backups](#maintenance)
+14. [Troubleshooting](#troubleshooting)
+15. [Feedback, privacy and legal terms](#privacy)
 
-[Getting started](#start) · [Saving settings](#save) · [1. Timer](#timer) · [2. Behavior](#behavior) · [3. Appearance & Display](#appearance) · [4. Remote Control](#remote) · [5. Controls](#controls) · [6. Scenarios](#scenarios) · [7. Other](#other) · [Phone controls](#phone) · [Troubleshooting](#faq)
+<a id="install"></a>
+## 1. Requirements and installation
 
-<a id="v1180"></a>
-## v1.18.0: reminders, hover controls and clearer Review
+Standalone timing does not require Office or .NET. Slide recognition and presentation control require a compatible **desktop** PowerPoint or WPS Presentation installation. A phone needs a browser; Remote and Browser Display use a local network and require Pro.
 
-This section takes precedence over older version walkthroughs below. See [v1.18.0 notes](RELEASE_NOTES_v1.18.0.md) for all changes since the last public v1.17.2. Back up your configuration and custom alert sounds before upgrading.
+Download v1.18.0 from the [GitHub release](https://github.com/Hona-Cao/FlyPPTTimer/releases/tag/v1.18.0) or [Gitee releases](https://gitee.com/hona-cao/fly-ppttimer/releases). Choose the official Windows x64 package.
 
-### Choose and save reminders
-
-1. Open **Settings → Behavior**, select **Simple** or **Custom**, then Apply/OK.
-2. In Simple, enable the pre-end, Timer-end and post-overtime reminders you need, set the two offsets and choose shared Sound / Flash / Speech effects. An enabled pre-end offset must be positive and no greater than the configured finite duration; an enabled post-overtime offset must be positive.
-3. In Custom, edit pre-end/Timer-end effects or add positive-offset post-overtime nodes. Allow timing to continue past the endpoint to use post-overtime reminders; they fire only after actual overtime begins.
-
-Fresh installations default to Simple. Existing configurations and unmarked scenario snapshots use Custom so detailed settings are retained. Both profiles are independent and saved together in scenarios; changing one leaves the other intact. New configurations default to **RoundedSmall**; saved existing shapes are preserved.
-
-While Running or Paused, switching profiles or applying **any scenario**, including the current scenario, requires desktop **fresh-round confirmation**. Cancel keeps elapsed time and feedback; confirm clears the current elapsed/reminder/slide feedback and keeps Running or Paused intent. Stopped switches apply directly. For phone-initiated active-round scenario changes, complete the confirmation on the desktop.
-
-### Enable the optional hover menu
-
-Open **Settings → Controls → Show rehearsal controls**, then Apply/OK. This Free option defaults OFF. Hover near the timer to reveal the independent compact menu; leaving both timer and menu retracts it after about **700 ms**. It has its own corners and a **2 DIP** gap, follows the timer's colors/opacity/theme/shape and automatic/custom height, and attaches on the left when needed near the monitor's right edge. Enabling or hovering it never moves or shrinks the timer body.
-
-- **Reset:** rounded-square icon; clears and stops the round.
-- **Restart:** circular-arrow icon; clears and starts a new round.
-- **Pause / Resume:** pause / play icons; available in Running / Paused respectively.
-
-With **mouse pass-through enabled**, the menu is completely absent and leaves no clickable control window. Disable pass-through to use it. Normal extra-border and repaint/lifecycle defects have been repaired; configured border flashes still work. An intermittent field double-visible/light-mask report still needs physical verification.
-
-### Extend the current round from a phone (Pro)
-
-Enable Remote, connect the phone and computer to the same LAN and scan the connection QR. In the phone Timer page, tap **+30 seconds** or **+1 minute** during a Running or Paused finite round. Repeated taps add cumulatively; Paused stays paused. Stopped, Finished and Unlimited do not allow extension. Reset/restart clears added time. These buttons leave saved default duration, scenarios and file rules unchanged.
-
-Use collapsed **Advanced details** for technical settings and saved-duration editing. Applying a saved duration is separate from extension; during Running/Paused, accept the phone confirmation to start a fresh round.
-
-### Read a Review and use Diagnostics
-
-After a completed slideshow, open **Presentation Review**. Effective time is accumulated valid slide timing, not the wall-clock span. The summary compares it with the final target and shows the longest accumulated slide; extension adds original plan + added time + final target. Unlimited reports omit target comparison. Detailed slide statistics and existing history remain available. Pro can select a same-presentation review as a rehearsal baseline and compare effective time; selection is explicit.
-
-Open **Settings → Other → Diagnostics Center** or its tray entry to refresh status, copy a safe summary or export a report. It omits tokens, activation data, presentation paths/content, raw configuration and logs. Refresh does not start a trial or contact license/update services. After a Remote listener failure, use Remote restart. Browser Display retains the last valid picture during disconnection and reconnects automatically.
-
-### Free / Pro, migration and current limits
-
-Free includes both reminder profiles, one enabled Custom pre-end node nearest the endpoint + Timer end + one enabled post-overtime node nearest the endpoint, one available scenario, hover controls, Diagnostics and full base Review. Pro enables Remote (including extension), Browser Display, multiple Custom nodes/scenarios and rehearsal baseline/pace comparison. Stored extra Pro configuration is preserved but inactive in Free, and available again with Pro.
-
-The trial starts only after explicit confirmation. **An unexpired trial still needs online reconfirmation after app restart; the original server-defined 168 hours do not reset.** A broader offline-after-restart rule is undecided. Client license error/expiry fixes are included; license-service repairs are local source/simulations only and not deployed to production. Real Office/WPS, audio, physical LAN, multi-monitor/fractional-DPI interaction and confirmation acceptance remain manual checks for v1.18.0.
-
-<a id="v1170"></a>
-## v1.17.0: complete Free edition, Pro when you need it
-
-v1.17.0 does not turn FlyPPTTimer into a pay-to-use basic timer. The Free edition keeps the complete local presentation-timing workflow: countdown/count up, overtime display, multi-display overlays, big-screen timer, slide numbers, per-slide stopwatch, presentation rules, appearance controls, config import/export, and software updates.
-
-Free also lets you create **one advance prompt point** and **one scenario**. Pro is for higher-frequency or more complex workflows: full Remote Control, the second and later prompt points, the second and later scenarios, and future advanced automation. This is historical v1.17.0 guidance; current runtime boundaries are described above under v1.18.0: extra configuration is retained but inactive in Free.
-
-**The 7-day Pro trial does not start when you install or launch the app.** It starts only after you explicitly choose Start trial or accept the confirmation when first using a Pro feature. Normal updates, portable re-extraction, and ordinary config reset do not reset a started trial.
-
-International users can buy **Permanent Pro for US$3/device as a one-time Patreon purchase**. Mainland China users can use Alipay at **¥10/device/year** or **¥20/device permanent**. Activation is centralized under **Settings → Other Settings → Pro License**, which shows status, the complete Device ID, Start trial, both purchase channels, and the activation-code / FPTL1 offline-license input. Remote Settings contains Remote-specific controls only.
-
-The first launch shows a one-time Welcome dialog. Welcome, About, update notes, and Pro information use Slint's native Dialog shell with centered Markdown content. Ordinary information dialogs no longer show a large in-body app logo or a redundant OK button; the body header is only “FlyPPTTimer” and “v1.17.0 · Windows x64”, with a dedicated gutter between text and the scrollbar.
-
-<a id="v1160"></a>
-## v1.16.0 workflow improvements
-
-- **Scenarios:** use **Save mode** in the Settings footer to name and save the currently applied configuration. Rows are newest-first and collapsed by default; select, confirm deletion, or expand them directly. Expanded details keep name, switch hotkey, badge color, and snapshot-update controls. The footer shows the active scenario and switching briefly highlights the timer border with its color.
-- **Presentation opener:** Windows system default remains the default. You can explicitly select a validated Microsoft PowerPoint or WPS Presentation executable; desktop and phone-initiated opens use the same preference.
-- **Phone Remote:** Exit presentation application is enabled only after FlyPPTTimer is attached to a controllable PowerPoint/WPS instance and that instance contains no uncontrolled presentations. Normal application Quit/WM_CLOSE is used first so the presentation software can handle save prompts and clean shutdown; process termination is retained only as a guarded last resort. Remote polling/dispatch intervals are reduced for quicker LAN feedback.
-
-<a id="v1150"></a>
-## v1.15.0 complete feature guide
-
-### Default slide stopwatch and time-only big screen
-
-Fresh configurations enable the slide stopwatch. The ordinary overlay reserves its second row from startup: `00` at lower left is current-slide dwell seconds and `-/-` at lower right is the slide placeholder. During a show these update normally; revisiting a slide adds to the phone's accumulated table while the overlay's current visit restarts at `00`.
-
-The dedicated big-screen timer now has a separate purpose: **fresh configurations show main time only**. Enable the big-screen metadata option under Appearance & Display only when that fullscreen display also needs slide numbers and per-slide seconds. This does not change the ordinary overlay.
-
-### Unlimited timing for teaching and open sessions
-
-**Unlimited**, beside Default duration, is a distinct mode. Once applied it:
-
-- forces Count up from zero and does not allow Countdown;
-- has no effective target, hiding/disabling target and time-up actions;
-- does not run the two advance reminders, end reminder, or overtime styling for that round;
-- ignores ±1 minute and 3/5/8/10/15-minute presets while unlimited is active;
-- keeps presentation rules stored so they resume after Unlimited is disabled.
-
-This is useful for open-ended teaching, discussion, or elapsed-time tracking. It is not implemented as a fake very-large user-visible duration.
-
-### Scenarios: save a complete working setup
-
-<a id="scenarios"></a>
-Scenarios sits between Controls and Other. Free can create one snapshot; Pro can create additional snapshots up to eight. Each snapshot stores timer, behavior/alerts, appearance, displays, controls and presentation rules. Language, update source and Remote credentials stay outside snapshots so a business-mode switch does not alter maintenance/security settings.
-
-**Save:** configure and Apply the working state first, then use **Save mode** in the Settings footer. Enter a name and confirm (or press Enter). New scenarios appear newest first and collapsed by default.
-
-**Maintain:** expand a row to rename it, assign a global switch hotkey, change its badge color, or overwrite the saved snapshot from the current configuration. Delete from the row itself and confirm; deleting a scenario never deletes PPT files.
-
-**Switch:** select a scenario from its row, its global hotkey, the tray/timer scenario submenu, or the phone Timer page. The footer shows the active scenario and color; the timer border briefly uses that color after a switch, and the application/tray badge dot is larger. The scenario submenu remains present even when no scenarios are saved.
-
-![Scenarios settings](media/v1.15.0/settings/en-06-scenarios-part-1.png)
-
-<img src="media/v1.15.0/mobile-en-light-scenario.png" width="360" alt="Scenario selector on the phone Timer page">
-
-Examples you can create include Competition, Recruiting with big screen enabled in its snapshot, or Speaker Reminder with the ordinary overlay limited to the primary screen. They are examples, not mandatory built-in presets.
-
-### Update source and automatic installation
-
-Choose **Gitee** or **GitHub** under Other → Software Updates. With no saved source, the application reads the Windows geographic-region setting: CN (mainland China) selects Gitee; other regions select GitHub. It does not query GPS or precise IP location, and a later explicit user choice is retained.
-
-When a newer stable version exists, the dialog shows the complete release notes from that selected source. Choose **Download and install**:
-
-| Edition | Automatic update path |
+| Package | Installation |
 |---|---|
-| Installed | Download `setup-win-x64.zip` → extract in a temporary directory → exit current process → run the installer silently → restart FlyPPTTimer. |
-| Portable | Download `portable-win-x64.zip` → extract → exit → replace application files in place → preserve `FlyPPTTimer.config.json` and `alert-sounds` → restart. |
+| Portable, `portable-win-x64.zip` | Extract the entire ZIP into a writable folder, then run `FlyPPTTimer.exe`. Keep the accompanying DLLs and other application files. |
+| Installer, `setup-win-x64.zip` | Extract the ZIP, run the installer EXE, and follow the language and location choices in the wizard. |
 
-This is an **in-app automatic update**, not an in-memory hot patch with the current process kept alive. Normal network access and write permission are still required; save unsaved PowerPoint/WPS work before updating.
+Before upgrading an existing installation, follow [the backup and upgrade steps](#maintenance). Save any unsaved presentation work before closing applications or updating.
 
-<a id="v1141"></a>
-## v1.14.1 illustrated instructions
+<a id="quick-start"></a>
+## 2. Quick start: an eight-minute talk
 
-This section describes the public v1.14.1 release. Check your actual version in Settings before following the new permission workflow.
+1. **Launch FlyPPTTimer.** Find the floating timer and its icon in the Windows notification area; the icon may be inside the hidden-icons menu.
+2. **Set the allowance.** Right-click the timer or notification-area icon → **Settings → Timer**. Leave Unlimited off, enter `00:08:00`, select **Countdown**, and click **Apply**.
+3. **Choose one reminder.** Open **Behavior**, select **Simple**, enable **Pre-end reminder**, and set **Before end HH:mm:ss** to `00:01:00`. Choose the shared Sound / Flash / Speech effects you want, then **Apply**.
+4. **Try the controls.** With the default shortcuts, press **F3** to start, press it again to pause, and again to resume. **F4** stops and resets. If testing without slideshow automation, turn off **Auto-start for fullscreen apps** under Behavior.
+5. **Rehearse with your slides.** Open the presentation in desktop PowerPoint/WPS. Enable automatic start if desired, begin the slideshow, and check the timer, slide number, sound output and display placement before the event.
 
-<a id="file-access"></a>
-### Allow computer PPT browsing after the phone connects
+This local workflow is Free. A phone connection is optional; set it up in [Remote](#remote) when needed.
 
-**Connecting to Remote and allowing file browsing are separate.** The additional browsing switch exposes folder/PPT names and is off by default. Leave it off when you only need timing or slide navigation.
+<a id="windows"></a>
+## 3. The three desktop windows and your first timer
 
-**Step 1 — Connect, then look at the computer.** Scan the live desktop Remote QR code on the same network and wait for Connected. When browsing is not yet allowed, Settings opens at Remote Control with the browsing option highlighted. The notice shows the connection address; it is not a password or an approval button.
-
-![Step 1: a successful phone connection opens Settings at the highlighted PPT browsing switch](media/v1.14.1/permission-en-light-connected.png)
-
-**Step 2 — Check the switch and click Apply.** Select **Allow phone to browse computer PPT files**. The footer now indicates unsaved changes; the phone still lacks permission. Click **Apply** to save. **OK** saves and closes Settings. Enter, hiding the window, or simply dismissing the notice is not Apply.
-
-
-**Step 3 — Confirm it is saved and return to the phone.** After Apply, the box stays selected, the footer shows Saved and the connection notice clears. Normal phone polling obtains the new permission. Open **Presentation → Browse computer PPT files**. If an already-open browser panel still shows its permission message, close and reopen that panel.
-
-![Step 3: saved authorization with the switch still on](media/v1.14.1/permission-en-light-saved.png)
-
-**Step 4 — Find and add a PPT.** Open Home or a local drive, navigate folders and filter the current folder's names. Use **Add to list** beside the file, then close the browser and open/start it from the controlled list. Existing entries are not duplicated.
-
-<img src="media/v1.14.0/mobile-en-light-browser.png" width="360" alt="Phone file browser showing computer folders and PPT files that can be added to the controlled list">
-
-The phone file browser is unchanged from v1.14.0, so that production-web rendering is retained above. The desktop authorization illustrations in this section are newly captured from v1.14.1.
-
-**Decline or revoke:** do not check the box to decline. To revoke later, uncheck it in desktop Settings → Remote Control and Apply. This stops future folder browsing; it does not delete existing rules or close an open presentation.
-
-**The checkbox does not grant access only to the phone named in the notice.** It remains a shared permission for devices holding the current valid Remote URL/token. It allows local folder navigation and adding PPT files—not arbitrary downloads, deletion, editing or network-share access. Keep live QR codes and full control URLs private.
-
-#### When the authorization page does not open automatically
-
-| Situation | What to do |
+| Window | What you use it for |
 |---|---|
-| The computer is still running v1.14.0 | Open Settings → Remote Control manually and Apply the permission. Automatic guidance starts with v1.14.1. |
-| Browsing is already allowed | No repeated prompt is needed. Browse directly from the phone. |
-| This phone was already announced | A connection IP is announced once per service session; refreshing or briefly reconnecting does not keep interrupting a presentation. Open Settings manually when needed. |
-| The web page opened but is not connected | First establish an authenticated connection; check the current QR, network and service. |
-| You opened the local control page on the PC | Loopback access is not treated as a new phone connection. Authorize manually if needed. |
-| The phone still asks for permission | Confirm that you clicked Apply, connected to the intended computer, and reopened the browser panel after saving. |
+| Floating timer | Main time, current-slide seconds and current/total slide number. Drag it when mouse pass-through and position locking are off. |
+| Settings | Seven pages: Timer, Behavior, Appearance & Display, Remote Control, Controls, Scenarios and Other. |
+| Desktop Remote Control | Connection information and QR code, plus a Presentations page for file rules and presentation operations. |
 
-Restarting the service or regenerating the token resets the connection-notice record. A changed network address can also produce another prompt; this is not permanent device identity. Existing unsaved Settings edits are preserved when the page changes. Apply also saves other pending edits in that Settings window, so check them first.
+The phone/browser control page is a separate view with **Timer** and **Presentation** tabs. [Presentation Review](#review) and [Diagnostics Center](#diagnostics) have their own windows.
 
-<details>
-<summary>The same steps in dark mode</summary>
+### Understand the readout and controls
 
-![Dark mode: connection guidance](media/v1.14.1/permission-en-dark-connected.png)
+The main readout is the speaking time. The lower row can show current-slide seconds on the left and slide progress such as `3 / 20` on the right. Fresh configurations enable the slide stopwatch; without a recognized slideshow, the enabled fields show `00` and `-/-`. Each field can be enabled independently under **Appearance & Display**.
 
+**Pause / Resume** keeps the current round's progress. **Reset** clears the round and stops it; **Restart** clears it and starts again. Hiding the timer does not stop timing. Closing Settings leaves the application running; use **Exit** in the notification-area menu to quit.
 
-![Dark mode: applied and saved](media/v1.14.1/permission-en-dark-saved.png)
+### Save what you change
 
-</details>
+**Apply** saves and keeps Settings open; **OK** saves and closes it. **Cancel** discards unapplied edits. Enter or leaving an input finishes the edit, but does not replace Apply/OK.
 
-<a id="compact-timer"></a>
-### Make the timer compact without shrinking its text
+The footer identifies unsaved edits. Appearance changes can preview immediately; Cancel restores the last applied state. Action buttons such as Import configuration or Regenerate token carry out their own operation, so read their confirmation before proceeding.
 
-In **Settings → Appearance & Display**, choose **Automatic** sizing and Apply. v1.14.1 reduces the gap between the main time and its lower row, and the outer padding. Your font sizes and left-stopwatch/right-page arrangement remain unchanged.
+<a id="presentation"></a>
+## 4. PowerPoint / WPS, timing modes and file rules
 
-| Idle, with stopwatch and slide numbers enabled | Slideshow example |
-|---|---|
-| ![Compact v1.14.1 timer with 00 and -/-](media/v1.14.1/timer-idle.png) | ![Compact v1.14.1 timer with visit seconds and slide numbers](media/v1.14.1/timer-slide.png) |
+### Connect a slideshow to the timer
 
-These are production GUI renders using example state, not a promise of the same physical pixel dimensions at every display scale. Saved custom width/height is not overwritten. If the new version still looks large, check whether Custom sizing is selected before assuming the compact layout did not apply.
+1. Open a local `.ppt`, `.pptx` or `.pptm` in desktop PowerPoint/WPS.
+2. In **Settings → Behavior**, choose whether **Auto-start for fullscreen apps** should start timing when a recognized application enters fullscreen.
+3. Set **Stop when leaving fullscreen** and **Reset when leaving fullscreen** separately, then Apply. These govern the automatically started fullscreen session: stop ends timing; reset returns its readout to the initial value. Disable both if timing should continue after leaving fullscreen.
+4. Start the slideshow. Verify the current/total slide number. For a deliberate break, pause with F3 or a Pause control, then resume.
 
-<a id="edge-placement"></a>
-### Make top-center and bottom-center flush at 0%
+Fullscreen automation also recognizes some browsers and PDF readers. Turn off automatic start when those fullscreen apps should not start the timer. A temporary loss of readable presentation status is not proof that the slideshow has ended.
 
-Under the appearance position settings, choose the target display/display mode and anchor, set **both horizontal and vertical offsets to 0%**, and Apply:
+When opening a file through FlyPPTTimer, the current Windows `.ppt/.pptx/.pptm` file association determines the application. Set that association in Windows if you want PowerPoint or WPS to open the file. Browser-based presentation editors do not provide the same desktop slide-control integration.
 
-| Anchor | Zero-offset result in v1.14.1 |
-|---|---|
-| Top-center | Horizontally centered; the actual window top touches the screen top. |
-| Bottom-center | Horizontally centered; the actual window bottom touches the screen bottom. |
-| Top-left/top-right and bottom-left/bottom-right | Both corresponding window edges align with the screen edges. |
-| Center | The whole window is centered horizontally and vertically. |
+<p align="center">
+  <a href="media/readme/v1.18.0/presentation-timer-zh-CN.png"><img src="media/readme/v1.18.0/presentation-timer-zh-CN.png" alt="Actual PPT slideshow with the timer at the top center. This is the placement used for this presentation; customize the monitor, anchor and offsets for your setup. The Chinese slide is shared with the Chinese documentation." width="820"></a>
+  <br>
+  <em>Actual PPT slideshow with the timer at the top center. This is the placement used for this presentation; customize the monitor, anchor and offsets for your setup. The Chinese slide is shared with the Chinese documentation.</em>
+</p>
 
-The calculation uses actual window dimensions, not an assumed 140×50 rectangle. Font changes, automatic resizing and DPI changes therefore use the real edges. Secondary monitors with negative coordinates use their own bounds.
+### Countdown, count up and Unlimited
 
-**Screen means the full display, not the work area above the taskbar.** Bottom-center at 0% can overlap the taskbar region. To add an inward margin, use a small positive vertical offset at the top or a small negative offset at the bottom. Positive moves right/down; negative moves left/up.
+**Countdown** counts down from the finite target. **Count up** shows elapsed time from zero but still uses the finite target for reminders and time-up behavior.
 
-Nonzero offsets still use the display work area's dimensions as the percentage scale. Upgrading does not zero your saved offsets, and dragging records an offset too. To restore flush positioning, choose the anchor, set both offsets to zero and Apply; use Reset timer position when necessary.
+**Unlimited**, beside Default duration, is for open-ended teaching or discussion. Apply it to count up without a target. Countdown, target reminders, time-up actions and overtime styling are inactive. The one-minute adjustments and duration presets do not act while Unlimited is enabled. File rules remain stored and can apply again after Unlimited is turned off.
 
-<a id="v1140"></a>
-## Shared 1.14 features: slide timing, computer file browsing, and full update notes
+**Automatic (content and font)** is a window-sizing choice under Appearance & Display. It fits the readout; it is separate from timing mode and automatic slideshow start.
 
-### Enable the slide stopwatch
+### What happens at the target
 
-Choose **Settings → Appearance → Show slide stopwatch**, then Apply. It is optional and off in a fresh configuration; ordinary slide numbers remain on. Enable either or both.
-
-A fixed row below the main timer places **slide seconds on the left and slide numbers on the right**. The old slide-number alignment and above/below choices are removed. The stopwatch follows the slide-number size by default. Turn off the font-follow switch for a custom size. Its color follows the main timer unless you disable that switch and pick a custom color.
-
-![Idle timer with 00 and -/- placeholders](media/v1.14.1/timer-idle.png)
-![Slide stopwatch and page numbers](media/v1.14.1/timer-slide.png)
-
-Before a presentation can be read, enabled fields show `00` and `-/-`. Automatic sizing reserves the row from startup, rather than revealing a clipped extra row only after slideshow detection. Use automatic sizing when increasing fonts; a deliberately tiny fixed window can still be too small.
-
-### Current visit versus accumulated slide time
-
-The stopwatch counts seconds during an actual slideshow: `09`, `65`, `123`, without changing to minutes/seconds. Moving to a different slide resets the current-visit display to zero. It measures slideshow dwell time independently of the main timer; pausing the main timer does not pause it.
-
-Expand **Presentation → Slide times for this show** on the phone for per-slide totals. Spending 20 seconds on slide 1 and returning for 10 seconds gives a 30-second total, while the floating stopwatch shows the current visit's 10 seconds.
-
-Ending the show retains the last table and resets the small display to `00`. A new show or a different presentation starts a new record. Records are session-only, not written into the PPT, and not automatically exported. Valid slideshow/page information is required; missing samples are not filled with guessed time.
-
-### Add a computer PPT from the phone
-
-1. Connect through the computer Remote QR code on the same trusted local network.
-2. Check **Allow phone to browse computer PPT files** on the computer, then Apply. In v1.14.1 an unapproved phone connection opens this highlighted setting automatically. In v1.14.0, or when no new notice appears, open **Settings → Remote Control** manually. The permission remains off by default.
-3. On the phone, open **Presentation → Browse computer PPT files** below the controlled list.
-4. Choose Home or a local disk and open folders. **Up one level** returns to the parent; **This computer** returns to drive roots.
-5. Filter searches names in the current folder only, not the whole disk. Only directories and `.ppt / .pptx / .pptm` files appear.
-6. Choose **Add to list** beside a PPT. Existing entries are not duplicated. Close the browser and then open/select/start the file from the controlled list.
-
-<img src="media/v1.14.0/mobile-en-light-browser.png" width="360" alt="Phone browser for computer PPT folders and adding a file to the controlled list">
-
-New entries use the global duration and mode and append to the list. Adding does not open the file, start a show, change existing rules or modify the original presentation.
-
-This is not remote desktop or file transfer. It provides no arbitrary download, upload, delete, rename, editing or network-share access. It uses the existing Remote token: anyone holding a valid QR URL can see folder/PPT names while this permission is on. Use trusted networks/devices, never forward the port to the public internet, and disable the permission after use if it is no longer needed.
-
-### Mobile layout and consistent selectors
-
-Navigation and slideshow-management buttons now precede the file list. Existing list scrolling, scroll chaining and long-press reordering remain available.
-
-Theme, sorting and available-file selectors share the same rounded shape, palette, animation and light/dark styling. Click outside or press Escape to dismiss; with a keyboard, use arrows, Home, End and Enter.
-
-### Complete release notes and startup checks
-
-Startup update checks are on by default. The first migration from a configuration older than 1.14 enables the preference once; later explicit choices in 1.14 are preserved.
-
-Checks run off the UI thread, compare available GitHub/Gitee stable releases and prompt only for a newer version. No-update and temporary connectivity failures stay silent on startup; manual checks still report their result. When mirrors differ, the newer reachable stable version is selected.
-
-The update window can be resized. Its complete release body wraps and scrolls, with fixed action buttons; the old 600-character limit is gone. ZIP releases open their download page. Extract the package and run the installer or migrate the portable edition. No update installs without confirmation.
-
-![Resizable update window with full release notes](media/v1.14.0/update-notes.png)
-
-### Positioning and spacing
-
-New horizontal/vertical offsets default to **0%**. Center anchors use the full width of each monitor, including when a side taskbar reduces its work area. Auto-size changes re-center the timer, and DPI/negative monitor coordinates are accounted for. **In v1.14.1, zero aligns the actual window edge to the full screen edge**; the old fixed edge padding no longer applies. See [edge placement](#edge-placement).
-
-Existing custom offsets remain. To use the new position, choose a centered anchor, set both offsets to zero and Apply; reset the timer position if needed. Settings and desktop Remote reduce vertical whitespace while keeping usable input/button targets.
-
-
-<a id="start"></a>
-## Getting started
-
-### Download and install
-
-Download the current v1.18.0 portable or setup ZIP from the [download links](../README.md#download).
-
-Choose an edition from [GitHub Releases](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest) or [Gitee Releases](https://gitee.com/hona-cao/fly-ppttimer/releases).
-
-| Edition | Best for | How to use it |
-|---|---|---|
-| `portable-win-x64.zip` | Occasional use, USB drives, different computers | Extract the complete ZIP into a writable folder and run `FlyPPTTimer.exe`. Keep the accompanying DLL files. |
-| `setup-win-x64.zip` | Regular use on one computer | Extract the ZIP, run the installer EXE, choose the installation language and location, and follow the wizard. |
-
-.NET is not required. Standalone timing does not require Office. Slide numbers and presentation control require a compatible desktop installation of PowerPoint or WPS Presentation. The phone only needs a browser.
-
-### Your first timer
-
-1. Start FlyPPTTimer. A floating timer appears.
-2. Right-click the timer or its notification-area icon and open **Settings**.
-3. On **Timer**, enter `00:08:00`, choose **Countdown**, and click **Apply**.
-4. Press **F3** to start or pause. Press **F4** to stop and reset.
-5. For phone control, open **Remote Control** from the context menu, connect the phone and computer to the same network, and scan the QR code.
-
-You can use the timer without adding a presentation or connecting a phone. The notification-area icon may be inside the taskbar's hidden-icons menu.
-
-### Which window should I use?
-
-| Interface | Purpose |
-|---|---|
-| Floating timer | Shows the time and available slide numbers; drag it to a convenient position. |
-| Settings | Configures durations, alerts, appearance, displays, remote access, shortcuts, and language. |
-| Desktop Remote Control | Shows the connection address and QR code; its Presentations page manages file rules. |
-| Phone/browser control page | Controls timing, opens presentations, runs slide shows, changes slides, and manages presentation order. |
-
-<a id="save"></a>
-## Saving settings
+On **Timer**, choose **Time-up action**:
 
 | Action | Result |
 |---|---|
-| Apply | Saves changes and keeps Settings open. |
-| OK | Saves changes and closes Settings; the timer keeps running. |
-| Cancel | Discards changes that have not been applied and closes Settings. |
-| Enter or clicking outside an input | Ends that edit. Click Apply or OK to save it. |
+| Alert only | Uses the active reminder profile. The timer stops at the target or continues into overtime according to that profile's overtime setting. |
+| Black screen with Time's up | Ends the slideshow, stops/resets timing, and shows a fullscreen Time's up message. Dismiss it with Esc or the phone's corresponding control. |
+| End slide show | Ends the slideshow and stops/resets timing. The document stays open. |
 
-The footer shows when there are **unsaved changes**. Fonts, colors, position, opacity, and other appearance settings can preview immediately. Cancel restores the last applied state.
+For continued overtime, use **Alert only** and enable the appropriate [continue-overtime setting](#overtime). Ending the slideshow or showing the Time's up screen prevents post-overtime reminders.
 
-Buttons such as Import configuration, Restore defaults, and Regenerate token perform specific actions, rather than simply editing a field for later saving. Their effects are explained in the relevant sections below.
+### Give each presentation its own allowance
 
-<a id="timer"></a>
-## 1. Timer: choose how long a talk should run
-
-![Timer settings with duration, mode, time-up action and presentation rules](media/v1.14.0/settings/en-01-timer-part-1.png)
-
-### Basic Timer
-
-| Setting | What it does | Example or recommendation |
-|---|---|---|
-| Default duration (HH:mm:ss) | The duration used when no enabled presentation rule supplies another value. | Enter `00:03:00` for three minutes, `00:08:00` for eight minutes, or `01:00:00` for an hour. |
-| Timer mode | Countdown decreases from the chosen duration; Count up increases from zero. | Use countdown for a strict speaking allowance and count-up to show elapsed time. Count-up can still trigger alerts at the preset duration. |
-| At the preset time | Stops timing or continues into overtime. | Continue into overtime when the speaker may need a little extra time. |
-| Time-up action | Alerts only, shows a full-screen Time's up message, or ends the slide show. | Start with Alert only unless the event requires automatic interruption. |
-
-**Overtime and the time-up action work together.** To keep showing overtime, choose **Continue into overtime** and **Alert only**. The other two actions end the slide show and stop/reset the timer instead of continuing overtime.
-
-| Time-up action | Effect |
-|---|---|
-| Alert only | Uses the alerts configured on Behavior. Timing stops or continues according to At the preset time. |
-| Black screen with Time's up | Ends the current slide show, stops/resets timing, and displays a full-screen Time's up message. Dismiss it with Esc or the corresponding phone control. |
-| End slide show | Ends the slide show and stops/resets timing. The document remains open in the presentation application. |
-
-### Presentation Rules: a different allowance for each file
-
-For example, give the introduction three minutes, the main talk fifteen minutes, and the discussion five minutes, without repeatedly changing the default duration.
-
-1. Under Presentation Rules, click **Add files** and select one or more `.ppt`, `.pptx`, or `.pptm` files.
-2. Select a rule, set its duration and countdown/count-up mode, and enable it.
+1. Open **Settings → Timer → Presentation Rules** and choose **Add files**.
+2. Select one or more supported PPT files. Select a rule, enter its duration, choose Countdown / Count up, and enable it.
 3. Click **Apply** or **OK**.
-4. When using that presentation, its enabled rule takes precedence over the default duration and mode.
+4. Use that file's slideshow; its enabled rule takes precedence over the default duration and mode.
 
-Rules identify files by their full paths. Identical filenames in different folders are separate files. Add the new path after moving or renaming a document.
+Rules match full paths. After moving or renaming a file, register its new path. Deleting a rule removes the entry, not the document.
 
-| List action | Purpose |
+For several rules, use Ctrl+click or Shift+click, then **Batch settings** to set a shared duration and mode. You can also edit rules in **desktop Remote Control → Presentations**; use **Save** in that window.
+
+### Current-slide seconds versus accumulated time
+
+The floating stopwatch shows seconds for the **current visit** to a slide: `09`, `65`, `123`. Changing slides resets that visit's readout. Returning to slide 1 after spending 20 seconds there and then spending another 10 seconds adds up to 30 seconds in the per-slide totals, while the floating stopwatch shows 10.
+
+Pause/Resume controls suspend/resume slide timing; Reset/Restart clear its current timing feedback. Only valid observed slideshow time is counted. Missing or unreadable samples are not filled with guessed time.
+
+On the phone, expand **Presentation → Slide times for this show** for accumulated totals. Ending a show retains its last table and clears the current-visit readout. Completed-show history is available in [Presentation Review](#review); timing does not modify the PPT itself.
+
+<a id="reminders"></a>
+## 5. Simple / Custom reminders and overtime
+
+Open **Settings → Behavior → Reminder setting mode**. **Simple** provides a small set of shared choices; **Custom** lets you edit individual reminder points and effects. Both are available in Free.
+
+Fresh installations use Simple. Existing settings and scenario snapshots without a profile marker open as Custom to retain their detailed reminders. **The profiles are saved independently**: switching or editing one does not overwrite the other. Scenarios retain both.
+
+### Set up Simple reminders
+
+1. Select **Simple**.
+2. Enable **Pre-end reminder** and enter a positive **Before end HH:mm:ss** value. For an eight-minute talk, `00:01:00` means remind at seven minutes, not one minute after starting. The enabled offset cannot exceed the configured finite default duration.
+3. Enable **Timer end** if you want a reminder at the target.
+4. For a reminder after the target, use the [overtime steps below](#overtime), enable **Post-overtime reminder**, and enter a positive **After end HH:mm:ss**, such as `00:00:30`.
+5. Select shared **Sound / Flash / Speech** effects and click Apply.
+
+Simple uses shared effects for its enabled reminders. Use Custom when you need different sounds, speech choices or flash patterns for different points.
+
+![Simple reminder settings](media/readme/v1.18.0/reminders-simple-en.png)
+
+### Configure Custom reminder points
+
+1. Select **Custom**. Enable a pre-end **Prompt**, then expand its row.
+2. Enter **Seconds before the preset time**. For an eight-minute talk, `120` means remind at six minutes and `30` means remind at seven minutes thirty seconds. Prefer offsets within the planned allowance.
+3. Set Speech announcement, choose an alert sound if needed, and select a Flash style. Expand **Timer end** to set its own effects.
+4. To add an after-end point, first enable continued overtime, then choose **Add post-overtime reminder**. Expand it and enter **After end HH:mm:ss**. Each after-end offset must be positive and distinct.
+5. Apply, then rehearse the full reminder sequence.
+
+Free runs **one enabled pre-end point nearest the endpoint**, Timer end, and **one enabled post-overtime point nearest the endpoint**. For example, with enabled pre-end points at 120 and 30 seconds, Free runs the 30-second point; with post points at 30 and 60 seconds, it runs the 30-second point. Pro runs multiple enabled points. Extra stored points are preserved when Pro is unavailable.
+
+![Custom reminder rows](media/readme/v1.18.0/reminders-custom-en.png)
+
+Custom sounds can use short `.mp3`, `.wav`, `.wma` or `.m4a` files. Clearing a point's custom sound restores its sound choice without resetting the whole application.
+
+Flash styles include None, text, background, solid border, or border plus background. On/off intervals are in milliseconds; total flash duration is in seconds. For example, 350 ms is 0.35 seconds. Speech and sounds play through the computer's output device. Test that device and its mute state.
+
+<a id="overtime"></a>
+### Enable overtime and post-overtime reminders
+
+1. On **Timer**, set **Time-up action → Alert only**.
+2. With **Simple**, open **Behavior** and enable **Continue overtime**. With **Custom**, open **Timer → At the preset time → Continue into overtime**.
+3. Return to Behavior, enable the post-overtime reminder point, set its positive after-end offset, and Apply.
+4. Let a finite rehearsal pass its target. A `00:00:30` after-end point fires only after 30 seconds of actual overtime.
+
+Unavailable post-overtime controls retain their saved settings. They do not fire when timing stops at the endpoint, in Unlimited, or while paused.
+
+In Custom, expand **Timer end** for overtime text/background colors and the overtime prefix. Reminder flash colors are separate from normal timer colors. Reset/Restart prepares the reminder sequence for a new round; Pause/Resume retains progress and already-fired reminders.
+
+![Post-overtime reminder settings](media/readme/v1.18.0/reminders-overtime-en.png)
+
+<a id="fresh-round"></a>
+### Confirm before changing an active round
+
+While **Running or Paused**, switching reminder profiles or applying **any scenario**, including the current one again, requires fresh-round confirmation on the desktop.
+
+- **Cancel:** keeps elapsed time and the current reminder/slide feedback.
+- **Confirm:** clears the current elapsed time, reminder and slide feedback, and starts a fresh round with the selected settings. A running round remains running; a paused round remains paused.
+- **Stopped:** the change applies directly.
+
+If a phone initiates an active-round scenario change, complete the confirmation on the computer. Switch profiles and scenarios before a talk whenever possible.
+
+![Confirmation before starting a fresh round](media/readme/v1.18.0/fresh-round-en.png)
+
+<a id="hover-controls"></a>
+## 6. Optional rehearsal hover controls — Free
+
+1. Open **Settings → Controls**.
+2. Enable **Show rehearsal controls**, then Apply. It is **off by default** and available in Free.
+3. Move the pointer over the timer to reveal the compact menu. Move between the timer and menu to use it.
+4. Move away from both; the menu retracts after about **700 ms**.
+
+<table>
+  <tr>
+    <td width="50%" align="center"><a href="media/readme/v1.18.0/presentation-timer-zh-CN.png"><img src="media/readme/v1.18.0/presentation-timer-closeup-zh-CN.png" alt="Menu retracted: main time, current-slide seconds and slide number" width="450"></a></td>
+    <td width="50%" align="center"><a href="media/readme/v1.18.0/presentation-rehearsal-expanded-zh-CN.png"><img src="media/readme/v1.18.0/presentation-rehearsal-closeup-zh-CN.png" alt="Menu expanded: Reset, Restart, Pause and Resume" width="450"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Menu retracted: main time, current-slide seconds and slide number</strong></td>
+    <td align="center"><strong>Menu expanded: Reset, Restart, Pause and Resume</strong></td>
+  </tr>
+</table>
+
+<em>Top-area crops of actual screenshots, captured at different timer moments. Click either crop to view its complete slideshow screenshot.</em>
+
+| Control | Effect |
 |---|---|
-| Add files | Registers presentations without editing their slide contents. |
-| Delete | Removes selected rules, not the files on disk. |
-| Clear | Clears the rule list. Export configuration first when you need a backup. |
-| Batch settings | Applies a common duration and mode to selected rules. |
-| Enable/disable | Controls whether the rule overrides the default timer settings. It does not delete the document. |
+| Reset, rounded-square icon | Clears and stops the round. |
+| Restart, circular-arrow icon | Clears and starts a new round. |
+| Pause, pause icon | Available while Running; preserves progress. |
+| Resume, play icon | Available while Paused; continues that round. |
 
-Use **Ctrl+click** for non-adjacent rules and **Shift+click** for a continuous range, then use Batch settings. A convenient meeting setup is ten minutes for everyone, followed by a separate twenty-minute rule for the main speaker.
+The menu is an independent window with its own rounded corners and a **2 DIP** gap (a small spacing that scales with Windows display scaling). It normally appears to the right and can attach to the left near the screen's right edge. Showing it does not move, shrink or change the timer readout.
 
-You can also edit rules in **desktop Remote Control → Presentations**. Click **Save** in that window after editing. The filename and path appear on the left, with duration and mode in their own columns.
+Colors, opacity, theme, shape and automatic/custom height follow the timer. It accompanies ordinary timer overlays; the dedicated fullscreen timer keeps its time-display role.
 
-![Desktop Remote presentation rules](media/v1.14.0/pc-remote-rules.png)
+**With mouse pass-through enabled, the menu is completely hidden and cannot be clicked.** Open Settings from the notification-area icon and disable pass-through before using it.
 
-<a id="behavior"></a>
-## 2. Behavior: automatic timing and reminders
-
-### Global & Startup
-
-![Behavior settings with fullscreen integration and the first alert](media/v1.14.0/settings/en-02-behavior-part-1.png)
-
-| Setting | What enabling it does | When to use it |
-|---|---|---|
-| Auto-start for fullscreen apps | Starts timing when an application on the fullscreen list enters fullscreen. | Enable it to start with PowerPoint/WPS slide shows. Disable it for timing controlled only by F3. |
-| Stop when leaving fullscreen | Stops the corresponding automatically started fullscreen timing session when fullscreen ends. | Useful when leaving a slide show should end that speaker's session. |
-| Reset when leaving fullscreen | Returns the corresponding fullscreen timing session to its initial time. | Enable for a fresh start for each speaker; disable to retain the finishing time. |
-| Flash current time when paused | Makes the paused time flash. | Useful when you might otherwise forget to resume. |
-
-Automatic fullscreen detection also includes certain browsers and PDF readers. Disable automatic start and use a shortcut when those applications should not start timing. Presentation rules and the phone's controlled-file list are for PPT files.
-
-### Alert 1, Alert 2, and Time Up
-
-Alert 1 and Alert 2 are advance reminders. Time Up is the reminder at the preset duration. Each group has its own enable switch, speech, sound, and flash settings.
-
-**Example: an eight-minute talk.** Set Alert 1 to `120` for a reminder after six minutes and Alert 2 to `30` for a second reminder after seven minutes thirty seconds. Time Up occurs at eight minutes. Enter the amount of time remaining, not the amount already elapsed.
-
-| Setting | Meaning and use |
-|---|---|
-| Enabled | The master switch for that alert group. A disabled group does not trigger. |
-| Seconds before the preset time | The advance reminder threshold, such as `120` or `30`. Use a value below the planned duration. Time Up does not have this field. |
-| Voice announcement | Uses the computer's speech feature to announce the reminder through its current audio output. |
-| Sound | Shows the selected audio path. Use the file chooser below to change it. |
-| Choose file | Select a short `.mp3`, `.wav`, `.wma`, or `.m4a` sound. |
-| Restore default | Clears this group's custom sound. It does not reset the whole application; speech and flashing keep their own settings. |
-| Flash style | Chooses flashing text, background, border, or no visual flashing. |
-| Visible interval (ms) | How long each flash stays visible. `350` means 0.35 seconds. |
-| Hidden interval (ms) | The gap between flashes. A larger value makes the rhythm slower. |
-| Flash duration (seconds) | How long the visual reminder runs overall; for example, `3` means approximately three seconds. |
-
-![Alert 1 sound and flash settings](media/v1.14.0/settings/en-02-behavior-part-2.png)
-
-| Flash style | Typical use |
-|---|---|
-| None | Keep sound or speech without a flashing visual reminder. |
-| Flash text | A relatively restrained change to the time readout. |
-| Flash background | A more noticeable background change. |
-| Solid border | A border-based reminder without changing a large background area. |
-| Border + background | A stronger visual reminder. |
-
-<details>
-<summary>Show Alert 2 and Time Up settings</summary>
-
-![Alert 2 threshold, speech, sound and flashing](media/v1.14.0/settings/en-02-behavior-part-3.png)
-
-![Time-up speech, sound and flashing](media/v1.14.0/settings/en-02-behavior-part-4.png)
-
-</details>
-
-For quiet visual reminders, turn speech off, clear the custom sound, and select a flash style. For audible reminders, check the computer's mute state and selected speakers or headphones.
-
-### Overtime colors and prefix
-
-![Overtime text color, background and prefix](media/v1.14.0/settings/en-02-behavior-part-5.png)
-
-Overtime text color and Overtime background color distinguish an overrun from normal timing. Overtime prefix is the text placed before the overtime readout; `-` makes an overrun easy to recognize.
-
-Use these settings with **Timer → Continue into overtime + Alert only**. The background color used for advance flashing reminders is configured separately under **Appearance & Display → Flash background color**.
-
-<a id="appearance"></a>
-## 3. Appearance & Display: readable and unobtrusive timing
-
-### Interface theme, visibility, and colors
-
-![Interface theme, timer visibility and color scheme](media/v1.14.0/settings/en-03-appearance-part-1.png)
-
-| Setting | Purpose |
-|---|---|
-| Interface theme | System, Light, or Dark for Settings, desktop Remote, and other application surfaces. |
-| Show timer window | Shows/hides the ordinary floating timer without stopping timing. The timer is shown again each time the application starts. |
-| Color scheme | Provides healthcare, education, business, technology, and high-contrast palettes. Start with a preset and adjust individual colors as needed. |
-| Text color | The normal time readout color. |
-| Background color | The normal floating timer background. |
-| Flash background color | The background used during visual reminders. |
-
-Click a color swatch or Choose color, or type a hexadecimal color such as `#0B3A66`. Interface theme and timer colors are separate: selecting Dark does not overwrite your timer's chosen colors.
-
-### Window size and slide-number layout
-
-![Time font, independent slide-number size and layout](media/v1.14.0/settings/en-03-appearance-part-2.png)
-
-| Setting | Purpose and operation |
-|---|---|
-| Automatic (content and font) | Fits the timer to its readout and font sizes. Appropriate for most uses; no width/height entry is needed. |
-| Custom window size | Reveals Width and Height. Leave enough space after increasing fonts to avoid clipped text. |
-| Time font size | Changes the main time readout size. |
-| Show current/total slides | Shows progress such as `3 / 20` for a recognized PowerPoint/WPS presentation. |
-| Match time font size | Uses the time font size for slide numbers. Turn it off to reveal Slide-number font size. |
-| Match time color | Uses the time color for slide numbers. Turn it off to reveal Slide-number color. |
-| Italic slide numbers | Visually separates slide numbers from the main time. |
-
-The default slide-number size is **12**, fixed below the main time on the right. The slide stopwatch occupies the left of the same row. Position/alignment choices have been removed. Idle placeholders are `-/-` and `00`; enabling either reserves the row. Either readout can be enabled independently.
-
-For a prominent time and smaller slide counter, disable Match time font size, increase the time font, keep slide numbers at 12, and use Automatic window sizing.
-
-### Shape and opacity
-
-![Corner size, background opacity and display selection](media/v1.14.0/settings/en-03-appearance-part-3.png)
-
-Window shape offers a rectangle or a small, medium, or large rounded rectangle. Small corners look more square; large corners are more rounded.
-
-**Background opacity** ranges from **0–100%**. At 100% the background is opaque; lower values reveal more of the content behind it. This adjusts the background, not the time text itself.
-
-| Adjustment method | Operation |
-|---|---|
-| Drag | Hold the slider and move it left/right. The value and floating timer preview update together. |
-| Wheel | Hover over the slider. Each wheel notch changes the value by one percentage point, such as 88% to 89%. |
-| Type | Click the adjacent number box and enter a precise value. Enter or click elsewhere to finish. |
-
-Click Apply to save. Horizontal and vertical position offsets use the same interactions. Position offsets support 0.1-percentage-point precision; background opacity uses whole percentages.
-
-### Multiple displays and full-screen timing
-
-| Setting | Purpose |
-|---|---|
-| Show on all displays | Shows a small floating timer for the same session on each applicable display. |
-| Single-display target | Turn off Show on all displays, then select the one display for the timer. |
-| Enable full-screen timer | Uses an extended display for a large full-screen time readout. |
-| Full-screen timer display | Selects the extended screen for that readout. An ordinary small timer is not duplicated on the same screen. |
-
-**A speaker-only timer:** turn off Show on all displays and select the speaker's monitor.
-
-**A dedicated moderator screen:** select Extend these displays in Windows display settings, enable the full-screen timer, and choose the moderator's display. It occupies that screen, so do not select the audience's slide-show screen unless that is intentional.
-
-When the full-screen option is disabled or says Extended display required, check the external monitor connection and Windows display mode first.
-
-### Default position and offsets
-
-With v1.14.1, Top-center at 0% touches the actual screen top and Bottom-center the actual bottom, including the taskbar region. [Detailed steps](#edge-placement).
-
-![Full-screen timer, anchor positions and horizontal/vertical offsets](media/v1.14.0/settings/en-03-appearance-part-4.png)
-
-| Setting | Purpose |
-|---|---|
-| Default anchor | Selects one of nine positions, including top left, top center, and bottom right. |
-| Horizontal offset (%) | Moves relative to that position. Positive means right; negative means left. |
-| Vertical offset (%) | Positive means down; negative means up. |
-| Reset timer window position | Clears manually dragged placement and repositions using the current anchor and offsets. |
-
-Offsets are relative to the selected display's work area and range from **-50% to 50%**. Choose a nearby anchor first, then make small adjustments. You can also drag the floating timer when click-through and position locking are off.
+![Controls settings with optional rehearsal controls](media/readme/v1.18.0/controls-settings-en.png)
 
 <a id="remote"></a>
-## 4. Remote Control: connect a phone
+## 7. Phone / browser Remote and file-browsing permission — Pro
 
-Starting with v1.17.0, full Remote Control is a Pro feature. Before a trial has started, this page explains the Pro requirement and offers Start trial; the 7-day trial begins only after that explicit action. Activation-code management is under **Other → Pro License**, not on the Remote page. Local timing, multi-display output, and presentation rules remain available in Free.
+Remote runs on the computer and serves a local browser page. Internet access is needed for trial confirmation or online activation, but a working local connection depends on devices reaching each other on the LAN.
 
-### Local Web Remote and ports
+### Pair a phone
 
-![Remote enable switch, service state, ports and connected devices](media/v1.14.0/settings/en-04-remote-part-1.png)
+1. Confirm an active Pro license or explicitly start the [trial](#trial).
+2. Connect the phone and computer to the same Wi-Fi, or connect the computer to the phone's hotspot.
+3. Enable Remote under **Settings → Remote Control** and Apply. Open **Remote Control → Remote connection** from the timer/notification-area menu.
+4. Check that the service is running. Scan **your computer's live connection QR code**, then open the link in the phone browser.
+5. Wait for a connected status and test Start/Pause before controlling a slideshow.
 
-| Setting | Meaning |
-|---|---|
-| Enable remote control | Allows browser control over the local network. Save after changing it. |
-| Service status | Shows whether the service has started. |
-| Current port | The port currently used for connections. |
-| Port on next start | The desired port. After editing, use Restart remote service and apply port. |
-| Connected devices | Shows the current connection count. |
-| Recommended address | The phone's entry point. Use the copy action or the live QR code to connect. |
+Use the displayed computer LAN address; do not replace it with the hotspot gateway. Scan again after changing networks, ports or tokens. No phone app is required. The browser's language environment determines the phone UI language; its theme can follow the computer or be selected separately.
 
-The application reuses the saved port when available. When it cannot use that port, it selects and saves an available one. Use the address currently shown in the window. Scan again after changing networks, ports, or the connection token.
+### Network and Advanced details
 
-### Actions and firewall help
+On the desktop, **Advanced details** starts collapsed. Expand it when you need addresses, ports, service restart, token actions or firewall help.
 
-![Service actions, token controls, address copying and firewall help](media/v1.14.0/settings/en-04-remote-part-2.png)
+The service reuses its saved port when possible and chooses an available one if necessary. Use the **current** address, not a remembered port. After editing the next-start port, choose **Restart service and apply port**, then reconnect.
 
-| Button | When to use it | What happens next |
-|---|---|---|
-| Restart remote service and apply port | After editing the port or when the service needs a restart. | Applies settings and restarts remote control. Reconnect the phone. |
-| Regenerate token | To replace the connection credentials and stop using the previous QR code. | Old URLs become invalid. Use the new QR code or URL. |
-| Disconnect all remote devices | To end current remote-control sessions. | Devices must reconnect using new connection information. |
-| Copy recommended URL | To open the page on a phone or another computer on the same network. | Share the complete copied value only with trusted people. |
-| Open local control page | To check the control page in this computer's browser. | When local access works but phone access does not, inspect the network and firewall. |
-| Copy firewall repair command | When Windows Firewall blocks the phone. | Copying does not change the system. Check the current port before executing it in an administrator terminal. |
+If the phone cannot connect, try **Open local control page** on the computer. If local access works, check guest-Wi-Fi device isolation, VPN routing and Windows Firewall. Use the provided firewall repair command only after checking its current port; copying it does not change Windows. Run a reviewed command in an administrator terminal when necessary. Allow the required application/port instead of disabling the firewall.
 
-Allow only the required application/port; do not turn off the entire firewall. Guest networks may prevent connected devices from communicating. Use a network that permits communication between the phone and computer.
+**Regenerate token** invalidates old control URLs. **Disconnect all remote devices** ends current access; use the new connection information to reconnect. Keep full control URLs and live QR codes private.
 
-### Connect step by step
+![Remote Advanced details and service actions](media/readme/v1.18.0/remote-advanced-en.png)
 
-1. Connect the phone and computer to the same Wi-Fi, or connect the computer to the phone's hotspot.
-2. Open **desktop Remote Control → Remote connection** from the context menu.
-3. Confirm the service has started and scan the **live QR code on your own computer**.
-4. Open the page in the phone browser. Try starting/pausing the timer before using presentation controls.
+<a id="remote-timer"></a>
+### Use the browser Timer page
 
-![Desktop remote connection window](media/v1.14.0/pc-remote-connection.png)
+Start, Pause, Resume, Stop/Reset and Restart control the computer's timer. Show/Hide changes visibility without stopping it. Flash triggers a visual reminder; Computer audio changes the computer's main output mute state. Dismiss Time's up closes FlyPPTTimer's fullscreen time-up message.
 
-The URL's IP address identifies the computer on the local network. Do not replace it with the hotspot gateway address. The full URL and QR code contain connection credentials; keep them private.
+**+30 seconds / +1 minute — Pro:** during a **Running or Paused finite round**, tap either button to extend that round. Repeated taps accumulate, and a paused round stays paused. Stopped, Finished and Unlimited rounds cannot be extended.
 
-<a id="controls"></a>
-## 5. Controls: shortcuts and window behavior
+These buttons change **only the current round**, leaving default duration, file rules and scenario snapshots intact. Reset/Restart clears the added time. Countdown and finite count-up both use the extended endpoint. A reminder moved back into the future by an extension can become eligible again.
 
-![Controls including function keys, click-through, locking, tray behavior and close action](media/v1.14.0/settings/en-05-controls-part-1.png)
+To change the **saved default duration**, use the directly visible **Time adjustment** card on the phone's Timer page. Edit Hours / Minutes / Seconds, then choose **Apply duration**. This is separate from adding time to the current round.
 
-### Main shortcuts
+If file rules exist, the phone asks whether to use **Global only** (change the default duration and leave file rules unchanged) or **Sync all** (also set every presentation rule to the new duration). With no file rules, the duration applies directly without that choice.
 
-Choose **F1–F12** for Start/Pause, Stop/Reset, and Show/Hide using the three dropdowns, then save. Use distinct keys and avoid shortcuts you need in other applications. Some laptops require Fn with the function key.
+Applying the saved duration during Running/Paused restarts the current round from its initial time with the new duration, clearing temporary extension and timing feedback. A running round remains running; a paused round is paused again after the restart. This does not require the desktop fresh-round confirmation used for scenario/profile switches; the phone choice above concerns only whether to synchronize file rules.
 
-| Default shortcut | Action |
-|---|---|
-| F3 | Start, pause, or continue timing. |
-| F4 | Stop and reset. |
-| F5 | Show/hide the ordinary floating timer. |
-| F7 | Trigger a visual reminder. |
-| F8 | Toggle the computer's main audio output mute, not just this application's sound. |
-| Ctrl+Alt+Up / Ctrl+Alt+Down | Add/subtract one minute. |
-| Ctrl+Alt+1 / 2 / 3 / 4 / 5 | Select a 3/5/8/10/15-minute preset. |
+![Phone Timer page with visible Time adjustment, Apply duration and current-round extension buttons](media/readme/v1.18.0/remote-phone-extension-en.png)
 
-### Window behavior
+*This screen uses isolated example data. It is not evidence of testing with a physical phone and a live PowerPoint/WPS slideshow.*
 
-| Setting | Purpose |
-|---|---|
-| Click-through | Sends clicks through the floating timer to the presentation or window behind it. Use the notification-area icon to reopen Settings. |
-| Lock window | Prevents accidental movement. Turn it off before repositioning. |
-| Minimize to tray | Hides the minimized Settings window in the notification area to reduce taskbar clutter. |
-| Close button behavior | Chooses whether closing the timer window exits the application or hides it to the tray. This is separate from OK in Settings. |
+<a id="file-access"></a>
+### Separately authorize browsing computer PPT files
 
-Click-through prevents the timer from blocking clicks. Lock window prevents accidental dragging. Enable either or both according to your needs.
+Connecting to Remote **does not grant folder browsing**. **Allow phone to browse computer PPT files** is off by default. Leave it off when you only need timing or navigation.
 
-Closing Settings leaves timing and remote control available. To end the application entirely, use **Exit** in the notification-area menu.
+1. Connect the phone. If browsing is not allowed, a newly announced phone connection can open desktop Remote settings with the permission highlighted.
+2. On the computer, check **Allow phone to browse computer PPT files**, then click **Apply** or **OK**. Checking the box, pressing Enter or dismissing the notice alone does not save permission.
+3. On the phone, open **Presentation → Browse computer PPT files**. Close and reopen an already-open browser panel if it still shows a permission message.
+4. Open Home or a local drive, navigate folders, and filter names in the current folder. The filter does not search the whole disk.
+5. Choose **Add to list** beside a PPT, close the browser, then select/open/start that file from the controlled list. Adding a file does not open it or modify its contents.
 
-<a id="other"></a>
-## 6. Scenarios: switch a complete working configuration
+<img src="media/v1.14.0/mobile-en-light-browser.png" width="360" alt="Compatible phone file-browser view with local folders and Add to list">
 
-Free can create one snapshot. Pro can create additional snapshots, up to eight. Names identify them, hotkeys switch them globally, badge colors mark the active scenario on the tray icon, and Overwrite with current configuration refreshes an existing snapshot. Switching applies timer, alert, appearance, display, control and presentation-rule settings together.
+*This compatible phone file-browser view comes from an earlier release. Use the current steps above for desktop authorization and button placement.*
 
-![Scenarios settings page](media/v1.15.0/settings/en-06-scenarios-part-1.png)
+If no notice appears, open **Settings → Remote Control** manually. Already announced phones and local computer-browser access do not repeatedly open the guidance. To revoke browsing, uncheck the permission and Apply; this does not delete file rules or close documents.
 
-See the [v1.15.0 scenario section](#scenarios) above for the complete workflow.
+This is a shared permission for devices holding a valid Remote URL/token, not approval for only the phone named in the notice. It reveals folder/PPT names and allows adding local presentations. It does not provide arbitrary downloads, uploads, editing, deletion or network-share browsing.
 
-## 7. Other: language, updates, backups, and file locations
+### Run a presentation from the browser
 
-### Pro License
-
-v1.17.2 keeps licensing here and uses the online signed-license service. You can see whether the device is Not started, in trial, annual, permanent, or expired; copy the complete Device ID; explicitly start the 7-day trial; choose a domestic or international purchase channel; and enter a server-issued activation code or an FPTL1 device-bound offline signed license.
-
-**International / Patreon**
-1. Permanent Pro is **US$3/device, one-time**.
-2. Choose Patreon (International) to open **https://www.patreon.com/HonaCao/shop** and buy **FlyPPTTimer Pro — Permanent License — 1 Device**.
-3. Choose Patreon activation message to copy a ready-to-send message containing the current Device ID and permanent-plan text.
-4. After purchase, paste that text into a Patreon Direct Message to the creator.
-5. After the purchase is verified, the activation code is returned in the same Patreon message thread.
-
-**Mainland China / Alipay**
-1. Pricing is **¥10/device/year** or **¥20/device permanent**.
-2. Pay **caohunan@foxmail.com** or scan the built-in Alipay QR.
-3. Put the receiving email address in the payment remark.
-4. Email **caohunan@foxmail.com** from that address with the Device ID and plan.
-5. The activation code is replied by email after payment verification.
-
-English UI puts Patreon first; Chinese UI puts Alipay first. Both channels remain available in both languages. Normal config import/export, Restore defaults, and scenarios do not carry or reset license state.
-
-### Language and updates
-
-![Other settings with language, update checking and configuration management](media/v1.14.0/settings/en-06-other-part-1.png)
-
-When opening PPT/PPTX/PPTM files, FlyPPTTimer always delegates to the current Windows default file association. There is no longer a “Default PPT application” selector. Change the default PowerPoint/WPS/other presentation app in Windows itself.
-
-| Setting | How to use it |
-|---|---|
-| Interface language | Select System, English, or Simplified Chinese. Save and restart when prompted. |
-| Check for updates on startup | On by default. Checks GitHub/Gitee stable releases and only prompts for a newer version. No-update and temporary network failures stay silent. |
-| Check for updates now | Checks GitHub/Gitee immediately; full release notes appear in a resizable, scrollable window. |
-
-For a ZIP update, extract it first. Run the installer inside a setup ZIP, or extract the complete portable edition and migrate your configuration.
-
-### Configuration management
-
-| Button | Purpose | Example |
-|---|---|---|
-| Export configuration | Saves settings and presentation rules to JSON. | Back up before an event or move your setup to another computer. Apply your current edits before exporting. |
-| Import configuration | Reads a chosen JSON file and applies its configuration. | Restore your settings on another computer, then check file paths and display selection. |
-| Restore defaults | Replaces the settings with defaults. | Start a fresh configuration. Export anything you need to keep first. |
-
-An exported configuration **does not contain the actual PPT files or custom sound files**. Copy presentations and the `alert-sounds` folder separately when moving computers. Register new file paths when their locations change.
-
-### File locations, About, and contact actions
-
-![Configuration/log locations, current version and author contact actions](media/v1.14.0/settings/en-06-other-part-2.png)
-
-| Entry | Purpose |
-|---|---|
-| Open configuration location | Finds `FlyPPTTimer.config.json` for backup or migration. |
-| Open log location | Finds the logs; use the relevant time range when reporting a problem. |
-| Current version | Identifies the running version for support requests. |
-| Project introduction | Describes the application's main uses. |
-| From the author | Introduces the project and its author. |
-| Open GitHub / Open Gitee | Opens the project pages, downloads, and related information. |
-| Send email | Contacts the author by email. |
-
-### Upgrade, move, or uninstall
-
-**Portable:** exit the old program, extract the new edition into a new folder, copy your `FlyPPTTimer.config.json` and `alert-sounds`, then run the new application. Do not overwrite personal settings with the default configuration from a new ZIP.
-
-**Installed:** exit the application and run the setup wizard against the existing installation directory. Existing configuration is retained.
-
-**Uninstall:** use Windows' application list for the installed edition. For the portable edition, exit and remove its folder. Export settings and back up sounds first when you intend to reuse them.
-
-<a id="phone"></a>
-## Phone controls: Timer and Presentation
-
-Switch between **Timer** and **Presentation** at the top. You can also swipe left/right on ordinary content and inside the file list. The phone theme can follow the computer or be chosen separately. The browser's language environment determines the phone interface language.
-
-### Timer page
-
-<img src="media/v1.14.0/mobile-en-light-timer.png" width="360" alt="Phone timer page with duration, timer actions and computer audio control">
-
-| Control | Purpose |
-|---|---|
-| Duration, mode, and Apply | Sets the timing target and mode. Apply confirms the edit. |
-| Start, Pause, Resume | Controls the current session. Resume retains progress after a pause. |
-| Stop and reset | Stops the session and returns to its initial time. |
-| Restart timer | Starts a fresh session instead of continuing previous progress. |
-| Show/hide | Changes the small timer's visibility without stopping timing. |
-| Flash | Gives the speaker a visual reminder. |
-| Computer audio | Toggles the computer's main audio output mute. |
-| Dismiss Time's up blackout | Closes FlyPPTTimer's full-screen Time's up message. |
-
-### Presentation page
-
-<img src="media/v1.14.0/mobile-en-light-presentation.png" width="360" alt="Phone presentation page with file order, navigation and slide-show controls">
-
-1. Add files to the computer's presentation rules and save. For a document already open on the computer, you can also use **Add open presentation → Add to list** on the phone.
-2. Select a listed presentation and use **Open**. Its editing window opens on the computer.
+1. Add and save file rules on the computer, use the authorized file browser, or use **Add open presentation → Add to list** for a presentation already open on the computer.
+2. Select the listed file and choose **Open**. Wait for the operation to complete.
 3. Choose **Start from beginning** or **Start from current slide**.
 4. Use Previous/Next, or enter a slide number and choose Go to slide.
-5. Finish with **End slide show**.
+5. Choose **End slide show** when finished.
 
-Black screen/Restore and White screen/Restore temporarily conceal the slide-show content for discussion. They are separate from dismissing the timer's Time's up message.
+Black screen/Restore and White screen/Restore temporarily conceal slideshow content. They are separate from FlyPPTTimer's Time's up message.
 
-### Order, hide, and remove files
+Sort by name, size, modification time or manual order. Long-press before dragging to reorder; Move up/down also selects manual order. Hide removes a finished item from the ordinary list; Show hidden/Restore returns it. Remove file removes list membership, not the disk file.
 
-| Action | Use |
+End slide show ends playback. Close active presentation closes the current document; Close last-opened presentation closes the last file opened through control operations. Exit presentation software is available only when a controllable application is attached and contains no uncontrolled presentations. Save needed edits first; handle the presentation application's save prompts on the computer.
+
+<a id="browser-display"></a>
+### Show the timer in another browser — Pro
+
+1. Enable Remote and establish a working local connection.
+2. In desktop Remote connection, expand Advanced details and choose **Open browser display** locally, or **Copy display URL** for another device on the same network.
+3. Open that display address in the target browser and use the browser's fullscreen mode if appropriate.
+
+Use the display URL for a display view and the control URL for operator controls. Keep both private. During a disconnection, Browser Display retains its **last valid picture**, shows a reconnecting indicator and retries automatically. That picture may be stale; check the computer's live timer before relying on it.
+
+<a id="appearance"></a>
+## 8. Displays, appearance, positioning and shortcuts
+
+### Make the timer readable
+
+Open **Settings → Appearance & Display**. Choose System / Light / Dark for application surfaces, then select a timer color scheme or edit colors individually. Interface theme does not replace your chosen timer colors.
+
+Choose **Automatic (content and font)** for sizing that fits the readout. With Custom window size, allow enough width/height after increasing fonts. Current/total slides and slide stopwatch can be enabled separately; their font/color follow options let you use smaller metadata below a larger time readout.
+
+Shapes include rectangular and small/medium/large rounded rectangles. New configurations use **RoundedSmall**; upgrading preserves an existing saved shape. Background opacity ranges from 0–100% and changes the background rather than hiding the text. Use the slider, wheel or adjacent number input, then Apply.
+
+### Place the timer and prevent accidental movement
+
+1. Turn off mouse pass-through and position locking under **Controls** if you need to drag the timer.
+2. Drag it, or choose a default anchor under Appearance & Display and adjust horizontal/vertical offsets.
+3. To restore anchor-based placement, choose **Reset timer window position**.
+4. Apply, then enable **Lock window** if the position should stay fixed.
+
+Offsets range from -50% to 50%, with 0.1-percentage-point precision: positive horizontal moves right, positive vertical moves down. At zero offsets, top/bottom anchors meet the actual full-screen edge. Center anchors use full screen width, including with a side taskbar. Saved nonzero offsets are retained.
+
+**Mouse pass-through** sends clicks to the application behind the timer and hides the rehearsal menu. **Lock window** prevents dragging. To change either when you cannot click the timer, use its notification-area icon.
+
+### Multiple monitors and a time-only big screen
+
+For a speaker-only overlay, turn off **Show on all displays** and select the speaker's monitor. Enable it to show the same round on applicable displays.
+
+For a dedicated fullscreen timer:
+
+1. In Windows display settings, select **Extend these displays**.
+2. In FlyPPTTimer Appearance & Display, enable the fullscreen timer and choose its extended display.
+3. Check the selected screen before the event; the timer occupies it.
+4. Leave big-screen metadata off for **time only**. Enable that option if this screen also needs slide numbers and slide seconds.
+
+The ordinary overlay and big-screen metadata choices are separate. The fullscreen-timer screen does not receive a duplicate small overlay.
+
+### Default shortcuts
+
+| Shortcut | Action |
 |---|---|
-| Sort | Arrange by name, file size, modification time, or manual order. |
-| Ascending/descending | Reverse the selected ordering direction. |
-| Long-press drag, Move up/down | Arrange the speaking order yourself. Moving an item switches to manual ordering. |
-| Hide | Temporarily remove a finished presentation from the ordinary list. |
-| Show hidden / Restore | Find hidden files and return them to the list. |
-| Remove file | Removes control-list membership; it does not delete or close the document. |
+| F3 | Start / Pause / Resume. |
+| F4 | Stop and reset. |
+| F5 | Show / Hide the ordinary timer. |
+| F7 | Trigger visual flashing. |
+| F8 | Toggle the computer's main audio output mute. |
+| Ctrl+Alt+Up / Down | Increase / decrease the configured duration by one minute. |
+| Ctrl+Alt+1 / 2 / 3 / 4 / 5 | Select a 3 / 5 / 8 / 10 / 15-minute duration preset. |
 
-Vertical swipes scroll the file list first, then continue scrolling the page at its boundaries. A short list scrolls the page directly. Swipe normally to browse; long-press before dragging to reorder.
+The three main shortcuts can be assigned F1–F12 under Controls. Use distinct keys and check conflicts with other software; some laptops need Fn. Duration shortcuts edit the configured allowance; they are different from Remote's temporary round extension and do not act in Unlimited.
 
-### Closing presentations
+Minimize to tray and Close button behavior determine whether windows hide to the notification area or exit. Use the tray **Exit** action when you intend to quit completely.
 
-End slide show stops the presentation playback. Close active presentation closes the current document. Close last-opened presentation closes the last file opened through control operations. Exit presentation software exits the relevant presentation applications. Save any changes you need before closing documents or exiting the presentation software.
+<a id="scenarios"></a>
+## 9. Scenarios
 
-<a id="faq"></a>
-## Troubleshooting
+A scenario saves timing, both reminder profiles, timer appearance, displays, positioning, controls and file rules as a working setup. Language, application interface theme, update settings, Remote credentials, licensing and Review history are outside that snapshot.
 
-| Problem | What to do |
+Free has **one available scenario**; Pro supports up to **eight**. A fresh configuration includes Scenario 1, which you can rename and overwrite. Extra saved scenarios remain stored when Pro is unavailable.
+
+### Save or update a setup
+
+1. Configure your working settings and click Apply.
+2. To create a new snapshot when a slot is available, use **Save mode** in the Settings footer, enter a name and confirm.
+3. For an existing snapshot, open **Scenarios**, expand its row and choose **Overwrite with current configuration**.
+4. In the expanded row, adjust its name, global switch hotkey or badge color as needed.
+
+Rows are newest-first and collapsed initially. A modified indicator means the current snapshot-owned settings differ from the saved scenario; edits do not silently overwrite it. Deleting a scenario requires confirmation and does not delete PPT files.
+
+### Switch a setup
+
+Select its row, assigned hotkey, timer/tray scenario submenu, or phone Timer-page selector. The footer identifies the active scenario; its color briefly highlights the timer border.
+
+During Running/Paused, **every scenario application**, even reapplying the current one, needs [fresh-round confirmation](#fresh-round). Phone-initiated changes are confirmed on the desktop. Cancel keeps the current round; confirm clears feedback and preserves running/paused intent.
+
+<a id="review"></a>
+## 10. Presentation Review and rehearsal baselines
+
+### Read a completed show — Free
+
+1. Complete a recognized desktop PowerPoint/WPS slideshow and end it.
+2. Open **Presentation Review** from the timer/notification-area menu.
+3. Select a history entry and read its summary, then scroll for slide details.
+
+**Effective time used** is accumulated valid recorded slide time. It is not simply the wall-clock interval between starting and ending the show. Pauses and gaps without valid observations can make those values differ.
+
+For finite timing, the summary compares effective time with the **final target**, showing ahead, overtime or on-target. It also identifies the slide with the longest **accumulated** time, including revisits.
+
+After a temporary extension, the summary shows **original plan + added time + final target**. For example, eight minutes plus one minute gives a nine-minute final target; target comparison uses nine minutes. Unlimited records omit target comparison.
+
+Visited/total slides, average time, the longest slides and per-slide bars remain available below the summary. History keeps up to 20 completed records; delete entries or clear history only when you no longer need them. Older records remain readable.
+
+![Review showing original plan, extension and final target](media/readme/v1.18.0/review-extension-en.png)
+
+### Select a rehearsal baseline — Pro
+
+1. Complete a rehearsal of the presentation.
+2. In Review, select that entry and choose **Use as rehearsal baseline**.
+3. Present the **same file** again. Review can show live pace information and, after completion, a faster/slower comparison with the selected rehearsal.
+4. Use **Clear rehearsal baseline** to remove the selection.
+
+No baseline is selected automatically. The completed comparison uses effective time against the baseline's effective time; it is separate from comparison with the planned target. Baselines match the presentation path, so moving the file can prevent a match. Deleting its record also removes that baseline.
+
+Base Review remains complete in Free. Baseline selection and pace comparison require Pro.
+
+![Review with an explicitly selected rehearsal baseline](media/readme/v1.18.0/review-baseline-en.png)
+
+<a id="diagnostics"></a>
+## 11. Diagnostics and connection recovery
+
+### Collect a safe status report — Free
+
+1. Open **Settings → Other → Diagnostics Center**, or its notification-area menu entry.
+2. Choose **Refresh** to update the local status snapshot.
+3. Use **Copy safe summary** for a support message, or **Export diagnostic report** to save a UTF-8 report.
+4. Describe the problem and relevant steps alongside that report.
+
+Diagnostics covers the app, presentation observer, displays, Remote/Browser Display, license summary and updater. Its report excludes tokens, activation material, presentation paths/content, personal data, raw configuration and raw logs. Refresh does not start a trial, validate a license online or check for updates.
+
+![Diagnostics Center and safe report actions](media/readme/v1.18.0/diagnostics-en.png)
+
+### Recover Remote or Browser Display
+
+If Remote reports a stopped/failed listener, open Remote Advanced details and use **Restart service and apply port**. Check the new status and scan the current QR again if the address changed.
+
+Browser Display retries automatically and keeps its last valid picture while disconnected. Allow a few seconds after a service restart; if it remains disconnected, verify the network and reopen the current display URL.
+
+### Share logs carefully
+
+**Other → Open log location** opens raw log files. Diagnostic export does **not** include them and is not a log-sanitizing tool.
+
+If support needs logs, reproduce the issue, note the time, copy only the relevant excerpt and remove private paths, presentation names, credentials and activation material before sharing. Do not upload your full configuration or log folder by default.
+
+<a id="pro"></a>
+## 12. Free, Pro, licenses and the seven-day trial
+
+| Capability | Free | Pro |
+|---|---|---|
+| Local countdown/count up, Unlimited, slideshow automation and file rules | Included | Included |
+| Multi-monitor overlays, fullscreen timer, appearance, shortcuts and backups | Included | Included |
+| Simple reminders; Custom Timer end and nearest enabled point before/after end | Included | Included |
+| Multiple enabled Custom reminder points | Extra points preserved but inactive | Available |
+| Scenarios | One available | Up to eight |
+| Rehearsal hover controls, Diagnostics and base Review | Included | Included |
+| Remote, temporary phone extension and Browser Display | Requires Pro | Included |
+| Rehearsal baseline and pace comparison | Requires Pro | Included |
+
+Losing Pro availability does not delete extra reminders, scenarios or history. The extra Pro settings remain stored and become available again with Pro; Free continues to provide local timing.
+
+<a id="trial"></a>
+### Start or reconfirm the trial
+
+1. Open **Settings → Other → Pro License**.
+2. Read the license status and choose **Start trial** only when you are ready to try Pro.
+3. Explicitly accept the trial confirmation and connect to the internet for the service response.
+4. Check the displayed status/expiry before relying on Pro at an event.
+
+Installation, launch, checking updates and opening Diagnostics do not start a trial. The trial lasts **168 hours (seven days) from the first server-side claim**. Reinstalling, restarting, re-extracting the portable edition or resetting/importing configuration does not restart that period.
+
+**An unexpired trial requires online reconfirmation after the application restarts.** Use **Confirm trial online** when offered; offline cached trial data alone is insufficient after restart. Reconfirmation retains the original expiry and does not grant another seven days.
+
+### Buy and activate Pro
+
+Use the purchase actions in **Pro License** for current plans and per-device prices.
+
+- **Patreon / International:** open the shop from Settings, purchase the one-device permanent license, copy the Patreon activation message containing your Device ID, and send it to the creator in a Patreon direct message. The activation code is returned there after payment verification.
+- **Alipay / Mainland China:** use the built-in payment information, include your receiving email in the payment remark, then email your full Device ID and chosen plan to the activation address shown in Settings. The activation code is returned after payment verification.
+
+Enter the issued activation code in Pro License. A supplied **FPTL1 device-bound signed offline license** uses the offline-license input; a purchase receipt alone is not an activation code. Check that the Device ID matches the intended computer. A license for another device cannot be used as a configuration backup.
+
+Annual licenses expire according to their entitlement; permanent licenses follow their issued terms. For activation, expiry, clock or damaged-state errors, read the exact message and contact support if needed. Do not change the system clock or delete license files to attempt to reset entitlement. Configuration import/export, scenarios and Restore defaults do not transfer or reset license state.
+
+<a id="maintenance"></a>
+## 13. Settings, upgrades, migration and backups
+
+### Language and software updates
+
+Under **Other**, choose System / English / Simplified Chinese for the interface and restart when prompted.
+
+Choose **Gitee** or **GitHub** under Software Updates. With no saved choice, the Windows geographic-region setting selects Gitee for mainland China and GitHub elsewhere; this does not use GPS. An explicit saved choice is retained.
+
+Startup update checks are on by default. Manual checks report their result; startup checks stay quiet when no newer version is found or a temporary network error occurs. Read the complete release notes before accepting **Download and install**. Installation requires confirmation and restarts the application.
+
+The installed updater downloads/extracts the setup package and runs the installer. The portable updater replaces application files and preserves `FlyPPTTimer.config.json` and `alert-sounds`. Back up first and ensure the target folder is writable.
+
+### Back up and move your settings
+
+1. Apply any edits you want to keep.
+2. Use **Other → Export configuration** to save JSON.
+3. Use **Open configuration location** to find `FlyPPTTimer.config.json`; back it up and copy your `alert-sounds` folder separately.
+4. Copy presentation files separately. On another computer, import the JSON, check display selections and file paths, and test reminders.
+
+Export includes settings, scenarios and file rules. It does not bundle PPT files, custom sound files, licenses or Review history. If you need to retain Review history, back up its local history file separately before moving; **Open configuration location** helps locate the application's data.
+
+Restore defaults replaces settings. Export anything needed first; it does not create a new trial.
+
+### Upgrade manually
+
+**Portable:** exit the old application, extract the complete new package into a new writable folder, copy your saved configuration and `alert-sounds` into it, and launch the new executable. Keep a separate copy of the old data. Do not overwrite personal settings with a ZIP's default configuration.
+
+**Installed:** exit the application and run the new installer against the existing installation directory. Existing configuration is retained; keep a backup and verify the result afterward.
+
+On migration to v1.18.0, existing unmarked reminder settings/scenarios use **Custom**, saved shapes remain unchanged, and rehearsal controls remain off unless saved as enabled. New configurations use **Simple** and a small rounded rectangle. Review reads existing history with no extension recorded where older entries lack that field.
+
+After either upgrade, verify duration, reminder profile, overtime policy, file paths, selected displays and any Remote connection. To uninstall, use Windows' application list for the installed edition; for portable, exit and remove its application folder after backing up data you need.
+
+<a id="troubleshooting"></a>
+## 14. Troubleshooting
+
+| Problem | What to check |
 |---|---|
-| Phone connected but file browsing denied | Check the permission on the computer and Apply. If no new notice appears, open Remote Control settings manually. [Illustrated steps](#file-access) |
-| Top/bottom anchor not flush | Confirm v1.14.1, the correct display and anchor, set both offsets to 0 and Apply; saved nonzero offsets remain preferences. |
-| Cannot find the timer | Press F5 or open Settings from the notification area. Check visibility, target display, text color/font size, and reset its position. |
-| Cannot click or drag the timer | Check Click-through and Lock window under Controls. |
-| Edits are not retained | Check the unsaved indicator. Use Apply or OK after previewing changes. |
-| Time text is clipped | Choose Automatic sizing or increase custom width/height. |
-| Slide numbers are missing | Enable slide numbers and open a supported desktop PowerPoint/WPS document. |
-| Automatic timing starts unexpectedly | Adjust fullscreen automatic start, stop, and reset separately, or disable automatic start and use F3. |
-| No alert sound | Check the group enable switch, speech/sound, output device, and mute state. F8 toggles computer mute. |
-| Phone will not connect | Confirm the service is running and both devices share a network; scan again and check guest-network isolation, VPNs, and the current port's firewall rule. |
-| Phone file list is empty | Add and save rules on the computer, or use Add open presentation on the phone. |
-| Timer works remotely but slide navigation does not | Confirm the target file is open and presenting in desktop PowerPoint/WPS; check the current presentation status on the phone. |
-| Full-screen timer cannot be selected | Configure the external display as an extended display in Windows. |
-| Need configuration or logs | Use the corresponding location buttons on Other. |
+| Timer is missing | Try the configured Show/Hide key (default F5). Open Settings from the notification area; check visibility, target monitor, colors, size and Reset timer window position. |
+| Timer cannot be clicked or dragged | Disable mouse pass-through; disable Lock window to move it. Use the notification-area icon to reach Settings. |
+| Rehearsal menu does not appear | Enable Show rehearsal controls and Apply, then hover over the ordinary timer. Mouse pass-through hides the menu completely. |
+| Text or metadata is clipped | Use Automatic sizing or increase custom dimensions after changing fonts. |
+| Settings revert | Finish the input and click Apply/OK; check the unsaved indicator. |
+| Slide numbers/times are missing | Enable the fields and use a supported desktop PowerPoint/WPS slideshow. Check presentation-observer status in Diagnostics. |
+| A file uses the wrong duration | Check the enabled full-path rule, saved edits and whether Unlimited is on. Moving/renaming a file changes its identity. |
+| Timing starts unexpectedly | Check Auto-start for fullscreen apps; browser/PDF fullscreen can also qualify. Use manual F3 control when appropriate. |
+| Ending a show stops/resets timing unexpectedly | Review the separate stop/reset-on-leaving-fullscreen options. |
+| Reminder does not fire | Check the active profile, point enable switch, offsets, effects and finite target. Free uses the nearest enabled Custom point on each side of the endpoint. |
+| No sound or speech | Check the computer's mute state/output device and the chosen effect. Default F8 toggles system mute. |
+| Post-overtime controls are unavailable | Use Alert only and the active profile's continue-overtime setting. Unlimited and ending actions do not run post-overtime reminders. |
+| Phone cannot connect | Check Pro status, running service, current QR/URL, same-LAN reachability, guest isolation, VPN and the current firewall port. Test the local control page. |
+| Phone connects but cannot browse files | Enable the separate desktop browsing permission and Apply; reopen the phone browser panel. |
+| Browser file list is empty | Add and save rules or use Add open presentation / authorized computer browsing. |
+| Timer works remotely but slides do not | Check that the intended file is open in supported desktop PowerPoint/WPS and a slideshow is running; wait for pending operations. |
+| Phone extension is unavailable | It requires a Running/Paused finite round and Pro. Finished, Stopped and Unlimited cannot be extended. |
+| A scenario/profile change asks to reset | Running/Paused changes require a fresh round; Cancel preserves the current one. Phone scenario changes need desktop confirmation. |
+| Fullscreen timer is unavailable | Connect an external display and select Extend these displays in Windows. |
+| Browser Display appears frozen | It may be showing the last valid picture while reconnecting. Check service/network status and reopen the current display URL. |
+| Trial does not work offline after restart | Reconnect and explicitly confirm the unexpired trial online. The original expiry remains unchanged. |
+| Review time differs from total event time | Review sums valid recorded slide time, including revisits, and excludes unrecorded gaps; use its final target for target comparison. |
 
-Before an event, check presentation order, timing allowances, displays, sound, and the phone connection. Share remote-control credentials only with trusted people; do not publish QR codes or forward the control port to the public internet.
+Before an event, rehearse with your own Office/WPS version, actual monitors/scaling, sound output and phone network. Software and isolated checks do not establish that every physical setup has been tested. If a duplicate timer region, pale overlay or unexpected hover artifact appears, record the monitor/scaling/state and report it with a redacted screenshot.
 
-For further help, open a [GitHub issue](https://github.com/Hona-Cao/FlyPPTTimer/issues) with the application version, Windows and presentation-software versions, steps, and screenshots. Remove tokens, private paths, and sensitive presentation content first.
+<a id="privacy"></a>
+## 15. Feedback, privacy and legal terms
 
-## 1.14.1 connection guidance and edge placement
+For help, open a [GitHub issue](https://github.com/Hona-Cao/FlyPPTTimer/issues) or use the contact actions under Other. Include v1.18.0, Windows and PowerPoint/WPS versions, steps, expected/actual behavior and a safe diagnostic summary. Include monitor scaling or network details when relevant.
 
-A newly connected phone opens desktop Remote settings at the highlighted file-browsing checkbox. Check it and Apply; connection alone never grants access. Polling from the same device does not reopen Settings.
+Keep full Remote/display URLs, QR codes, activation material, Device IDs, private paths and presentation content out of public reports. Use trusted LANs and devices; do not forward the Remote port to the public internet. Revoke file browsing when no longer needed and regenerate the token if connection credentials were exposed.
 
-The timer uses tighter rows/padding. Zero-offset top/bottom anchors now meet the full screen edge with no baseline inset, using actual window dimensions. Saved custom offsets remain unchanged. [Full notes](RELEASE_NOTES_v1.14.1.md).
+File rules and Review history can identify local presentations; raw configuration and logs are not automatically safe to publish. Diagnostics export deliberately omits those sensitive inputs.
 
-## v1.17.3 diagnostics and connection recovery
-
-Open **Settings → Other → Diagnostics Center** or **tray → Diagnostics Center**. This separate window shows privacy-safe app, presentation observer, display, Remote, license and updater status. Use **Copy safe summary** or **Export diagnostic report** to share a UTF-8 report. It omits presentation names/paths, tokens, activation data, personal data, raw configuration and logs. Refresh does not request license validation, start a trial or check updates.
-
-If Remote reports a listener failure, use the existing Remote restart action. Browser Display keeps its last good screen while disconnected, shows a small reconnecting indicator, and retries automatically; allow a few seconds after restarting Remote.
+FlyPPTTimer v1.18.0 is governed by its [license](../LICENSE), with separate [third-party notices](../THIRD_PARTY_NOTICES.md) and [trademark terms](../TRADEMARKS.md). Free/Pro feature availability does not grant redistribution rights. Microsoft PowerPoint and WPS are trademarks of their respective owners; FlyPPTTimer is an independent companion application.
