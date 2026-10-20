@@ -17,7 +17,7 @@
 
 </div>
 
-当前版本：**v1.18.0** · [更新说明与升级指引](docs/RELEASE_NOTES_v1.18.0.zh-CN.md)
+当前版本：**v1.19.0** · [更新说明与升级指引](docs/RELEASE_NOTES_v1.19.0.zh-CN.md)
 
 <a id="download"></a>
 
@@ -34,7 +34,7 @@
 
 两种版本提供相同的计时功能。**Free 满足日常本地演示计时需求**；可选 Pro 功能与需主动确认开启的七日试用见[下方对照](#free-and-pro)。
 
-升级前，请先备份配置和自定义提示音。按[用户指南](docs/USER_GUIDE.zh-CN.md)保留原有设置，并用 [v1.18.0 SHA256 校验清单](docs/SHA256SUMS_v1.18.0.txt)核对对应的下载包。
+升级前，请先备份配置和自定义提示音。按[用户指南](docs/USER_GUIDE.zh-CN.md)保留原有设置，并用 [v1.19.0 SHA256 校验清单](docs/SHA256SUMS_v1.19.0.txt)核对对应的下载包。
 
 ## 为什么选择 FlyPPTTimer？
 
@@ -297,7 +297,7 @@ Pro 不可用时，额外已存提醒点和情景仍会保留；Pro 恢复可用
 |---|---|
 | 用户指南 | [简体中文](docs/USER_GUIDE.zh-CN.md) · [English](docs/USER_GUIDE.en.md) |
 | v1.18.0 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.18.0.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.18.0.md) |
-| 下载校验 | [v1.18.0 SHA256 校验清单](docs/SHA256SUMS_v1.18.0.txt) |
+| 下载校验 | [v1.19.0 SHA256 校验清单](docs/SHA256SUMS_v1.19.0.txt) |
 | Bug 与功能建议 | [GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues) |
 | 法律资料 | [软件许可](LICENSE) · [第三方声明](THIRD_PARTY_NOTICES.md) · [品牌政策](TRADEMARKS.md) |
 
