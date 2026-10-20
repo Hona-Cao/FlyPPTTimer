@@ -18,7 +18,7 @@ concurrency:
 jobs:
   mirror:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       GH_TOKEN: ${{ github.token }}
       GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
@@ -163,13 +163,13 @@ jobs:
               url = link(item)
               if not url:
                   return None
-              for attempt in range(1, 7):
+              for attempt in range(1, 4):
                   try:
                       req = urllib.request.Request(url, headers={"User-Agent": "FlyPPTTimer-release-verify"})
-                      with urllib.request.urlopen(req, timeout=180) as response:
+                      with urllib.request.urlopen(req, timeout=65) as response:
                           return hashlib.sha256(response.read()).hexdigest()
                   except Exception:
-                      if attempt < 6:
+                      if attempt < 3:
                           time.sleep(5 * attempt)
               return None
 
@@ -187,7 +187,7 @@ jobs:
               result = subprocess.run(
                   [
                       "curl", "--config", "-", "--fail-with-body", "--silent", "--show-error",
-                      "--connect-timeout", "30", "--max-time", "900", "--header", "Expect:",
+                      "--connect-timeout", "20", "--max-time", "150", "--header", "Expect:",
                       "--form-string", f"owner={owner}",
                       "--form-string", f"repo={repo}",
                       "--form-string", f"release_id={release_id}",
@@ -198,7 +198,7 @@ jobs:
               )
               if result.returncode:
                   detail = (result.stderr[-600:] + result.stdout[-400:]).replace(token, "[REDACTED]")
-                  raise SystemExit(f"Gitee upload failed for {path.name}: {detail}")
+                  raise RuntimeError(f"Gitee upload failed for {path.name}: {detail}")
 
           for name in sorted(expected):
               wanted = local[name]["sha256"]
@@ -209,10 +209,15 @@ jobs:
               if item:
                   delete_attachment(item)
               for attempt in range(1, 4):
-                  upload(local[name]["path"])
+                  print(f"Uploading {name}, attempt {attempt}/3", flush=True)
+                  try:
+                      upload(local[name]["path"])
+                  except RuntimeError as error:
+                      print(f"Upload attempt {attempt} failed: {error}", flush=True)
+                  # A timed-out upload may have completed on Gitee. Check first.
                   item = next((entry for entry in attachments() if entry.get("name") == name), None)
                   if item and public_digest(item) == wanted:
-                      print(f"Uploaded and verified: {name}")
+                      print(f"Uploaded and verified: {name}", flush=True)
                       break
                   if item:
                       delete_attachment(item)
