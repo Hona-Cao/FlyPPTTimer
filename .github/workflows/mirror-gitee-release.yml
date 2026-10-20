@@ -7,6 +7,11 @@ on:
         description: Stable release tag, for example v1.17.2
         required: true
         type: string
+      notes_only:
+        description: Update Gitee release title and notes without uploading assets
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -24,6 +29,7 @@ jobs:
       GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
       GITEE_OWNER: hona-cao
       GITEE_REPO: fly-ppttimer
+      NOTES_ONLY: ${{ inputs.notes_only }}
     steps:
       - name: Validate and mirror the published release
         shell: python
@@ -145,6 +151,9 @@ jobs:
           if not isinstance(mirror, dict) or not mirror.get("id"):
               raise SystemExit("Gitee did not return a valid Release id")
           release_id = mirror["id"]
+          if os.environ.get("NOTES_ONLY", "false").lower() == "true":
+              print("Gitee Release title and notes synchronized.", flush=True)
+              raise SystemExit(0)
           endpoint = f"/releases/{release_id}/attach_files"
 
           def attachments():
