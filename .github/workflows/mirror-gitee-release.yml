@@ -12,6 +12,11 @@ on:
         required: false
         default: false
         type: boolean
+      upload_diagnostics:
+        description: Check one missing asset upload with transfer metrics and a short timeout
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -30,6 +35,7 @@ jobs:
       GITEE_OWNER: hona-cao
       GITEE_REPO: fly-ppttimer
       NOTES_ONLY: ${{ inputs.notes_only }}
+      UPLOAD_DIAGNOSTICS: ${{ inputs.upload_diagnostics }}
     steps:
       - name: Validate and mirror the published release
         shell: python
@@ -196,7 +202,10 @@ jobs:
               result = subprocess.run(
                   [
                       "curl", "--config", "-", "--fail-with-body", "--silent", "--show-error",
-                      "--connect-timeout", "20", "--max-time", "150", "--header", "Expect:",
+                      "--connect-timeout", "20",
+                      "--max-time", "95" if os.environ.get("UPLOAD_DIAGNOSTICS","false").lower()=="true" else "150",
+                      "--write-out", "\nTRANSFER_DIAGNOSTICS http=%{http_code} uploaded=%{size_upload} tls=%{time_appconnect} first_byte=%{time_starttransfer} seconds=%{time_total}\n",
+                      "--header", "Expect:",
                       "--form-string", f"owner={owner}",
                       "--form-string", f"repo={repo}",
                       "--form-string", f"release_id={release_id}",
@@ -205,6 +214,10 @@ jobs:
                   ],
                   input=auth, text=True, capture_output=True,
               )
+              report = next((line for line in result.stdout.splitlines()
+                             if line.startswith("TRANSFER_DIAGNOSTICS ")), None)
+              if report:
+                  print(f"{path.name}: {report}", flush=True)
               if result.returncode:
                   detail = (result.stderr[-600:] + result.stdout[-400:]).replace(token, "[REDACTED]")
                   raise RuntimeError(f"Gitee upload failed for {path.name}: {detail}")
@@ -217,8 +230,9 @@ jobs:
                   continue
               if item:
                   delete_attachment(item)
-              for attempt in range(1, 4):
-                  print(f"Uploading {name}, attempt {attempt}/3", flush=True)
+              limit = 1 if os.environ.get("UPLOAD_DIAGNOSTICS","false").lower()=="true" else 3
+              for attempt in range(1, limit+1):
+                  print(f"Uploading {name}, attempt {attempt}/{limit}", flush=True)
                   try:
                       upload(local[name]["path"])
                   except RuntimeError as error:
@@ -230,7 +244,7 @@ jobs:
                       break
                   if item:
                       delete_attachment(item)
-                  if attempt == 3:
+                  if attempt == limit:
                       raise SystemExit(f"Gitee public download did not verify: {name}")
                   time.sleep(5 * attempt)
 
