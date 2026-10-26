@@ -17,7 +17,7 @@ A Windows presentation timer and control companion for **Microsoft PowerPoint** 
 
 </div>
 
-Current version: **v1.19.0** · [Release notes and upgrade guidance](docs/RELEASE_NOTES_v1.19.0.md)
+Current version: **v1.19.2** · [Release notes](docs/RELEASE_NOTES_v1.19.2.md)
 
 <a id="download"></a>
 
@@ -34,7 +34,7 @@ Choose the **Windows x64** package that suits your setup:
 
 Both editions provide the same timer features. **Free covers everyday local presentation timing**; optional Pro features and the explicitly started seven-day trial are explained [below](#free-and-pro).
 
-Upgrading? Back up your configuration and custom alert sounds first. Follow the [user guide](docs/USER_GUIDE.en.md) to keep your settings, and use the [v1.19.0 SHA256 checksums](docs/SHA256SUMS_v1.19.0.txt) to verify the matching downloaded package.
+Upgrading? Back up your configuration and custom alert sounds first. Follow the [user guide](docs/USER_GUIDE.en.md) to keep your settings, and use the [v1.19.2 SHA256 checksums](docs/SHA256SUMS_v1.19.2.txt) to verify the matching downloaded package.
 
 ## Why FlyPPTTimer?
 
@@ -45,6 +45,10 @@ A thesis defense, a five-minute pitch, a classroom session: each needs a differe
 - **Make the next rehearsal better.** Review recorded slide time, find the slides that took longest and see how the talk compares with its target.
 
 ## From rehearsal to the live presentation
+
+### Single-line layout and custom sizing
+
+Choose single-line or two-line display. In single-line mode, choose whether to show the total time, per-slide timer and page number. The control bar uses four horizontal buttons in single-line mode and retains its 2×2 layout in two-line mode. Custom window dimensions update live; both layouts share font-size settings, and the window grows to fit text instead of shrinking the font.
 
 ### 1. Keep time and slide progress in view
 
@@ -66,12 +70,12 @@ For a five-minute introduction followed by a fifteen-minute keynote, assign each
 
 ### 2. Rehearse with controls beside the timer
 
-During practice, a quick pause or restart should be easy to reach. Enable **Settings → Controls → Show rehearsal controls** to reveal a compact menu when you hover near the timer.
+During practice, a quick pause or restart should be easy to reach. The rehearsal control bar is enabled by default and appears when you hover near the timer.
 
 <p align="center">
   <img src="docs/media/readme/v1.18.0/controls-settings-en.png" alt="Controls settings with Show rehearsal controls enabled and click-through disabled" width="820">
   <br>
-  <em>Opt in to rehearsal controls here; the setting is off by default.</em>
+  <em>Rehearsal controls are enabled by default and appear when you hover near the timer.</em>
 </p>
 
 <table>
@@ -270,7 +274,7 @@ Phone and PC must be on a reachable, trusted local network; check firewall acces
 
 **Why is the hover menu missing?**
 
-It is off by default. Enable Show rehearsal controls and apply the setting. Mouse click-through hides the menu completely; use configured hotkeys or disable click-through to interact with it.
+The rehearsal control bar is enabled by default and appears when you hover near the timer. Mouse click-through hides the menu completely; use configured hotkeys or disable click-through to interact with it.
 
 **Can an unexpired trial resume offline after restarting the app?**
 
@@ -296,8 +300,9 @@ The top badges describe the current application. This public repository also con
 | Resource | Link |
 |---|---|
 | User guides | [English](docs/USER_GUIDE.en.md) · [简体中文](docs/USER_GUIDE.zh-CN.md) |
+| v1.19.2 release notes | [English](docs/RELEASE_NOTES_v1.19.2.md) · [简体中文](docs/RELEASE_NOTES_v1.19.2.zh-CN.md) |
 | v1.18.0 release notes | [English](docs/RELEASE_NOTES_v1.18.0.md) · [简体中文](docs/RELEASE_NOTES_v1.18.0.zh-CN.md) |
-| Download verification | [v1.19.0 SHA256 checksums](docs/SHA256SUMS_v1.19.0.txt) |
+| Download verification | [v1.19.2 SHA256 checksums](docs/SHA256SUMS_v1.19.2.txt) |
 | Bugs and feature requests | [GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues) |
 | Legal information | [License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md) · [Brand policy](TRADEMARKS.md) |
 
