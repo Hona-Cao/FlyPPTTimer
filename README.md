@@ -34,7 +34,7 @@ Choose the **Windows x64** package that suits your setup:
 
 Both editions provide the same timer features. **Free covers everyday local presentation timing**; optional Pro features and the explicitly started seven-day trial are explained [below](#free-and-pro).
 
-Upgrading? Back up your configuration and custom alert sounds first. Follow the [user guide](docs/USER_GUIDE.en.md) to keep your settings, and use the [v1.19.2 SHA256 checksums](docs/SHA256SUMS_v1.19.2.txt) to verify the matching downloaded package.
+Upgrading? Back up your configuration and custom alert sounds first. Follow the [user guide](docs/USER_GUIDE.en.md) to keep your settings.
 
 ## Why FlyPPTTimer?
 
@@ -302,7 +302,6 @@ The top badges describe the current application. This public repository also con
 | User guides | [English](docs/USER_GUIDE.en.md) · [简体中文](docs/USER_GUIDE.zh-CN.md) |
 | v1.19.2 release notes | [English](docs/RELEASE_NOTES_v1.19.2.md) · [简体中文](docs/RELEASE_NOTES_v1.19.2.zh-CN.md) |
 | v1.18.0 release notes | [English](docs/RELEASE_NOTES_v1.18.0.md) · [简体中文](docs/RELEASE_NOTES_v1.18.0.zh-CN.md) |
-| Download verification | [v1.19.2 SHA256 checksums](docs/SHA256SUMS_v1.19.2.txt) |
 | Bugs and feature requests | [GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues) |
 | Legal information | [License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.md) · [Brand policy](TRADEMARKS.md) |
 
