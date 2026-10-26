@@ -12,3 +12,16 @@ Release date: 2026-10-26.
 - Share font-size settings between single-line and two-line layouts.
 - When the text needs more space, the window expands instead of automatically shrinking the font.
 - Switching to custom sizing initializes the width and height from the current window dimensions.
+
+
+## Download packages and SHA-256
+
+- **Portable ZIP:** FlyPPTTimer-v1.19.2-portable-win-x64.zip (17,041,075 bytes)
+- **Installer ZIP:** FlyPPTTimer-v1.19.2-setup-win-x64.zip (13,509,884 bytes)
+
+Verify the downloaded ZIP against its SHA-256 value:
+
+- Portable: 431045920EDAAA4819E04CA26D5ED173FC62B57011E4500E62CAC826C3D334F6
+- Installer: 04B1A4D9EF24DD9357302F7D3EFDDFC95D88756008B51114869BF69FD59FB5BC
+
+The Windows binaries are not code-signed.
