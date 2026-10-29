@@ -1,0 +1,2 @@
+cbeb62c8f3d0806db206a7b1f3753526f023e2561ac583bbf18b55a67d750619  FlyPPTTimer-v1.19.3a-test-preview-win-x64.zip
+06fb12a93d9b729e60b46afc559903dc8414a83858b19d467e5900f4dce3dbd8  FlyPPTTimer.exe (inside ZIP)
