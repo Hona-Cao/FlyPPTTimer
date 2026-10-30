@@ -300,6 +300,7 @@ Pro 不可用时，额外已存提醒点和情景仍会保留；Pro 恢复可用
 | 资料 | 入口 |
 |---|---|
 | 用户指南 | [简体中文](docs/USER_GUIDE.zh-CN.md) · [English](docs/USER_GUIDE.en.md) |
+| v1.19.3a 测试版更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.3a.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.3a.md) |
 | v1.19.2 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.2.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.2.md) |
 | v1.18.0 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.18.0.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.18.0.md) |
 | Bug 与功能建议 | [GitHub Issues](https://github.com/Hona-Cao/FlyPPTTimer/issues) |
