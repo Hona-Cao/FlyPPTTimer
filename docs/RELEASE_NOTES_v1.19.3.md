@@ -1,28 +1,27 @@
 # FlyPPTTimer 1.19.3 Release Notes
 
-This release fixes three problems that could interrupt a presentation, and makes the phone's close/exit actions explicit. Features and settings are the same as 1.19.2; nothing new was added.
+This update fixes three issues that affected normal presentations and adjusts the phone-side close-deck and exit behaviour. Features and settings are unchanged from 1.19.2.
 
-## 1. Opening a deck from your phone failed after changing the default presentation app
+## 1. Phone remote could not open a deck after switching the default presentation app
 
-- Before: if WPS was the default program and you later switched back to PowerPoint (or the other way round), opening a deck from your phone still went through the previous program, so it failed or opened in the wrong one.
-- Now: it uses the presentation app currently set as your Windows default.
+- Before the fix: after changing the default from WPS to PowerPoint (or the reverse), opening a deck from the phone still called the previous app, so it failed or opened in the wrong program.
+- After the fix: the current Windows default presentation app is always used.
 
-## 2. Opening the next deck right after a slideshow ended could hang
+## 2. Opening the next deck immediately after a slideshow could hang
 
-- Before: starting another deck immediately after the previous slideshow closed sometimes stayed on loading, and the only way out was restarting the app.
-- Now: it retries automatically; if the deck still will not open, it uses the Windows default open method and takes over the deck that actually opened. The previous deck is never saved or closed.
+- Before the fix: opening another deck right after the previous slideshow exited occasionally stayed in a loading state and required restarting the app.
+- After the fix: the app retries automatically, falls back to the system default open method, and takes over the deck that actually opened. The previous deck is neither saved nor closed.
 
-## 3. The timer could reset to zero and restart in the middle of a slideshow
+## 3. Timer could reset to zero during a running slideshow
 
-- Before: while the same slideshow was still running, the timer was occasionally treated as a new run and jumped back to the start.
-- Now: the timer restarts only when a genuinely new slideshow begins; state wobble during the same show no longer interrupts it.
+- Before the fix: mid-slideshow, the timer was occasionally treated as a new run and restarted from zero.
+- After the fix: the timer restarts only when a new slideshow actually begins.
 
-## 4. Clearer "close deck" and "exit presentation app" on the phone
+## 4. Behaviour changes for closing decks and exiting the app from the phone
 
-- Decks you opened by hand, outside the file list, can now be closed remotely.
-- "Exit presentation app" closes every deck in the current PowerPoint / WPS instance, including ones you opened by hand; other Office windows are untouched. It asks for confirmation first and states that unsaved changes will be discarded.
+- Decks opened manually and not in the file list can now be closed remotely.
+- "Exit presentation app" closes every deck in the current PowerPoint / WPS instance, including manually opened ones; other Office windows are unaffected. Confirmation is required and unsaved changes are discarded.
 
 ## Upgrading
 
-- The installer updates over 1.19.2 in place and keeps your settings and file rules.
-- If you have not hit these problems, staying on 1.19.2 is fine.
+- The installer can upgrade over 1.19.2 in place; personal settings and file rules are preserved.
