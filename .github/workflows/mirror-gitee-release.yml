@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Stable release tag, for example v1.17.2
+        description: Release tag, for example v1.17.2 or v1.19.3a
         required: true
         type: string
       notes_only:
@@ -53,8 +53,8 @@ jobs:
           import urllib.request
 
           tag = ${{ toJSON(inputs.tag) }}
-          if not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
-              raise SystemExit("Tag must be a stable version such as v1.17.2")
+          if not re.fullmatch(r"v\d+\.\d+\.\d+[0-9A-Za-z.]*", tag):
+              raise SystemExit("Tag must look like v1.17.2 or v1.19.3a")
 
           token = os.environ.get("GITEE_TOKEN", "")
           if not token:
@@ -110,8 +110,10 @@ jobs:
               "release", "view", tag, "--repo", github_repo,
               "--json", "name,body,isDraft,isPrerelease,assets,url,targetCommitish"
           )
-          if release["isDraft"] or release["isPrerelease"]:
-              raise SystemExit("Only a published stable GitHub Release can be mirrored")
+          if release["isDraft"]:
+              raise SystemExit("A draft GitHub Release cannot be mirrored")
+          # Test builds (for example v1.19.3a) are mirrored too, and the Gitee
+          # release keeps the same pre-release state so stable users never see it.
           names = {asset["name"] for asset in release["assets"]}
           if names != expected:
               raise SystemExit("GitHub Release must contain exactly the portable and setup ZIPs")
@@ -147,7 +149,7 @@ jobs:
               "name": release["name"],
               "body": release["body"],
               "target_commitish": gitee_sha,
-              "prerelease": False,
+              "prerelease": bool(release["isPrerelease"]),
           }
           mirror = request("GET", "/releases/tags/" + quote(tag, safe=""), missing_ok=True)
           if isinstance(mirror, dict) and mirror.get("id"):
