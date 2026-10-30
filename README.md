@@ -302,6 +302,7 @@ The top badges describe the current application. This public repository also con
 | Resource | Link |
 |---|---|
 | User guides | [English](docs/USER_GUIDE.en.md) · [简体中文](docs/USER_GUIDE.zh-CN.md) |
+| v1.19.3 release notes | [English](docs/RELEASE_NOTES_v1.19.3.md) · [简体中文](docs/RELEASE_NOTES_v1.19.3.zh-CN.md) |
 | v1.19.3a test build notes | [English](docs/RELEASE_NOTES_v1.19.3a.md) · [简体中文](docs/RELEASE_NOTES_v1.19.3a.zh-CN.md) |
 | v1.19.2 release notes | [English](docs/RELEASE_NOTES_v1.19.2.md) · [简体中文](docs/RELEASE_NOTES_v1.19.2.zh-CN.md) |
 | v1.18.0 release notes | [English](docs/RELEASE_NOTES_v1.18.0.md) · [简体中文](docs/RELEASE_NOTES_v1.18.0.zh-CN.md) |
