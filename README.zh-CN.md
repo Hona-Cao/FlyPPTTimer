@@ -17,13 +17,15 @@
 
 </div>
 
-当前版本：**v1.19.2** · [更新说明](docs/RELEASE_NOTES_v1.19.2.zh-CN.md)
+当前版本：**v1.19.3** · [更新说明](docs/RELEASE_NOTES_v1.19.3.zh-CN.md)
 
 <a id="download"></a>
 
 ## 下载 FlyPPTTimer
 
-**[从 Gitee 下载](https://gitee.com/hona-cao/fly-ppttimer/releases)** · [GitHub 下载](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)
+软件内检查更新请在“设置 → 软件更新”选择 **GitHub**，Gitee 发布源已停止维护。
+
+**[从 GitHub 下载](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)**
 
 选择适合你的 **Windows x64** 发布包：
 

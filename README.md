@@ -17,13 +17,15 @@ A Windows presentation timer and control companion for **Microsoft PowerPoint** 
 
 </div>
 
-Current version: **v1.19.2** · [Release notes](docs/RELEASE_NOTES_v1.19.2.md)
+Current version: **v1.19.3** · [Release notes](docs/RELEASE_NOTES_v1.19.3.md)
 
 <a id="download"></a>
 
 ## Download FlyPPTTimer
 
-**[Download from GitHub](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)** · [Gitee mirror](https://gitee.com/hona-cao/fly-ppttimer/releases)
+For in-app update checks, select **GitHub** in Settings → Software Update. The Gitee release feed is no longer maintained.
+
+**[Download from GitHub](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)**
 
 Choose the **Windows x64** package that suits your setup:
 
