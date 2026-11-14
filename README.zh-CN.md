@@ -17,7 +17,7 @@
 
 </div>
 
-当前版本：**v1.19.3** · [更新说明](docs/RELEASE_NOTES_v1.19.3.zh-CN.md)
+当前版本：**v1.19.4** · [更新说明](docs/RELEASE_NOTES_v1.19.4.zh-CN.md)
 
 <a id="download"></a>
 
@@ -302,6 +302,7 @@ Pro 不可用时，额外已存提醒点和情景仍会保留；Pro 恢复可用
 | 资料 | 入口 |
 |---|---|
 | 用户指南 | [简体中文](docs/USER_GUIDE.zh-CN.md) · [English](docs/USER_GUIDE.en.md) |
+| v1.19.4 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.4.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.4.md) |
 | v1.19.3 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.3.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.3.md) |
 | v1.19.3a 测试版更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.3a.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.3a.md) |
 | v1.19.2 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.2.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.2.md) |
