@@ -17,13 +17,13 @@
 
 </div>
 
-当前版本：**v1.19.4** · [更新说明](docs/RELEASE_NOTES_v1.19.4.zh-CN.md)
+当前版本：**v1.19.6** · [更新说明](docs/RELEASE_NOTES_v1.19.6.zh-CN.md)
 
 <a id="download"></a>
 
 ## 下载 FlyPPTTimer
 
-软件内检查更新请在“设置 → 软件更新”选择 **GitHub**，Gitee 发布源已停止维护。
+在“设置 → 软件更新”中可选择 **GitHub** 或 **Gitee**。[Gitee 仓库](https://gitee.com/hona-cao/fly-ppttimer)仍在维护，两边的附件上线时间可能不同。
 
 **[从 GitHub 下载](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)**
 
@@ -302,7 +302,7 @@ Pro 不可用时，额外已存提醒点和情景仍会保留；Pro 恢复可用
 | 资料 | 入口 |
 |---|---|
 | 用户指南 | [简体中文](docs/USER_GUIDE.zh-CN.md) · [English](docs/USER_GUIDE.en.md) |
-| v1.19.4 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.4.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.4.md) |
+| v1.19.6 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.6.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.6.md) |
 | v1.19.3 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.3.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.3.md) |
 | v1.19.3a 测试版更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.3a.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.3a.md) |
 | v1.19.2 更新说明 | [简体中文](docs/RELEASE_NOTES_v1.19.2.zh-CN.md) · [English](docs/RELEASE_NOTES_v1.19.2.md) |

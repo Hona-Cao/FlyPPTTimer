@@ -17,13 +17,13 @@ A Windows presentation timer and control companion for **Microsoft PowerPoint** 
 
 </div>
 
-Current version: **v1.19.4** · [Release notes](docs/RELEASE_NOTES_v1.19.4.md)
+Current version: **v1.19.6** · [Release notes](docs/RELEASE_NOTES_v1.19.6.md)
 
 <a id="download"></a>
 
 ## Download FlyPPTTimer
 
-For in-app update checks, select **GitHub** in Settings → Software Update. The Gitee release feed is no longer maintained.
+Choose **GitHub** or **Gitee** under Settings → Software Update. The [Gitee repository](https://gitee.com/hona-cao/fly-ppttimer) remains maintained; release assets may appear at different times.
 
 **[Download from GitHub](https://github.com/Hona-Cao/FlyPPTTimer/releases/latest)**
 
@@ -302,7 +302,7 @@ The top badges describe the current application. This public repository also con
 | Resource | Link |
 |---|---|
 | User guides | [English](docs/USER_GUIDE.en.md) · [简体中文](docs/USER_GUIDE.zh-CN.md) |
-| v1.19.4 release notes | [English](docs/RELEASE_NOTES_v1.19.4.md) · [简体中文](docs/RELEASE_NOTES_v1.19.4.zh-CN.md) |
+| v1.19.6 release notes | [English](docs/RELEASE_NOTES_v1.19.6.md) · [简体中文](docs/RELEASE_NOTES_v1.19.6.zh-CN.md) |
 | v1.19.3 release notes | [English](docs/RELEASE_NOTES_v1.19.3.md) · [简体中文](docs/RELEASE_NOTES_v1.19.3.zh-CN.md) |
 | v1.19.3a test build notes | [English](docs/RELEASE_NOTES_v1.19.3a.md) · [简体中文](docs/RELEASE_NOTES_v1.19.3a.zh-CN.md) |
 | v1.19.2 release notes | [English](docs/RELEASE_NOTES_v1.19.2.md) · [简体中文](docs/RELEASE_NOTES_v1.19.2.zh-CN.md) |
