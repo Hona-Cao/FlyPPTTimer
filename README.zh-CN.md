@@ -19,6 +19,18 @@
 
 当前版本：**v1.19.6** · [更新说明](docs/RELEASE_NOTES_v1.19.6.zh-CN.md)
 
+## 快速安装使用视频教程
+
+第一次使用 FlyPPTTimer？推荐先看这段 **约 16 分钟的安装与入门视频**，了解软件下载、安装和基本使用方法。
+
+<p align="center">
+  <a href="https://www.bilibili.com/video/BV1jzyszfEAa/" title="在 B 站观看 FlyPPTTimer 快速安装使用教程">
+    <img src="docs/media/readme/quick-start-video-BV1jzyszfEAa.jpg" alt="FlyPPTTimer 快速安装使用视频教程封面，点击前往 B 站观看" width="720">
+  </a>
+</p>
+
+<p align="center"><strong>▶ <a href="https://www.bilibili.com/video/BV1jzyszfEAa/">点击观看 B 站快速安装使用教程</a></strong> · 约 16 分钟</p>
+
 <a id="download"></a>
 
 ## 下载 FlyPPTTimer

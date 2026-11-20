@@ -19,6 +19,18 @@ A Windows presentation timer and control companion for **Microsoft PowerPoint** 
 
 Current version: **v1.19.6** · [Release notes](docs/RELEASE_NOTES_v1.19.6.md)
 
+## Quick-start video tutorial
+
+New to FlyPPTTimer? Watch the **16-minute installation and getting-started walkthrough** on Bilibili. The video shows how to install and start using the software.
+
+<p align="center">
+  <a href="https://www.bilibili.com/video/BV1jzyszfEAa/" title="Watch the FlyPPTTimer quick-start tutorial on Bilibili">
+    <img src="docs/media/readme/quick-start-video-BV1jzyszfEAa.jpg" alt="FlyPPTTimer installation and usage video tutorial — click to watch on Bilibili" width="720">
+  </a>
+</p>
+
+<p align="center"><strong>▶ <a href="https://www.bilibili.com/video/BV1jzyszfEAa/">Watch the quick-start video on Bilibili</a></strong> · 16 min · Chinese</p>
+
 <a id="download"></a>
 
 ## Download FlyPPTTimer
